@@ -1,0 +1,66 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var FillGoodDic:ISDictionary;
+    FillTaxGroup : integer;
+
+procedure SrvCalcFields(Dic : ISDictionary);
+begin
+  PricesInNativeCurrency(Dic); //находится в модуле Расчёты
+end;
+
+function SrvCalcFieldsEP : Variant; server;
+begin
+  Result := EntryPoint(SrvCalcFields);
+end;  
+
+procedure unCheckedActiveBarcode;Server;
+var
+  tmpDic : IsDictionary;
+Begin
+  tmpDic := CreateObject('Справочники.ШтрихКодыТоваров');
+  tmpDic.Select;
+  While tmpDic.SelectNext do
+    if StrLength(VarAsStr(TmpDic.Код))>6 then
+      begin
+        tmpDic.Edit;
+        tmpDic.Активность := false;
+        tmpDic.Post;
+      end;
+end;
+
+procedure SetGoods(Dic : ISDictionary; var Accept : Boolean);
+var Count, Total : integer;
+begin
+  Accept := false;
+  FillGoodDic.Select;
+  Count := 0;
+  Total := FillGoodDic.RecordCount;
+  While FillGoodDic.SelectNext do
+    begin
+      FillGoodDic.Edit;
+      FillGoodDic.НалоговаяГруппа := FillTaxGroup;
+      FillGoodDic.Post;
+      inc(Count);
+      if Count mod 10 = 0 then
+        begin
+          Dic.NotifyClient('Заполнение налоговой группы товаров',Count,Total);
+          if Dic.Terminated then exit;
+        end;
+    end;
+  FillGoodDic.ApplyUpdates;
+  Accept := not Dic.Terminated;
+end;
+
+function FillGoodTaxGroupEP(FillGoodDicS: ISDictionary; FillTaxGroupS:integer) : Variant; server;
+begin
+  FillGoodDic := FillGoodDicS;
+  FillTaxGroup := FillTaxGroupS;
+  Result := EntryPoint(SetGoods);
+end;
+
+end.

@@ -1,0 +1,139 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСПеременными, ДополнительныйФункционал;
+
+implementation  
+
+var
+  MasterData, FindBarCodes : ICDictionary;
+  OwnerGood : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  OwnerGood := MasterData._GetOwner;
+ // if not IsObjFocused(OwnerGood) then
+ //   raise('Не указан товар!');
+  MasterData.SetSrvOnCalcFields(server.GetCalcParams);    
+  FindBarCodes := CreateObject('Справочники.ШтрихКодыТоваров');
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused and VarAsBool(MasterData.Активность) then
+    Index1 := 36;
+end;
+{$D+}
+
+procedure tbRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure tbAddInsideBarCode_Click(Sender: TObject);
+var BarCode: string;
+begin
+ if IsObjFocused(MasterData._GetOwner) then
+   begin 
+     BarCode := MasterData._GetOwner.CodeField;
+     if BarCode='' then
+       ShowMessage('У товара "'+MasterData.NameField+'" нет внутренего штрих-кода!')
+     else
+     if MasterData.FindByCode(BarCode, false) then
+       ShowMessage('Штрих-код "'+BarCode+'" уже есть!')
+     else
+       begin
+         MasterData.Append;
+         MasterData.Код := BarCode;
+         MasterData.Товар := MasterData._GetOwner;
+         MasterData.Количество := 1;
+         MasterData.Активность := true;
+         MasterData.Идентификатор := '0';
+         MasterData.Post;
+         MasterData.ApplyUpdates;  
+         ResetActive(MasterData);
+         MasterData.Refresh;
+       end;
+   end;
+end;
+
+procedure miBarCode_Click(Sender: TObject);
+begin
+  edBarCode.Text := '';
+  edBarCode.SetFocus;
+end;
+
+procedure edBarcode_KeyDown(Sender: TObject; var Key: Integer);
+var
+  FindOwnerGood : ICDictionary;
+begin
+ if (Key=13) and (edBarCode.Text<>'') then
+   begin   
+     Key := 0;
+     if MasterData.FindByCode(edBarCode.Text, false) then
+       edBarCode.Text := ''
+     else
+       begin
+         if FindBarCodes.FindByCode(edBarCode.Text, false) then
+           begin
+             FindOwnerGood := FindBarCodes._GetOwner;
+             if IsObjEQ(FindOwnerGood, OwnerGood) or
+                ((not IsObjEQ(FindOwnerGood, OwnerGood)) and  IsObjFocused(FindOwnerGood) and
+                (MessageDlg('ШтрихКод принадлежит товару "'+FindOwnerGood.NameField+'"'+#13+'Перепривязать ШтрихКод?', mtInformation, ArrayOf(mbYes, mbNo))=mrYes)) then
+               FindBarCodes.Edit
+             else
+               exit;
+           end
+         else
+           begin
+             FindBarCodes.Append;
+             FindBarCodes.Идентификатор := '0';
+           end;
+         FindBarCodes.SetMaster(OwnerGood);
+         FindBarCodes.Код := edBarCode.Text;
+         FindBarCodes.Товар := OwnerGood;
+         FindBarCodes.Активность := not HasActive(FindBarCodes);
+         FindBarCodes.Количество := 1;
+         FindBarCodes.Post;
+         FindBarCodes.ApplyUpdates;
+         MasterData.Refresh; 
+         edBarCode.Text := ''
+       end;
+   end;
+end;
+
+procedure Form_Show(Sender: TObject);
+begin
+  miBarCode.ShortCut := GetShortCut;
+  edBarcode.SetFocus;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbAddInsideBarCode:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+edBarcode:TO4Edit
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miAddInsideBarCode:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+pmBarCode:TO4PopupMenu
+miBarCode:TO4MenuItem

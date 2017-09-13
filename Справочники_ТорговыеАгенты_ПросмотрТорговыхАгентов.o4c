@@ -1,0 +1,518 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, Пользователи, РаботаСПеременными, РаботаСОбъектами,РаботаСТаблицамиЗначений,
+  РаботаСКомпонентамиVCL, XMLИмпортЭкспорт, РаботаСТаблицамиЗначенийCL, ПодключениеДопИнтерфейса, НумерацияДокументов,   РаботаСДокументамиCL, КПК;
+
+implementation
+
+const
+  msgSuccessFileCreate = 'Создание файлов для экспорта в КПК завершено.';
+  msgDocNotFoundOrNotAccess = 'Нет доступа или отсутствует документ';
+
+var
+  MasterData : ICDictionary;
+  ConfType : Integer;
+  UseLevels : Boolean;
+  Opt : ICOptions; 
+  AgentID : String;
+  CursorVis : TCursor;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  DocSlipOut : ICDocuments;
+  DocName : string;
+begin
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+  DocName := 'НакладнаяОтпуска';
+  if CheckObjectExists('Документы.' + DocName) then
+    begin
+      DocSlipOut := CreateObject('Документы.' + DocName);
+      ConfType := cnfType;
+    end
+  else
+    if CheckObjectExists('Документы.' + DocName + 'Фарм') then
+      begin
+        DocSlipOut := CreateObject('Документы.' + DocName + 'Фарм');
+        ConfType := cnfFarm;
+      end
+    else
+      if CheckObjectExists('Документы.' + DocName + 'Алко') then
+        begin
+          DocSlipOut := CreateObject('Документы.' + DocName + 'Алко');
+          ConfType := cnfAlco;
+        end
+      else
+        raise(Trans(msgDocNotFoundOrNotAccess) + ' "' + DocName + '"');
+  case ConfType of
+    cnfFarm :
+      DefaultInterfaceInitOnPanel('ОбработкаДанныхДляМодулей', 'ОбработкаДанныхФарм',
+        pnConf, MasterData);
+    cnfAlco :
+      DefaultInterfaceInitOnPanel('ОбработкаДанныхДляМодулей', 'ОбработкаДанныхАлко',
+        pnConf, MasterData);
+  end;  
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if VarAsBool(MasterData.Активность) then
+    Index1 := 36;
+end;
+{$D+}
+
+procedure tbChangeWithPocket_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('Обработки.ОбменДаннымиКПК');
+  V.Execute('ОбменДаннымиКПК', MasterData);
+end;
+
+procedure miCopy_VPABeforeActionClick(Sender : TObject);
+var
+  CopyFrom : ICDictionary;
+begin
+  CopyFrom := CreateObject('Справочники.ТорговыеАгенты');
+  if CopyFrom.Find(MasterData) then
+    MasterData.Params['CopyFrom'] := CopyFrom
+  else
+    MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure tbAdd_VPABeforeActionClick(Sender : TObject);
+begin
+  MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure GetAllOrders(var OrdersCount, NaklsCount, VisitCount : Integer);
+var
+  ResultArray : Variant;
+begin
+  try
+    ExportFileOle := CreateOleObject('O4PocketFunc.PocketFunc');
+  except
+    raise(Trans(errNotFoundPocketFunc));
+  end;
+  try
+    MasterData.DisableControls;
+    try
+      MasterData.Select;
+      while MasterData.SelectNext do
+        if MasterData.Код <> 0 then
+          begin
+            DataCommunication(null, MasterData, False, False, False,
+              False, False, True, False, False, False, False,
+              ConfType, pnConf, ResultArray);
+            if (not IsNil(ResultArray)) and IsArray(ResultArray) then
+              begin
+                OrdersCount := OrdersCount + ResultArray[1];
+                NaklsCount := NaklsCount + ResultArray[2];
+                VisitCount := VisitCount + ResultArray[0];
+              end;
+          end;
+    finally
+      MasterData.EnableControls;
+    end;
+  finally
+    nil(ExportFileOle)
+  end;
+end;
+
+
+procedure tbAllOrders_Click(Sender : TObject);
+var
+  CommercialAgents : ICDictionary;
+  OrdersCount, NaklsCount, VisitCount, PaysCount, ChecksCount : integer;
+  V : IcProcessing;
+  AgentsTable : IcValueTable;
+begin
+//--------------
+{
+  CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+  CommercialAgents.SetRangeByField('ОперационнаяСистема', osWindowsMobile, osWindowsMobile);
+  OrdersCount := 0;
+  NaklsCount := 0;
+  VisitCount := 0;
+  if CommercialAgents.Select then
+    GetAllOrders(OrdersCount, NaklsCount, VisitCount);
+  CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+  if CommercialAgents.Select then
+    CreateAllAndroidOrders(ConfType, pnConf, OrdersCount, NaklsCount, VisitCount, PaysCount);
+}
+//-------------------
+
+  V := CreateObject('Обработки.ВыборТорговыхАгентов');
+  if (V.Execute('ВыборАгентовИмпорт',Null)= mrOk) and ( V.HasParam('AgentsTable')) then
+    begin
+      AgentsTable := V.Params['AgentsTable'];
+      AgentsTable.SortBy('ОперационнаяСистема');
+      AgentsTable.SetRange(osWindowsMobile, osWindowsMobile);
+      AgentsTable.Select;
+      OrdersCount := 0;
+      NaklsCount := 0;
+      VisitCount := 0;
+      if AgentsTable.LineCount>0 then
+        GetAllOrders(OrdersCount, NaklsCount, VisitCount);
+      AgentsTable.CancelRange;
+      AgentsTable.SetRange(osAndroid, osAndroid);
+      AgentsTable.Select;
+
+      if AgentsTable.LineCount>0 then
+        CreateAllAndroidOrdersByTbl(ConfType, pnConf, OrdersCount, NaklsCount,ChecksCount , VisitCount, PaysCount,AgentsTable);
+      ShowMessage(
+         //Trans(msgAdd) + IntToStr(OrdersCount) + Trans(msgOrdersDoc) + #13#10 +
+         //Trans(msgAdd) + IntToStr(NaklsCount) + Trans(msgNaklsDoc) + #13#10 +
+         Trans(msgAdd) + IntToStr(ChecksCount) + Trans(msgChecksDoc) + #13#10 +
+         Trans(msgAdd) + IntToStr(VisitCount) + Trans(msgVisitDoc) + #13#10 +
+         Trans(msgAdd) + IntToStr(PaysCount) + Trans(msgPaysDoc));
+    end
+  else
+    ShowMessage('Импорт отменен!!!');
+
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure miOnlyDictUpdate_Click(Sender : TObject);
+begin
+  miOnlyDictUpdate.Checked := not (miOnlyDictUpdate.Checked)
+end;
+
+procedure DeleteProtocols;
+const
+  msgDeleteLogs = 'Удаление протоколов';
+var
+  Constants : IC4VPAConst;
+  P : ICProcessing;
+begin
+  Constants := GetConstants;
+  if VarAsBool(Constants.УдалятьПротоколыОбменаКПК) then
+    begin
+      P := CreateObject('Обработки.О');
+      P.RunThreadProcess(server.DeleteLogs,
+        DateTimeToStr(CurrentDateTime) + ' - ' + Trans(msgDeleteLogs));
+    end;
+end;
+
+procedure SetAllWMFiles;
+const
+  msgDeleteLogs = 'Удаление протоколов';
+var
+  ResultArray : Variant;
+  CommercialAgents, GroupDict : ICDictionary;
+begin
+  try
+    ExportFileOle := CreateOleObject('O4PocketFunc.PocketFunc');
+  except
+    raise(Trans(errNotFoundPocketFunc));
+  end;
+  try
+    CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+    GroupDict := CreateObject('Справочники.ГруппыТА');
+    GroupDict.Select;
+    if not GroupDict.FindByField('Тип', 0, False) then
+      raise(Trans(errNotSystemGroupPresent));
+    GroupDict.Select;
+    while GroupDict.SelectNext do
+      DataCommunication(GroupDict, CommercialAgents, False, False, True,
+        False, False, False, True, miOnlyDictUpdate.Checked,
+        False, False, ConfType, pnConf, ResultArray);
+  finally
+    nil(ExportFileOle)
+  end;
+  DeleteProtocols;
+end;
+
+procedure SetAllAndroidFiles;
+begin
+  CreateAllAndroidFiles(ConfType, MasterData);
+  DeleteProtocols;
+end;
+  
+procedure SetAllAndroidFilesByTbl(AgentsTable : IcValueTable);
+begin
+  CreateAllAndroidFilesByTbl(ConfType, AgentsTable);
+  DeleteProtocols;
+end;
+
+procedure  CheckUnCtgGoods;
+var UnCtgGoodsTbl : ICValueTable;
+    V : ICProcessing;
+    SList : TStringList;
+begin
+ try
+   CursorVis := WaitCursorStart;
+   UnCtgGoodsTbl := CreateObject('ТаблицаЗначений');  
+   UnCtgGoodsTbl.AddColumn('Self', vtclink,0);
+   UnCtgGoodsTbl.AddColumn('Код', vtcString,20);
+   UnCtgGoodsTbl.AddColumn('НазвТовара', vtcString,100);
+   UnCtgGoodsTbl.Open;
+   UnCtgGoodsTbl.Clear;
+   UnCtgGoodsTbl.CopyDataToServer;
+   server.GetUnCtgGoods(UnCtgGoodsTbl.SrvMean);
+   UnCtgGoodsTbl.CopyDataFromServer;
+   if UnCtgGoodsTbl.LineCount>0 then
+     begin
+       SList := CreateStringList; 
+       SList.Add('В справочнике товаров есть следущие товары без категории:');  
+       SList.Add('');
+       UnCtgGoodsTbl.Select;
+       While UnCtgGoodsTbl.SelectNext do
+         SList.Add(VarAsStr(UnCtgGoodsTbl.Код)+' '+VarAsStr(UnCtgGoodsTbl.НазвТовара));
+       SList.Add('');
+       SList.Add('Всего '+IntToStr(UnCtgGoodsTbl.LineCount)+' записей');
+       V := CreateObject('Обработки.СтандартныеФормыИнтерфейса');
+       V.Execute('ПросмотрЛога',ArrayOf(SList.Text,''));
+     end;
+ finally  
+   SetCursor(CursorVis);
+   UnCtgGoodsTbl.Close;
+   Nil(UnCtgGoodsTbl); 
+   Nil(V);
+ end;                    
+
+
+end;
+
+procedure tbAllFiles_Click(Sender : TObject);
+var
+  CommercialAgents : ICDictionary;
+  V : IcProcessing;
+  AgentsTable : IcValueTable;
+
+begin
+  CheckUnCtgGoods;
+{
+  CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+  CommercialAgents.SetRangeByField('ОперационнаяСистема', osWindowsMobile, osWindowsMobile);
+  if CommercialAgents.Select then
+    SetAllWMFiles;
+  CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+  if CommercialAgents.Select then
+    SetAllAndroidFiles;
+  ShowMessage(Trans(msgSuccessFileCreate));
+
+}
+//-------------------
+  V := CreateObject('Обработки.ВыборТорговыхАгентов');
+  if (V.Execute('ВыборАгентовЭкспорт',Null)= mrOk) and ( V.HasParam('AgentsTable')) then
+    begin
+      AgentsTable := V.Params['AgentsTable'];
+      AgentsTable.SortBy('ОперационнаяСистема');
+      AgentsTable.SetRange(osAndroid, osAndroid);
+      AgentsTable.Select;
+
+      if AgentsTable.LineCount>0 then
+        SetAllAndroidFilesByTbl(AgentsTable);
+      DeleteProtocols;
+      ShowMessage(Trans(msgSuccessFileCreate));
+    end
+  else
+    ShowMessage('Импорт отменен!!!');
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender: TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender: TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+end;
+
+procedure MDS_VPAAfterScroll(Sender: TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure ExportAndroidItems(PhotoTbl : ICValueTable; ItemsGroup : ICDictionary; Constants : IC4VPAConst; ZipType : integer; ZipExePath : string);
+var
+  ExchangePath, XMLPhotoZipFullName, FileNames : String;
+  i, iTotal : integer;
+begin
+  ExchangePath := Constants.ПутьКПапкеОбменаДляКПК;
+  if ItemsGroup.IsFocused then
+    begin
+      ExchangePath := ExchangePath + VarAsStr(ItemsGroup.Код) + '\';
+      ForceDir(ExchangePath);
+    end;   
+  FileNames := EnumerateFolder(ExchangePath, '*.jpg', False, False, True);
+  for i := 1 to WordCount(FileNames, ';') do
+    DeleteFile(ExchangePath + ExtractWord(i, FileNames, ';'));
+  i := 0; 
+  iTotal := PhotoTbl.LineCount;
+  PhotoTbl.Select;
+  try
+    while PhotoTbl.SelectNext do
+      begin
+        dbiPhoto.SaveToFile(ExchangePath + PhotoTbl.GUID + '.jpg');
+        if i mod 10 = 0 then
+          StatusText(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(iTotal));
+        inc(i);
+      end;
+  finally
+    StatusText('');
+  end;
+  XMLPhotoZipFullName := ExchangePath + AndroidPhotoZipFileName + ZipExt;
+  if FileExists(XMLPhotoZipFullName) then
+    DeleteFile(XMLPhotoZipFullName);
+  AddFilesToZipByZipType(ZipType, ZipExePath, XMLPhotoZipFullName, ExchangePath + '*.jpg');
+end;
+
+procedure ExportAndroidItemsForGroup(PhotoTbl : ICValueTable; CommercialAgentGroup : ICDictionary; Constants : IC4VPAConst;
+                                     ZipType : integer; ZipExePath : string);
+begin
+  PhotoTbl.SortBy('Группа');
+  CommercialAgentGroup.SetRangeByField('Тип', grItem, grItem);
+  CommercialAgentGroup.Select;
+  while CommercialAgentGroup.SelectNext do
+    begin
+      PhotoTbl.SetRange(CommercialAgentGroup.Код, CommercialAgentGroup.Код);
+      PhotoTbl.Select;
+      ExportAndroidItems(PhotoTbl, CommercialAgentGroup, Constants, ZipType, ZipExePath);
+    end;
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+var
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  CommercialAgentGroup : ICDictionary;
+  ZipType : integer;
+  ZipExePath, ExchangePath, XMLPhotoZipFullName : string;
+  PhotoTbl : ICValueTable;
+  UnionItemsDict : boolean;
+begin
+  case ProcID of
+    'SavePhoto' :
+      begin
+        PhotoTbl := InParams;
+        PhotoTbl.Select;
+        if PhotoTbl.LineCount > 0 then
+          begin
+            PhotoTbl.UseDataSource(CtrlToVar(tvsPhoto));
+            Options := GetOptions;
+            Constants := GetConstants;
+            ExchangePath := Constants.ПутьКПапкеОбменаДляКПК;
+            ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+            if ZipType = 0 then
+              raise(Trans(msgSelectArchiveType));
+            ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+            UnionItemsDict := VarAsBool(Constants.ТоварыДляКПК);
+            CommercialAgentGroup := CreateObject('Справочники.ГруппыТА');
+            if VarAsBool(UnionItemsDict) then
+              ExportAndroidItems(PhotoTbl, CommercialAgentGroup, Constants, ZipType, ZipExePath)
+            else
+              ExportAndroidItemsForGroup(PhotoTbl, CommercialAgentGroup, Constants, ZipType, ZipExePath);
+          end;
+      end;
+  end;
+end;
+
+procedure miSetAgentID_Click(Sender : TObject);
+const
+  errSetAgentIDBreakByUser = 'Пользователем было прервано заполнение поля идентификатор агента для справочника торговых агентов';
+  msgSetAgentID = 'Заполнение поля идентификатор агента для справочника торговых агентов';
+begin
+  if MessageDlg(Trans('Заполнить поле идентификатор агента для справочника торговых агентов?'),
+    mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes then
+    try
+      if not MasterData.RunThreadProcess(server.SetAgentIDEP, Trans(msgSetAgentID)) then
+        raise(Trans(errSetAgentIDBreakByUser));
+    finally
+      MasterData.Refresh;
+    end;
+end;
+
+procedure MDS_VPABeforeDelete(Source : Variant; IsGroup : boolean; var Accept : boolean);
+begin
+  AgentID := '';
+  if MasterData.ОперационнаяСистема = osAndroid then
+    AgentID := MasterData.AgentID;
+end;
+
+procedure MDS_VPAAfterDelete(Sender : TObject);
+begin
+  if StrLength(AgentID) <> 0 then
+    DeleteCommercialAgents(AgentID);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+pnMain:TO4Panel
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+tbDelimiter3:TO4ToolButton
+tbAllFiles:TO4ToolButton
+tbAllOrders:TO4ToolButton
+tbChangeWithPocket:TO4ToolButton
+dbgData:TO4DBGrid
+pnConf:TO4Panel
+dbiPhoto:TO4DBImage
+Panel1:TO4Panel
+tbrCtg:TO4ToolBar
+tbAddLevel:TO4ToolButton
+tbEditLevel:TO4ToolButton
+tbDelLevel:TO4ToolButton
+dbtCtg:TO4DBTreeView
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miCopy:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+MenuItem2:TO4MenuItem
+miPrint:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem
+MenuItem4:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+MenuItem5:TO4MenuItem
+miSetAgentID:TO4MenuItem
+pmOptions:TO4PopupMenu
+miOnlyDictUpdate:TO4MenuItem
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+pmAddLevels:TO4PopupMenu
+pmiAddBros:TO4MenuItem
+pmiAddChild:TO4MenuItem
+tvsPhoto:TO4TableValueSource

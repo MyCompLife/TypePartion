@@ -1,0 +1,349 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Интерфейс, РаботаСТаблицамиЗначений, Расчеты;
+
+implementation
+
+var
+  AccsGood, AccsPartGood, AccsGoodRes : ISAccs;
+  Store : ISDictionary;
+  Date : DateTime;
+  ServerCheck : Boolean;
+  StoresList : ISValueList;
+  Constants : IS4VPAConst;
+  TempTbl : ISValueTable; 
+
+procedure SrvCalcFields(Dic : ISDictionary);
+begin
+  PricesInNativeCurrency(Dic); //находится в модуле Расчёты
+end;
+
+function SrvCalcFieldsEP : Variant; server;
+begin
+  Result := EntryPoint(SrvCalcFields);
+end;
+
+procedure GetGroupTbl(GroupTbl: ISValueTable);server;
+var
+  GroupDic: ISDictionary;
+  TempTbl: ISValueTable;
+begin
+  GroupDic := CreateObject('Справочники.Производители');
+  GroupDic.Select;
+  TempTbl := CreateObject('ValueTable');
+  GroupDic.SaveToValueTable('',TempTbl,1,GroupDic.RecordCount);
+  TempTbl.AppendTo('SELF=ГруппаТовара',GroupTbl);
+  GroupTbl.DoGetLinks('Группа=ГруппаТовара.Название');
+  GroupTbl.DoCalculation('Order','1');
+  GroupTbl.Append;
+  GroupTbl.Группа := 'Все';
+  GroupTbl.Order := 0;
+  GroupTbl.Post;
+end;
+
+procedure InitSrvData; server;
+begin
+  Date := CurrentDate;
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoodRes := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  Constants := GetConstants;  
+  TempTbl := CreateObject('ТаблицаЗначений');
+  TempTbl.AddColumn('Активность', vtcInteger, 0);
+  TempTbl.AddColumn('Склад', lftLink, 0);
+  TempTbl.AddColumn('КолОбщ', lftFFT, 5);
+  TempTbl.Open;
+end;
+
+procedure SetStoreParams(DT : DateTime; Stores : ISValueList; Index : Integer); server;
+begin 
+  StoresList := Stores;
+  Date := RoundDate(DT, rdDay, True);
+  if Stores.ValidIndex(Index) and (Index <> 0) then
+    Store := Stores.GetValue(Index)
+  else
+    nil(Store);
+end;
+
+procedure GoodCalcFields(Good : ISDictionary);
+begin
+  if VarAsBool(Good.Услуга) then
+    exit;
+  if IsObjFocused(Store) then
+    AccsGood.SetFieldFilter('Склад',Store)
+  else
+    AccsGood.SetFieldFilter('Склад',StoresList);
+  AccsGood.CalcGroupRestDirect(Date, Good);
+  Good.КоличествоНаСкладах := AccsGood.КолОбщ;
+
+  AccsGoodRes.CalcGroupRestDirect(Date, Good);
+  Good.КолВРез := AccsGoodRes.КолОбщ;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  Result := EntryPoint(GoodCalcFields);
+end;
+
+procedure GetStoreList(Good : ISDictionary; TblStore, TblPartGood : ISValueTable; ZeroRest : Boolean); server;
+begin
+  AccsGood.SetFieldFilter('Товар', Good);
+  if IsObjFocused(Store) then
+    AccsGood.SetFieldFilter('Склад',Store)
+  else
+    AccsGood.SetFieldFilter('Склад',StoresList);
+  AccsGood.IncludeZeroRest := ZeroRest;
+  if VarAsBool(Constants.УчетПоСреднейСтоим) then
+    begin
+      AccsGood.AppendGroupRestToValueTable(Date, 'Склад;Партия;КолОбщ;СумВх;СумВалВх', TblPartGood);
+      TblPartGood.SortBy('Склад;Партия');
+    end
+  else
+    begin
+      AccsGood.AppendGroupRestToValueTable(Date, 'Склад;Партия;КолОбщ', TblPartGood);
+      TblPartGood.SortBy('Склад;Партия');
+    end;
+  AccsGood.ClearFieldFilters();
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ДатаПр;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', TblPartGood);
+  if VarAsBool(Constants.УчетПоСреднейСтоим) then
+    begin
+      TblPartGood.DoCalculation('ВхЦенаБезНДС', 'СумВх/КолОбщ');
+      TblPartGood.DoCalculation('ВхЦенаВал', 'СумВалВх/КолОбщ');
+    end;
+  TblPartGood.GroupToMaster('Склад', 'КолОбщ', TblStore);
+  TblPartGood.SortBy('-ВхЦенаБезНДС;Партнер;Склад');
+  TblStore.AppendTo('Склад;КолОбщ', TempTbl);
+  TempTbl.DoGetLinks('Активность=Склад.Активность');
+  TempTbl.CopyTo('', TblStore);
+  TempTbl.Clear;
+end;
+
+procedure GoSrvFilter(Good : ISDictionary; var Visible : Boolean); server;
+begin
+  if ServerCheck then
+    Visible := Good.КоличествоНаСкладах > 0
+  else
+    Visible := True;
+end;
+
+function GetGoSrvFilter(CheckZero : Boolean) : Variant; server;
+begin
+  ServerCheck := CheckZero;
+  Result := EntryPoint(GoSrvFilter);
+end;
+
+procedure GetDocs(DocsTbl : ISValueTable; PartOld, PartNew : Variant); server;
+var
+  tmpDoc : ISDocuments;
+  tbl : ISValueTable;
+begin
+  tbl := CreateObject('ТаблицаЗначений');
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+  AccsGood.SetFieldFilter('Товар', PartOld[0]);
+  AccsGood.SetFieldFilter('Склад', PartOld[1]);
+  AccsGood.SetFieldFilter('Партия', PartOld[2]);
+
+  AccsGood.AppendGroupMotionToValueTable(0, RoundDate(CurrentDate, rdDay, True), amtOutcome,
+    'Document;Date', -1, DocsTbl);
+
+  DocsTbl.Select();
+  while DocsTbl.SelectNext() do
+    begin
+      tmpDoc := DocsTbl.Document;
+      if VarAsBool(tmpDoc.IsFocused) then
+        begin
+          tmpDoc.StateDown();
+          tmpDoc.Edit;
+          tmpDoc.SelectLines();
+          while tmpDoc.SelectNextLine do
+            begin
+              if tmpDoc.Партия = PartOld[2] then
+                begin
+                  tmpDoc.EditLine;
+                  tmpDoc.Склад := PartNew[1];
+                  tmpDoc.Партия := PartNew[2];
+                  tmpDoc.ВхЦенаБезНДС := PartNew[3];
+                  tmpDoc.PostLine;
+                end;
+              if tmpDoc.HasField('Наценка') then
+                begin
+                  tmpDoc.SaveContents('количество;ценабезндс;вхценабезндс;цена', tbl);
+                  tbl.DoCalculation('цена', 'количество*(ценабезндс-вхценабезндс)');
+                  tmpDoc.Наценка := tbl.Total('цена');
+                end;
+            end;
+          tmpDoc.Post;
+          tmpDoc.StateUp();
+        end;
+    end;
+end;
+
+procedure SetMiddlePrice(DocsTbl : ISValueTable; PartNew : Variant); server;
+var
+  tmpDoc : ISDocuments;
+  tbl : ISValueTable;
+  Price, Count : Double;
+begin
+  tbl := CreateObject('ТаблицаЗначений');
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+  AccsGood.SetFieldFilter('Товар', PartNew[0]);
+  AccsGood.SetFieldFilter('Склад', PartNew[1]);
+  AccsGood.SetFieldFilter('Партия', PartNew[2]);
+
+  AccsGood.AppendGroupMotionToValueTable(0, RoundDate(CurrentDate, rdDay, True), amtBoth,
+    'Document;Date;MotionSign;КолОбщ;СумВх', -1, DocsTbl);
+  DocsTbl.SortBy('Date');
+
+  Price := 0;
+  Count := 0;
+  DocsTbl.Select();
+  DocsTbl.SelectFirst();
+  while DocsTbl.SelectNext() do
+    begin
+      tmpDoc := DocsTbl.Document;
+      if VarAsBool(tmpDoc.IsFocused) then
+        tmpDoc.StateDown();
+    end;
+
+  DocsTbl.SelectFirst();   
+  if DocsTbl.КолОбщ <> 0 then
+    Price := DocsTbl.СумВх / DocsTbl.КолОбщ;
+  Count := DocsTbl.КолОбщ;
+  while DocsTbl.SelectNext() do
+    begin
+      tmpDoc := DocsTbl.Document;
+      if VarAsBool(tmpDoc.IsFocused) then
+        begin
+          if DocsTbl.MotionSign = 1 then
+            begin
+              Price := (Price * Count + DocsTbl.СумВх) / (Count + DocsTbl.КолОбщ);
+              Count := Count + DocsTbl.КолОбщ;
+              tmpDoc.StateUp();
+            end
+          else
+            begin
+              tmpDoc.Edit;
+              tmpDoc.SelectLines();
+              while tmpDoc.SelectNextLine do
+                begin
+                  if tmpDoc.Партия = PartNew[2] then
+                    begin
+                      tmpDoc.EditLine;
+                      tmpDoc.ВхЦенаБезНДС := Price;
+                      tmpDoc.PostLine;
+                    end;
+                  if tmpDoc.HasField('Наценка') then
+                    begin
+                      tmpDoc.SaveContents('количество;ценабезндс;вхценабезндс;цена', tbl);
+                      tbl.DoCalculation('цена', 'количество*(ценабезндс-вхценабезндс)');
+                      tmpDoc.Наценка := tbl.Total('цена');
+                    end;
+                end;
+              tmpDoc.Post;
+              tmpDoc.StateUp();
+              Count := Count - DocsTbl.КолОбщ;
+            end;
+        end;
+    end;
+end;
+
+//заполнение аккумулятора ОстаткиТоваровНаСегодня
+//procedure GetAss(Good : ISDictionary);server;
+
+procedure GetAcc(Mean : ISProcessing; var Success : Boolean);
+var
+  AccsGoodCurrent : ISAccs;
+  TblGood : ISValueTable;
+  i, Total : Integer;
+  CursorVis : TCursor;
+  Client : ISProcessing;
+  Log : TStringList;
+begin
+  Success := True;
+  Client := Mean;
+  Client.NotifyClientEx(1, 'Пройдено 0 этапов из 2', 0, 2);
+  TblGood := CreateObject('ТаблицаЗначений');
+  TblGood.AddColumn('Товар', vtcLink, 0);
+  TblGood.AddColumn('Document', vtcLink, 0);
+  TblGood.AddColumn('Date', vtcDateTime, 0);
+  TblGood.AddColumn('MotionSign', vtcInteger, 0);
+  TblGood.AddColumn('Склад', vtcLink, 0);
+  TblGood.AddColumn('КолОбщ', lftFFT, 5);
+  TblGood.AddColumn('DocLineNum', vtcInteger, 0);
+
+  TblGood.Open;
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  //удаление из аккумулятора записей
+  AccsGoodCurrent.IncludeZeroRest := True;
+  AccsGoodCurrent.AppendGroupMotionToValueTable(0, Date, amtBoth,
+    'Товар;Склад;Document;Date;MotionSign;КолОбщ;DocLineNum', -1, TblGood);
+  TblGood.Select;
+  i := 0;
+  Total := TblGood.LineCount;
+  while TblGood.SelectNext do
+    begin
+      Inc(i);
+      Client.NotifyClientEx(2, 'Удалено ' + IntToStr(i) + ' из ' + IntToStr(Total), i, Total);
+      if Client.Terminated then
+        begin
+          Success := False;
+          exit;
+        end;
+      AccsGoodCurrent.RemoveDoc(TblGood.Document, 1, True);
+    end;
+  Client.NotifyClientEx(1, 'Пройден 1 этап из 2', 1, 2);
+  TblGood.Clear;
+  //удаление из аккумулятора записей
+  AccsGood.IncludeZeroRest := True;
+  AccsGood.AppendGroupMotionToValueTable(0, Date, amtBoth,
+    'Товар;Склад;Document;Date;MotionSign;КолОбщ;DocLineNum', -1, TblGood);
+  TblGood.Select;
+  i := 0;
+  Total := TblGood.LineCount;
+  Log := CreateStringList;
+  try
+    while TblGood.SelectNext do
+      begin
+        //   if AccsGoodCurrent.IsDocPresent(TblGood.Document, 1, true) = 0 then
+        //     begin
+        Inc(i);
+        Client.NotifyClientEx(2, 'Добавлено ' + IntToStr(i) + ' из ' + IntToStr(Total), i, Total);
+        if Client.Terminated then
+          begin
+            Success := False;
+            exit;
+          end;
+        AccsGoodCurrent.Товар := TblGood.Товар;
+        AccsGoodCurrent.КолОбщ := TblGood.КолОбщ;
+        AccsGoodCurrent.Склад := TblGood.Склад;
+        if VarAsBool(TblGood.Document.IsFocused) then
+          begin
+            if TblGood.MotionSign = -1 then
+              AccsGoodCurrent.Outcome(TblGood.Document, TblGood.Document.GetDate, TblGood.DocLineNum)
+            else
+              AccsGoodCurrent.Income(TblGood.Document, TblGood.Document.GetDate, TblGood.DocLineNum);
+          end
+        else
+          begin
+            Log.Add(TblGood.DefValue['Document'] + ' ' + DateToStr(TblGood.Date) + ' ' + VarAsStr(TblGood.Товар.НазвТовара) + ' к-во ' + FloatToStr(TblGood.КолОбщ));
+            //           res := AccsGood.RemoveDoc(TblGood.Document,0,true);
+            Success := False;
+          end;
+        //   end;
+      end;
+  finally
+    Log.SaveToFile(ExtractFilePath(RunPath) + 'ErrorCnv.log');
+    Log.Free
+  end;
+  Client.NotifyClientEx(1, 'Пройдено 2 этапа из 2', 2, 2);
+end;
+
+function ConvertationAcc : Variant; server;
+begin
+  Result := EntryPoint(GetAcc);
+end;
+
+end.

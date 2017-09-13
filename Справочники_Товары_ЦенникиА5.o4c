@@ -1,0 +1,101 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData, MYF, CurrencyDic : ICDictionary;
+  Pk : Integer;
+  Constants : IC4VPAConst;
+  TypePrice : string;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  Constants := GetConstants;
+  TypePrice := VarAsStr(Constants.ПечатьЭтикеткиТипЦены);
+  if TypePrice='' then
+    TypePrice := 'Цена';
+  CurrencyDic := CreateObject('Справочники.Валюты');
+  // Ира
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+{  if VarAsBool(Constants.ВашеПредпрНалогОтч.IsFocused) then
+    MYF.Find(Constants.ВашеПредпрНалогОтч)
+  else
+    ShowMessage('Константа "Ваше предприятие" не заполнена!');
+}
+  Pk := Form.GetPrintKind;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  str : string;
+  Rate, Price : Decimal;
+begin
+  if Index = 0 then
+    begin
+      if Pk = 0 then
+        MasterData.SelectBookmarks
+      else
+        begin
+          if Pk = 1 then
+            MasterData.AssignSelectParams(Form.GetMean);
+          MasterData.Select;
+        end
+    end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Name'] := StrUpperCase(MasterData.НазвТовара);
+      Value['Code'] := MasterData.Код;
+      if VarAsBool(MasterData.ЕдИзм.IsFocused) then
+        Value['UnitName'] := MasterData.ЕдИзм.Value;
+    end;
+
+  if CurrencyDic.Find(MasterData._Default['Валюта'+TypePrice]) then
+    Rate := CurrencyDic.GetTimedValue(Constants.UsedCurs, CurrentDate)
+  else
+    Rate := 1;
+  Price := MasterData._Default[TypePrice];
+  str := StrCopy(VarAsStr((RoundFloat(Frac(Price * Rate), 2)) * 100), 1, 2);
+  case StrLength(str) of
+    0 :
+      str := '00';
+    1 :
+      str := '0' + str;
+  end;
+
+  lbPrice.Caption := IntToStr(trunc(Price))+'.';
+  lbPriceCop.Caption := str;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  MYF.Select;
+  if not MYF.SelectNext then
+    exit;
+  with Table do
+    Value['NAME'] := GetPartName(MYF);
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+Label8:TRBLabel
+Label3:TRBLabel
+Label5:TRBLabel
+Label17:TRBLabel
+lbPrice:TRBLabel
+Label4:TRBLabel
+Label6:TRBLabel
+Label2:TRBLabel
+Label7:TRBLabel
+lbPriceCop:TRBLabel
+Label9:TRBLabel
+Structure1:TRBStructure

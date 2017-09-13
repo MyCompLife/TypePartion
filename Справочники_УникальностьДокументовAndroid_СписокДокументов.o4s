@@ -1,0 +1,25 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var MasterData : ISDictionary;
+
+function CheckUniqAndroidGUID(MasterData : ISDictionary; AndroidGUID : string; Resp : Variant) : boolean;server;
+var
+  AndroidDict : ISDictionary;
+  Res : Boolean;
+begin
+  Result := False;
+  AndroidDict := CreateObject('Справочники.УникальностьДокументовAndroid');
+  AndroidDict.Select;
+  Res := AndroidDict.FindByField('AndroidGUID', AndroidGUID, false);
+  if Res and not IsNull(MasterData) then
+    Result := not IsObjEQ(MasterData, AndroidDict, false)
+  else
+    Result := Res;
+end;
+
+end.

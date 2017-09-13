@@ -1,0 +1,112 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation      
+
+var
+  MasterData : ICDictionary;
+
+procedure SetVisibleVCL; 
+begin
+ case edType.Text of
+  'Unisystem' :
+    begin
+      pnComSettings.Visible := true;
+      pnPasswInt.Visible := true;
+      pnPasswStr.Visible := false;
+      pnNumKassir.Visible := false;
+      pnIP.Visible := false;
+    end;
+  'ICS' :
+    begin
+      pnComSettings.Visible := true;
+      pnPasswInt.Visible := true; 
+      pnPasswStr.Visible := false; 
+      pnNumKassir.Visible := false; 
+      pnIP.Visible := false;
+    end;
+  'Excellio' :
+    begin
+      pnComSettings.Visible := true;
+      pnPasswInt.Visible := false;
+      pnPasswStr.Visible := true;
+      pnNumKassir.Visible := false;
+      pnIP.Visible := true;
+    end;
+  'MG-N707' :  
+    begin
+      pnComSettings.Visible := false;
+      pnPasswInt.Visible := false;
+      pnNumKassir.Visible := true;
+      pnPasswStr.Visible := true;
+      pnIP.Visible := true;
+    end;
+ end;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  edCOMPortNumber.ItemIndex := edCOMPortNumber.Items.IndexOf(IntToStr(VarAsInt(MasterData.ComPort)));
+  edSpeed.ItemIndex := edSpeed.Items.IndexOf(IntToStr(VarAsInt(MasterData.Скорость)));
+  edType.ItemIndex := edType.Items.IndexOf(VarAsStr(MasterData.Тип));   
+  SetVisibleVCL;
+end;
+
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  MasterData.Тип := edType.Text;
+  if MasterData.Тип = '' then
+    raise('Выберите тип фискального регистратора!');
+  MasterData.Скорость := VarAsInt(edSpeed.Text);
+  MasterData.ComPort := VarAsInt(edCOMPortNumber.Text);
+end;
+
+procedure edType_Change(Sender: TObject);
+begin
+ SetVisibleVCL;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Panel2:TO4Panel
+lbCashServerName:TO4Label
+lbCashServerProc:TO4Label
+dbeName:TO4DBEdit
+edType:TO4Edit
+pnPasswInt:TO4Panel
+Label4:TO4Label
+dbeRepPsw:TO4DBEdit
+pnPasswStr:TO4Panel
+Label3:TO4Label
+dbePswKassir:TO4DBEdit
+pnNumKassir:TO4Panel
+Label5:TO4Label
+dbeNumKassir:TO4DBEdit
+pnComSettings:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+edCOMPortNumber:TO4Edit
+edSpeed:TO4Edit
+pnIP:TO4Panel
+Label6:TO4Label
+dbeIP:TO4DBEdit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource

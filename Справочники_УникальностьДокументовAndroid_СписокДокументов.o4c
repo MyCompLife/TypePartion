@@ -1,0 +1,81 @@
+interface
+
+uses 
+
+System, DispIntf;
+
+var
+ MasterData : ICDictionary; 
+ Doc : ICDocuments;
+
+implementation
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+ MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+// MakeInterface(tbrCtg, tbrData, dbgData);
+ pmiSort.Enabled := MasterData.IsFocused();
+end;
+
+procedure miPrintActive_Click(Sender : TObject);
+begin
+ MasterData.PrintForm('', false, 0, Null)
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+ pmiSort.Enabled := MasterData.IsFocused();
+end;
+
+procedure MenuItem4_Click(Sender: TObject);       
+var i : integer;
+begin         
+  i := 0;
+  Doc := CreateObject('Документы.НакладнаяОтпуска');
+  Doc.Select;
+  while Doc.SelectNext do
+    begin
+      if Doc.AndroidGUID <> '' then
+        if not server.CheckUniqAndroidGUID(MasterData.SrvMean, Doc.AndroidGUID, Doc.Посредник) then
+          begin
+            MasterData.Append;
+            MasterData.AndroidGUID := Doc.AndroidGUID;
+            MasterData.Партнер := Doc.Партнер;
+            MasterData.ДатаДокумента := Doc.ДатаДокумента;
+            MasterData.Сумма := Doc.Сумма;
+            MasterData.Посредник := Doc.Посредник;
+            MasterData.НомерДокумента := Doc.НомерДокумента;
+            MasterData.Post;  
+            inc(i);
+          end;
+    end; 
+  ShowMessage('Добавлено ' + VarAsStr(i) + ' записей.');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+DataPanel:TO4Panel
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbSeparator:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem3:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem4:TO4MenuItem

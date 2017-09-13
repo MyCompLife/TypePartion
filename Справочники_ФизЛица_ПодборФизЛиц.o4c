@@ -1,0 +1,173 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData, DetAdr, DetPhone, DetBankAcc, DetRepresenter, DetDocument, DetEmail,
+    DetRespons, DetRegNumbers : ICDictionary;
+  UseLevels : Boolean;
+  Opt : ICOptions;
+  TblOwners : ICValueTable;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itDropForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+  DetPhone := SetDetailDict(MasterData, 'Телефоны', 'ПросмотрТелефонов', CtrlToVar(ntbLists.PageClass[0]));
+  TblOwners := CreateObject('ТаблицаЗначений');
+  TblOwners.AddColumn('Название', vtcLink, 0);
+  TblOwners.Open();
+  ntbLists.PageIndex := 0;
+end;
+
+procedure GetTheOwners;
+var
+  DOwner : ICDictionary;
+begin
+  TblOwners.UseDataSource(0);
+  TblOwners.Clear();
+  TblOwners.CopyDataToServer;
+  MasterData.SetSrvToClientPos;
+  server.SGetTheOwners(MasterData.SrvMean, TblOwners.SrvMean);
+  TblOwners.CopyDataFromServer;
+  TblOwners.SrvMean.Clear;
+  TblOwners.UseDataSource(CtrlToVar(TVSOwners));
+end;
+
+procedure tstLists_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  case NewTab of
+    1 :
+      if IsNil(DetAdr) then
+        DetAdr := SetDetailDict(MasterData, 'Адреса', 'ПросмотрАдресов',
+          CtrlToVar(ntbLists.PageClass[NewTab]));
+    2 :
+      if IsNil(DetBankAcc) then
+        DetBankAcc := SetDetailDict(MasterData, 'РасчСчета', 'ПросмотрРасчСчетов',
+          CtrlToVar(ntbLists.PageClass[NewTab]));
+    3 :
+      if IsNil(DetRepresenter) then
+        DetRepresenter := SetDetailDict(MasterData, 'Представители', 'ПросмотрПредставителей',
+          CtrlToVar(ntbLists.PageClass[NewTab]));
+    4 :
+      if IsNil(DetRespons) then
+        DetRespons := SetDetailDict(MasterData, 'ФизЛица', 'ПросмотрПредставителей',
+          CtrlToVar(ntbLists.PageClass[NewTab]));
+    5 :
+      GetTheOwners;
+    6 :
+      if IsNil(DetDocument) then
+        DetDocument := SetDetailDict(MasterData, 'ЛичДокументы', 'ПросмотрЛичДокументов',
+          CtrlToVar(ntbLists.PageClass[NewTab]));
+    7 :
+      if IsNil(DetEmail) then
+        DetEmail := SetDetailDict(MasterData, 'Email', 'ПросмотрEmail',
+          CtrlToVar(ntbLists.PageClass[NewTab]));
+    8 :
+      if IsNil(DetRegNumbers) then
+        DetRegNumbers := SetDetailDict(MasterData, 'РегНомера', 'ПросмотрРегНомеров',
+          CtrlToVar(ntbLists.PageClass[NewTab]));
+  end;
+  ntbLists.PageIndex := NewTab;
+end;
+
+procedure miPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null)
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if ntbLists.PageIndex = 5 then
+    GetTheOwners;
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+splCtg:TO4Splitter
+CtgPanel:TO4Panel
+dbtCtg:TO4DBTreeView
+tbrCtg:TO4ToolBar
+tbAddLevel:TO4ToolButton
+tbEditLevel:TO4ToolButton
+tbDelLevel:TO4ToolButton
+DataPanel:TO4Panel
+splLists:TO4Splitter
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+ListsPanel:TO4Panel
+tstLists:TO4TabSet
+ntbLists:TO4Notebook
+Panel1:TO4Panel
+dbgOwners:TO4DBGrid
+dmNotes:TO4DBMemo
+dbgData:TO4DBGrid
+pmAddLevels:TO4PopupMenu
+pmiAddBros:TO4MenuItem
+pmiAddChild:TO4MenuItem
+MDS:TO4DataSource
+TVSOwners:TO4TableValueSource
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

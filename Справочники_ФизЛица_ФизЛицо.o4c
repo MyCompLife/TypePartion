@@ -1,0 +1,183 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData, DetRepresenter, DetAdr, DetPhone, DetBankAcc, DetDocument,
+    DetEmail, DetRespons, DetRegNumbers : ICDictionary;
+  CollectTbl : ICValueTable;
+  Collection : ICCollection;
+  Constants : IC4VPAConst;
+
+  
+procedure SetVisible;
+begin
+  SetPropertyForComponentList(ptTabVisible, Form, 'tsBankAcc;tsRepresenter;tsResponse;tsPrice;tsRegNumbers;tsAgreement', false);
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeLastName.Text, dbeFirstNames.Text), ' ');
+end;
+
+procedure Form_Open(Sender : TObject);
+begin     
+  SetVisible;
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeLastName.Text, dbeFirstNames.Text), ' ');
+  cbTax.Checked := MasterData.НДСплат;
+  if VarAsBool(MasterData.Должность.IsFocused) then
+    edCollect.Text := MasterData.Должность.Value;
+  Collection := CreateObject('Коллекции.Должности');
+  CollectTbl := CreateObject('ТаблицаЗначений');
+  CreateCollectionTbl(CollectTbl, Collection);
+  while CollectTbl.SelectNext() do
+    edCollect.Items.Add(CollectTbl.Comment);
+  rgPrice.ItemIndex := MasterData.Статус;
+  rgDictPrice.ItemIndex := MasterData.ЦенаСправ;
+  cbPayDate.Checked := MasterData.ИспСрокОплаты;
+  ePayDate.Enabled := MasterData.ИспСрокОплаты;
+end;
+
+procedure chbTax_Click(Sender : TObject);
+begin
+  MasterData.НДСплат := cbTax.Checked;
+  SetPropertyForComponentList(ptVisible, Form, 'lbTaxNumber;dbeTaxNumber;lbTaxDocNum;dbeTaxDocNum', cbTax.Checked)
+end;
+
+procedure pgcLists_Change(Sender : TObject);
+begin
+  case pgcLists.ActivePage.Name of
+    'tsPhone' :
+      if IsNil(DetPhone) then
+        DetPhone := SetDetailDict(MasterData, 'Телефоны', 'ПросмотрТелефонов', CtrlToVar(pgcLists.ActivePage));
+    'tsAdr' :
+      if IsNil(DetAdr) then
+        DetAdr := SetDetailDict(MasterData, 'Адреса', 'ПросмотрАдресов', CtrlToVar(pgcLists.ActivePage));
+    'tsBankAcc' :
+      if IsNil(DetBankAcc) then
+        DetBankAcc := SetDetailDict(MasterData, 'РасчСчета', 'ПросмотрРасчСчетов', CtrlToVar(pgcLists.ActivePage));
+    'tsRepresenter' :
+      if IsNil(DetRepresenter) then
+        DetRepresenter := SetDetailDict(MasterData, 'Представители', 'ПросмотрПредставителей', CtrlToVar(pgcLists.ActivePage));
+    'tsResponse' :
+      if IsNil(DetRespons) then
+        DetRespons := SetDetailDict(MasterData, 'ФизЛица', 'ПросмотрПредставителей', CtrlToVar(pgcLists.ActivePage));
+    'tsDocument' :
+      if IsNil(DetDocument) then
+        DetDocument := SetDetailDict(MasterData, 'ЛичДокументы', 'ПросмотрЛичДокументов', CtrlToVar(pgcLists.ActivePage));
+    'tsEmail' :
+      if IsNil(DetEmail) then
+        DetEmail := SetDetailDict(MasterData, 'Email', 'ПросмотрEmail', CtrlToVar(pgcLists.ActivePage));
+    'tsRegNumbers' :
+      if IsNil(DetRegNumbers) then
+        DetRegNumbers := SetDetailDict(MasterData, 'РегНомера', 'ПросмотрРегНомеров', CtrlToVar(pgcLists.ActivePage));
+  end
+end;
+
+procedure MDS_Validate(Sender : TObject);
+var
+  OtherDict : ICDictionary;
+begin
+  if (dbeFirstNames.Text = '') then
+    MasterData.ПолноеНазвание := dbeLastName.Text
+  else
+    MasterData.ПолноеНазвание := dbeLastName.Text + ' ' + dbeFirstNames.Text;
+  ChangeCollectionField(Collection, MasterData, 'Должность', edCollect.Text);
+  MasterData.Статус := rgPrice.ItemIndex;
+  MasterData.ЦенаСправ := rgDictPrice.ItemIndex;
+  if VarAsInt(MasterData.Код) <> 0 then
+    begin
+      CheckForUnique('Код', 'Код', MasterData, Null);
+      if VarAsInt(Constants.КлиентыДляКПК) = 2 then
+        begin
+          OtherDict := CreateObject('Справочники.ЮрПартнеры');
+          CheckForUnique('Код', 'Код', MasterData, OtherDict)
+        end
+    end;
+end;
+
+procedure cbPayDate_Click(Sender : TObject);
+begin
+  MasterData.ИспСрокОплаты := cbPayDate.Checked;
+  ePayDate.Enabled := cbPayDate.Checked;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  if VarAsInt(Constants.КлиентыДляКПК) = 2 then
+    MasterData.Код := GetNextNumberForField('Справочники.ФизЛица', 'Код', False, 'Справочники.ЮрПартнеры')
+  else
+    MasterData.Код := GetNextNumberForField('Справочники.ФизЛица', 'Код')
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+TitlePanel:TO4Panel
+lbTitle:TO4Label
+MainPanel:TO4Panel
+pgcLists:TO4PageControl
+tsGeneral:TTabSheet
+lbTaxNumber:TO4Label
+lbTaxDocNum:TO4Label
+Label3:TO4Label
+Label5:TO4Label
+Label4:TO4Label
+Label2:TO4Label
+Label6:TO4Label
+dbeTaxNumber:TO4DBEdit
+dbeTaxDocNum:TO4DBEdit
+dbeLastName:TO4DBEdit
+deStatus:TO4DBEdit
+dbeFirstNames:TO4DBEdit
+cbTax:TO4CheckBox
+edCollect:TO4Edit
+dbeIdentNumber:TO4DBEdit
+dbeCode:TO4DBEdit
+tsPhone:TTabSheet
+tsAdr:TTabSheet
+tsBankAcc:TTabSheet
+tsRepresenter:TTabSheet
+tsResponse:TTabSheet
+tsDocument:TTabSheet
+tsEmail:TTabSheet
+tsPrice:TTabSheet
+Label1:TO4Label
+Label7:TO4Label
+ePayDate:TO4DBEdit
+cbPayDate:TO4CheckBox
+GroupBox1:TO4GroupBox
+rgPrice:TO4RadioGroup
+rgDictPrice:TO4RadioGroup
+dbeDiscount:TO4DBEdit
+tsRegNumbers:TTabSheet
+tsAgreement:TTabSheet
+Label8:TO4Label
+Label9:TO4Label
+Label10:TO4Label
+dbeAgreementView:TO4DBEdit
+dbeAgreementDate:TO4DBEdit
+dbeAgreementNumber:TO4DBEdit
+tsNotes:TTabSheet
+dmNotes:TO4DBMemo
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem

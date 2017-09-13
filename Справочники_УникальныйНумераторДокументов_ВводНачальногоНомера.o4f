@@ -1,0 +1,238 @@
+object Form: TO4DataForm
+  Left = 4
+  Top = 4
+  Width = 324
+  Height = 134
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = ()
+  Translat.ScanedProps.Props = (
+    'BottomPanel.Caption'
+    1
+    ''
+    'BottomPanel.Hint'
+    1
+    ''
+    'btCancel.Caption'
+    1
+    'Отмена'
+    'btCancel.Hint'
+    1
+    ''
+    'btOK.Caption'
+    1
+    'OK'
+    'btOK.Hint'
+    1
+    ''
+    'ButtonPanel.Caption'
+    1
+    ''
+    'ButtonPanel.Hint'
+    1
+    ''
+    'DBMemo1.Hint'
+    1
+    ''
+    'deDate.ActionFormName'
+    1
+    ''
+    'deDate.Hint'
+    1
+    ''
+    'deDate.Period.StrStartDate'
+    1
+    '19.03.2011'
+    'deDate.Period.Text'
+    1
+    ''
+    'deFirm.ActionFormName'
+    1
+    ''
+    'deFirm.Hint'
+    1
+    ''
+    'deFirm.Period.StrStartDate'
+    1
+    '19.03.2011'
+    'deFirm.Period.Text'
+    1
+    ''
+    'deNumber.ActionFormName'
+    1
+    ''
+    'deNumber.Hint'
+    1
+    ''
+    'deNumber.Period.StrStartDate'
+    1
+    '19.03.2011'
+    'deNumber.Period.Text'
+    1
+    ''
+    'edDocTypes.EditMask'
+    1
+    ''
+    'edDocTypes.Hint'
+    1
+    ''
+    'edDocTypes.Period.StrStartDate'
+    1
+    '19.03.2011'
+    'edDocTypes.Period.Text'
+    1
+    ''
+    'edDocTypes.Text'
+    1
+    'edDocTypes'
+    'Label1.Caption'
+    1
+    'Дата'
+    'Label1.Hint'
+    1
+    ''
+    'Label2.Caption'
+    1
+    'Тип документа'
+    'Label2.Hint'
+    1
+    ''
+    'Label3.Caption'
+    1
+    'Организация'
+    'Label3.Hint'
+    1
+    ''
+    'Label4.Caption'
+    1
+    'Номер'
+    'Label4.Hint'
+    1
+    '')
+  Translat.LangDict.Cols = ()
+  Translat.LangDict.Words = ()
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object Label2: TO4Label
+    Left = 8
+    Top = 12
+    Width = 76
+    Height = 13
+    Caption = 'Тип документа'
+  end
+  object Label4: TO4Label
+    Left = 8
+    Top = 38
+    Width = 34
+    Height = 13
+    Caption = 'Номер'
+  end
+  object Label1: TO4Label
+    Left = 7
+    Top = 65
+    Width = 51
+    Height = 13
+    Caption = 'Документ'
+  end
+  object BottomPanel: TO4Panel
+    Left = 1
+    Top = 104
+    Width = 322
+    Height = 29
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    Ctl3D = True
+    ParentCtl3D = False
+    TabOrder = 2
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 146
+      Top = 1
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      Ctl3D = True
+      ParentCtl3D = False
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 15
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actSave
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object edDocTypes: TO4Edit
+    Left = 89
+    Top = 8
+    Width = 224
+    Height = 21
+    EditStyle = fesSimple
+    Enabled = False
+    Period.Enabled = False
+    Period.StrStartDate = '19.03.2011'
+    TabOrder = 0
+    Text = 'edDocTypes'
+  end
+  object deNumber: TO4DBEdit
+    Left = 89
+    Top = 33
+    Width = 224
+    Height = 21
+    Enabled = False
+    Period.Enabled = False
+    Period.StrStartDate = '19.03.2011'
+    TabOrder = 1
+    Lock = False
+    O4FieldName = 'Номер'
+    O4MDSource = MDS
+    FastFindIndex = 0
+  end
+  object DBMemo1: TO4DBMemo
+    Left = 88
+    Top = 61
+    Width = 226
+    Height = 39
+    Color = clBtnFace
+    DataSource = MDS.MDS
+    Enabled = False
+    ReadOnly = True
+    TabOrder = 3
+    O4FieldName = 'ДокументОснование'
+    O4MDSource = MDS
+  end
+  object MDS: TO4DataSource
+    VPAOnValidate.EventName = 'MDS_Validate'
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 27
+    Top = 93
+  end
+end

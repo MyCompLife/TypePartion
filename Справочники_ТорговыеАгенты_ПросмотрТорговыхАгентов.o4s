@@ -1,0 +1,141 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, ĞàáîòàÑÏåğåìåííûìè, ĞàáîòàÑÎáúåêòàìè;
+
+implementation
+
+procedure EPDeleteLogs(Mean : ISProcessing; var Success : Boolean); server;
+const
+  msgCompleted = 'Îáğàáîòàíî ';
+  msgFrom = ' èç ';
+var
+  i, Total : integer;
+  Doc : ISDocuments;
+  Journ : ISJournal;
+  Constants : IS4VPAConst;
+  DateFrom, DateTo : DateTime;
+begin
+  Success := False;
+  Constants := GetConstants;
+  DateFrom := VarAsDate(0.00001);
+  DateTo := VarAsDate(RoundDate(CurrentDate, rdDay, False) - VarAsInt(Constants.ÄíèÑîõğàíåíèÿÏğîòîêîëàÊÏÊ));
+  Journ := CreateObject('Æóğíàëû.ÆóğíàëÏğîòîêîëîâÎáìåíàÑÊÏÊ');
+  Journ.SetDateRange(DateFrom, DateTo);
+  Journ.Select;
+  Total := Journ.RecordCount;
+  i := 0;
+//  Doc := CreateObject('Äîêóìåíòû.ÏğîòîêîëÎáìåíàÑÊÏÊ');
+//  Doc.SetFieldFilter('ÄàòàÄîêóìåíòà', '>=', '0', 'and', '<', DateTo);
+//  Doc.Select;
+//  while Doc.SelectNext do
+  while Journ.SelectNext do
+    begin
+      Journ.GetDoc.Delete;
+      //Doc.Delete;
+      if Mean.Terminated then
+        begin
+          Success := False;
+          exit
+        end;
+      inc(i);
+      Mean.NotifyClient(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(Total), i, Total);
+    end;
+  Journ.CancelRangeByField;
+  Success := True;
+end;
+
+function DeleteLogs : Variant; server;
+begin
+  Result := EntryPoint(EPDeleteLogs);
+end;
+
+procedure SetAgentID(MasterData : ISDictionary; var Accept : Boolean);
+var
+  TypeLib : OLEVariant;
+  Count, Total : Integer;
+begin
+  MasterData.Select;
+  Total := MasterData.RecordCount;
+  while MasterData.SelectNext do
+    begin
+      if StrLength(MasterData.AgentID) = 0 then
+        begin
+          TypeLib := CreateOLEObject('Scriptlet.TypeLib');
+          MasterData.Edit;
+          MasterData.AgentID := StrCopy(TypeLib.Guid, 2, 36);
+          MasterData.Post;
+        end;
+      if MasterData.Terminated then
+        begin
+          Accept := False;
+          exit;
+        end;
+      Inc(Count);
+      MasterData.NotifyClientEx(1, Trans('Îáğàáîòàíî: ') + IntToStr(Count) + Trans(' èç ') + IntToStr(Total), Count, Total);
+    end;
+  Accept := not MasterData.Terminated;
+end;
+
+function SetAgentIDEP : Variant; server;
+begin
+  Result := EntryPoint(SetAgentID);
+end;                                                        
+
+procedure GetUnCtgGoods(UnCtgGoodsTbl:ISValueTable); server;
+var GoodsDic:ISDictionary;  
+    tmpTbl1,tmpTbl2, AllGoodsTbl, CtgGoodsTbl, ChildGoodsTbl:ISValueTable;
+begin
+ try
+  GoodsDic := CreateObject('Ñïğàâî÷íèêè.Òîâàğû'); 
+  AllGoodsTbl := CreateObject('ÒàáëèöàÇíà÷åíèé');
+  CtgGoodsTbl := CreateObject('ÒàáëèöàÇíà÷åíèé');
+  ChildGoodsTbl := CreateObject('ÒàáëèöàÇíà÷åíèé');
+  tmpTbl1 := CreateObject('ÒàáëèöàÇíà÷åíèé');  
+  tmpTbl1.AddColumn('Self', vtclink,0);
+  tmpTbl1.AddColumn('Count',vtcInteger,0);
+  tmpTbl1.Open;
+  tmpTbl2 := CreateObject('ÒàáëèöàÇíà÷åíèé');
+  tmpTbl1.CopyColumnsTo(tmpTbl2);
+  tmpTbl2.Open;
+
+  GoodsDic.IncludeOnlyLevels(false);
+  GoodsDic.IncludeLevels(false);
+  GoodsDic.Select;
+  GoodsDic.SaveToValueTable('Self',AllGoodsTbl,1,GoodsDic.RecordCount);
+  AllGoodsTbl.AppendTo('Self',tmpTbl2);
+  tmpTbl2.DoNumbering('Count',0,0);
+
+  GoodsDic.IncludeLevels(true);
+  GoodsDic.IncludeOnlyLevels(true);
+  GoodsDic.Select;
+  GoodsDic.SaveToValueTable('Self',CtgGoodsTbl,1,GoodsDic.RecordCount);
+
+  GoodsDic.IncludeOnlyLevels(false);
+  GoodsDic.IncludeLevels(false);
+  CtgGoodsTbl.Select;
+  While CtgGoodsTbl.SelectNext do
+    begin
+      GoodsDic.UseParent(CtgGoodsTbl.Self);
+      GoodsDic.Select;    
+      GoodsDic.SaveToValueTable('Self',ChildGoodsTbl,1,GoodsDic.RecordCount);
+      ChildGoodsTbl.AppendTo('Self',tmpTbl1);
+    end;
+  tmpTbl1.DoNumbering('Count',1,0);
+  tmpTbl2.AppendTo('',tmpTbl1); 
+  tmpTbl1.GroupBy('Self','Count');
+  tmpTbl1.SortBy('Count');
+  tmpTbl1.SetRange(0,0);
+  tmpTbl1.AppendTo('Self',UnCtgGoodsTbl);
+  UnCtgGoodsTbl.DoGetLinks('Êîä=Self.Êîä;ÍàçâÒîâàğà=Self.ÍàçâÒîâàğà');
+ finally
+   Nil(GoodsDic);
+   Nil(AllGoodsTbl);
+   Nil(tmpTbl1);
+   Nil(tmpTbl2);
+   Nil(CtgGoodsTbl);
+   Nil(ChildGoodsTbl);
+ end;
+end;
+
+end.

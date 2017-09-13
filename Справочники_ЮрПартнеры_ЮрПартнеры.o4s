@@ -1,0 +1,49 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Representer : ISDictionary;
+
+procedure SGetTheOwners(MasterData : ISDictionary; TblOwners : ISValueTable); server;
+var
+  DOwner : ISDictionary;
+begin
+  if IsNil(Representer) then
+    Representer := CreateObject('Справочники.Представители');
+  Representer.SetRangeByField('Название', MasterData, MasterData);
+  Representer.Select();
+  while Representer.SelectNext() do
+    begin
+      TblOwners.Append();
+      DOwner := Representer._GetOwner;
+      if DOwner.IsFocused then
+        TblOwners.Название := DOwner.NameField;
+      TblOwners.Post();
+    end;
+end;   
+
+procedure CheckPartForSite; server;
+var
+  Dic: ISDictionary;
+begin        
+  Dic := CreateObject('Справочники.ЮрПартнеры');
+  Dic.Select;
+  while Dic.SelectNext do
+    begin
+      Dic.Edit;
+      Dic.ЭкспортНаСайт := 1;
+      case StrLength(Dic.Логин) of
+        1: Dic.Логин := '0000' + Dic.Логин;
+        2: Dic.Логин := '000' + Dic.Логин;
+        3: Dic.Логин := '00' + Dic.Логин;
+        4: Dic.Логин := '0' + Dic.Логин;
+      end;
+      Dic.Post;
+    end;
+end;
+
+end.

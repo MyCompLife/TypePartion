@@ -1,0 +1,241 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 400
+  Height = 221
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'DBEdit9.ActionFormName'
+    1
+    ''
+    'DBEdit9.Hint'
+    1
+    'Код товара/услуги'
+    'DBEdit9.Period.StrStartDate'
+    1
+    '31.12.1899'
+    'DBEdit9.Period.Text'
+    1
+    ''
+    'Label22.Caption'
+    1
+    'Код'
+    'Label22.Hint'
+    1
+    ''
+    'Label5.Caption'
+    0
+    #1'-1'#1'Название категории'
+    'pmiCancel.Caption'
+    0
+    #1'-1'#1'Отменить изменения'
+    'pmiSave.Caption'
+    0
+    #1'-1'#1'Записать'
+    'pmiSaveAdd.Caption'
+    0
+    #1'-1'#1'Записать и добавить'
+    'pnCommercialAgentsGroups.Caption'
+    1
+    'pnCommercialAgentsGroups'
+    'pnCommercialAgentsGroups.Hint'
+    1
+    '')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  PopupMenu = pmSaveRecord
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  VPAOnClose.EventName = 'Form_Close'
+  object ImagePanel: TO4Panel
+    Left = 0
+    Top = 0
+    Width = 112
+    Height = 192
+    Align = alLeft
+    AutoSize = True
+    BevelSides = [sdRight, sdBottom]
+    BorderSides = []
+    Caption = 'ImagePanel'
+    TabOrder = 0
+    Transparent = False
+    object LinkImage: TO4LinkImage
+      Left = 1
+      Top = 1
+      Width = 110
+      Height = 190
+      AutoSize = True
+      Picture = ImagesHolder.CateroryHC
+      Align = alClient
+    end
+  end
+  object MainPanel: TO4Panel
+    Left = 112
+    Top = 0
+    Width = 288
+    Height = 192
+    Align = alClient
+    Alignment = taLeftJustify
+    BevelSides = [sdLeft, sdBottom]
+    BorderSides = []
+    TabOrder = 1
+    Transparent = False
+    object Label5: TO4Label
+      Left = 8
+      Top = 6
+      Width = 105
+      Height = 13
+      Caption = 'Название категории'
+    end
+    object lbCode: TO4Label
+      Left = 8
+      Top = 45
+      Width = 19
+      Height = 13
+      Caption = 'Код'
+    end
+    object deCtgName: TO4DBEdit
+      Left = 8
+      Top = 23
+      Width = 275
+      Height = 21
+      Period.Enabled = False
+      Period.StrStartDate = '12.06.2002'
+      TabOrder = 0
+      Lock = False
+      O4FieldName = 'Название'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object dbeCode: TO4DBEdit
+      Left = 8
+      Top = 61
+      Width = 120
+      Height = 21
+      Period.Enabled = False
+      Period.StrStartDate = '31.12.1899'
+      TabOrder = 1
+      Lock = False
+      O4FieldName = 'Код'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object pnCommercialAgentsGroups: TO4Panel
+      Left = 1
+      Top = 92
+      Width = 286
+      Height = 99
+      Align = alBottom
+      BorderSides = []
+      BevelOuter = bvNone
+      Caption = 'pnCommercialAgentsGroups'
+      TabOrder = 2
+      Transparent = False
+    end
+  end
+  object BottomPanel: TO4Panel
+    Left = 0
+    Top = 192
+    Width = 400
+    Height = 29
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    TabOrder = 2
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 224
+      Top = 1
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 14
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actSave
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object MDS: TO4DataSource
+    VPAOnAppend.EventName = 'MDS_Append'
+    VPAOnValidate.EventName = 'MDS_Validate'
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 41
+    Top = 70
+  end
+  object pmSaveRecord: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 54
+    Top = 126
+    object pmiSave: TO4MenuItem
+      Caption = 'Записать'
+      ImageIndex = 5
+      ShortCut = 16467
+      O4Action = actSave
+      SortMenuParent = False
+    end
+    object pmiSaveAdd: TO4MenuItem
+      Caption = 'Записать и добавить'
+      ImageIndex = 0
+      ShortCut = 16462
+      O4Action = actAdd
+      SortMenuParent = False
+    end
+    object MenuItem1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object pmiCancel: TO4MenuItem
+      Caption = 'Отменить изменения'
+      ImageIndex = 2
+      ShortCut = 32776
+      O4Action = actCancel
+      SortMenuParent = False
+    end
+  end
+end

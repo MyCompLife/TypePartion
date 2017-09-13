@@ -1,0 +1,455 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСоСправочникамиCL, Пользователи;
+
+implementation
+
+var
+  LockCalc, LCalcGoodCount, LookStore, ChangeSort : Boolean;
+  CursorVis : TCursor;
+  UseConst : IC4VPAConst;
+  MasterData  : ICDictionary;
+  UseLevels, ShowGoodsRest, LockPost : Boolean;
+  Opt : ICOptions;
+  AccsGood : ICAccs;
+  Store : Variant;
+  OwnerProc : ICProcessing;
+  FieldName : String;
+  ManufacturerTbl, GroupTbl: ICValueTable;
+  tsGoodOrServiceTabIndex : integer;
+
+procedure SetCalcField(DT : DateTime);
+var
+  Cond : string;
+begin    
+ if ShowGoodsRest then
+   begin
+     MasterData.ClearCalcFieldInDBServer;
+     if miFilterNoZero.Checked and (not tsGoodOrService.Visible or (tsGoodOrServiceTabIndex<>2)) then
+       Cond := '>0'
+     else
+       Cond := '';
+     MasterData.SetCalcFieldInDBServer('КоличествоНаСкладах', AccsGood,
+         RoundDate(DT, rdDay, True), ArrayOf('Товар', Store), 'КолОбщ', amtBoth, Cond);
+    end;
+end; 
+
+procedure ReceiveEvent(Sender : ICDictionary; SessionID : Integer; CenterName, FromUserID, FromUserName : string;
+  Param : Variant);
+begin
+ if GetSessionID <> SessionID then
+   MasterData.Refresh;
+end;      
+
+
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  LockCalc := True;
+  try
+    UseConst := GetConstants;
+    Opt := GetOptions;
+    MasterData := MDS.GetMean; 
+    Masterdata.SetFieldFilter('ПометкаУдаление','<>',-1,'','',Null);
+    if  MasterData.HasParam('Store') then
+      Store := MasterData.Params['Store'];
+    if not IsObjFocused(Store) then
+      raise('Не указан склад');
+    if  MasterData.HasParam('OwnerProc') then
+      OwnerProc := MasterData.Params['OwnerProc'];
+    if IsNil(OwnerProc) then
+      raise('Не указано рабочее место кассира');
+    MasterData.RegEventReceiver('RefreshGoodsInKassWorkPlace', EntryPoint(ReceiveEvent), 1000);
+    AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+    SetColors(UseConst);  
+    ShowGoodsRest := not GetUsersBlockedField('РабМестоНеОтобрОстаткиТовара');
+    tbFilter.Visible := ShowGoodsRest;
+    if ShowGoodsRest then 
+      begin
+        miFilterNoZero.Checked := true;
+        SetCalcField(CurrentDateTime);
+      end
+    else
+      dbgData.VPAOnGetRowParams.EventName := '';
+    if VarAsBool(UseConst.ПоказыватьЦеныГрн) then
+      MasterData.SetSrvOnCalcFields(server.SrvCalcFieldsEP);
+
+    if VarAsBool(UseConst.ОтображатьКатегорииВРабМестоКассира) then
+      UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption))
+    else
+      begin
+        pnCtg.Visible := false;
+        Splitter1.Visible := false;
+      end;
+  finally
+    LockCalc := False;
+  end
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  RefreshDataWithoutCtg(MDS, dbtCtg, MasterData);
+  tsFilter.Down := GetFilterPanel(MasterData.GetSign);
+  pFilter.Visible := tsFilter.Down;
+  MakeCnfgInterfaceSpl(MasterData, Form, ManufacturerTbl, GroupTbl);
+
+  dbgManufacturer.Height := VarAsInt(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'dbgmanufacturer'),190);
+  dbgGroup.Height := VarAsInt(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'dbggroup'),190);
+  if MasterData.HasParam('BlockChangeBarCode') then
+    miBarCode.Visible := VarAsBool(MasterData.Params['BlockChangeBarCode']);
+  if MasterData.HasParam('EnabledChangeGoodPrices') then
+    miChangePrice.Visible :=  VarAsBool(MasterData.Params['EnabledChangeGoodPrices']);
+  if MasterData.HasParam('EnabledPrintBarCodes') then
+    miPrintGoodPrice.Visible :=  VarAsBool(MasterData.Params['EnabledPrintBarCodes']);
+
+  tsGoodOrService.Visible :=  GetUsersBlockedField('ИспПереклТоварУслуга');
+  //  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+{$D-}
+procedure dbgData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if MasterData.IsFocused and (MasterData.КоличествоНаСкладах <= 0) and not VarAsBool(MasterData.Услуга) then
+    if Highlight then
+      begin
+        BackColor := BlZeroSel;
+        DrawFont.Color := BlFZeroSel;
+      end
+    else
+      begin
+        BackColor := BlZero;
+        DrawFont.Color := BlFZero;
+      end;
+end;
+{$D+}
+
+procedure miFilterNoZero_Click(Sender : TObject);
+begin
+  miFilterNoZero.Checked := not miFilterNoZero.Checked;
+  SetCalcField(CurrentDateTime);
+  RefreshDataWithoutCtg(MDS, dbtCtg, MasterData);
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'dbgmanufacturer', dbgManufacturer.Height);
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'dbggroup', dbgGroup.Height);
+end;
+
+
+procedure dbgData_DblClick(Sender: TObject); 
+var OutParam:Variant;
+begin
+  if MasterData.IsFocused then
+    OwnerProc.ExecProc(MasterData,'AddGood',MasterData,OutParam);
+end;
+
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+var i:integer; 
+   FieldName : string;
+begin
+ case StrLowerCase(ProcID) of
+   'setgridfocus' :
+     begin
+       dbgData.SetFocus;
+     end;
+   'changetypeprice' :
+     begin
+       if dbgData.PosColumns.Count>0 then
+        for i:=0 to dbgData.PosColumns.Count-1 do
+          begin 
+           FieldName := StrLowerCase((dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName);
+           if StrPos('валюта',FieldName)<>0 then
+              begin
+               (dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName := 'валюта'+VarAsStr(InParams);
+               (dbgData.PosColumns.Items[i] as TO4GridColumn).Title.Caption := 'Вал. '+VarAsStr(InParams);
+              end
+            else
+            if StrPos('грн',FieldName)<>0 then
+              begin
+               (dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName := VarAsStr(InParams)+'грн';
+               (dbgData.PosColumns.Items[i] as TO4GridColumn).Title.Caption := VarAsStr(InParams)+' грн';
+              end
+            else
+            if StrPos('цена',FieldName)<>0 then
+              begin
+               (dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName := VarAsStr(InParams);
+               (dbgData.PosColumns.Items[i] as TO4GridColumn).Title.Caption := VarAsStr(InParams);
+              end;
+          end;
+       dbgData.Refresh;
+     end;
+ end;
+
+end;
+
+procedure FilterMean;
+Var
+  OneFiltr, TwoFiltr : String;
+begin
+  Case eFieldFilter.Text of
+    'Название' : FieldName := 'НазвТовара';
+  else
+    FieldName := eFieldFilter.Text;
+  end;
+  if (FieldName = 'НазвТовара') and (StrPos(' ',eGoodsFilter.Text)>0) then
+    begin
+      OneFiltr := StrCopy(eGoodsFilter.Text,1,StrPos(' ',eGoodsFilter.Text)-1);
+      TwoFiltr := StrCopy(eGoodsFilter.Text,StrPos(' ',eGoodsFilter.Text)+1,StrLength(eGoodsFilter.Text)-StrPos(' ',eGoodsFilter.Text));
+      MasterData.SetFieldFilter(FieldName,'Like', '%' + OneFiltr + '%','AND','Like','%' + TwoFiltr + '%');
+    end
+  else
+    MasterData.SetFieldFilter(FieldName,'Like', '%' + eGoodsFilter.Text + '%','','',Null);
+  MasterData.Refresh;
+  form.ActiveControl := dbgData;
+end;
+
+
+procedure tsFilter_Click(Sender: TObject);
+begin
+  pFilter.Visible := tsFilter.Down;
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+  SetFilterPanel(MasterData.GetSign, tsFilter.Down);
+
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  FilterMean;
+
+end;
+
+procedure eGoodsFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if key=13 then
+    FilterMean;
+
+end;
+  
+
+{$D-}
+procedure dbgManufacturer_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if ManufacturerTbl.Order = 0 then
+    begin
+      if not Highlight then
+        BackColor := 10942461
+      else
+        begin
+          BackColor := 703486;
+          DrawFont.Color := clBlack;
+        end;
+    end;
+end;
+
+procedure dbgGroup_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if GroupTbl.Order = 0 then
+    begin
+      if not Highlight then
+        BackColor := 10942461
+      else
+        begin
+          BackColor := 703486;
+          DrawFont.Color := clBlack;
+        end;
+    end;
+end;
+
+
+{$D+}
+procedure GoodsFilter(FieldName: String; Tbl: ICValueTable);
+begin
+  MasterData.DisableControls;
+  if VarAsBool(Tbl._Default[FieldName + 'Товара'].IsFocused) then
+    begin
+      MasterData.SetFieldFilter(FieldName,'=',Tbl._Default[FieldName + 'Товара'],'','',Null);
+      MasterData.Select;
+    end
+  else
+    begin
+      MasterData.CancelFieldFilter(FieldName);
+      MasterData.Select;
+    end;
+  MasterData.EnableControls;
+end;
+
+procedure TVS_VPAAfterScroll(Sender: TObject);
+var
+  FieldName: String;
+begin
+  case (Sender as TO4TableValueSource).Name of
+    'TVSManufacturer': GoodsFilter('Производитель', ManufacturerTbl);
+    'TVSGroup': GoodsFilter('Группа', GroupTbl);
+  end;
+end; 
+
+
+procedure miBarCode_Click(Sender: TObject);
+var Proc: ICProcessing;
+begin
+ if MasterData.IsFocused then
+   begin
+     Proc := CreateObject('Обработки.ПривязкаШтрихКода');
+     if VarAsBool(UseConst.ИспльзоватьМультиШтрихКодыДляТоваров) then
+       Proc.Execute('ПривязкаМультиШтрихКода',MasterData)
+     else
+       Proc.Execute('ПривязкаШтрихКода',MasterData)
+   end;
+end;
+
+procedure miChangePrice_Click(Sender: TObject);
+begin
+ if MasterData.IsFocused then
+   begin
+     MasterData.Params['EditOnlyPrices'] := true;
+     MasterData.EditInForm('Товар', 1);
+     MasterData.Refresh;
+   end;
+end;
+
+procedure miPrintGoodPrice_Click(Sender: TObject);
+var OutParam:Variant;
+begin
+  if MasterData.IsFocused then
+    OwnerProc.ExecProc(MasterData,'AddGoodByPrint',MasterData,OutParam);
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+Var
+  CatDic : ICDictionary;
+begin
+ if LockPost then exit;
+ CatDic := CreateObject('Справочники.Товары');
+ CatDic.IncludeLevels(true);
+ CatDic.IncludeOnlyLevels(true);
+ if CatDic.Find(MasterData.@Категория) and not IsObjEQ(MasterData.GetParent,CatDic)  then
+   begin
+     LockPost := true;
+     MasterData.Edit;
+     MasterData.Категория := MasterData.GetParent;
+     MasterData.POst;
+     MasterData.ApplyUpdates;
+     LockPost := False;
+   end;
+
+
+end;
+
+procedure tsGoodOrService_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ tsGoodOrServiceTabIndex := NewTab;
+ case NewTab of
+  0 : MasterData.CancelFieldFilter('Услуга');
+  1 :
+    begin
+      MasterData.SetFieldFilter('Услуга','<>',-1,'','',Null);
+      SetCalcField(CurrentDateTime);
+    end;
+  2 :
+    begin
+      MasterData.SetFieldFilter('Услуга','=',-1,'','',Null);
+      SetCalcField(CurrentDateTime);
+    end;
+ end;
+ RefreshDataWithoutCtg(MDS, dbtCtg, MasterData);
+end;
+
+procedure tbWeightGood_Click(Sender: TObject);
+Var
+  V : IcProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      if VarAsBool(MasterData.ВесовойТовар) then
+        begin
+          V := CreateObject('Обработки.РаботаСВесами');
+          V.Execute('ФасовкаТовара',MasterData);
+        end
+      else
+        ShowMessage('Товар не весовой!');
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+pnCtg:TO4Panel
+SpGroup:TO4Splitter
+SpManufacturer:TO4Splitter
+tbrCtg:TO4ToolBar
+dbtCtg:TO4DBTreeView
+dbgGroup:TO4DBGrid
+dbgManufacturer:TO4DBGrid
+Panel2:TO4Panel
+Label1:TO4Label
+tbrData:TO4ToolBar
+tbFilter:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+ToolButton1:TO4ToolButton
+tsFilter:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbWeightGood:TO4ToolButton
+dbgData:TO4DBGrid
+pFilter:TO4Panel
+CodePanel:TO4Panel
+eGoodsFilter:TO4Edit
+eFieldFilter:TO4Edit
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+tsGoodOrService:TO4TabSet
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miSort:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+MenuItem1:TO4MenuItem
+miBarCode:TO4MenuItem
+miChangePrice:TO4MenuItem
+miPrintGoodPrice:TO4MenuItem
+pmOptions:TO4PopupMenu
+miFilterNoZero:TO4MenuItem
+pmCtg:TO4PopupMenu
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+TVSManufacturer:TO4TableValueSource
+TVSGroup:TO4TableValueSource

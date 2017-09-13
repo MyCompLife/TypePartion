@@ -1,0 +1,22 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure GetGood(Dic : ISDictionary);
+begin
+  if IsObjFocused(Dic._GetOwner) then
+    begin
+      Dic.Товар := Dic._GetOwner;
+    end;
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetGood);
+end;
+
+
+end.

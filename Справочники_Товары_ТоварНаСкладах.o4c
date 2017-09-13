@@ -1,0 +1,101 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  Pk : Integer;
+  s1 : Decimal;
+  V : Variant;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  s1 := 0;
+  try
+    V := Form.GetParams;
+    MasterData := Form.GetMean;
+    Pk := Form.GetPrintKind;
+    lbDateTime.Caption := DateToStr(V[0]); //Form.GetParams
+  except
+    ShowMessage(Trans('ƒл€ печати остатков товара используйте режим “овары на складах'))
+  end;
+end;
+
+procedure Form_EndPrint(PrintForm : TO4PrintForm);
+begin
+  nil(MasterData)
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    if Pk = 0 then
+      MasterData.SelectBookmarks
+    else
+      begin
+        if Pk = pkWindow then
+          MasterData.AssignSelectParams(Form.GetMean);
+        MasterData.Select;
+      end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := MasterData.CodeField;
+      Value['Name'] := MasterData.NameField;
+      if VarAsBool(MasterData.≈д»зм.IsFocused) then
+        Value['UnitName'] := MasterData.≈д»зм.Value;
+      Value['Count'] := MasterData. оличествоЌа—кладах;
+      Value['InPrice'] := MasterData.¬х÷ена;
+      Value['InPriceNT'] := MasterData.¬х÷ена;
+      Value['OutPrice'] := MasterData.÷ена;
+      Value['OutPriceNT'] := MasterData.÷ена;
+      s1 := s1 + MasterData. оличествоЌа—кладах * MasterData.¬х÷ена;
+    end;
+end;
+
+procedure Band3_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  lbAllSumNT.Caption := FormatFloat('0.00', s1);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+SysData1:TRBSysData
+Label24:TRBLabel
+DetailBand1:TRBDetailBand
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label18:TRBLabel
+Label20:TRBLabel
+SysData2:TRBSysData
+Band1:TRBBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label19:TRBLabel
+lbDateTime:TRBLabel
+Band3:TRBBand
+lbAllSumNT:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+Structure1:TRBStructure

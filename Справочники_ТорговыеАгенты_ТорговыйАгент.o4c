@@ -1,0 +1,382 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, –асчеты, ѕользователи, –абота—ѕеременными, –абота—ќбъектами,
+  –абота—“аблицами«начений, –абота—о—правочниками, XML»мпортЁкспорт, –абота—“аблицами«наченийCL, ѕодключениеƒоп»нтерфейса, Ќумераци€ƒокументов,
+  –абота—ƒокументамиCL,  ѕ ;
+
+
+implementation
+
+const
+  odProgramFilter = '¬ыполн€емые файлы|*.exe';
+  odProgramName = 'MobileClient.exe';
+  odProgramTitle = 'ќпределите путь к программе "ћобильный клиент" на  ѕ ';
+  odImportFileFilter = '¬се файлы|*.*';
+  odImportFileName = '*.*';
+  odImportFileTitle = 'ќпределите путь к папке импорта на ѕ ';
+
+var
+  MasterData : ICDictionary;
+  Constants : IC4VPAConst;
+  OldImportExportPath : string;
+  ChangeLock : Boolean;
+  IsStore, IsPartner : Boolean;
+  tblExpStores : IcValueTable;
+ 
+  StoresDic, RegionsDic : ICDictionary;
+  SLst, RLst : ICValueList;
+  StrStores, StrRegions : String;
+
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+Var
+  i : Integer;
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  if (VarAsStr(Constants.ѕуть ѕапкеќбменаƒл€ ѕ ) = '') or
+    (not DirectoryExists(VarAsStr(Constants.ѕуть ѕапкеќбменаƒл€ ѕ ))) then
+    raise(Trans(errImportExportPath));
+
+
+
+  StrStores := MasterData.—кладыЁкспорта;
+  SLst := CreateObject('—писок«начений');
+  StoresDic := CreateObject('—правочники.—клады');
+  StoresDic.Select;
+  while StoresDic.SelectNext do
+    begin
+      SLst.AddValue(StoresDic.NameField, StoresDic);
+      i := cbStores.Items.Add(StoresDic.CodeField + ' ' + StoresDic.NameField);
+      if StrPos(StoresDic.CodeField + ' ' + StoresDic.NameField, StrStores) > 0 then
+        cbStores.Checked[i] := true;
+    end;
+
+  StrRegions := MasterData.–егионыЁкспорта;
+  RLst := CreateObject('—писок«начений');
+  RegionsDic := CreateObject('—правочники.–егионы');
+  RegionsDic.Select;
+  while RegionsDic.SelectNext do
+    begin
+      RLst.AddValue(RegionsDic.NameField, RegionsDic);
+      i := cbRegions.Items.Add(RegionsDic.CodeField + ' ' + RegionsDic.NameField);
+      if StrPos(RegionsDic.CodeField + ' ' + RegionsDic.NameField, StrRegions) > 0 then
+        cbRegions.Checked[i] := true;
+    end;
+
+
+
+  tblExpStores := CreateTblFromBLOB(MasterData.—кладыЁкспорта); //распаковка таблицы
+  if IsNil(tblExpStores) then
+    begin
+      tblExpStores := CreateObject('ValueTable');
+      tblExpStores.AddColumn('—клад',vtcLink, 0);
+      tblExpStores.Open;
+    end;
+  tblExpStores.Select;
+  tblExpStores.SelectFirst;
+
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+  cbActive.Checked := MasterData.јктивность;
+  cbChangePrice.Checked := MasterData.Ќастройка÷ены;
+  cbChangePriceTypeAndDiscount.Checked := MasterData.Ќастройка“ипа÷ены»—кидок;
+  cbRecalcPriceAtAddByTempl.Checked := MasterData.ѕересчет÷ен;
+  cbSendToEMail.Checked := MasterData.ќтправкаѕоѕочте;
+  cbReceiveFromEMail.Checked := MasterData.»мпорт»зѕочты;
+  OldImportExportPath := MasterData.ѕуть»мпортаѕ ;
+  rgPocketTransferType.ItemIndex := MasterData.“ипѕередачиЌа ѕ ;
+  rgOS.ItemIndex := MasterData.ќперационна€—истема;
+  cbShowInPrice.Checked := MasterData.ќтображать¬х÷ену;
+
+
+  IsStore := not VarAsBool(Constants.“оварыƒл€ ѕ );
+  IsPartner := not VarAsBool(Constants.ѕартнерыƒл€ ѕ );
+
+  cbStoreCount.Enabled := IsStore;
+  pStores.Enabled := IsStore;
+
+  dbeGoodGroup.Enabled := IsStore;
+  dbePartnerGroup.Enabled := IsPartner;
+  pRegions.Enabled := IsPartner;
+
+
+  Label5.Enabled := IsStore;
+  Label10.Enabled := IsPartner;
+
+  GroupBox1.Enabled := IsPartner or IsStore;
+
+
+
+
+  cbStoreCount.Checked := VarAsBool(MasterData. оличествоЅольшеЌул€);
+end;
+
+procedure cbActive_Click(Sender : TObject);
+begin
+  MasterData.јктивность := cbActive.Checked;
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+var
+  CommercialAgents : ICDictionary;
+begin
+  ResetActive(MasterData);
+  MasterData.ApplyUpdates;
+  if MasterData.ќперационна€—истема = osAndroid then
+    begin
+      CommercialAgents := CreateObject('—правочники.“орговыејгенты');
+      CreateAndroidXMLExchangeFile(CommercialAgents);
+    end;
+end;
+
+procedure cbChangePrice_Click(Sender : TObject);
+begin
+  MasterData.Ќастройка÷ены := cbChangePrice.Checked;
+end;
+
+procedure cbChangePriceTypeAndDiscount_Click(Sender : TObject);
+begin
+  MasterData.Ќастройка“ипа÷ены»—кидок := cbChangePriceTypeAndDiscount.Checked;
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+end;
+
+procedure MDS_Validate(Sender : TObject);
+Var
+  i : Integer;
+begin
+  if VarAsInt(MasterData. од) <> 0 then
+    CheckForUnique(' од', ' од', MasterData, Null);
+  if VarAsStr(MasterData.Ћогин) <> '' then
+    CheckForUnique('Ћогин', 'Ћогин', MasterData, Null);
+  if VarAsBool(MasterData.@—лужащий.IsFocused) then
+    CheckForUnique('—лужащий', '—лужащий', MasterData, Null);
+  if (VarAsInt(MasterData.ќперационна€—истема) = osAndroid) and
+    (VarAsStr(MasterData.AndroidID) <> '') then
+    CheckForUnique('AndroidID', 'AndroidID', MasterData, Null);
+  if OldImportExportPath <> MasterData.ѕуть»мпортаѕ  then
+    MakeDir(MasterData.ѕуть»мпортаѕ );
+
+  StrStores :='';
+  For i:= 0 to cbStores.Items.Count-1 do
+    if cbStores.Checked[i] then
+      StrStores := StrStores + cbStores.Items.Strings[i] + ';';
+  MasterData.—кладыЁкспорта := StrStores;
+
+  StrRegions :='';
+  For i:= 0 to cbRegions.Items.Count-1 do
+    if cbRegions.Checked[i] then
+      StrRegions := StrRegions + cbRegions.Items.Strings[i] + ';';
+  MasterData.–егионыЁкспорта := StrRegions;
+
+
+end;
+
+procedure SetAgentID;
+var
+  TypeLib : OLEVariant;
+begin
+  TypeLib := CreateOLEObject('Scriptlet.TypeLib');
+  MasterData.AgentID := StrCopy(TypeLib.Guid, 2, 36);
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  if MasterData.HasParam('CopyFrom') and (not IsNull(MasterData.Params['CopyFrom'])) then
+    begin
+      try
+        MasterData.AssignFields('Ћогин;√руппа“оваров;√руппаѕартнеров;' +
+          'ѕуть»мпорта ѕ ;' +
+          'ѕутьЁкспорта ѕ ;Ќастройка÷ены;Ќастройка“ипа÷ены»—кидок;ќперационна€—истема',
+          MasterData.Params['CopyFrom']);
+      finally
+        ChangeLock := False;
+      end;
+    end
+  else
+    begin                              
+      MasterData.ќперационна€—истема := osAndroid;
+      MasterData.Ќастройка÷ены := 0;
+      MasterData.Ќастройка“ипа÷ены»—кидок := 0; 
+//      MasterData.ѕуть»мпорта ѕ  := '\Program Files\MobileClient\import\';
+//      MasterData.ѕутьЁкспорта ѕ  := '\Program Files\MobileClient\export\';
+
+      MasterData.ѕуть»мпорта ѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + 'import\';
+      MasterData.ѕутьЁкспорта ѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + 'export\';
+      MasterData.¬се—клады := -1;
+    end;
+  SetAgentID;
+  MasterData.јктивность := 0;
+  MasterData.“ипѕередачиЌа ѕ  := 0;
+  MasterData. од := GetNextNumberForField('—правочники.“орговыејгенты', ' од');
+end;
+
+procedure tsMain_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbMain.PageIndex := NewTab;
+end;
+
+procedure dbePartnerGroup_Enter(Sender : TObject);
+begin
+  MasterData.Params['ParentObjName'] := 'ѕартнеры';
+end;
+
+procedure dbeGoodGroup_Enter(Sender: TObject);
+begin
+  MasterData.Params['ParentObjName'] := '“овары';
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  MasterData.Params['ParentObjName'] := null;
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  if ChangeLock then
+    exit;
+  ChangeLock := True;
+  try
+    case FieldName of
+      'Ћогин' :
+        begin
+          case VarAsInt(MasterData.ќперационна€—истема) of
+            osWindowsMobile :
+              MasterData.ѕуть»мпортаѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + 'Agents\' + MasterData.Ћогин + '\';
+            osAndroid :
+              MasterData.ѕуть»мпортаѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + MasterData.Ћогин + '\';
+          end;
+        end;
+      'ќперационна€—истема' :
+        begin
+          case VarAsInt(Value) of
+            osWindowsMobile :
+              MasterData.ѕуть»мпортаѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + 'Agents\' + MasterData.Ћогин + '\';
+            osAndroid :
+              MasterData.ѕуть»мпортаѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + MasterData.Ћогин + '\';
+          end;
+        end;
+      '–егион»мпорта' :
+        begin
+          MasterData.—клад»мпорта := Null;
+          dbeStoreImp.Refresh;
+        end;
+    end;
+  finally
+    ChangeLock := False;
+  end;
+end;
+
+procedure cbSendToEMail_Click(Sender : TObject);
+begin
+  MasterData.ќтправкаѕоѕочте := cbSendToEMail.Checked;
+end;
+
+procedure cbReceiveFromEMail_Click(Sender : TObject);
+begin
+  MasterData.»мпорт»зѕочты := cbReceiveFromEMail.Checked;
+end;
+
+procedure cbRecalcPriceAtAddByTempl_Click(Sender : TObject);
+begin
+  MasterData.ѕересчет÷ен := cbRecalcPriceAtAddByTempl.Checked;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure rgPocketTransferType_Click(Sender: TObject);
+begin
+  MasterData.“ипѕередачиЌа ѕ  := rgPocketTransferType.ItemIndex;
+end;
+
+procedure rgOS_Click(Sender: TObject);
+begin
+  MasterData.ќперационна€—истема := rgOS.ItemIndex;
+end;
+
+procedure cbShowInPrice_Click(Sender: TObject);
+begin
+  MasterData.ќтображать¬х÷ену := cbShowInPrice.Checked;
+end;
+
+procedure cbStoreCount_Click(Sender: TObject);
+begin
+  MasterData. оличествоЅольшеЌул€ := cbStoreCount.Checked;
+end;
+
+procedure dbeStoreImp_Enter(Sender: TObject);
+begin
+  MasterData.Params['IsPartner'] := true;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Panel5:TO4Panel
+LinkImage1:TO4LinkImage
+Panel2:TO4Panel
+tsMain:TO4TabSet
+nbMain:TO4Notebook
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+dbeName:TO4DBEdit
+dbePassword:TO4DBEdit
+dbeCode:TO4DBEdit
+dbeEmploy:TO4DBEdit
+cbActive:TO4CheckBox
+rgOS:TO4RadioGroup
+cbChangePriceTypeAndDiscount:TO4CheckBox
+cbChangePrice:TO4CheckBox
+cbShowInPrice:TO4CheckBox
+GroupBox1:TO4GroupBox
+Label5:TO4Label
+Label10:TO4Label
+dbeGoodGroup:TO4DBEdit
+dbePartnerGroup:TO4DBEdit
+Panel3:TO4Panel
+pRegions:TO4Panel
+Label7:TO4Label
+cbRegions:TO4CheckListBox
+pStores:TO4Panel
+Label6:TO4Label
+cbStores:TO4CheckListBox
+Panel7:TO4Panel
+Panel6:TO4Panel
+cbStoreCount:TO4CheckBox
+lbRegionImp:TO4Label
+lbStoreImp:TO4Label
+dbeRegionImp:TO4DBEdit
+dbeStoreImp:TO4DBEdit
+Label11:TO4Label
+Label9:TO4Label
+dbeAndroidID:TO4DBEdit
+dbeAgentID:TO4DBEdit
+cbRecalcPriceAtAddByTempl:TO4CheckBox
+rgPocketTransferType:TO4RadioGroup
+cbSendToEMail:TO4CheckBox
+cbReceiveFromEMail:TO4CheckBox
+Panel4:TO4Panel
+lbTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem

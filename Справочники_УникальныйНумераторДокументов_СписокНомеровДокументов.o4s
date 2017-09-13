@@ -1,0 +1,40 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation  
+
+procedure SetNumbers; server;
+const DocTypeStr = '¬водќстатков;Ќакладна€ѕрихода;јктЌаќказание”слуг;јктЌаѕолучение”слуг;¬озвратќтѕокупателей;¬озвратѕоставщикам;Ќакладна€¬нутрѕеремещ;ќбмен¬алют¬ ассе;ѕеремещениећежду ассами;ѕриход¬ ассу;ѕриходЌа–асч—чет;ѕриходѕоЁквайрингу;–асход»з ассы;–асходѕоЁквайрингу;–асход—–асч—чета;–евизи€“овара;—писание“овара;“рансферЌа–асч—чет;“рансфер—–асч—чета;„ек';
+var
+  Doc : ISDocuments;
+  i, Total : integer;
+  CurrentDocSign : string;
+  DictNumbers : ISDictionary;
+begin
+  DictNumbers := CreateObject('—правочники.”никальныйЌумераторƒокументов'); 
+  Total := WordCount(DocTypeStr,';');
+  for i:=1 to Total do
+    begin
+      CurrentDocSign := ExtractWord(i,DocTypeStr,';');
+      Doc := CreateObject('ƒокументы.'+CurrentDocSign);
+      Doc.SortByField('NumID');
+      if Doc.Select and Doc.SelectPrior then
+        begin
+          DictNumbers.SetFieldFilter('“ипƒокумента','=',CurrentDocSign,'','',Null);
+          if not DictNumbers.FindByField('Ќомер',VarAsInt(Doc.NumID),false) then
+            begin
+              DictNumbers.Append;
+              DictNumbers.“ипƒокумента := CurrentDocSign;
+              DictNumbers.Ќомер := Doc.NumID;
+              DictNumbers.Post;
+              DictNumbers.ApplyUpdates;
+            end;
+        end;
+      SysProgress(0,Total,i,'”становка последних NumID');
+    end;
+  SysProgress(0,0,0,'');
+end;
+
+end.

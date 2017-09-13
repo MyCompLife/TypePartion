@@ -1,0 +1,27 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+function GetNextNumberForFieldBK(MeanName, FieldName : string) : Integer; server;
+var
+  DicCurrent, DicOther : ISDictionary;
+  i, TmpRes : Integer;
+begin
+  DicCurrent := CreateObject(MeanName);
+  DicCurrent.SortByField(FieldName);
+  DicCurrent.Select;
+  if VarAsBool(DicCurrent.SelectPrior) then
+    begin
+      if not (IsNull(DicCurrent._Default[FieldName]) or (VarAsInt(DicCurrent._Default[FieldName]) <= 0)) then
+        Result := VarAsInt(DicCurrent._Default[FieldName]) + 1
+      else
+        Result :=  1;
+    end
+  else
+    Result := 1;
+end;
+
+end.

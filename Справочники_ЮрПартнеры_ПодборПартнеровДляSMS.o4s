@@ -1,0 +1,53 @@
+interface
+
+uses
+ System, DispIntf, Расчеты, Интерфейс, ConstNames;
+
+function GetPartTel(TelTbl:ISValueTable; PartDic:ISdictionary; OnlySMS:Boolean) : Variant; server;
+
+implementation
+var TelDic : ISDictionary;
+
+function StrOnlyDigitTel(s:string):string;
+var tmpStr : String;
+    i : integer;
+const AllowChars='0123456789';
+begin
+ tmpStr := '';
+  if strLength(s)>0 then
+   for i:=1 to strLength(s) do
+    if StrPos(s[i],AllowChars)<>0 then
+     tmpStr := tmpStr + s[i];
+  if (StrLength(tmpStr)=11) and (tmpStr[1]='8') then
+   StrDelete(tmpStr,1,1);
+  Result := tmpStr;
+end;
+
+function GetPartTel(TelTbl:ISValueTable; PartDic:ISDictionary; OnlySMS:Boolean) : Variant; server;
+var Tel : String;
+    i, cnt : integer;
+begin
+ if IsNil(TelDic) then
+  TelDic := CreateObject('Справочники.Телефоны');
+
+ if OnlySMS then
+  TelDic.SetFieldFilter('SMSРассылка','=',true,'','',Null)
+ else
+  TelDic.CancelFieldFilter('SMSРассылка');
+
+  if TelDic.UseMasterAndSelect(PartDic) then
+  While TelDic.SelectNext do
+   begin
+    TelTbl.Append;
+    TelTbl.Телефон := TelDic;
+    TelTbl.Номер :=StrOnlyDigitTel(VarAsStr(TelDic.Номер, ''));
+    TelTbl.Партнер := PartDic;
+    TelTbl.AssignFields('ВладелецТел;Активность;SMSРассылка',TelDic);
+    TelTbl.Post;
+   end;
+ TelTbl.SortBy('SMSРассылка;ВладелецТел;Номер');
+end;
+
+
+
+end.

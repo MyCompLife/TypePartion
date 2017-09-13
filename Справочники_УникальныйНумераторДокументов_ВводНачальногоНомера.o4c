@@ -1,0 +1,79 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  DocTypes : ICValueList;
+
+procedure Form_Open(Sender: TObject);
+begin
+  DocTypes := CreateObject('—писок«начений');
+  DocTypes.AddValue('Ќакладна€ќтпуска', 'Ќакладна€ќтпуска');
+  DocTypes.AddValue('Ќакладна€ѕрихода', 'Ќакладна€ѕрихода');       
+  DocTypes.AddValue('ƒокумент”четаѕокупок', 'ƒокумент”четаѕокупок');
+  DocTypes.AddValue('ƒокумент”четаѕродаж', 'ƒокумент”четаѕродаж');
+  DocTypes.AddValue(' орЌалогЌакл', ' орЌалогЌакл');
+  DocTypes.AddValue(' орЌалогЌаклѕрих', ' орЌалогЌаклѕрих');  
+  DocTypes.AddValue('ѕриход¬ ассу', 'ѕриход¬ ассу');
+  DocTypes.AddValue('ѕриходЌа–асч—чет', 'ѕриходЌа–асч—чет');
+
+{  DocTypes.AddValue('јктЌаќказание”слуг', 'јктЌаќказание”слуг');
+  DocTypes.AddValue('јктЌаѕолучение”слуг', 'јктЌаѕолучение”слуг');
+  DocTypes.AddValue('¬водќстатков', '¬водќстатков');
+  DocTypes.AddValue('¬водќстатковѕоЅанку» ассе', '¬водќстатковѕоЅанку» ассе');
+  DocTypes.AddValue('¬водќстатковѕо¬заиморасчетам', '¬водќстатковѕо¬заиморасчетам');
+  DocTypes.AddValue('¬водќстатков“ћ÷ѕо—чету', '¬водќстатков“ћ÷ѕо—чету');
+  DocTypes.AddValue('¬озвратќтѕокупателей', '¬озвратќтѕокупателей');
+  DocTypes.AddValue('¬озвратѕоставщикам', '¬озвратѕоставщикам');
+  DocTypes.AddValue('¬озврат“ћ÷', '¬озврат“ћ÷');
+  DocTypes.AddValue('ƒоверенность', 'ƒоверенность');
+  DocTypes.AddValue('ƒокумент»змен¬х÷ен', 'ƒокумент»змен¬х÷ен');
+  DocTypes.AddValue('Ќакладна€¬нутрѕеремещ', 'Ќакладна€¬нутрѕеремещ');
+  DocTypes.AddValue('Ќакладна€ќтпускаѕо—чету', 'Ќакладна€ќтпускаѕо—чету');
+  DocTypes.AddValue('Ќакладна€ќтпуска“ћ÷ѕо—чету', 'Ќакладна€ќтпуска“ћ÷ѕо—чету');
+  DocTypes.AddValue('Ќакладна€ѕриходаѕо—чету', 'Ќакладна€ѕриходаѕо—чету');
+  DocTypes.AddValue('–асход»з ассы', '–асход»з ассы');
+  DocTypes.AddValue('–асход—–асч—чета', '–асход—–асч—чета');
+  DocTypes.AddValue('–евизи€“овара', '–евизи€“овара');
+  DocTypes.AddValue('—писание“овара', '—писание“овара');
+  DocTypes.AddValue('—четЌа«акупку', '—четЌа«акупку');
+  DocTypes.AddValue('—четЌаќказание”слуг', '—четЌаќказание”слуг');
+  DocTypes.AddValue('—четЌаѕолучение”слуг', '—четЌаѕолучение”слуг');
+  DocTypes.AddValue('—четЌаѕродажу', '—четЌаѕродажу');
+  DocTypes.AddValue('“рансферЌа–асч—чет', '“рансферЌа–асч—чет');
+  DocTypes.AddValue('“рансфер—–асч—чета', '“рансфер—–асч—чета'); }
+
+  DocTypes.UseControl(CtrlToVar(edDocTypes));
+  DocTypes.CurIndex := 0;
+
+  if DocTypes.FindByValue(MasterData.“ипƒокумента) <> -1 then
+    DocTypes.CurIndex := DocTypes.FindByValue(MasterData.“ипƒокумента);
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  MasterData.“ипƒокумента := DocTypes.GetValue(DocTypes.CurIndex);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Label2:TO4Label
+Label4:TO4Label
+Label1:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+edDocTypes:TO4Edit
+deNumber:TO4DBEdit
+DBMemo1:TO4DBMemo
+MDS:TO4DataSource

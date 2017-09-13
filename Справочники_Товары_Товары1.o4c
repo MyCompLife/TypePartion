@@ -1,0 +1,386 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками, РаботаСоСправочникамиCL;
+
+implementation
+
+var
+  MasterData, DetPack : ICDictionary;
+  Opt : ICOptions;
+  UseLevels, LockPost : Boolean;
+  FieldName : string;
+
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+  if VarAsBool(GetConstants.ПоказыватьЦеныГрн) then
+    MasterData.SetSrvOnCalcFields(server.SrvCalcFieldsEP);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if not MasterData.HasParam('CardType') then
+    MasterData.Params['CardType'] := 0;
+  MasterData.SetFieldFilter('ТипКарточки','=',MasterData.Params['CardType'],'','',Null);
+//  CardType := MasterData.Params['cardType'];
+
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+  DetPack := SetDetailDict(MasterData, 'Упаковки', 'ПросмотрУпаковок', CtrlToVar(pcLists)); 
+  tsFilter.Down := GetFilterPanel(MasterData.GetSign);
+  pFilter.Visible := tsFilter.Down;
+end;
+
+procedure miPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null)
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure miCopy_VPABeforeActionClick(Sender : TObject);
+var
+  CopyFrom : ICDictionary;
+begin
+  CopyFrom := CreateObject('Справочники.Товары');
+  if CopyFrom.Find(MasterData) then
+    MasterData.Params['CopyFrom'] := CopyFrom
+  else
+    MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure tbAdd_VPABeforeActionClick(Sender : TObject);
+begin
+  MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+end;
+
+procedure miProperty_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('Обработки.СвойстваТовара');
+      dialog.Execute('СвойстваТовара', MasterData);
+    end;
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure miEditPrice_Click(Sender: TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('Обработки.ИзменениеЦеныТовара');
+      dialog.Execute('ИзменениеЦены', MasterData);
+    end;
+end;
+
+procedure MenuItem1_Click(Sender: TObject);
+var
+  Dic : ICDictionary;
+  i : Integer;
+begin
+  Dic := CreateObject('Справочники.Товары');
+  Dic.Select;
+  While Dic.SelectNext Do
+    begin
+      Dic.Edit;
+      Dic.Группа := ExtractWord(1,Dic.НазвТовара);
+      Dic.Post;
+      Dic.ApplyUpdates;
+      Inc(i);
+      StatusText('Изменено: ' + IntToStr(i) + ' записей');
+    end;
+end;
+
+
+procedure miEditVal_Click(Sender: TObject);
+var
+  Dic, Cur : ICDictionary;
+  i : Integer;
+begin
+  Cur := CreateObject('Справочники.Валюты');
+  Cur.Select;
+  Dic := CreateObject('Справочники.Товары');
+  Dic.Select;
+  While Dic.SelectNext Do
+    begin
+      Dic.Edit;
+      Dic.Валюта := Cur;
+      Dic.Post;
+      Dic.ApplyUpdates;
+      Inc(i);
+      StatusText('Изменено: ' + IntToStr(i) + ' записей');
+    end;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if VarAsBool(MasterData.ОтображатьНаСайте) then
+       Index1 := 162;
+      if VarAsBool(MasterData.ПометкаУдаление) then
+       Index2 := 51;
+    end;
+end;
+{$D+}
+
+
+procedure MenuItem8_Click(Sender: TObject);
+Var
+  Dic: ICDictionary;
+  Comment: String;
+  i : Integer;
+begin
+  Dic := CreateObject('Справочники.Товары');
+  Dic.Select;
+  While Dic.SelectNext Do
+    begin
+      Comment := 'Начальное заполнение истории цен';
+      ChangePrice(Dic, Dic.Валюта, Dic.Цена, 'Цена', Comment, 'EditInGoodDic');
+      ChangePrice(Dic, Dic.Валюта, Dic.ОптЦена, 'ОптЦена', Comment, 'EditInGoodDic');
+      ChangePrice(Dic, Dic.Валюта, Dic.КрОптЦена, 'КрОптЦена', Comment, 'EditInGoodDic');
+      Inc(i);
+      StatusText('Внесено: ' + IntToStr(i) + ' записей');
+    end;
+end;
+
+procedure MenuItem9_Click(Sender: TObject);
+Var
+  i : Integer;
+  PriceJourn: ICJournal;
+  PriceDoc: ICDocuments;
+begin
+  PriceJourn := CreateObject('Журналы.ЖурналИзмЦенОптЦены');
+  While PriceJourn.Select and PriceJourn.SelectNext do
+    begin
+      PriceDoc := PriceJourn.GetDoc;
+      PriceDoc.Delete;
+      PriceDoc.ApplyUpdates;
+      Inc(i);
+      StatusText('Удалено : ' + IntToStr(i) + ' документов изменения отпускных цен');
+    end;
+{
+  PriceDoc := CreateObject('Документы.ИзмЦенОптЦены');
+  While PriceDoc.Select and PriceDoc.SelectNext do
+    begin
+      PriceDoc.Delete;
+      PriceDoc.ApplyUpdates;
+      Inc(i);
+      StatusText('Удалено : ' + IntToStr(i) + ' документов изменения отпускных цен');
+    end;
+}
+end;
+        
+procedure FilterMean;
+begin
+  Case eFieldFilter.Text of
+    'Название' : FieldName := 'НазвТовара';
+  else
+    FieldName := eFieldFilter.Text;
+  end;
+  MasterData.SetFieldFilter(FieldName,'Like', '%' + eGoodsFilter.Text + '%','','',Null);
+  MasterData.Refresh;
+  form.ActiveControl := dbgData;
+end;
+
+procedure tsFilter_Click(Sender: TObject);
+begin
+  pFilter.Visible := tsFilter.Down;
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+  SetFilterPanel(MasterData.GetSign, tsFilter.Down);
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  FilterMean
+end;
+
+procedure eGoodsFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if key=13 then
+    FilterMean
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+end;
+
+procedure miCheckDel_Click(Sender: TObject);
+begin
+ if MasterData.IsFocused then
+   try
+     MasterData.DisableControls;
+     ChangeGoodToDelMark(MasterData);
+     if VarAsBool(MasterData.ПометкаУдаление) then
+       miCheckDel.Caption:='Снять отметку на удаление'
+     else
+       miCheckDel.Caption:='Установить отметку на удаление';
+   finally
+     MasterData.EnableControls;
+   end;
+end;
+
+procedure miAllGoods_Click(Sender: TObject);
+begin
+ (Sender as TO4MenuItem).Checked := true;
+ case (Sender as TO4MenuItem).Tag of
+  0: MasterData.CancelFieldFilter('ПометкаУдаление');
+  1: Masterdata.SetFieldFilter('ПометкаУдаление','=',-1,'','',Null);
+  2: Masterdata.SetFieldFilter('ПометкаУдаление','<>',-1,'','',Null);
+ end;
+ Masterdata.Refresh;
+end;
+
+procedure tbGoodToDel_Click(Sender: TObject);
+var x,y : integer;
+begin
+ tbGoodToDel.GetScreenPos(x,y);
+ pmGoodsToDel.Popup(x,y+tbGoodToDel.Height);
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender: TObject);
+begin
+  if MasterData.IsFocused then
+   if not VarAsBool(MasterData.ПометкаУдаление) then
+     miCheckDel.Caption:='Установить отметку на удаление'
+   else
+     miCheckDel.Caption:='Снять отметку на удаление';
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+Var
+  CatDic : ICDictionary;
+begin
+ if LockPost then exit;
+ CatDic := CreateObject('Справочники.Товары');
+ CatDic.IncludeLevels(true);
+ CatDic.IncludeOnlyLevels(true);
+ if CatDic.Find(MasterData.@Категория) and not IsObjEQ(MasterData.GetParent,CatDic)  then
+   begin
+     LockPost := true;
+     MasterData.Edit;
+     MasterData.Категория := MasterData.GetParent;
+     MasterData.POst;
+     MasterData.ApplyUpdates;
+     LockPost := False;
+   end;
+
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+tbrCtg:TO4ToolBar
+tbAddLevel:TO4ToolButton
+tbEditLevel:TO4ToolButton
+tbDelLevel:TO4ToolButton
+dbtCtg:TO4DBTreeView
+Panel2:TO4Panel
+Splitter2:TO4Splitter
+Panel3:TO4Panel
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tsFilter:TO4ToolButton
+tbGoodToDel:TO4ToolButton
+dbgData:TO4DBGrid
+pFilter:TO4Panel
+CodePanel:TO4Panel
+eGoodsFilter:TO4Edit
+eFieldFilter:TO4Edit
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+Panel4:TO4Panel
+Splitter3:TO4Splitter
+dmNotes:TO4DBMemo
+pcLists:TO4Panel
+MDS:TO4DataSource
+pmAddLevels:TO4PopupMenu
+pmiAddBros:TO4MenuItem
+pmiAddChild:TO4MenuItem
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miCopy:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+MenuItem2:TO4MenuItem
+miEditPrice:TO4MenuItem
+miCheckDel:TO4MenuItem
+MenuItem3:TO4MenuItem
+MenuItem11:TO4MenuItem
+MenuItem8:TO4MenuItem
+miEditVal:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem9:TO4MenuItem
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem6:TO4MenuItem
+MenuItem7:TO4MenuItem
+pmGoodsToDel:TO4PopupMenu
+miAllGoods:TO4MenuItem
+miGoodsToDel:TO4MenuItem
+miWithoutGoodsToDel:TO4MenuItem
