@@ -1,0 +1,48 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  AccsBalance : ISAccs;
+  DateFrom, DateTo : DateTime;
+
+procedure AddTotalRow(ValTbl : ISValueTable; TotalFieldName, ValueFieldsList : string);
+var
+  V : Variant;
+  i : Integer;
+begin
+  if not IsNil(ValTbl) and (ValTbl.LineCount > 0) then
+    begin
+      V := ValTbl.Total(ValueFieldsList);
+      if ValTbl.SelectLast then
+        begin
+          ValTbl.Append;
+          ValTbl._Default[TotalFieldName] := lblTotal;
+          ValTbl._Default[ValueFieldsList] := V;
+          ValTbl.Артикул := 1000000;
+          ValTbl.Post();
+        end;
+    end;
+end;
+
+procedure GetSum(Dic : ISDictionary; Tbl : ISValueTable; DateFromS, DateToS : DateTime); server;
+begin
+  AccsBalance := CreateObject('Аккумуляторы.ДоходыРасходы');
+  AccsBalance.ClearFieldFilters();
+  AccsBalance.ClearFieldBuffers();
+  DateFrom := RoundDate(DateFromS, rdDay, False);
+  DateTo := RoundDate(DateToS, rdDay, True);
+  if Dic.IsFocused then
+    AccsBalance.SetFieldFilter('Регион',Dic);
+  AccsBalance.AppendMotionToValueTable(DateFrom, DateTo, 0, 'Статья;Сумма;MotionSign', -1, Tbl);
+  Tbl.DoCalculation('Сумма','MotionSign*Сумма');
+  Tbl.GroupBy('Статья','Сумма');
+  Tbl.DoGetLinks('Код=Статья.Код;Артикул=Статья.Артикул');
+  Tbl.SortBy('Код');
+  AddTotalRow(Tbl, 'Код', 'Сумма');
+end;
+
+end.

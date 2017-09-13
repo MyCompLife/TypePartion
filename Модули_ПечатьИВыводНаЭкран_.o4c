@@ -1,0 +1,919 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, УстановкаВажныхОбъектов;
+
+type
+  TXGridDirection = T_Enum;
+  TOneCellAbsoluteCoord = string; // формат: 1 (2) Лат.Буквы 1(2) Цифры - буквенноцифровой адресс
+  TOneCellRelativeCoord = string; // формат: R[число]C[число] - относительный адрес по смещению из данной (активной калькулируемой) координаты
+  TCellsStringCoordsDescr = string; // Для задания координат ячеек.
+  // Общий формат: <xgName!CellFrom_1:CellTo_1.Step_1;...;CellFrom_n:CellTo.Step_n>. Тут CellFrom_i, CellTo_i типа TOneCellAbsoluteCoord или TOneCellRelativeCoord.
+  // xgName, CellTo_i, Step - необязательны; n >= 1
+  TCellsArrayCoord = Variant; // массив из двух или четырех координат, что задают интервал (Range) ячеек
+  TCellsStringDescrValues = T_Enum; // отдельные значения, взятые из описания по TCellsStringCoordsDescr или ее части
+  // экспорт в Excel
+  TExportExcelRangeIndexDescriptor = T_Enum;
+  TExportExcelRangeDescriptor = Variant; // массив с индексным типом TExportExcelRangeIndexDescriptor - задает координаты области ячеек в виде (Row1, Row2, Col2); Col1=1 всегда
+  TExportExcelIndexDescriptor = T_Enum;
+  TExportExcelDescriptor = Variant; // скелет распечатки отчета в Excel; массив с индексным типом массива TExportExcelIndexDescriptor - вместо простого перечислимого типа
+const
+  // excel range descriptors
+  erdName = 0; // TExportExcelIndexDescriptor - следует записать уникальное название печатаемой таблицы - название подпроцедуры процедуры
+  erdHead = 1; // TExportExcelIndexDescriptor - координаты типа TExportExcelRangeDescriptor - шаблон заголовка; может быть Null
+  erdPlace = 2; // TExportExcelIndexDescriptor - координаты типа TExportExcelRangeDescriptor - шаблон детализации
+  erdFoot = 3; // TExportExcelIndexDescriptor - координаты типа TExportExcelRangeDescriptor - шаблон окончания; может быть Null
+  erdDet = 4; // TExportExcelIndexDescriptor - детализация дескриптора - следует записать знгачение типа TExportExcelDescriptor или Null
+  // описание области распечатки
+  pddRow1 = 0; // TExportExcelRangeIndexDescriptor
+  pddRow2 = 1; // TExportExcelRangeIndexDescriptor
+  pddCol2 = 2; // TExportExcelRangeIndexDescriptor; значению для pddCol1 отвечает всегда 1
+  // TXGrid направления
+  xgdHorizontal = 0;
+  xgdVertical = 1;
+  xgdAnyDirection = 2;
+  //
+  csdXGridName = 0; // TCellsStringDescrValues
+  csdCellRanges = 1; // TCellsStringDescrValues
+  csdOneRange = 2; // TCellsStringDescrValues
+  csdOneRangeCells = 3; // TCellsStringDescrValues
+  csdOneRangeStep = 4; // TCellsStringDescrValues
+  csdOneRangeCellsAddress = 5; // TCellsStringDescrValues
+  // сообщение при печати/экспорте в Excel
+  msgPrintedCount = 'Напечатано %s строк из %s';
+  msgExportedCount = 'Экспортировано %s строк из %s';
+
+function GetStandartFormat(FieldName : string) : string;
+procedure ExportReportToExcel(RepACurrent : ICReport; PrintDescriptor : TExportExcelDescriptor);
+procedure FillExcelDataFormat(ObjRange, FormatDescr : Variant);
+procedure FillExcelTitleFormat(AssistVar : Variant);
+// макросы работы с XGrid - недостающий функционал
+function IsXGridRangeMultiCell(crCurrent : TCellRange; Direction : TXGridDirection = xgdAnyDirection) : Boolean;
+function GetCellsByCoord(xgCurrent : TO4XGrid; crCoord : TCellsArrayCoord) : TCellRange;
+procedure CopyXGridCellsFormat(xgSource, xgTarget : TO4XGrid;
+  crSourceCoord, crTargetCoord : TCellsArrayCoord);
+procedure RegroupCellAndReformat(Cells : TCellRange; Caption : string = '');
+function GetExtStringFieldValue(ExtFieldValue : Variant; AdditSuff, AdditPref : string = '') : string;
+//
+function SumCellValues(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr) : Double;
+function GetValueFromArray(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr;
+  ValidIndex : Integer) : Variant;
+function CellValue(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr) : Variant;
+// пересчет компонентов XGrid пр запуске отчета
+procedure RecalcXGrids(ctrlFrom : TWinControl; DoRecalc : Boolean);
+function GetStrCoordDescrOneValue(CellStrCoord : TCellsStringCoordsDescr;
+  ValueID : TCellsStringDescrValues;
+  AssistInt : Integer = 0) : Variant;
+function PrepareCatsBeforeRunReport(DicCats : ICDictionary; LstSelectedCats : ICValueList) : Boolean;
+
+implementation
+
+const
+  errCannotDetermineXGridByCellStrCoordDescr = 'Возникла ошибка при определении компоненты XGrid%s' +
+    'для расчета координат ячеек по компоненте %s и%s по формуле для координат %s';
+  msgMustCheckCtg = 'У вас выбран режим Просмотр с учетом категорий.%sОтметьте категории для анализа.';
+  // разделите в дескрипторе адресов для XGrid
+  OneRangeDelimiter = ':';
+  RangesDelimiter = ';';
+  XGridAndCellsDelim = '!';
+  CellsStepDelimiter = '.';
+var
+  Constants : IC4VPAConst;
+
+function GetStandartFormat(FieldName : string) : string;
+begin
+  Constants := GetConstants;
+  if StrPos('Кол', FieldName) <> 0 then
+    Result := Constants._Default['ФорматКол']
+  else
+    if StrPos('Курс', FieldName) <> 0 then
+      Result := Constants._Default['ФорматКурс']
+    else
+      begin
+        if StrPos('Вал', FieldName) <> 0 then
+          Result := 'Вал'
+        else
+          Result := 'ГРН';
+        if (StrPos('Цена', FieldName) <> 0) or (FieldName = 'НДС') then
+          Result := Constants._Default['ФорматЦены' + Result]
+        else
+          Result := Constants._Default['ФорматСум' + Result]
+      end;
+end;
+
+// Работа с Excel
+//******************************************************************************
+
+var
+  ObjExcel, ObjBaseRange, ObjPrintedRange, ObjRangeForCarcas,
+    ObjCurrCellFrom, ObjCurrCellTo : OLEVariant;
+  PrintedRowsCounter : Integer;
+  RepCurrent : ICReport;
+
+procedure PrintRangeForCurrDescr(OneRangePrintDescriptor : Variant);
+begin
+  if not IsArray(OneRangePrintDescriptor) then
+    exit;
+  ObjCurrCellFrom := ObjRangeForCarcas.Cells(OneRangePrintDescriptor[pddRow1], 1);
+  ObjCurrCellTo := ObjRangeForCarcas.Cells(OneRangePrintDescriptor[pddRow2],
+    1 + OneRangePrintDescriptor[pddCol2]);
+  ObjPrintedRange := ObjRangeForCarcas.Range(ObjCurrCellFrom, ObjCurrCellTo);
+  //
+  ObjCurrCellFrom := ObjBaseRange.Cells(PrintedRowsCounter, 1);
+  // раньше распечатка, потом inc
+  ObjPrintedRange.Copy(ObjBaseRange.Range(ObjCurrCellFrom, ObjCurrCellFrom));
+  inc(PrintedRowsCounter, VarAsInt(ObjPrintedRange.Rows.Count));
+end;
+
+procedure PrintOneTableWithDetail(OneLevelPrintDescriptor : Variant; LevelID : Integer = 1);
+var
+  Counter : Integer;
+  AssistVar : Variant;
+begin
+  if not IsArray(OneLevelPrintDescriptor) then
+    exit;
+  try
+    RepCurrent.ExecProc(Null, 'BeforeDetPrint', ArrayOf(LevelID, OneLevelPrintDescriptor), AssistVar);
+    if not VarAsBool(AssistVar) then
+      exit;
+  finally
+    AssistVar := Null;
+  end;
+  // один заголовок
+  PrintRangeForCurrDescr(OneLevelPrintDescriptor[erdHead]); // Head
+  //
+  while True do
+    begin
+      AssistVar := Null;
+      RepCurrent.ExecProc(Null, 'ExportToExcelOneTable',
+        ArrayOf(OneLevelPrintDescriptor, ObjRangeForCarcas), AssistVar);
+      if VarAsBool(AssistVar) then // = PrintAccept
+        PrintRangeForCurrDescr(OneLevelPrintDescriptor[erdPlace]) // вывод в нужные строки Excel - a
+      else
+        break;
+      AssistVar := OneLevelPrintDescriptor[erdDet];
+      if IsArray(AssistVar) then
+        for Counter := ArrayLow(AssistVar) to ArrayHigh(AssistVar) do
+          PrintOneTableWithDetail(AssistVar[Counter], LevelID + 1);
+    end;
+  // одно окончание
+  PrintRangeForCurrDescr(OneLevelPrintDescriptor[erdFoot]); // Foot
+  //
+  try
+    RepCurrent.ExecProc(Null, 'AfterDetPrint', ArrayOf(LevelID, OneLevelPrintDescriptor), AssistVar);
+  finally
+    AssistVar := Null;
+  end;
+end;
+
+procedure ExportReportToExcel(RepACurrent : ICReport; PrintDescriptor : TExportExcelDescriptor);
+var
+  SB : Boolean;
+  Cursor : TCursor;
+  AssistVar : Variant;
+begin
+  RepCurrent := RepACurrent;
+  ObjExcel := CreateOleObject('Excel.Application');
+  try
+    SB := ObjExcel.DisplayStatusBar;
+    ObjExcel.Visible := False;
+    ObjExcel.Interactive := False;
+    ObjExcel.ScreenUpdating := False;
+    ObjExcel.DisplayStatusBar := False;
+    //
+    ObjExcel.SheetsInNewWorkbook := 3;
+    ObjBaseRange := ObjExcel.WorkBooks.Add.Worksheets(1).Range('A1');
+    ObjRangeForCarcas := ObjExcel.WorkBooks(1).Worksheets(2).Range('A1');
+    PrintedRowsCounter := 1;
+    //
+    WaitCursorStart;
+    try
+      try
+        RepCurrent.ExecProc(Null, 'PrepareExcelPlace', ObjRangeForCarcas, AssistVar);
+      finally
+        AssistVar := Null;
+      end;
+      PrintOneTableWithDetail(PrintDescriptor);
+      ObjExcel.WorkBooks(1).Worksheets(1).Columns.AutoFit;
+      ObjExcel.WorkBooks(1).Worksheets(1).Rows.AutoFit;
+    finally
+      // очистка буфферной зоны
+      //ObjRangeForCarcas
+      try
+        ObjExcel.Interactive := True;
+        ObjExcel.ScreenUpdating := True;
+        ObjExcel.DisplayStatusBar := SB;
+        ObjExcel.Visible := True;
+      finally
+        WaitCursorFinish(Cursor);
+      end;
+    end;
+  finally
+    nil(ObjExcel);
+    StatusText('');
+  end;
+end;
+
+procedure SetFullBorderStyle(AssistVar : Variant);
+var
+  i : Byte;
+begin
+  if AssistVar.Rows.Count > 1 then
+    begin
+      AssistVar.Borders(12 {xlInsideHorizontal}).LineStyle := $00000001 {xlContinuous};
+      AssistVar.Borders(12 {xlInsideHorizontal}).Weight := $00000002 {xlThin};
+    end;
+  if AssistVar.Columns.Count > 1 then
+    begin
+      AssistVar.Borders(11 {xlInsideVertical}).LineStyle := $00000001 {xlContinuous};
+      AssistVar.Borders(11 {xlInsideVertical}).Weight := $00000002 {xlThin}
+    end;
+  for i := 10 downto 7 do {xlEdgeRight, xlEdgeBottom, xlEdgeTop, xlEdgeLeft}
+    begin
+      AssistVar.Borders(i).LineStyle := $00000001 {xlContinuous};
+      AssistVar.Borders(i).LineStyle := $00000001 {xlContinuous};
+      AssistVar.Borders(i).LineStyle := $00000001 {xlContinuous};
+      AssistVar.Borders(i).LineStyle := $00000001 {xlContinuous};
+      AssistVar.Borders(i).Weight := $00000002 {xlThin};
+      AssistVar.Borders(i).Weight := $00000002 {xlThin};
+      AssistVar.Borders(i).Weight := $00000002 {xlThin};
+      AssistVar.Borders(i).Weight := $00000002 {xlThin};
+    end;
+end;
+
+procedure FillExcelDataFormat(ObjRange, FormatDescr : Variant);
+var
+  i : Byte;
+  AssistVar, FieldDescr : Variant;
+begin
+  SetFullBorderStyle(ObjRange.Range(ObjRange.Cells(FormatDescr[0], FormatDescr[1]),
+    ObjRange.Cells(FormatDescr[0], FormatDescr[2])));
+  AssistVar := FormatDescr[3];
+  for i := 0 to ArrayHigh(AssistVar) do
+    begin
+      FieldDescr := FormatDescr[3][i];
+      AssistVar := ObjRange.Cells(FormatDescr[0], FieldDescr[0]);
+      case VarAsInt(FieldDescr[1]) of
+        vtcLink, vtcMemo, vtcString :
+          begin
+            AssistVar.NumberFormat := '@';
+            AssistVar.HorizontalAlignment := $FFFFEFDD; // xlLeft
+            AssistVar.WrapText := True;
+          end;
+        vtcFFt, vtcFloat :
+          begin
+            AssistVar.HorizontalAlignment := $FFFFEFC8; // xlRight
+            if (VarAsInt(FieldDescr[1]) = vtcFFt) and (ArrayHigh(FieldDescr) >= 2) then
+              AssistVar.NumberFormat := ReplaceDecDelim(GetStandartFormat(FieldDescr[2]));
+          end;
+        vtcInteger :
+          begin
+            AssistVar.HorizontalAlignment := $FFFFEFF4; // xlCenter
+          end;
+        vtcDate, vtcDateTime :
+          begin
+            AssistVar.NumberFormat := 'dd.mm.yyyy';
+            AssistVar.HorizontalAlignment := $FFFFEFF4; // xlCenter
+          end;
+        vtcTime :
+          begin
+            AssistVar.NumberFormat := 'hh.mm.ss';
+            AssistVar.HorizontalAlignment := $FFFFEFF4; // xlCenter
+          end;
+      end;
+    end;
+end;
+
+procedure FillExcelTitleFormat(AssistVar : Variant);
+begin
+  AssistVar.HorizontalAlignment := $FFFFEFF4; // xlCenter
+  AssistVar.VerticalAlignment := $FFFFEFF4; // xlCenter
+  SetFullBorderStyle(AssistVar);
+  AssistVar.Font.Bold := True;
+end;
+//******************************************************************************
+
+// макросы работы с XGrid - недостающий функционал
+//******************************************************************************
+
+function IsXGridRangeMultiCell(crCurrent : TCellRange; Direction : TXGridDirection = xgdAnyDirection) : Boolean;
+begin
+  case Direction of
+    xgdHorizontal :
+      Result := (crCurrent.Col1 < crCurrent.Col2);
+    xgdVertical :
+      Result := (crCurrent.Row1 < crCurrent.Row2);
+    xgdAnyDirection :
+      Result := (crCurrent.Row1 < crCurrent.Row2) or (crCurrent.Col1 < crCurrent.Col2);
+  end;
+end;
+
+function GetCellsByCoord(xgCurrent : TO4XGrid; crCoord : TCellsArrayCoord) : TCellRange;
+var
+  I : Integer;
+begin
+  I := ArrayLow(crCoord);
+  case ArrayLength(crCoord) of
+    2 :
+      Result := xgCurrent.Cell(crCoord[I], crCoord[I + 1]);
+    4 :
+      Result := xgCurrent.Cells(crCoord[I], crCoord[I + 1], crCoord[I + 2], crCoord[I + 3]);
+  end;
+end;
+
+function GetCellParams(crCurrent : TCellRange) : Variant;
+begin
+  Result := Null;
+  ArrayCreate(Result, [1, 26], Variant);
+  Result[1] := crCurrent.BorderBottom;
+  Result[2] := crCurrent.Alignment;
+  Result[3] := crCurrent.BkColor;
+  Result[4] := crCurrent.BorderColor;
+  Result[5] := crCurrent.BorderBottom;
+  Result[6] := crCurrent.BorderLeft;
+  Result[7] := crCurrent.BorderRight;
+  Result[8] := crCurrent.BorderTop;
+  Result[9] := crCurrent.ClipOnCell;
+  Result[10] := crCurrent.DisplayFormat;
+  Result[11] := crCurrent.FontColor;
+  Result[12] := crCurrent.FontName;
+  Result[13] := crCurrent.FontSize;
+  Result[14] := crCurrent.FontStyle;
+  Result[15] := crCurrent.Layout;
+  Result[16] := crCurrent.WordWrap;
+  Result[17] := crCurrent.Row1;
+  Result[18] := crCurrent.Row2;
+  Result[19] := crCurrent.Col1;
+  Result[20] := crCurrent.Col2;
+  Result[21] := crCurrent.ColWidth;
+  Result[22] := crCurrent.RowHeight;
+
+end;
+
+procedure SetCellParams(crDescr : Variant; crCurrent : TCellRange);
+begin
+  crCurrent.BorderBottom := crDescr[1];
+  crCurrent.Alignment := crDescr[2];
+  crCurrent.BkColor := crDescr[3];
+  crCurrent.BorderColor := crDescr[4];
+  crCurrent.BorderBottom := crDescr[5];
+  crCurrent.BorderLeft := crDescr[6];
+  crCurrent.BorderRight := crDescr[7];
+  crCurrent.BorderTop := crDescr[8];
+  crCurrent.ClipOnCell := crDescr[9];
+  crCurrent.DisplayFormat := crDescr[10];
+  crCurrent.FontColor := crDescr[11];
+  crCurrent.FontName := crDescr[12];
+  crCurrent.FontSize := crDescr[13];
+  crCurrent.FontStyle := crDescr[14];
+  crCurrent.Layout := crDescr[15];
+  crCurrent.WordWrap := crDescr[16];
+  //
+  crCurrent.ColWidth := crDescr[21];
+  crCurrent.RowHeight := crDescr[22];
+  //
+  if IsXGridRangeMultiCell(crCurrent, xgdHorizontal) then
+    crCurrent.BorderVertInner := crDescr[6];
+  if IsXGridRangeMultiCell(crCurrent, xgdVertical) then
+    crCurrent.BorderHorzInner := crDescr[8];
+end;
+
+function IsValidCoord(crCoord : TCellsArrayCoord) : Boolean;
+var
+  I : Integer;
+begin
+  I := ArrayLow(crCoord);
+  case ArrayLength(crCoord) of
+    2 :
+      Result := True;
+    4 :
+      Result := (crCoord[I] <= crCoord[I + 2]) and (crCoord[I + 1] <= crCoord[I + 3]);
+  end;
+end;
+
+// CopyOneCellFormat аналогична CopyXGridCellsFormat. Работает только в случае, когда
+// crSourceCoord задает ячейки с длиной одного измерения = 1
+
+procedure CopyOneCellFormat(crSourceDescr : Variant; crTargetCoord : TCellsArrayCoord;
+  xgTarget : To4XGrid; Delta, MainDirection : Integer);
+var
+  Index, p1, p2, dIndex, OneCoord : Integer;
+  crTarget : TCellRange;
+begin
+  if not IsValidCoord(crTargetCoord) then
+    exit;
+  crTarget := GetCellsByCoord(xgTarget, crTargetCoord);
+  case MainDirection of // "движение цикла копирования"
+    xgdHorizontal :
+      begin
+        p1 := crTarget.Col1;
+        p2 := crTarget.Col2;
+        if Delta = 1 then
+          SetCellParams(crSourceDescr, crTarget)
+        else
+          for dIndex := 0 to Delta - 1 do
+            begin
+              OneCoord := p1 + dIndex;
+              crTargetCoord := crSourceDescr[ArrayLow(crSourceDescr) + dIndex]; // оптимизация подсчета
+              while OneCoord <= p2 do
+                begin
+                  // одним махом отформатируем вертикальную полоску
+                  SetCellParams(crTargetCoord, xgTarget.Cells(crTarget.Row1, OneCoord, crTarget.Row2, OneCoord));
+                  inc(OneCoord, Delta);
+                end;
+            end;
+      end;
+    xgdVertical :
+      begin
+        p1 := crTarget.Row1;
+        p2 := crTarget.Row2;
+        if Delta = 1 then
+          SetCellParams(crSourceDescr, crTarget)
+        else
+          for dIndex := 0 to Delta - 1 do
+            begin
+              OneCoord := p1 + dIndex;
+              crTargetCoord := crSourceDescr[ArrayLow(crSourceDescr) + dIndex]; // оптимизация подсчета
+              while OneCoord <= p2 do
+                begin
+                  // одним махом отформатируем горизонтальную полоску
+                  SetCellParams(crTargetCoord, xgTarget.Cells(OneCoord, crTarget.Col1, OneCoord, crTarget.Col2));
+                  inc(OneCoord, Delta);
+                end;
+            end;
+      end;
+  end;
+end;
+
+procedure GetCoordsByDescr(CoordDescr : TCellsArrayCoord; var srow1, scol1, srow2, scol2 : Integer);
+begin
+  case ArrayLength(CoordDescr) of
+    2 :
+      begin
+        srow1 := CoordDescr[ArrayLow(CoordDescr)];
+        scol1 := CoordDescr[ArrayLow(CoordDescr) + 1];
+        srow2 := srow1;
+        scol2 := scol1;
+      end;
+    4 :
+      begin
+        srow1 := CoordDescr[ArrayLow(CoordDescr)];
+        scol1 := CoordDescr[ArrayLow(CoordDescr) + 1];
+        srow2 := CoordDescr[ArrayLow(CoordDescr) + 2];
+        scol2 := CoordDescr[ArrayLow(CoordDescr) + 3];
+      end;
+  end;
+end;
+
+function GetCellsParams(XGrid : TO4XGrid; Cells : TCellRange;
+  Direction : TXGridDirection = xgdHorizontal) : Variant;
+var
+  i, j : Integer;
+begin
+  Result := Null;
+  case Direction of
+    xgdAnyDirection :
+      ;
+    xgdHorizontal :
+      begin
+        i := Cells.Row1;
+        ArrayCreate(Result, [Cells.Col1, Cells.Col2], Variant);
+        for j := ArrayLow(Result) to ArrayHigh(Result) do
+          Result[j] := GetCellParams(XGrid.Cell(i, j));
+      end;
+    xgdVertical :
+      begin
+        j := Cells.Col1;
+        ArrayCreate(Result, [Cells.Row1, Cells.Row2], Variant);
+        for i := ArrayLow(Result) to ArrayHigh(Result) do
+          Result[i] := GetCellParams(XGrid.Cell(i, j));
+      end;
+  end;
+end;
+
+// копирование формата ячеек. Если crSourceCoord является координатами нескольких ячеек,
+// то копирование происходит через "укладывание плиткой"
+
+procedure CopyXGridCellsFormat(xgSource, xgTarget : TO4XGrid;
+  crSourceCoord, crTargetCoord : TCellsArrayCoord);
+var
+  crCurrent : TCellRange;
+  crDescr : Variant;
+  srow1, srow2, scol1, scol2, trow1, trow2, tcol1, tcol2, i, j : Integer;
+begin
+  GetCoordsByDescr(crSourceCoord, srow1, scol1, srow2, scol2);
+  GetCoordsByDescr(crTargetCoord, trow1, tcol1, trow2, tcol2);
+  //
+  if srow1 = srow2 then // оптимизация копирования
+    if scol1 = scol2 then
+      begin
+        crDescr := GetCellParams(GetCellsByCoord(xgSource, crSourceCoord));
+        crCurrent := GetCellsByCoord(xgTarget, crTargetCoord);
+        SetCellParams(crDescr, crCurrent);
+      end
+    else
+      // копирование по горизонтали (слева направо) с массивом горизонтального форматирования
+      begin
+        crDescr := GetCellsParams(xgSource, GetCellsByCoord(xgSource, crSourceCoord), xgdHorizontal);
+        CopyOneCellFormat(crDescr, crTargetCoord, xgTarget, ArrayLength(crDescr), xgdHorizontal);
+      end
+  else
+    if scol1 = scol2 then
+      // копирование по вертикали (сверху вниз) с массивом вертикального форматирования
+      begin
+        crDescr := GetCellsParams(xgSource, GetCellsByCoord(xgSource, crSourceCoord), xgdVertical);
+        CopyOneCellFormat(crDescr, crTargetCoord, xgTarget, ArrayLength(crDescr), xgdVertical);
+      end
+    else // расбросанное форматирование
+      begin
+        // проход по вертикали
+        for i := 0 to srow2 - srow1 do
+          begin
+            crDescr := GetCellsParams(xgSource, GetCellsByCoord(xgSource,
+              ArrayOf(srow1 + i, scol1, srow1 + i, scol2)), xgdHorizontal);
+            j := trow1 + i; // tcol1 отвечает за рядки
+            while j <= trow2 do
+              begin
+                CopyOneCellFormat(crDescr, ArrayOf(j, tcol1, j, tcol2),
+                  xgTarget, ArrayLength(crDescr), xgdHorizontal);
+                inc(j, srow2 - srow1 + 1);
+              end;
+          end;
+      end;
+end;
+
+procedure RegroupCellAndReformat(Cells : TCellRange; Caption : string = '');
+begin
+  with Cells do
+    begin
+      GroupCells;
+      BorderLeft := 1;
+      BorderRight := 1;
+      BorderBottom := 1;
+      BorderTop := 1;
+      if Caption <> '' then
+        Value := Caption;
+    end;
+end;
+
+// Подсчет значений ф-ций для XGrid
+//******************************************************************************
+// function RelativeCoordToAbsoluteCoord(OneRelativeCoord : )
+
+function IsRelativeCoord(OneCellCoord : TCellsStringCoordsDescr) : Boolean;
+begin
+  Result := StrPos('[', OneCellCoord) > 0;
+end;
+
+function IsLatinLetter(a : Char) : Boolean;
+begin
+  Result := (CharToByte(StrUpperCase(a)[1]) >= CharToByte('A')) and
+    (CharToByte(StrUpperCase(a)[1]) <= CharToByte('Z'));
+end;
+
+procedure GetCoordByRelativeStrCoordsDescr(xgCurrent : TO4XGrid; OneCellCoord : TCellsStringCoordsDescr;
+  var Row, Col : Integer);
+var
+  AssistInt : Integer;
+begin
+  AssistInt := StrPos(']', OneCellCoord);
+  Row := xgCurrent.CalcRow + StrToInt(StrCopy(OneCellCoord, StrLength('R[') + 1, AssistInt - StrLength('R[') - 1));
+  OneCellCoord := StrCopy(OneCellCoord, AssistInt + 1, StrLength(OneCellCoord));
+  Col := xgCurrent.CalcCol + StrToInt(StrCopy(OneCellCoord, StrLength('C[') + 1, StrLength(OneCellCoord) - StrLength('C[') - 1));
+end;
+
+procedure GetCoordByAbsoluteStrCoordsDescr(OneCellCoord : TCellsStringCoordsDescr;
+  var Row, Col : Integer);
+begin
+  OneCellCoord := StrUpperCase(OneCellCoord);
+  if IsLatinLetter(OneCellCoord[2]) then
+    begin
+      Col := 26 * (CharToByte(OneCellCoord[1]) - CharToByte('A') + 1) + CharToByte(OneCellCoord[2]) - CharToByte('A') + 1;
+      Row := StrToInt(StrCopy(OneCellCoord, 3, StrLength(OneCellCoord) - 2));
+    end
+  else
+    begin
+      Col := CharToByte(OneCellCoord[1]) - CharToByte('A') + 1;
+      Row := StrToInt(StrCopy(OneCellCoord, 2, StrLength(OneCellCoord) - 1));
+    end;
+end;
+
+procedure GetCoordByStrCoordsDescr(xgCurrent : TO4XGrid; OneCellCoord : TCellsStringCoordsDescr;
+  var Row, Col : Integer);
+begin
+  if IsRelativeCoord(OneCellCoord) then
+    GetCoordByRelativeStrCoordsDescr(xgCurrent, OneCellCoord, Row, Col)
+  else
+    GetCoordByAbsoluteStrCoordsDescr(OneCellCoord, Row, Col);
+end;
+
+// Получение нужной части описания соотв. переданному параметру
+
+function GetStrCoordDescrOneValue(CellStrCoord : TCellsStringCoordsDescr;
+  ValueID : TCellsStringDescrValues;
+  AssistInt : Integer = 0) : Variant;
+begin
+  case ValueID of
+    csdXGridName :
+      if StrPos(XGridAndCellsDelim, CellStrCoord) > 0 then
+        Result := ExtractWord(1, CellStrCoord, XGridAndCellsDelim)
+      else
+        Result := '';
+    csdCellRanges :
+      if StrPos(XGridAndCellsDelim, CellStrCoord) > 0 then
+        Result := ExtractWord(2, CellStrCoord, XGridAndCellsDelim)
+      else
+        Result := CellStrCoord;
+    csdOneRange : // предполагается, что передан формат, что совпадает с результатом ф-ции с параметром csdCellRanges
+      Result := ExtractWord(AssistInt, CellStrCoord, RangesDelimiter);
+    // в подальших двух вариантах предполагается, что передан формат, что совпадает с результатом ф-ции с параметром csdOneRange
+    csdOneRangeCells :
+      Result := ExtractWord(1, CellStrCoord, CellsStepDelimiter);
+    csdOneRangeStep :
+      if StrPos(CellsStepDelimiter, CellStrCoord) > 0 then
+        Result := StrToInt(ExtractWord(2, CellStrCoord, CellsStepDelimiter))
+      else
+        Result := 1;
+    csdOneRangeCellsAddress : // предполагается, что передан формат, что совпадает с результатом ф-ции с параметром csdOneRangeCells
+      Result := ExtractWord(AssistInt, CellStrCoord, OneRangeDelimiter);
+  end;
+end;
+
+procedure GetCoordsByStrCoordsDescr(xgSource : To4XGrid; CellStrCoord : TCellsStringCoordsDescr;
+  var Row1, Col1, Row2, Col2 : Integer);
+begin
+  GetCoordByStrCoordsDescr(xgSource, GetStrCoordDescrOneValue(CellStrCoord, csdOneRangeCellsAddress, 1), Row1, Col1);
+  if StrPos(OneRangeDelimiter, CellStrCoord) > 0 then
+    GetCoordByStrCoordsDescr(xgSource, GetStrCoordDescrOneValue(CellStrCoord, csdOneRangeCellsAddress, 2), Row2, Col2)
+  else
+    begin
+      Row2 := Row1;
+      Col2 := Col1;
+    end;
+end;
+
+// Получение ячеек по string-описанию.
+// Предполагается, что передан формат, что совпадает с результатом ф-ции GetStrCoordDescrOneValue с параметром csdOneRangeCells
+// Отсутствует проверка на валидность координат
+
+function GetCellsByStrCoordDescr(xgSource : To4XGrid; CellStrCoord : TCellsStringCoordsDescr) : TCellRange;
+var
+  Row1, Col1, Row2, Col2 : Integer;
+begin
+  GetCoordsByStrCoordsDescr(xgSource, CellStrCoord, Row1, Col1, Row2, Col2);
+  Result := xgSource.Cell(Row1, Col1);
+end;
+
+// Получение компоненты XGrid по string-описанию.
+// Также вписан контроль по отсутствию в калькулируемом состоянии
+
+function GetXGridByStrCoord(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr;
+  DoNilOnNotCalc : Boolean = True) : TO4XGrid;
+var
+  xgName : string;
+  xgNil : TO4XGrid;
+begin
+  xgName := GetStrCoordDescrOneValue(CellStrCoord, csdXGridName);
+  if (xgName = '') then
+    if ctrlSource is To4XGrid then
+      Result := ctrlSource as To4XGrid
+    else
+      raise(GetTranslation(errCannotDetermineXGridByCellStrCoordDescr,
+        ArrayOf(#13, ctrlSource.Name, #13, CellStrCoord)))
+  else
+    begin
+      while not (ctrlSource is To4CustomForm) do
+        ctrlSource := ctrlSource.Parent;
+      Result := ctrlSource.FindComponent(xgName) as To4XGrid;
+      if IsNil(Result) then
+        raise(GetTranslation(errCannotDetermineXGridByCellStrCoordDescr,
+          ArrayOf(#13, ctrlSource.Name, #13, CellStrCoord)));
+    end;
+  if not IsNil(Result) then
+    if DoNilOnNotCalc and not Result.Calc then
+      Result := xgNil;
+end;
+
+// Предполагается, что передан формат, что совпадает с результатом ф-ции GetStrCoordDescrOneValue с параметром csdOneRangeCells
+
+function GetCellValueByCoord(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr;
+  DefValue : Variant = '') : Variant;
+var
+  crCurrent : TCellRange;
+  xgCurrent : TO4XGrid;
+begin
+  xgCurrent := GetXGridByStrCoord(ctrlSource, CellStrCoord);
+  if IsNil(xgCurrent) then
+    Result := DefValue
+  else
+    begin
+      crCurrent := GetCellsByStrCoordDescr(xgCurrent, CellStrCoord);
+      Result := crCurrent.Value;
+    end;
+end;
+
+// Подобран общий формат процедур в надежде на будущие версии ядра, которые помогут
+// вызывать Invoke для процедур
+
+function InternalParserSum(var CurrentSum : Variant; CurrentCell : TCellRange; InParams : Variant) : Boolean;
+begin
+  CurrentSum := VarAsFloat(CurrentSum) + VarAsFloat(CurrentCell.Value, 0);
+end;
+
+var
+  InternalParserArrayCounter : Integer;
+
+function InternalParserOneValueFromArray(var IntParResult : Variant; CurrentCell : TCellRange; InParams : Variant) : Boolean;
+begin
+  inc(InternalParserArrayCounter);
+  Result := InternalParserArrayCounter = VarAsInt(InParams);
+  if Result then
+    IntParResult := CurrentCell.Value;
+end;
+
+function InternalParserCellValue(var IntParResult : Variant; CurrentCell : TCellRange; InParams : Variant) : Boolean;
+begin
+  Result := True;
+  IntParResult := CurrentCell.Value;
+end;
+
+// Общий парсер по ячейкам согласно параметру. Парсинг предполагает проход по гор. и верт. массивам
+// вызов внутренней процедуры через case вынужденный
+
+function CellsParsing(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr;
+  InternalParseProcID : string; DefValue, Params : Variant = '') : Variant;
+var
+  crCurrent : TCellRange;
+  xgSource : To4XGrid;
+  OneRangeDescr : TCellsStringCoordsDescr;
+  i, Step, CellRangesCounter, Row1, Col1, Row2, Col2 : Integer;
+begin
+  Result := DefValue;
+  xgSource := GetXGridByStrCoord(ctrlSource, CellStrCoord);
+  if IsNil(xgSource) or not xgSource.Calc then
+    exit;
+  CellStrCoord := GetStrCoordDescrOneValue(CellStrCoord, csdCellRanges);
+  for CellRangesCounter := 1 to WordCount(CellStrCoord, RangesDelimiter) do
+    begin
+      OneRangeDescr := GetStrCoordDescrOneValue(CellStrCoord, csdOneRange, CellRangesCounter);
+      Step := GetStrCoordDescrOneValue(OneRangeDescr, csdOneRangeStep);
+      GetCoordsByStrCoordsDescr(xgSource, GetStrCoordDescrOneValue(OneRangeDescr, csdOneRangeCells),
+        Row1, Col1, Row2, Col2);
+      //
+      if Row1 = Row2 then
+        begin
+          i := Col1;
+          while i <= Col2 do
+            begin
+              crCurrent := xgSource.CalcCell(Row1, i);
+              case InternalParseProcID of
+                'CellValue' :
+                  if InternalParserCellValue(Result, crCurrent, Params) then
+                    break;
+                'OneValueFromArray' :
+                  if InternalParserOneValueFromArray(Result, crCurrent, Params) then
+                    break;
+                'Sum' :
+                  InternalParserSum(Result, crCurrent, Params);
+              end;
+              inc(i, Step);
+            end;
+        end
+      else
+        if Col1 = Col2 then
+          begin
+            i := Row1;
+            while i <= Row2 do
+              begin
+                crCurrent := xgSource.CalcCell(i, Col1);
+                case InternalParseProcID of
+                  'CellValue' :
+                    if InternalParserCellValue(Result, crCurrent, Params) then
+                      break;
+                  'OneValueFromArray' :
+                    if InternalParserOneValueFromArray(Result, crCurrent, Params) then
+                      break;
+                  'Sum' :
+                    InternalParserSum(Result, crCurrent, Params);
+                end;
+                inc(i, Step);
+              end
+          end
+        else
+          begin
+            Result := DefValue;
+            break; // игнорируется проход, поскольку проходит по квадратируемой области
+          end;
+    end;
+end;
+
+// сумма значений по переданным ячейкам. Формат самый общий
+
+function SumCellValues(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr) : Double;
+begin
+  Result := VarAsFloat(CellsParsing(ctrlSource, CellStrCoord, 'Sum', 0));
+end;
+
+// Получение значения из массива согласно индексу.
+// Соответственно формат, предполагается, задает или один Range или отдельные ячейки через ;
+
+function GetValueFromArray(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr;
+  ValidIndex : Integer) : Variant;
+begin
+  InternalParserArrayCounter := 0;
+  Result := CellsParsing(ctrlSource, CellStrCoord, 'OneValueFromArray', 0, ValidIndex);
+end;
+
+// Получение значения ячейки по адресу.
+// Соответственно формат, предполагается, задает один Range
+
+function CellValue(ctrlSource : TControl; CellStrCoord : TCellsStringCoordsDescr) : Variant;
+begin
+  Result := CellsParsing(ctrlSource, CellStrCoord, 'CellValue', 0);
+end;
+
+function GetExtStringFieldValue(ExtFieldValue : Variant; AdditSuff, AdditPref : string = '') : string;
+begin
+  if IsObjFocused(ExtFieldValue) then
+    Result := GetDefaultLinkValue(ExtFieldValue)
+  else
+    Result := VarAsStr(ExtFieldValue);
+  if Result <> '' then
+    Result := AdditPref + Result + AdditSuff;
+end;
+
+// пересчет одной компоненты XGrid
+
+procedure RecalcOneGrid(xgCurrent : To4XGrid; DoRecalc : Boolean);
+begin
+  if DoRecalc then
+    xgCurrent.EditData := True;
+  xgCurrent.Calc := DoRecalc;
+  if xgCurrent.Calc and not xgCurrent.EditData then
+    xgCurrent.EditData := True;
+  xgCurrent.Refresh;
+end;
+
+// пересчет группы компонент XGrid
+// предполагается, что группа форм расположена на компоненте TO4PageControl на отдельных закладках
+
+procedure RecalcXGrids(ctrlFrom : TWinControl; DoRecalc : Boolean);
+var
+  i, j : Integer;
+  tsTemp : TTabSheet;
+begin
+  case ctrlFrom.ClassName of
+    'TO4PageControl' :
+      // ВНИМАНИЕ! Не зря берется нисходящий цикл. Предполагается (в целях оптимизации),
+      // что формы спереди ссылаются (=AddLinkXGridData) на формы сзади и лишь изредка наоборот
+      // При правильном размещении форм на экране возможно сократить скорость выполнения более, чем в 3 раза
+      for i := (ctrlFrom as TO4PageControl).PageCount - 1 downto 0 do
+        begin
+          tsTemp := (ctrlFrom as TO4PageControl).Pages[i];
+          if tsTemp.TabVisible then
+            for j := 0 to tsTemp.ControlCount - 1 do
+              if tsTemp.Controls[j] is TO4XGrid then
+                RecalcOneGrid(tsTemp.Controls[j] as TO4XGrid, DoRecalc);
+        end;
+    'TO4XGrid' :
+      RecalcOneGrid(ctrlFrom as TO4XGrid, DoRecalc);
+  end;
+end;
+//******************************************************************************
+
+function PrepareCatsBeforeRunReport(DicCats : ICDictionary; LstSelectedCats : ICValueList) : Boolean;
+var
+  ViewCatsAction : TO4Actions;
+begin
+  if VarAsBool(DicCats.Params['UseLevel']) then // просмотр с учетом или без учета категорий
+    if DicCats.InteractiveUseLevels then
+      ViewCatsAction := actUseLevel
+    else
+      ViewCatsAction := actDontUseLevel
+  else
+    ViewCatsAction := actUseNoLevel;
+  try
+    case ViewCatsAction of
+      actUseLevel :
+        begin
+          DicCats.GetCheckLevelsAsValueList(LstSelectedCats);
+          Result := (LstSelectedCats.Count > 0);
+          LstSelectedCats.CopyDataToServer;
+        end;
+      actDontUseLevel :
+        Result := True;
+      actUseNoLevel :
+        begin
+          DicCats.AssignSelectParamsOnSrv(Null);
+          server.GetSelectedAsVList(DicCats.SrvMean, LstSelectedCats.SrvMean);
+          Result := True;
+        end;
+    end;
+  finally
+    LstSelectedCats.Clear;
+  end;
+  LstSelectedCats.Params['ViewCatsAction'] := ViewCatsAction;
+  LstSelectedCats.SrvMean.Params['ViewCatsAction'] := ViewCatsAction;
+end;
+
+end.

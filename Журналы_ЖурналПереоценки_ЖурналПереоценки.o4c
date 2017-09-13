@@ -1,0 +1,172 @@
+interface
+
+uses 
+  System, DispIntf, ConstNames, »нтерфейс, –асчеты, ƒополнительный‘ункционал;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Options : ICOptions;      
+  PrintList : ICValueList;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;
+begin
+  Options := GetOptions;
+  MakeInterface(tbrData, Nobody, dbgData);  
+  miDocMove.Visible := GetUDASet('viewdocmove'); 
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;   
+  GetPrintersList(PrintList, edPrinters, MasterData.GetSign);
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    MasterData.PrintForm('∆урналѕереоценок', True, 0, Null)
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    MasterData.GetDoc.PrintForm('ƒокумент»зм¬х÷ен', True, Null);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    if MasterData.GetDocState > 0 then
+      Index1 := 10
+    else
+      Index1 := 9;
+end;
+{$D+}
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure tbFixUp_VPABeforeActionClick(Sender : TObject);
+var
+  Doc : ICDocuments;
+  LinesCount : Integer;
+  Sum : Decimal;
+begin
+  Doc := MasterData.GetDoc;
+  if Doc.GetSign = 'ƒокумент»змен¬х÷ен' then
+    begin
+      LinesCount := Doc.LinesCount;
+      Doc.Edit;
+      Doc.SelectLines;
+      Doc.SelectNextLine;
+      while LinesCount > 0 do
+        begin
+          Sum := VarAsDec(Doc. оличество) * VarAsDec(Doc.÷ена - GetPrice(Doc.¬х÷енаЅезЌƒ—, Doc.—тавкаЌƒ—));
+          if Sum = 0 then
+            Doc.DeleteLine
+          else
+            Doc.SelectNextLine;
+          dec(LinesCount);
+        end;
+      Doc.Post;
+    end;
+end;
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  SaveUserActivePrinter(PrinterName, MasterData.GetSign);
+//  Options.SetServerPrm('јктивныйѕринтер' + MasterData.GetSign + Form.Caption, PrinterName);
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('ќбработки.ƒвижениеѕоƒокументу');
+      P.Execute('ƒвижениеѕоƒокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.»нфо»зменений');
+  V.Execute('»нфо»зменений', MasterData.GetDoc);
+end;    
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+tsState:TO4TabSet
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbFixUp:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton4:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbParam:TO4ToolButton
+Panel4:TO4Panel
+Label4:TO4Label
+btSaveActivPrinter:TO4Button
+edPrinters:TO4Edit
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem6:TO4MenuItem
+pmiRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+MDS:TO4DataSource
+miInfoChange:TO4MenuItem

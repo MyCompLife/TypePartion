@@ -1,0 +1,131 @@
+interface
+
+uses
+  System, DispIntf, ДополнительныйФункционал;
+
+implementation
+
+var
+  V: ICProcessing;
+  DocSumTbl, PaySumTbl : ICValueTable;
+  ChangeDoc : ICDocuments;   
+  PrintFormCount : integer;
+  PrintFormName : string;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant); 
+var   UserDic : ICDictionary;
+begin
+  V := Mean;  
+  UserDic := CreateObject('Справочники.Пользователи');  
+  PrintFormCount := 1;
+  if UserDic.FindByCode(GetUserLogin,false) then
+    begin
+      PrintFormCount := VarAsInt(UserDic.КолКопийЧекаОтчетКассира);
+      PrintFormName := VarAsStr(UserDic.ПечатнаяФормаОтчетКассира);
+    end; 
+  if PrintFormName='' then
+    PrintFormName :=  'ПечатьСмена80мм';
+  if PrintFormCount<=0 then
+    PrintFormCount := 1;
+  ChangeDoc := Params;
+  DocSumTbl := CreateObject('ТаблицаЗначений');     
+  PaySumTbl := CreateObject('ТаблицаЗначений');
+  DocSumTbl.AddColumn('Название', vtcString, 50);
+  DocSumTbl.AddColumn('Значение', vtcString, 50);
+  DocSumTbl.Open;
+  DocSumTbl.CopyColumnsTo(PaySumTbl);
+  PaySumTbl.Open;
+
+
+  DocSumTbl.Append;
+  DocSumTbl.Название := 'Сумма продаж';
+  DocSumTbl.Значение := FormatFloat('0.00', ChangeDoc.СуммаПродаж);
+  DocSumTbl.Post;
+  DocSumTbl.Append;
+  DocSumTbl.Название := 'Сумма возвратов';
+  DocSumTbl.Значение := FormatFloat('0.00', ChangeDoc.СуммаВозвратов);
+  DocSumTbl.Post;   
+  DocSumTbl.Append;
+  DocSumTbl.Название := 'Всего';
+  DocSumTbl.Значение := FormatFloat('0.00', ChangeDoc.Сумма);
+  DocSumTbl.Post;
+  PaySumTbl.Append;
+  PaySumTbl.Название := 'Оплата в кассу';
+  PaySumTbl.Значение := FormatFloat('0.00', ChangeDoc.СуммаОплатыНал);
+  PaySumTbl.Post;
+  PaySumTbl.Append;
+  PaySumTbl.Название := 'Оплата картой';
+  PaySumTbl.Значение := FormatFloat('0.00', ChangeDoc.СуммаОплатыКарт);
+  PaySumTbl.Post;    
+  PaySumTbl.Append;
+  PaySumTbl.Название := 'Всего';
+  PaySumTbl.Значение := FormatFloat('0.00', ChangeDoc.СуммаОплатыКарт+ChangeDoc.СуммаОплатыНал);
+  PaySumTbl.Post;  
+  PaySumTbl.SelectFirst;
+  DocSumTbl.SelectFirst;
+  DocSumTbl.UseDataSource(CtrlToVar(TVSDocSum));
+  PaySumTbl.UseDataSource(CtrlToVar(TVSPaySum));
+end;
+
+
+
+procedure tbExit_Click(Sender: TObject);
+begin     
+ Form.ModalResult := mrOK;
+ Form.Close;
+end;
+
+
+
+
+procedure tbPrint_Click(Sender: TObject);
+var
+    PrinterName, OldPrintName : string;  
+    i : integer;
+begin
+ if PrintFormCount>0 then
+   try
+     PrinterName := GetPrintNameForCurPrintForm(PrintFormName);
+     if (PrinterName<>'') and (PrinterName<>GetActivePrinterName) then
+       begin
+         OldPrintName := GetActivePrinterName;
+         SetActivePrinter(PrinterName);
+       end;
+     for i:=1 to PrintFormCount do
+       ChangeDoc.PrintForm(PrintFormName, false, ChangeDoc);
+   finally
+     if (OldPrintName<>'') and (OldPrintName<>GetActivePrinterName) then
+       SetActivePrinter(OldPrintName);
+   end;
+end;
+
+procedure tbPrintParam_Click(Sender: TObject);
+Var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечатьЧека');
+  V.Execute('ВыборПринтераДляПечФормы', PrintFormName);
+end;
+
+procedure tbMoneyCalk_Click(Sender: TObject);
+Var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.РабочееМестоКассираCL');
+  V.Execute('РасчетКупюр', ChangeDoc.Ответственный);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+dbgDocsum:TO4DBGrid
+ToolBar:TO4ToolBar
+tbExit:TO4ToolButton
+tbPrint:TO4ToolButton
+tbPrintParam:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbMoneyCalk:TO4ToolButton
+Panel1:TO4Panel
+Panel2:TO4Panel
+dbgPaySum:TO4DBGrid
+TVSDocSum:TO4TableValueSource
+TVSPaySum:TO4TableValueSource

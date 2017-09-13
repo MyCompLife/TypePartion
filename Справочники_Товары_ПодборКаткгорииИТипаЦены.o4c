@@ -1,0 +1,135 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL;
+
+implementation
+var MasterData : ICDictionary;
+    Constants : IC4VPAConst;
+    PriceTypes : string;
+    TypePriceTbl, GoodsTbl : ICValueTable;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);    
+var i,code : integer;
+begin
+  MasterData := MDS.GetMean;  
+  MasterData.IncludeOnlyLevels(true);
+  Constants := GetConstants; 
+  TypePriceTbl := CreateObject('ТаблицаЗначений');
+  TypePriceTbl.AddColumn('Код',vtcInteger,0);
+  TypePriceTbl.AddColumn('ТипЦены',vtcString,20);
+  TypePriceTbl.AddColumn('Название',vtcString,20);
+  TypePriceTbl.Open;
+  TypePriceTbl.TblName := 'TypePrice';
+
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.AddColumn('Товар',vtcLink,0);
+  GoodsTbl.AddColumn('НазвТовара',vtcString,255);
+  GoodsTbl.AddColumn('Название',vtcString,255);  
+  GoodsTbl.AddColumn('root',vtcInteger,0);
+  GoodsTbl.Open;
+  GoodsTbl.TblName := 'GoodsTbl';
+  GoodsTbl.CopyDataToServer;
+  server.FillGoodsTbl(GoodsTbl.SrvMean);
+  GoodsTbl.CopyDataFromServer;
+  GoodsTbl.SortBy('НазвТовара');
+  GoodsTbl.UseDataSource(CtrlToVar(TVSGoods));
+  GoodsTbl.SelectFirst;
+
+
+  PriceTypes := Constants.ТипыЦен;
+  if StrLength(PriceTypes) > 0 then
+    for i:= 1 to StrLength(PriceTypes) do
+      begin
+        code := StrToIntDef(PriceTypes[i],-1);
+        case code of
+          0:
+           begin
+             TypePriceTbl.Append;
+             TypePriceTbl.Код := code;
+             TypePriceTbl.ТипЦены := 'Цена';
+             TypePriceTbl.Название := 'Цена';
+           end;
+          1:
+           begin
+             TypePriceTbl.Append;
+             TypePriceTbl.Код := code;
+             TypePriceTbl.ТипЦены := 'ОптЦена';
+             TypePriceTbl.Название := 'Опт.Цена';
+           end;
+          2:
+           begin
+             TypePriceTbl.Append;
+             TypePriceTbl.Код := code;
+             TypePriceTbl.ТипЦены := 'КрОптЦена';
+             TypePriceTbl.Название := 'Кр.Опт.Цена';
+           end;
+        end;    
+      end;
+  TypePriceTbl.SortBy('Код');
+  TypePriceTbl.UseDataSource(CtrlToVar(TVS));
+  TypePriceTbl.SelectFirst;
+end;
+
+
+
+procedure TVS_VPATimedAfterScroll(Sender: TObject);
+begin
+ if TypePriceTbl.IsFocused then
+   MasterData.Params['TypePrice'] := VarAsStr(TypePriceTbl.ТипЦены);
+end;
+
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+ if ProcID='usectg' then
+   pnCtg.Visible := VarAsBool(InParams);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  pnCtg.Visible := VarAsBool(Params);
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itDropForm;
+end;
+
+procedure miRefresh_Click(Sender: TObject);
+begin
+ MasterData.Refresh;
+end;
+
+procedure TVSGoods_VPATimedAfterScroll(Sender: TObject);
+begin
+ if GoodsTbl.IsFocused then
+   MasterData.Find(GoodsTbl.@Товар);
+end;
+{$D-}
+procedure dbgData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if GoodsTbl.IsFocused and VarAsBool(GoodsTbl.root) then
+   DrawFont.Style := 1;
+end;
+{$D+}
+procedure edPrecent_Change(Sender: TObject);
+begin
+  MasterData.Params['Precent'] := StrToDecDef(edPrecent.Text,0);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+pnTypePrice:TO4Panel
+Label1:TO4Label
+dbgTypePrice:TO4DBGrid
+Panel1:TO4Panel
+Label3:TO4Label
+edPrecent:TO4Edit
+pnCtg:TO4Panel
+Label2:TO4Label
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+TVS:TO4TableValueSource
+TVSGoods:TO4TableValueSource

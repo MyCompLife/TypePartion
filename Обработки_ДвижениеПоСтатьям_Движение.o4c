@@ -1,0 +1,272 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  Stores, GoodList : ICValueList;
+  S, UrPartner, ManPartner, Partner, Store, GoodDict, ArticleDic, Region : ICDictionary;
+  GoodsTbl, AllGoodsTbl : ICValueTable;
+  V: ICProcessing;
+  DateFrom, DateTo : DateTime;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn('Аналитика', lftString, 250);
+  GoodsTbl.AddColumn('ТоварУслуга', lftLink, 0);
+  GoodsTbl.AddColumn('Партнер', lftLink, 0);
+  GoodsTbl.AddColumn('Document', lftLink, 0); 
+  GoodsTbl.AddColumn('ДатаДокумента', lftDateTime, 0);
+  GoodsTbl.AddColumn('Количество', vtcFft, 7);
+  GoodsTbl.AddColumn('СуммаВВал', vtcFft, 7);
+  GoodsTbl.AddColumn('Валюта', lftLink, 0);
+  GoodsTbl.AddColumn('Курс', vtcFft, 2);
+  GoodsTbl.AddColumn('Сумма', vtcFft, 7);
+  GoodsTbl.AddColumn('MotionSign', vtcInteger, 0);
+  GoodsTbl.Open;
+  AllGoodsTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.CopyColumnsTo(AllGoodsTbl);
+  AllGoodsTbl.Open;
+  UrPartner := CreateObject('Справочники.ЮрПартнеры');
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  //категории
+  GoodDict := CreateObject('Справочники.Товары');
+  GoodList := CreateObject('СписокЗначений');
+end;
+
+procedure Run;
+var
+  i, j : Integer;
+  TotalSum : Variant;
+begin
+  try
+    CursorVis := WaitCursorStart;
+    GoodsTbl.Clear;
+    AllGoodsTbl.Clear;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    GoodsTbl.CopyDataToServer;
+    AllGoodsTbl.CopyDataToServer;
+    try
+      V.RunThreadProcess(server.GetRunReportEP(GoodsTbl.SrvMean, AllGoodsTbl.SrvMean,
+        Region, ArticleDic, rgMain.ItemIndex,
+        DateFrom, DateTo),
+        ReportRunning);
+      GoodsTbl.CopyDataFromServer;
+      AllGoodsTbl.CopyDataFromServer;
+    finally
+      GoodsTbl.SrvMean.Clear;
+      AllGoodsTbl.SrvMean.Clear;
+    end;
+    i := 1;                                  
+    if rgMain.ItemIndex = 0 then
+      begin
+        XGrid.AddSection('TitleGoods');
+        GoodsTbl.SortBy('ТоварУслуга');
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'DetGoods', 'ТоварУслуга;Количество;Сумма;Валюта;Курс;СуммаВВал' , 0, GoodsTbl.LineCount);
+        TotalSum := GoodsTbl.Total('Сумма');
+        GoodsTbl.Clear;
+        GoodsTbl.Append;
+        GoodsTbl.Сумма := TotalSum;
+        GoodsTbl.Post;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'TotalPart', ';Сумма' , 0, 0);
+      end;
+    if rgMain.ItemIndex = 1 then
+      begin                         
+        XGrid.AddSection('TitlePart');
+        GoodsTbl.SortBy('Партнер');
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'DetPart', 'Партнер;;Сумма;Валюта;Курс;СуммаВВал' , 0, GoodsTbl.LineCount);
+        TotalSum := GoodsTbl.Total('Сумма');
+        GoodsTbl.Clear;
+        GoodsTbl.Append;
+        GoodsTbl.Сумма := TotalSum;
+        GoodsTbl.Post;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'TotalPart', ';Сумма' , 0, 0);
+      end;
+    if rgMain.ItemIndex = 2 then
+      begin
+        XGrid.AddSection('TitleDocs');
+        GoodsTbl.SortBy('Document');
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'DetDocs', 'Document;ДатаДокумента;Сумма;Валюта;Курс;СуммаВВал' , 0, GoodsTbl.LineCount);
+        TotalSum := GoodsTbl.Total('Сумма');
+        GoodsTbl.Clear;
+        GoodsTbl.Append;
+        GoodsTbl.Сумма := TotalSum;
+        GoodsTbl.Post;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'TotalDocs', ';;Сумма' , 0, 0);
+      end;
+    XGrid.Cells(1,1,XGrid.RowCount,1).AdjustColWidths(0);    
+    XGrid.FixedRowCount := 4;
+    XGrid.Cell(1, 1).Value := 'Деталізація за період з ' + DateToStr(DateFrom) + ' по ' + DateToStr(DateTo);
+    XGrid.Cell(2, 1).Value := 'Стаття: "' + ArticleDic.Название + '"';
+    XGrid.Cell(3, 1).Value := 'Регіон: ' + Region.Название;
+  finally
+    SetCursor(CursorVis);
+  end;
+  tbPrint.Enabled := True;
+end;
+
+procedure RunNew;
+var
+  i, j : Integer;
+  TotalSum : Variant;
+begin
+  try
+    CursorVis := WaitCursorStart;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    GoodsTbl.Clear;
+    AllGoodsTbl.CopyTo('',GoodsTbl);
+    i := 1;
+    if rgMain.ItemIndex = 0 then
+      begin
+        XGrid.AddSection('TitleGoods');             
+        GoodsTbl.GroupBy('ТоварУслуга;Валюта;Курс','Количество;Сумма;СуммаВВал');
+        GoodsTbl.DoCalculation('Курс','Сумма/СуммаВВал');
+        GoodsTbl.SortBy('ТоварУслуга');
+        GoodsTbl.SelectFirst;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'DetGoods', 'ТоварУслуга;Количество;Сумма;Валюта;Курс;СуммаВВал' , 0, GoodsTbl.LineCount);
+        TotalSum := GoodsTbl.Total('Сумма');
+        GoodsTbl.Clear;
+        GoodsTbl.Append;
+        GoodsTbl.Сумма := TotalSum;
+        GoodsTbl.Post;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'TotalPart', ';;Сумма' , 0, 0);
+      end;
+    if rgMain.ItemIndex = 1 then
+      begin                         
+        XGrid.AddSection('TitlePart');   
+        GoodsTbl.GroupBy('Партнер;Валюта;Курс','Сумма;СуммаВВал');
+        GoodsTbl.DoCalculation('Курс','Сумма/СуммаВВал');
+        GoodsTbl.SortBy('Партнер');   
+        GoodsTbl.SelectFirst;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'DetPart', 'Партнер;;Сумма;Валюта;Курс;СуммаВВал' , 0, GoodsTbl.LineCount);
+        TotalSum := GoodsTbl.Total('Сумма');
+        GoodsTbl.Clear;
+        GoodsTbl.Append;
+        GoodsTbl.Сумма := TotalSum;
+        GoodsTbl.Post;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'TotalPart', ';;Сумма' , 0, 0);
+      end;
+    if rgMain.ItemIndex = 2 then
+      begin                        
+        XGrid.AddSection('TitleDocs');
+        GoodsTbl.DoGetLinks('ДатаДокумента=Document.ДатаДокумента');
+        GoodsTbl.GroupBy('Document;Валюта;Курс;Аналитика;ДатаДокумента','Сумма;СуммаВВал');
+        GoodsTbl.DoCalculation('Курс','Сумма/СуммаВВал');
+        GoodsTbl.SortBy('Document');
+        GoodsTbl.SelectFirst;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'DetDocs', 'Document;ДатаДокумента;Сумма;Валюта;Курс;СуммаВВал' , 0, GoodsTbl.LineCount);
+        TotalSum := GoodsTbl.Total('Сумма');
+        GoodsTbl.Clear;
+        GoodsTbl.Append;
+        GoodsTbl.Сумма := TotalSum;
+        GoodsTbl.Post;
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'TotalDocs', ';;Сумма' , 0, 0);
+      end;
+    XGrid.Cells(1,1,XGrid.RowCount,1).AdjustColWidths(0);
+    XGrid.Cell(1, 1).Value := 'Деталізація за період з ' + DateToStr(DateFrom) + ' по ' + DateToStr(DateTo);
+    XGrid.Cell(2, 1).Value := 'Стаття: "' + ArticleDic.Название + '"';
+    XGrid.Cell(3, 1).Value := 'Регіон: ' + Region.Название;
+  finally
+    SetCursor(CursorVis);
+  end;
+  tbPrint.Enabled := True;
+end;
+
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+   XGrid.Print('Детализация затрат',true);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+  Region := Params.Params['Region'];
+  ArticleDic := Params.Params['StDic'];
+  DateFrom := Params.Params['DateFrom'];
+  DateTo := Params.Params['DateTo'];
+  tbXTools.Visible := GetUDASet('XTools');
+  CreateObjects;
+  server.CreateSrvObjects;
+  XGrid.AddSection('Hed');
+  Run;
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure rgMain_Click(Sender: TObject);
+begin
+  RunNew;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel4:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel1:TO4Panel
+Panel2:TO4Panel
+Panel3:TO4Panel
+rgMain:TO4RadioGroup
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+TableValueSource1:TO4TableValueSource

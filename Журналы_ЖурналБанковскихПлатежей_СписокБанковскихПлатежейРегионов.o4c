@@ -1,0 +1,506 @@
+interface
+
+uses
+ System, DispIntf, ConstNames, InitColors, »нтерфейс, –асчеты, –абота—ѕеременными, –абота—ќбъектами, –абота—ƒокументами¬∆урналах,
+ –абота—“аблицами«наченийCL, ѕользователи, Ќумераци€ƒокументов, ƒополнительный‘ункционал, –абота—ƒокументамиCL;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Options : ICOptions;
+  DateFrom, DateTo : DateTime;
+  OwnerProc : ICProcessing;
+  OutParams : Variant;
+  CurrentRegion : ICDictionary;
+
+procedure GetTotalSums;
+var
+  V : Variant;
+begin
+  MasterData.SrvAssignClientSelectParams;
+  V := server.GetTotalSumsSrv(MasterData.SrvMean);
+  lSum.Caption := FormatFloat('0.00', V);
+  if V < 0 then
+    lSum.Font.Color := clRed
+  else
+    lSum.Font.Color := clNavy;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean; 
+  Options := GetOptions;
+
+ // установка периода
+  DateFrom := Options.GetServerPrm('StartDateFromForReg');
+  DateTo := Options.GetServerPrm('StartDateToForReg');
+  if (DateFrom=0) and (DateTo=0) then
+    begin
+     DateFrom := RoundDate(CurrentDate, rdMonth, False);
+     DateTo := RoundDate(CurrentDate, rdMonth, True)-1;
+    end;
+  MasterData.SetDateRange(RoundDate(DateFrom, rdDay, false), RoundDate(DateTo, rdDay, true));
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;
+begin
+  if MasterData.HasParam('OwnerProc') then
+    OwnerProc := MasterData.Params['OwnerProc'];
+  MakeInterface(tbrData, Nobody, dbgData); 
+  miDocMove.Visible := GetUDASet('viewdocmove'); 
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  if IsNil(Users) then
+    Users := CreateObject('—правочники.ѕользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    begin   
+      if VarAsBool(Users.@–егион.IsFocused) and VarAsBool(Users.ќтборѕо–егиону) then
+        MasterData.SetFieldFilter('–егион','=',Users.–егион,'','',Null);
+      if VarAsBool(Users.ќтборѕоѕользователю) then
+        MasterData.SetFieldFilter('ќтветственный','=',Users.—лужащий,'','',Null);
+    end;
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  GetTotalSums;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+  MasterData.Refresh;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+var IsDateRange : boolean;
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  IsDateRange := MasterData.GetDateRange(DateFrom, DateTo);
+  DateTo := DateTo - 1;
+  if not IsNil(OwnerProc) then
+    OwnerProc.ExecProc(MasterData, 'ChJrnDatePeriod', ArrayOf(DateFrom, DateTo, IsDateRange), OutParams);
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ѕеч”нив∆урнала');
+  V.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+var
+  PrcPrintPayment : ICProcessing;
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if MasterData.GetDocSign = '–асход—–асч—чета' then
+    begin
+      PrcPrintPayment := CreateObject('ќбработки.ѕечатьѕлатежки');
+      PrcPrintPayment.Execute('ѕечатьѕлатежки', MasterData.GetDoc);
+    end
+  else
+    MasterData.GetDoc.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), Null);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  case StrLowerCase(MasterData.GetDocSign) of
+    'приходнарасчсчет' :
+      Index1 := 13;
+    'расходсрасчсчета' :
+      Index1 := 14;
+    'трансферсрасчсчета' :
+      Index1 := 17;
+    'трансфернарасчсчет' :
+      Index1 := 18;
+  end;
+  if MasterData.GetDocState > 0 then
+    Index2 := 10
+  else
+    Index2 := 9;
+end;
+
+procedure dbgData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if MasterData.IsFocused and (MasterData.—умма < 0) then
+    if Highlight then
+      DrawFont.Color := clWhite
+    else
+      DrawFont.Color := clRed;
+end;
+{$D+}
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure pmiCopyDoc_Click(Sender : TObject);
+begin
+  AddDocByTemplate(MasterData);
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case StrLowerCase(ProcID) of
+    'chjrndateperiod' :
+      if  IsArray(InParams) then
+        try
+          DateFrom := InParams[0];
+          DateTo := InParams[1];
+          if VarAsBool(InParams[2]) then
+            MasterData.SetDateRange(RoundDate(DateFrom, rdDay, false), RoundDate(DateTo, rdDay, true))
+          else
+            MasterData.CancelDateRange;
+          MasterData.Refresh;
+        finally
+        end;    
+    'changeregion' :
+      begin
+        if IsObjFocused(InParams) then
+          begin
+            if IsNil(CurrentRegion) then
+              CurrentRegion := CreateObject('—правочники.–егионы');
+            if CurrentRegion.Find(InParams) then
+              MasterData.SetFieldFilter('–егион','=',CurrentRegion,'','',Null)
+            else
+              MasterData.CancelFieldFilter('–егион');
+          end
+        else
+          MasterData.CancelFieldFilter('–егион');
+        MasterData.Refresh;
+      end;
+    'dontuselevel' :
+      begin
+        MasterData.CancelFieldFilter(' атегори€');
+        MasterData.Refresh;
+      end;
+    'levelchanged', 'usenolevel' :
+      begin
+        MasterData.SetFieldFilter(' атегори€', '=', InParams, '', Null, '');
+        MasterData.Refresh;
+      end;
+  end;
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  GetTotalSums;
+end;
+
+procedure pmiDetail_Click(Sender : TObject);
+var
+  DocOJ, OJ : Variant;
+begin
+  if (MasterData.IsFocused) and (MasterData.HasDocOwner) then
+    begin
+      DocOJ := MasterData.GetDocOwner;
+      if VarAsBool(DocOJ.IsFocused) then
+        begin
+          case VarAsStr(DocOJ.GetSign) of
+            '—четЌаѕродажу' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаѕродажу');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            '—четЌа омплект' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—борки омплектов');
+                OJ.OpenAttachFormTo('—писок—борки омплектов', MasterData);
+              end;
+            '—четЌа«акупку' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌа«акупку');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            'Ќакладна€ќтпуска', 'Ќакладна€ѕрихода' :
+              begin
+                OJ := CreateObject('∆урналы.∆урналЌакладных');
+                OJ.OpenAttachFormTo('—писокЌакладных', MasterData);
+              end;
+            '–еализаторы' :
+              begin
+                OJ := CreateObject('—правочники.–еализаторы');
+                OJ.OpenForm(' арточки–еализаторов');
+              end;
+            'ѕостЌа–еализацию' :
+              begin
+                OJ := CreateObject('—правочники.ѕостЌа–еализацию');
+                OJ.OpenForm(' арточкиѕостЌа–еал');
+              end;
+            '“орговые“очки' :
+              begin
+                OJ := CreateObject('—правочники.“орговые“очки');
+                OJ.OpenForm('“орговые“очки');
+              end;
+            'ƒоговѕоставки' :
+              begin
+                OJ := CreateObject('—правочники.ƒоговѕоставки');
+                OJ.OpenForm(' арточкиƒоговѕост');
+              end;
+            'Ѕартер' :
+              begin
+                OJ := CreateObject('—правочники.Ѕартер');
+                OJ.OpenForm('Ѕартерныеќперации');
+              end;
+            ' онтракт»мпорт' :
+              begin
+                OJ := CreateObject('—правочники. онтракт»мпорт');
+                OJ.OpenForm(' онтракт»мпорт');
+              end;
+            '¬озвратќтѕокупателей' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал¬озвратовќтѕокупател€');
+                OJ.OpenAttachFormTo('—писок¬озвратов', MasterData);
+              end;
+            '¬озвратѕоставщикам' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал¬озвратовѕоставщикам');
+                OJ.OpenAttachFormTo('—писок¬озвратов', MasterData);
+              end;
+            '—четЌаќказание”слуг' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаќказание”слуг');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            '—четЌаѕолучение”слуг' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаѕолучение”слуг');
+                OJ.OpenAttachFormTo('—писок—четовЌаѕолучение”слуг', MasterData);
+              end;
+            'ќбъектыѕроизводства' :
+              begin
+                OJ := CreateObject('—правочники.ќбъектыѕроизводства');
+                OJ.OpenForm(' арточкиќбъектов');
+              end;
+            'Ќачисление«арплаты_B', 'Ќачисление«арплаты_D' :
+              begin
+                OJ := CreateObject('∆урналы.∆урналЌачислени€«арплаты_B');
+                OJ.OpenAttachFormTo('—писокЌачислений«арплаты', MasterData);
+              end;
+            //‘арм
+            '—четЌаѕродажу‘арм' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаѕродажу‘арм');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            '—четЌа«акупку‘арм' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌа«акупку‘арм');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            'Ќакладна€ќтпуска‘арм', 'Ќакладна€ѕрихода‘арм' :
+              begin
+                OJ := CreateObject('∆урналы.∆урналЌакладных‘арм');
+                OJ.OpenAttachFormTo('—писокЌакладных', MasterData);
+              end;
+            '–еализаторы‘арм' :
+              begin
+                OJ := CreateObject('—правочники.–еализаторы‘арм');
+                OJ.OpenForm(' арточки–еализаторов');
+              end;
+            'ѕостЌа–еализацию‘арм' :
+              begin
+                OJ := CreateObject('—правочники.ѕостЌа–еализацию‘арм');
+                OJ.OpenForm(' арточкиѕостЌа–еал');
+              end;
+            '¬озвратќтѕокупателей‘арм' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал¬озвратовќтѕокупател€‘арм');
+                OJ.OpenAttachFormTo('—писок¬озвратов', MasterData);
+              end;
+            '¬озвратѕоставщикам‘арм' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал¬озвратовѕоставщикам‘арм');
+                OJ.OpenAttachFormTo('—писок¬озвратов', MasterData);
+              end;
+            '—четЌаќказание”слуг‘арм' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаќказание”слуг‘арм');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            //јлко
+            '—четЌаѕродажујлко' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаѕродажујлко');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            '—четЌа«акупкујлко' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌа«акупкујлко');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            'Ќакладна€ќтпускајлко', 'Ќакладна€ѕриходајлко' :
+              begin
+                OJ := CreateObject('∆урналы.∆урналЌакладныхјлко');
+                OJ.OpenAttachFormTo('—писокЌакладных', MasterData);
+              end;
+            '¬озвратќтѕокупателейјлко' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал¬озвратовќтѕокупател€јлко');
+                OJ.OpenAttachFormTo('—писок¬озвратов', MasterData);
+              end;
+            '¬озвратѕоставщикамјлко' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал¬озвратовѕоставщикамјлко');
+                OJ.OpenAttachFormTo('—писок¬озвратов', MasterData);
+              end;
+            '—четЌаќказание”слугјлко' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаќказание”слугјлко');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            //–еклама
+            '—четЌаќказание”слуг–еклама' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаќказание”слуг–еклама');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+            //–есторан
+            '—четЌаѕродажу–есторан' :
+              begin
+                OJ := CreateObject('∆урналы.∆урнал—четовЌаѕродажу–есторан');
+                OJ.OpenAttachFormTo('—писок—четов', MasterData);
+              end;
+          end;
+          if IsObject(OJ) then
+            if VarAsBool(OJ.IsType('∆урналы')) and VarAsBool(DocOJ.IsFocused) then
+              begin
+                OJ.SetDocStateRange(DocOJ.GetDocState);
+                OJ.SetDateRange(DocOJ.GetDate, DocOJ.GetDate);
+                OJ.SetDocTypeRange('ƒокументы.' + DocOJ.GetSign);
+                OJ.CancelRangeByField;
+                if not VarAsBool(OJ.FindDoc(DocOJ)) then
+                  ShowMessage(DontFindLinkDocum);
+              end
+            else
+              if not VarAsBool(OJ.Find(DocOJ)) then
+                ShowMessage(DontFindLinkDocum);
+        end
+      else
+        ShowMessage(DontFindLinkDocum)
+    end
+  else
+    ShowMessage(SingleDocum);
+end;
+
+procedure miTaxNakl_Click(Sender : TObject);
+var
+  Nakls : ICDocuments;
+begin
+  case VarAsStr(MasterData.GetDoc.GetSign) of
+    '–асход—–асч—чета' :
+      begin
+        Nakls := CreateObject('ƒокументы.ƒокумент”четаѕокупок');
+        Nakls.Params['¬ладелец'] := MasterData.GetDoc;
+        Nakls.EditInForm('ƒокумент”четаѕокупок', 0);
+      end;
+    'ѕриходЌа–асч—чет' :
+      begin
+        Nakls := CreateObject('ƒокументы.ƒокумент”четаѕродаж');
+        Nakls.Params['¬ладелец'] := MasterData.GetDoc;
+        Nakls.EditInForm('ƒокумент”четаѕродаж', 0);
+      end;
+  end;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure dmNotes_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData, ' омментарий');
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  dmNotes.ReadOnly := not MasterData.IsFocused or (MasterData.GetDocState > 0);
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('ќбработки.ƒвижениеѕоƒокументу');
+      P.Execute('ƒвижениеѕоƒокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure tbAdd_VPABeforeActionClick(Sender: TObject);
+begin
+  if IsObjFocused(CurrentRegion) then
+    DefDocRegionCode := VarAsStr(CurrentRegion. од);
+end;
+
+procedure tbAdd_Click(Sender: TObject);
+begin
+ DefDocRegionCode := '';
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.»нфо»зменений');
+  V.Execute('»нфо»зменений', MasterData.GetDoc);
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+Panel5:TO4Panel
+dmNotes:TO4DBMemo
+tsState:TO4TabSet
+Panel3:TO4Panel
+Label1:TO4Label
+lSum:TO4Label
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+miCopyDoc:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiRefresh:TO4MenuItem
+pmiDetail:TO4MenuItem
+MenuItem1:TO4MenuItem
+miTaxNakl:TO4MenuItem
+miDocMove:TO4MenuItem
+MDS:TO4DataSource
+miInfoChange:TO4MenuItem

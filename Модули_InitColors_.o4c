@@ -1,0 +1,31 @@
+interface
+
+uses System, DispIntf, ConstNames;
+
+var
+  NoPayNorm, NoPaySel, BlZero, BlZeroSel, BlFZero, BlFZeroSel : Integer;
+  Opt : ICOptions;
+
+procedure SetColors(Constants : IC4VPAConst);
+
+implementation
+
+procedure SetColors(Constants : IC4VPAConst);
+begin
+  if IsNil(Opt) then
+    Opt := CreateObject('ќпции лиента');
+  if NoPayNorm = 0 then
+    NoPayNorm := VarAsInt(Opt.GetServerPrm(NoPayNormOpt));
+  if NoPaySel = 0 then
+    NoPaySel := VarAsInt(Opt.GetServerPrm(NoPaySelOpt));
+  if BlZero = 0 then
+    BlZero := VarAsInt(Opt.GetServerPrm(BlZeroOpt));
+  if BlZeroSel = 0 then
+    BlZeroSel := VarAsInt(Opt.GetServerPrm(BlZeroSelOpt));
+  if BlFZero = 0 then
+    BlFZero := VarAsInt(Opt.GetServerPrm(BlFZeroOpt));
+  if BlFZeroSel = 0 then
+    BlFZeroSel := VarAsInt(Opt.GetServerPrm(BlFZeroSelOpt));
+end;
+
+end.

@@ -1,0 +1,432 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, РаботаСОбъектами, РаботаСДокументамиВЖурналах, Пользователи, ДополнительныйФункционал,
+  РаботаСТаблицамиЗначений, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  ChildPaysOut, MasterData : ICJournal;
+  Constants :IC4VPAConst;
+  Doc : ICDocuments;
+  Options : ICOptions;
+  PrintList : ICValueList;
+  Users: ICDictionary;
+  PaysTbl: ICValueTable;
+
+procedure GetTotalSums;
+var
+  V : Variant;
+begin
+  MasterData.SrvAssignClientSelectParams;
+  V := server.GetTotalSumsSrv(MasterData.SrvMean);
+  lSum.Caption := FormatFloat('0.00', V);
+  if cbPaySum.Checked then
+    begin
+      V := server.GetTotalPaySrv(MasterData.SrvMean);
+      lPay.Caption := FormatFloat('0.00', V);
+    end
+  else
+   lPay.Caption := FormatFloat('0.00', 0);
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Options := GetOptions;
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+  ChildPaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  ChildPaysOut.UseMaster(MasterData);
+
+  PaysTbl := CreateObject('ValueTable');
+  PaysTbl.AddColumn('Документ',vtcLink,0);
+  PaysTbl.AddColumn('Дата',vtcDateTime,0);
+  PaysTbl.AddColumn('СуммаДок',vtcFFT,2);
+  PaysTbl.AddColumn('Сумма',vtcFFT,2);
+  PaysTbl.AddColumn('Calc',vtcInteger,0);
+  PaysTbl.Open;
+  PaysTbl.SetColumnFormat('СуммаДок','0.00');
+  PaysTbl.SetColumnFormat('Сумма','0.00');
+
+  server.InitSrvDate;
+end;
+
+procedure TabSet1_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+   MasterData.SetDocStateRange(NewTab-1);
+   MasterData.Select;
+end;
+
+procedure Form_Open(Sender: TObject);
+var
+  Nobody : TO4Toolbar;
+  i : integer;
+begin
+  Users := GetDictUser;
+  Constants := GetConstants;
+  MakeInterface(tbr, Nobody, dbGridData); 
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  for i := 0 to MasterData.StateCount - 1 do
+    TabSet1.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.CancelRangeByField;
+  GetPrintersList(PrintList, edPrinters, MasterData.GetSign);
+  if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    begin
+      if VarAsBool(Users.@Регион.IsFocused) and VarAsBool(Users.ОтборПоРегиону) then
+        MasterData.SetFieldFilter('Регион','=',Users.Регион,'','',Null);
+      if VarAsBool(Users.ОтборПоПользователю) then
+        MasterData.SetFieldFilter('Ответственный','=',Users.Служащий,'','',Null);
+        pPays.Enabled := not(Users.БлокировкаПлатежей);
+    end;
+  MasterData.DefineSelectParams(True);
+  TabSet1.TabIndex := MasterData.GetDocStateRange+1;
+//  ChildPaysOut.OpenFormInplace('СписокПодчиненныхПлатежей', CtrlToVar(pPaysOut));
+  GetTotalSums;
+end;
+
+procedure btnRefresh_Click(Sender : TObject);
+begin
+   MasterData.Refresh;
+   GetTotalSums;
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+ MasterData.DefineSelectParams(False);
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  GetTotalSums;
+end;
+
+procedure ToolButton3_Click(Sender: TObject);
+var V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ОбработкаОбъектов');
+  V.OpenForm('Главная');
+end;
+
+procedure MenuItem10_Click(Sender: TObject);
+Var
+  Currency : ICDictionary;
+  Doc : ICDocuments;
+begin
+  Currency := CreateObject('Справочники.Валюты');
+  if Currency.FindByCode('грн',false) then
+    begin         
+      Doc := MasterData.GetDoc;
+      Doc.Edit;
+      Doc.Валюта := Currency;
+      Doc.Курс := 1;
+      Doc.Post;
+      Doc.ApplyUpdates;
+    end;
+end;
+
+procedure MenuItem11_Click(Sender: TObject);
+Var 
+  JournalOut : ICJournal;
+begin
+  JournalOut := CreateObject('Журналы.ЖурналПродаж');
+  MasterData.Select;
+  While MasterData.SelectNext Do
+    Begin
+      JournalOut.AddDoc(MasterData.GetDoc);
+    End;
+end;
+
+procedure cbPaySum_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+  GetTotalSums;
+end;
+
+{$D-}
+procedure dbGridData_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if (MasterData.ОплаченоВал > 0) and (MasterData.ОплаченоВал < MasterData.СуммаВал) then
+        Index1 := 8
+      else
+        if (MasterData.ОплаченоВал > 0) and (MasterData.ОплаченоВал > MasterData.СуммаВал) then
+          Index1 := 7
+        else
+          if (MasterData.ОплаченоВал > 0) and (MasterData.ОплаченоВал = MasterData.СуммаВал) then
+            Index1 := 6;
+      if MasterData.GetDocState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9;
+    end;
+end;
+
+procedure dbgPayDoc_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if VarAsBool(PaysTbl.@Документ.IsFocused) and (PaysTbl.Сумма <> PaysTbl.СуммаДок) then
+    begin
+      Index1 := 8
+    end;
+end;
+
+procedure dbGridData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if MasterData.IsFocused and (MasterData.Импорт > 0) then
+    if Highlight then
+      DrawFont.Color := clWhite
+    else
+      DrawFont.Color := clBlue;
+end;
+{$D+}
+
+
+procedure miPayCheck_Click(Sender: TObject);
+var
+  PayDoc: ICDocuments;
+  OptUser : Variant;
+begin
+  PayDoc := CreateObject('Документы.ПриходВКассу');
+  PayDoc.Params['AddPay'] := true;
+  PayDoc.Params['OwnerDoc'] := MasterData.GetDoc;
+  PayDoc.EditInForm('ПриходВКассуПоЧеку',null);
+  if PayDoc.HasParam('mrOk') then
+  begin
+    try
+      OptUser := Options.GetServerPrm(FixAck);
+      Options.SetServerPrm(FixAck, false);
+      PayDoc.StateUp;
+    finally
+      Options.SetServerPrm(FixAck, OptUser);
+    end
+  end;
+  MasterData.Refresh;
+  ChildPaysOut.Refresh;
+end;
+
+procedure miCopyInNaklIn_Click(Sender: TObject);
+Var
+  DocNew: ICDocuments;
+begin
+  DocNew := CreateObject('Документы.НакладнаяПрихода');
+  DocNew.Params['CheckDoc'] := MasterData.GetDoc;
+  DocNew.EditInForm('НакладнаяПрихода', 0);
+end;
+
+procedure btnPrint_Click(Sender: TObject);
+var
+  PrinterName: String;    
+  V : ICProcessing;
+begin
+  PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  //PrintOnUserDevice('Обработки.ПечатьЧека', 'ЧекА4ГРН', PrinterName, MasterData);
+  V := CreateObject('Обработки.ПечатьЧека');
+  V.PrintForm('ЧекА4ГРН', true, MasterData.GetDoc);
+//  V := CreateObject('Обработки.ПечатьЧека');
+//  V.Execute('ЧекА4Excel', MasterData.GetDoc);
+end;
+
+procedure MenuItem13_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечУнивЖурнала'); //ПечУнивЖурналаСКоличеством
+  V.PrintForm('ПечУнивЖурналаЧеков', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+end;
+
+procedure miPrintBarCode_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      V := CreateObject('Обработки.ПечатьЧека');
+      V.PrintForm('ПечатьШтрихКодовДляКлиента', true, MasterData.GetDoc);
+    end;
+end;
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  SaveUserActivePrinter(PrinterName, MasterData.GetSign);
+end;
+
+procedure DBComment_Exit(Sender: TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData, 'Заметки');
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender: TObject);
+var
+  Doc: ICDocuments;
+  Sum, Days: Decimal;
+  CurrCode: String;
+begin
+  if MasterData.IsFocused then
+    begin
+      PaysTbl.UseDataSource(0);
+      Doc := MasterData.GetDoc;
+      Doc.SetSrvToClientPos;
+      PaysTbl.Clear;
+      PaysTbl.CopyDataToServer;
+      Server.GetPaysTbl(PaysTbl.SrvMean, Doc.SrvMean, Sum, CurrCode);
+      PaysTbl.CopyDataFromServer;
+      PaysTbl.SortBy('Calc;Дата');
+      PaysTbl.SetRange(1,1);
+      PaysTbl.Select;
+      if PaysTbl.SelectFirst then
+        Days := CurrentDate - RoundDate(PaysTbl.Дата, rdDay, false);
+      PaysTbl.SortBy('Calc;-Дата');
+      PaysTbl.SetRange(1,1);
+      PaysTbl.Select;
+      PaysTbl.UseDataSource(CtrlToVar(TVSPays));
+      if VarAsDec(Sum) < 0 then
+        begin
+          lbPayTitle.Caption := 'Мы должны:';
+          lbPayTitle.Font.Color := ClRed;
+          lbPaySum.Caption := FormatFloat('0.00',-VarAsDec(Sum));
+          lbPaySum.Font.Color := ClRed;
+          pPayDays.Visible := false;
+          pDelayDays.Visible := false;
+        end
+      else
+        begin
+          pDelayDays.Visible := false;
+          lbPayTitle.Caption := 'Нам должны:';
+          lbPayTitle.Font.Color := ClNavy;
+          lbPaySum.Caption := FormatFloat('0.00',VarAsDec(Sum));
+          lbPaySum.Font.Color := ClNavy;
+          pPayDays.Visible := true;
+          lbPayDaysTitle.Font.Color := ClNavy;
+          lbPayDays.Font.Color := ClNavy;
+          lbPayDays.Caption := FormatFloat('0.#', Days);
+          if Days > VarAsInt(MasterData.Партнер.СрокОплаты) then
+            begin
+              lDelayTitle.Font.Color := ClRed;
+              pDelayDays.Visible := true;
+              lDelayDays.Caption := FormatFloat('0.#', Days - VarAsInt(MasterData.Партнер.СрокОплаты));
+              lDelayDays.Font.Color := ClRed;
+            end;
+        end;
+      lbCurr.Caption := CurrCode;
+    end;
+end;
+
+procedure miPrintNakl_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечатьЧека');
+  V.PrintForm('Накладная', true, MasterData.GetDoc);
+end;
+
+procedure miViewOrder_Click(Sender: TObject);
+var
+  TblOrder: ICValueTable;
+  V: ICProcessing;
+begin
+  if VarAsBool(MasterData.Импорт) then
+    begin
+      TblOrder := CreateTblFromBLOB(MasterData.GetDoc.ЗаказСайт);
+      if not IsNil(TblOrder) then
+        begin
+          V := CreateObject('Обработки.ЭкспортИмпортССайтом');
+          V.Execute('ЗаказСайт',TblOrder);
+        end
+      else
+        ShowMessage('Таблица заказа с сайта пуста!');
+    end
+  else
+    ShowMessage('Чек не импортирован с сайта!');
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel2:TO4Panel
+dbGridData:TO4DBGrid
+TabSet1:TO4TabSet
+Tbr:TO4ToolBar
+btnAdd:TO4ToolButton
+btnEdit:TO4ToolButton
+btnStateUp:TO4ToolButton
+btnStateDown:TO4ToolButton
+btnDel:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbSelect:TO4ToolButton
+btnPrint:TO4ToolButton
+ToolButton4:TO4ToolButton
+ToolButton2:TO4ToolButton
+btnRefresh:TO4ToolButton
+tbParams:TO4ToolButton
+ToolButton3:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+lSum:TO4Label
+lPay:TO4Label
+cbPaySum:TO4CheckBox
+Panel4:TO4Panel
+Label4:TO4Label
+btSaveActivPrinter:TO4Button
+edPrinters:TO4Edit
+Panel3:TO4Panel
+Splitter3:TO4Splitter
+pPays:TO4Panel
+Label2:TO4Label
+nbPays:TO4Notebook
+pPaysIn:TO4Panel
+pPaysOut:TO4Panel
+Panel6:TO4Panel
+lbPayTitle:TO4Label
+lbCurr:TO4Label
+Panel7:TO4Panel
+lbPaySum:TO4Label
+dbgPayDoc:TO4DBGrid
+pPayDays:TO4Panel
+lbPayDaysTitle:TO4Label
+pP:TO4Panel
+lbPayDays:TO4Label
+pDelayDays:TO4Panel
+lDelayTitle:TO4Label
+pD:TO4Panel
+lDelayDays:TO4Label
+Panel5:TO4Panel
+Label5:TO4Label
+dbComment:TO4DBMemo
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+MenuItem4:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem15:TO4MenuItem
+miPayCheck:TO4MenuItem
+MenuItem6:TO4MenuItem
+MenuItem7:TO4MenuItem
+MenuItem12:TO4MenuItem
+miPrintBarCode:TO4MenuItem
+MenuItem14:TO4MenuItem
+MenuItem13:TO4MenuItem
+miPrintNakl:TO4MenuItem
+MenuItem8:TO4MenuItem
+MenuItem9:TO4MenuItem
+MenuItem10:TO4MenuItem
+MenuItem11:TO4MenuItem
+MenuItem16:TO4MenuItem
+miCopyInNaklIn:TO4MenuItem
+MenuItem17:TO4MenuItem
+miViewOrder:TO4MenuItem
+TVSPays:TO4TableValueSource
+miInfoChange:TO4MenuItem

@@ -1,0 +1,314 @@
+interface
+
+uses
+ System, DispIntf, Расчеты,  РаботаСSMS;
+
+implementation
+var TextMessage, Tel, ServerAnswer : string;
+    DisableSMSCharWaring, CyrilicCharPresent : boolean;
+    SMSCount : integer;
+    Partner, SMSConfigDic, TelDic, TextMessDic, Respons : ICDictionary;
+    SMSDoc : ICDocuments;
+    Price, SumDoc : Decimal;
+    MasterData : ICProcessing;
+
+procedure CalcSum;
+begin
+   SumDoc := Price * SMSCount;
+   ePrice.Text := VarAsStr(Price);
+   eSumDoc.Text := VarAsStr(SumDoc);
+end;
+
+
+procedure MemoTextMessage_Change(Sender: TObject);
+var  CyrilicCharPresentText : string;
+begin
+ TextMessage := MemoTextMessage.Lines.Text;
+ CheckValidTextMessage(TextMessage, DisableSMSCharWaring, CyrilicCharPresent, SMSCount);
+ if CyrilicCharPresent then
+  CyrilicCharPresentText := ' (Кирилица)'
+ else
+  CyrilicCharPresentText := ' (Латиница)';
+ TextMessageCommentLabel.Caption :=  'Количество символов: '+ VarAsStr(StrLength(TextMessage))+ #13 +
+                                      'Количество SMS: ' +  VarAsStr(SMSCount) + CyrilicCharPresentText;
+ CalcSum;
+end;
+
+procedure CloseFormWithMessage(Message:string);
+begin
+   showmessage(Message);
+   form.ModalResult := mrCancel;
+   Form.Close;
+end;
+
+procedure GetActiveTelForPartner;
+begin
+ if TelDic.UseMasterAndSelect(Partner) then
+   begin
+     if not TelDic.FindByField('Активность', True, False) then
+       begin
+        TelDic.Select;
+        TelDic.SelectNext;
+       end;
+     if TelDic.IsFocused then
+      eTel.Text := StrOnlyDigitTel(TelDic.Номер);
+   end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin   
+ MasterData := Mean;
+  try
+   if IsObjFocused(Params[0]) then
+     Partner := Params[0];
+   Tel := StrOnlyDigitTel(VarAsStr(Params[1]));
+   TextMessage := VarAsStr(Params[2]);
+   eComment.Text := VarAsStr(Params[3]);
+  except
+    CloseFormWithMessage('Не указаны парамтеры обработки');
+  end;
+
+ eTel.Text := Tel;
+ MemoTextMessage.Lines.Text := TextMessage;
+ SMSConfigDic := CreateObject('Справочники.SMSНастройки');
+ TelDic := CreateObject('Справочники.Телефоны');
+ TelDic.Params['SMS'] := true;
+ TextMessDic := CreateObject('Справочники.SMSШаблоныСообщений');
+ Respons := CreateObject('Справочники.Служащие');
+ if Respons.FindByField('ПолноеНазвание', GetUserName, False) then
+   eEmpl.Text := VarAsStr(Respons.ПолноеНазвание,'');
+ if IsObjFocused(Partner) then
+   ePartner.Text := VarAsStr(Partner.ПолноеНазвание,'');
+ TelDic.SetFieldFilter('SMSРассылка','=',true,'','',Null);
+ if (Tel = '') and IsObjFocused(Partner) then
+   GetActiveTelForPartner;
+ if SMSConfigDic.FindByField('Активность',True,false) then
+  begin
+   //UpdatePriceByDic(SMSConfigDic, ServerAnswer);
+   eSMSConfig.Text := SMSConfigDic.NameField;
+   eSender.Text := SMSConfigDic.Отправитель;
+   Price := SMSConfigDic.ЦенаSMS;
+   CalcSum;
+  end;
+
+end;
+
+
+
+procedure btSelectTextMessage_Click(Sender: TObject);
+begin
+ if TextMessDic.SelectInForm('ВыборТекстаSMSСообщения',TextMessage , Null) then
+   MemoTextMessage.Lines.Text := TextMessage;
+end;
+
+
+procedure eTel_ActionClear(Sender: TObject);
+begin
+ eTel.Text := '';
+end;
+
+procedure eTel_ActionExecute(Sender: TObject);
+begin
+ TelDic.UseMaster(Partner);
+ TelDic.SetFieldFilter('SMSРассылка','=',true,'','',Null);
+ if TelDic.SelectInForm('ПросмотрТелефонов',Tel,Null) then
+  begin
+    eTel.Text := StrOnlyDigitTel(TelDic.Номер);
+    if IsNil(Partner) then
+     begin
+      Partner := TelDic._GetOwner;
+      ePartner.Text := Partner.ПолноеНазвание;
+     end;
+  end;
+end;
+
+procedure eSMSConfig_ActionClear(Sender: TObject);
+begin
+ Price := 0;
+ CalcSum;
+ eSMSConfig.Text := '';
+end;
+
+procedure eSMSConfig_ActionExecute(Sender: TObject);
+var DefName : string;
+begin
+ if SMSConfigDic.SelectInForm('',DefName,Null) then
+  begin
+   eSMSConfig.Text := SMSConfigDic.NameField;
+   eSender.Text := SMSConfigDic.Отправитель;
+   Price := SMSConfigDic.ЦенаSMS;
+   CalcSum;
+  end;
+end;
+
+procedure btOk_Click(Sender: TObject);
+var error : Boolean;
+    ErrorMessage : string;
+    GoodSMSCount : integer;
+    ProgressBar : TO4ProgressBar;
+begin
+  if (eSMSConfig.Text='') or  (not SMSConfigDic.IsFocused) then
+   begin
+    ShowMessage('Не заданы SMS-настройки!');
+    exit;
+   end;
+  if not ValidTelNumber(eTel.Text) then
+   begin
+    ShowMessage('Не правильный номер телефона');
+    exit;
+   end;
+ TextMessage := MemoTextMessage.Lines.Text;
+ CheckValidTextMessage(TextMessage, DisableSMSCharWaring, CyrilicCharPresent, SMSCount);
+ if TextMessage='' then
+   begin
+    ShowMessage('Не правильный текст сообщения');
+    exit;
+   end;
+ if eSender.Text='' then
+   begin
+    ShowMessage('Не задан отправитель');
+    exit;
+   end;
+ error := false;
+ try
+  SMSDoc := CreateObject('Документы.SMSРассылка');
+  SMSDoc.Select;
+  SMSDoc.Append;
+  SMSDoc.Комментарий := eComment.Text;
+  SMSDoc.КоличествоСообщений := 1;
+  SMSDoc.СуммаРасчетная := SumDoc;
+  SMSDoc.Отправитель := eSender.Text;
+  SMSDoc.Ответственный := Respons;
+  SMSDoc.SMSНастройки := SMSConfigDic;
+  SMSDoc.ЦенаSMS := Price;
+  SMSDoc.ОбщТекстСообщения := TextMessage;
+  SMSDoc.ИспОбщТекстСообщения := true;
+  SMSDoc.КоличествоSMSОбщ := SMSCount;
+  SMSDoc.СтатусДокумента := 0;
+  SMSDoc.КоличествоSMSОбщТекст := SMSCount;
+   SMSDoc.AppendLine;
+   if IsObjFocused(Partner) then
+     SMSDoc.партнер := Partner; 
+   SMSDoc.ПолноеНазваниеПартнера := ePartner.Text;
+   SMSDoc.НомерТелефона := eTel.Text;
+   SMSDoc.текстсообщения := '';
+   SMSDoc.messageid := '';
+   SMSDoc.ответсервера := '';
+   SMSDoc.статуссообщения := 'создано';
+   SMSDoc.кодстатусасообщения := 0;
+   SMSDoc.PostLine;
+  SMSDoc.Post;
+  SMSDoc.ApplyUpdates;
+ except
+  ShowMessage('Не удалось создать документ SMS-рассылки!');
+  error := true;
+ end;
+ if Error then exit;
+ // Отправка документа
+ if CheckValidSMSdocument(SMSDoc,ErrorMessage) then
+  begin
+   if SendSMSDocument(SMSDoc,GoodSMSCount,ProgressBar) then
+    begin
+     if CheckStatusSMSDocument(SMSDoc,GoodSMSCount,ProgressBar) then
+      ShowMessage('Сообщение доставлено')
+     else
+      ShowMessage('Сообщение отправлено, но пока нет подтверждения о доставке');  
+     if SMSDoc.SelectLines and SMSDoc.SelectNextLine then 
+      MasterData.Params['MessageID'] := VarAsStr(SMSDoc.MessageID);
+     MasterData.Params['SMSDoc']:= SMSDoc;
+    end
+   else
+    ShowMessage('Документ SMS-рассылки создан, но его не удалось отправить!');
+   Form.ModalResult := mrCancel;
+   Form.Close;
+  end
+ else
+  ShowMessage('ErrorMessage');
+end;
+
+procedure ePartner_ActionClear(Sender: TObject);
+begin
+ ePartner.Text := '';
+ Partner := Null;
+end;
+
+procedure miFizPart_Click(Sender: TObject);
+var DefName, SelectFormName : string;
+begin
+ with Sender as TO4MenuItem do
+  begin
+   case Tag of
+    0:   // Физ.Лица
+     begin
+      Partner := CreateObject('Справочники.ФизЛица');
+      SelectFormName := 'ПодборФизЛицДляSMS';
+     end;
+    1:   // ЮрЛица
+     begin
+      Partner := CreateObject('Справочники.ЮрПартнеры');
+      //SelectFormName := 'ВыборПартнера';
+      SelectFormName := 'ПодборПартнеровДляSMS';
+     end;
+    2:   // служащие
+     begin  
+      Partner := CreateObject('Справочники.Служащие');
+      SelectFormName := 'ПодборСлужащегоДляSMS';
+     end;
+   end; 
+   if Partner.SelectInForm(SelectFormName,DefName,Null) then
+    begin
+     ePartner.Text := Partner.ПолноеНазвание;
+     if (Partner.HasParam('SMSTel')) and (StrLength(Partner.Params['SMSTel'])>0) then
+       eTel.Text := Partner.Params['SMSTel']
+     else
+      begin  
+       eTel.Text := '';
+       GetActiveTelForPartner;
+      end;
+    end
+   else
+    Partner := Null;
+  end;
+end;
+{$D-}
+procedure ePartner_ActionExecute(Sender: TObject);
+var x,y : integer;
+begin
+ ePartner.GetScreenPos(x,y);
+ pmSelectPartner.Popup(x+ePartner.Width-100,y+ePartner.Height);
+end;
+{$D+}
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pcMain:TO4PageControl
+tsPage1:TTabSheet
+pMaine:TO4Panel
+Label10:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+TextMessageCommentLabel:TO4Label
+ePartner:TO4Edit
+eTel:TO4Edit
+MemoTextMessage:TO4Memo
+btSelectTextMessage:TO4Button
+tsPage2:TTabSheet
+pDevices:TO4Panel
+Label7:TO4Label
+Label8:TO4Label
+Label9:TO4Label
+Label6:TO4Label
+Label11:TO4Label
+Label5:TO4Label
+eSMSConfig:TO4Edit
+ePrice:TO4Edit
+eSumDoc:TO4Edit
+eSender:TO4Edit
+eEmpl:TO4Edit
+eComment:TO4Edit
+Panel1:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+pmSelectPartner:TO4PopupMenu
+miFizPart:TO4MenuItem
+miUroPart:TO4MenuItem
+miEmplPart:TO4MenuItem

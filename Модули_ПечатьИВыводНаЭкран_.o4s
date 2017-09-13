@@ -1,0 +1,59 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –абота—ѕеременными, –абота—ќбъектами, ”становка¬ажныхќбъектов;
+
+function GetExtStringFieldValue(ExtFieldValue : Variant; AdditSuff, AdditPref : string = '') : string;
+function SetCtgFilter(LstSelectedCats : ISValueList; AccsForCatFilter : ISAccs;
+  FilterFieldName : string) : Boolean;
+
+implementation
+
+function GetExtStringFieldValue(ExtFieldValue : Variant; AdditSuff, AdditPref : string = '') : string;
+begin
+  if IsObjFocused(ExtFieldValue) then
+    Result := GetDefaultLinkValue(ExtFieldValue)
+  else
+    Result := VarAsStr(ExtFieldValue);
+  if Result <> '' then
+    Result := AdditPref + Result + AdditSuff;
+end;
+
+procedure GetSelectedAsVList(DicCats : ISDictionary; LstSelectedCats : ISValueList); server;
+var
+  TblTemp : ISValueTable;
+begin
+  if not DicCats.Select then // используем справочник категорий как справочник товаров
+    exit;
+  TblTemp := CreateObject('“аблица«начений');
+  DicCats.SaveToValueTable('', TblTemp, 1, DicCats.RecordCount);
+  TblTemp.GroupToList('Self', LstSelectedCats);
+end;
+
+function SetCtgFilter(LstSelectedCats : ISValueList; AccsForCatFilter : ISAccs;
+  FilterFieldName : string) : Boolean;
+begin
+  Result := True;
+  try
+    case VarAsInt(LstSelectedCats.Params['ViewCatsAction']) of
+      11 {actUseLevel} :
+        if LstSelectedCats.Count > 0 then
+          AccsForCatFilter.SetCtgFieldFilter(FilterFieldName, LstSelectedCats)
+        else
+          Result := False; // + AccsForCatFilter.SetFieldFilter(FilterFieldName, Null) - ничего не надо
+      10 {actDontUseLevel} : 
+        ; // фильтр не нужен
+      15 {actUseNoLevel} : // фильтр на безкатегорные
+        begin
+          if LstSelectedCats.Count > 0 then
+            AccsForCatFilter.SetFieldFilter(FilterFieldName, LstSelectedCats) // в списке уже должны быть сами безкатегорные элементы
+          else
+            Result := False; // AccsForCatFilter.SetFieldFilter(FilterFieldName, Null);
+        end;
+    end;
+  finally
+    LstSelectedCats.Clear;
+  end;
+end;
+
+end.

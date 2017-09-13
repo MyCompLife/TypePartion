@@ -1,0 +1,325 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+  V : Variant;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  V := Form.GetParams;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  FulSum : Variant;
+  Partner, TmpAcc, TmpBank : ICDictionary;
+  str : string;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      FulSum := MasterData.Сумма;
+      Value['SumNT'] := MasterData.СуммаБезНДС;
+      Value['Tax'] := MasterData.СуммаНДС;
+      Value['PARTZKPO'] := '';
+      Partner := MasterData.Партнер;
+      if Partner.GetSign = 'РасчСчета' then
+        begin
+          MYF.Select;
+          if MYF.SelectNext then
+            begin
+              Value['PARTNAME'] := GetPartName(MYF);
+              Value['PARTZKPO'] := MYF.ЗКПО;
+            end;
+          if VarAsBool(Partner.@Банк.IsFocused) then
+            begin
+              TmpBank := Partner.Банк;
+              Value['BankName'] := GetPartName(TmpBank);
+              Value['BANKTOWN'] := GetActiv(ADR, 'Город.Название', TmpBank);
+              Value['BANKMFO'] := TmpBank.МФО;
+            end;
+          Value['BANKACC'] := Partner.НомерСчета;
+        end
+      else
+        begin
+          Partner := GetPartner(MasterData.Партнер);
+          if (not IsNil(Partner)) and (VarAsBool(Partner.IsFocused)) then
+            begin
+              case Partner.GetSign of
+                'ЮрПартнеры', 'Банки' :
+                  begin
+                    Value['PARTNAME'] := GetPartName(MasterData.Партнер);
+                    Value['PARTZKPO'] := Partner.ЗКПО;
+                  end;
+                'ФизЛица' :
+                  begin
+                    Value['PartName'] := Partner.ПолноеНазвание;
+                    Value['PARTZKPO'] := Partner.ИдентНомер;
+                  end;
+                'Служащие' :
+                  begin
+                    Value['PartName'] := Partner.ПолноеНазвание;
+                    Value['PARTZKPO'] := Partner.НалогНом;
+                  end;
+              end;
+            end;
+          if VarAsBool(MasterData.@СчетПартнера.IsFocused) then
+            begin
+              TmpAcc := MasterData.СчетПартнера;
+              if VarAsBool(TmpAcc.@Банк.IsFocused) then
+                begin
+                  TmpBank := TmpAcc.Банк;
+                  Value['BankName'] := GetPartName(TmpBank);
+                  Value['BANKTOWN'] := GetActiv(ADR, 'Город.Название', TmpBank);
+                  Value['BANKMFO'] := TmpBank.МФО;
+                end;
+              Value['BANKACC'] := TmpAcc.НомерСчета;
+            end;
+        end;
+      if VarAsBool(MasterData.@СчетПредприятия.IsFocused) then
+        begin    
+          TmpAcc := MasterData.СчетПредприятия;
+          if VarAsBool(TmpAcc.@Банк.IsFocused) then
+            begin
+              TmpBank := TmpAcc.Банк;
+              Value['S_BankName'] := GetPartName(TmpBank);
+              Value['S_BANKTOWN'] := GetActiv(ADR, 'Город.Название', TmpBank);
+              Value['S_BANKMFO'] := TmpBank.МФО;
+              if TmpBank.СтоимУслуг <> 0 then
+                begin
+                  FulSum := MasterData.Сумма + TmpBank.СтоимУслуг;
+                  Value['BankSum'] := TmpBank.СтоимУслуг;
+                  Value['BankHave'] := TmpBank.РасчСчет;
+                  Value['RealSum'] := VarAsStr(MasterData.Сумма);
+                end
+              else
+                begin
+                  Value['BankSum'] := '';
+                  Value['RealSum'] := '';
+                  Value['BankHave'] := '';
+                end;
+            end;
+          Value['S_BANKACC'] := TmpAcc.НомерСчета;
+        end;
+      if (v[1] = True) then
+        Value['Descript'] := VarAsStr(MasterData.Комментарий) + ' Без ПДВ'
+      else
+        if Value['Tax'] = 0 then
+          Value['Descript'] := VarAsStr(MasterData.Комментарий)
+        else
+          Value['Descript'] := VarAsStr(MasterData.Комментарий) + ' В т.ч. ПДВ ' + FormatFloat('0', Int(MasterData.СуммаНДС)) + ' грн. ' +
+            FormatFloat('00', Frac(MasterData.СуммаНДС) * 100) + ' коп.';
+      Value['Summa'] := FulSum;
+    end;
+  lbSumInWord.Caption := CNV.MoneyToStr(FulSum, 'ГРН', 1058); //C_GRN,C_KOP,True);
+  if Int(FulSum) = 0 then
+    begin
+      str := CNV.MoneyToStr(FulSum, 'ГРН', 1058);
+      StrDelete(str, 1, 1);
+      StrInsert('Нуль', str, 1);
+      lbSumInWord.Caption := str;
+    end;
+  Label75.Caption := lbSumInWord.Caption;
+  Label126.Caption := lbSumInWord.Caption;
+  lbDate.Caption := StrLowerCase(CNV.FormatDateTime('dd mmmm yyyy р.', MasterData.ДатаДокумента, 1, 1058));
+  Label20.Caption := lbDate.Caption;
+  Label82.Caption := lbDate.Caption;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  Accept := False;
+end;
+
+procedure Band1_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  if (v[0] = 0) or (v[0] = -1) then
+    Accept := False;
+end;
+
+procedure Band2_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  if (v[0] = 0) or (v[0] = 1) or (v[0] = -1) then
+    Accept := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndROOT:TRBDetailBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+lbDate:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+lbPayer:TRBLabel
+Label11:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+lbSumma:TRBLabel
+Label25:TRBLabel
+Label28:TRBLabel
+lbPartZKPO:TRBLabel
+Label31:TRBLabel
+Label33:TRBLabel
+Label34:TRBLabel
+Label35:TRBLabel
+lbPart:TRBLabel
+Label38:TRBLabel
+Label39:TRBLabel
+Label41:TRBLabel
+lbBankSumAcc:TRBLabel
+Label43:TRBLabel
+lbBankSum:TRBLabel
+Label46:TRBLabel
+lbRestSum:TRBLabel
+Label44:TRBLabel
+Label50:TRBLabel
+lbSumInWord:TRBLabel
+lbComment:TRBLabel
+Label51:TRBLabel
+Label53:TRBLabel
+Label54:TRBLabel
+Label55:TRBLabel
+Label40:TRBLabel
+Label9:TRBLabel
+Label147:TRBLabel
+Label150:TRBLabel
+Label151:TRBLabel
+Label152:TRBLabel
+Label5:TRBLabel
+Label104:TRBLabel
+Label142:TRBLabel
+Label143:TRBLabel
+Band1:TRBBand
+Label4:TRBLabel
+Label12:TRBLabel
+Label20:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label32:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label42:TRBLabel
+Label45:TRBLabel
+Label47:TRBLabel
+Label48:TRBLabel
+Label49:TRBLabel
+Label52:TRBLabel
+Label56:TRBLabel
+Label57:TRBLabel
+Label58:TRBLabel
+Label59:TRBLabel
+Label60:TRBLabel
+Label61:TRBLabel
+Label62:TRBLabel
+Label63:TRBLabel
+Label64:TRBLabel
+Label65:TRBLabel
+Label67:TRBLabel
+Label68:TRBLabel
+Label69:TRBLabel
+Label70:TRBLabel
+Label71:TRBLabel
+Label72:TRBLabel
+Label73:TRBLabel
+Label74:TRBLabel
+Label75:TRBLabel
+Label76:TRBLabel
+Label77:TRBLabel
+Label78:TRBLabel
+Label79:TRBLabel
+Label80:TRBLabel
+Label83:TRBLabel
+Label84:TRBLabel
+Label85:TRBLabel
+Label86:TRBLabel
+Label91:TRBLabel
+Label92:TRBLabel
+Label93:TRBLabel
+Label112:TRBLabel
+Label133:TRBLabel
+Label144:TRBLabel
+Label145:TRBLabel
+Band2:TRBBand
+Label66:TRBLabel
+Label81:TRBLabel
+Label82:TRBLabel
+Label87:TRBLabel
+Label88:TRBLabel
+Label89:TRBLabel
+Label90:TRBLabel
+Label95:TRBLabel
+Label96:TRBLabel
+Label97:TRBLabel
+Label98:TRBLabel
+Label99:TRBLabel
+Label100:TRBLabel
+Label101:TRBLabel
+Label102:TRBLabel
+Label103:TRBLabel
+Label105:TRBLabel
+Label106:TRBLabel
+Label107:TRBLabel
+Label108:TRBLabel
+Label109:TRBLabel
+Label110:TRBLabel
+Label111:TRBLabel
+Label113:TRBLabel
+Label114:TRBLabel
+Label115:TRBLabel
+Label116:TRBLabel
+Label117:TRBLabel
+Label118:TRBLabel
+Label119:TRBLabel
+Label120:TRBLabel
+Label121:TRBLabel
+Label122:TRBLabel
+Label123:TRBLabel
+Label124:TRBLabel
+Label125:TRBLabel
+Label126:TRBLabel
+Label127:TRBLabel
+Label128:TRBLabel
+Label129:TRBLabel
+Label130:TRBLabel
+Label131:TRBLabel
+Label132:TRBLabel
+Label134:TRBLabel
+Label135:TRBLabel
+Label136:TRBLabel
+Label137:TRBLabel
+Label138:TRBLabel
+Label139:TRBLabel
+Label140:TRBLabel
+Label141:TRBLabel
+Label148:TRBLabel
+Label149:TRBLabel
+Structure1:TRBStructure

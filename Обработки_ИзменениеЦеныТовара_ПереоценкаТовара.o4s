@@ -1,0 +1,114 @@
+interface
+
+uses
+  System, DispIntf, »нтерфейс, –асчеты, ConstNames, Reports;
+
+var
+  Currency, Goods: ISDictionary;
+  Constants : IS4VPAConst;
+  Course : Decimal;
+  Price0, Price1, Price2: Boolean;
+implementation
+
+procedure CreateObjects;
+begin
+  Goods := CreateObject('—правочники.“овары');
+  Currency := CreateObject('—правочники.¬алюты');
+  Constants := GetConstants;
+end;
+
+function RoundTo5Cop(Price: Decimal): Decimal;
+var
+  Det : Decimal;
+  Grn, Cop: Decimal;
+begin
+  Grn := DecInt(Price);
+  Cop := RoundDec(DecFrac(Price)*100,0);
+  Det := DecFrac(Cop/10);
+  case Det*10 of
+    1, 2, 3, 4: result := Grn + (Cop - Det*10 + 5)/100;
+    6, 7, 8, 9: result := Grn + (Cop - Det*10 + 10)/100;
+    0, 5: result := Grn + Cop/100;
+  end;
+end;
+
+procedure UpdGoods(Doc : ISProcessing; var Accept : Boolean);
+var
+  Total, i : Integer;
+  OldCourse, Cof : Decimal;
+begin
+  CreateObjects;
+  Goods.Select;
+  Total := Goods.RecordCount;
+  while Goods.SelectNext do
+    begin
+      Goods.Edit;
+      if Goods. урсѕересчета <> 0 then
+        Cof :=  Course/Goods. урсѕересчета
+      else
+        Cof := 1;
+      if Price0 then
+        begin
+          Goods.÷ена := RoundTo5Cop(RoundDec(Goods.÷ена*Cof,2));
+        end;
+      if Price1 then
+        begin
+          Goods.ќпт÷ена := RoundTo5Cop(RoundDec(Goods.ќпт÷ена*Cof,2));
+        end;
+      if Price2 then
+        begin
+          Goods. рќпт÷ена := RoundTo5Cop(RoundDec(Goods. рќпт÷ена*Cof,2));
+        end;
+      Goods. урсѕересчета := Course;
+      Goods.Post;
+      inc(i);
+      if i mod 10 = 0 then
+        begin
+          if Doc.Terminated then
+            exit;
+          Doc.NotifyClient(trans('»зменено товаров ') + IntToStr(i) + trans(' из ') + IntToStr(Total), i, Total);
+        end;
+    end;
+  Accept := True;
+end;
+
+function GetRunReportEP(SCourse: Decimal; SPrice0, SPrice1, SPrice2: Boolean) : Variant; server;
+begin
+  Course := SCourse;
+  Price0 := SPrice0;
+  Price1 := SPrice1;
+  Price2 := SPrice2;
+  Result := EntryPoint(UpdGoods);
+end;
+
+procedure UpdGoodsCource(Doc : ISProcessing; var Accept : Boolean);
+var
+  Total, i : Integer;
+  OldCourse, Cof : Decimal;
+begin
+  CreateObjects;
+  Goods.Select;
+  Total := Goods.RecordCount;
+  while Goods.SelectNext do
+    begin
+      Goods.Edit;
+      Goods. урсѕересчета := Course;
+      Goods.Post;
+      inc(i);
+      if i mod 10 = 0 then
+        begin
+          if Doc.Terminated then
+            exit;
+          Doc.NotifyClient(trans('»зменено товаров ') + IntToStr(i) + trans(' из ') + IntToStr(Total), i, Total);
+        end;
+    end;
+  Accept := True;
+end;
+
+function GetRunReportBegPriceEP(SCourse: Decimal) : Variant; server;
+begin
+  Course := SCourse;
+  Result := EntryPoint(UpdGoodsCource);
+end;
+
+end.

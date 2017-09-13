@@ -1,0 +1,56 @@
+interface
+
+uses
+ System, DispIntf, Reports, ConstNames;
+
+implementation  
+
+var
+ AccsGood, AccsPartGood, AccGood : ISAccs;
+ TblPartGood, StoreTbl : ISValueTable;
+ PartGoodList,PartList, GoodsList : ISValueList;
+ Partner, Store : Variant;
+ DateBeg, DateEnd, SDateBeg, SDateEnd : DateTime;
+ ShowCodeUnitname : boolean;
+ DetPart, UseLevel : boolean;
+ Items, Currency : ISDictionary;
+ priceType: String;
+ DMD : ISDocuments;
+
+procedure SetGoods(DateBegs, DateEnds : DateTime; TblGoods, TblDoc : ISValueTable); server;
+begin
+  AccGood := CreateObject('Аккумуляторы.ВозвратТовараЗП');
+  SDateBeg := RoundDate(DateBegs, rdDay, False);
+  SDateEnd := RoundDate(DateEnds, rdDay, True);
+  TblGoods.Clear;
+  TblGoods.SortBy('Товар');
+  AccGood.IncludeZeroRest := false;
+  AccGood.AppendGroupMotionToValueTable(SDateBeg, SDateEnd, amtBoth, 'Товар;Смена=Document;КолОбщ;Цена', -1, TblGoods);
+  TblGoods.GroupBy('Document;Товар;Цена', 'КолОбщ');
+  TblGoods.SortBy('Document;Товар');
+  TblGoods.Select;
+  while TblGoods.SelectNext do
+    begin
+      DMD := TblGoods.Document;
+      TblGoods.Edit;
+      TblGoods.Date := DMD.ДатаДокумента;
+      TblGoods.DocumentStr := 'Смена ' + DMD.НомерДокумента + trans(' от ') + DateToStr(DMD.ДатаДокумента);
+      TblGoods.Post;
+    end;
+  TblGoods.DoCalculation('СумОтп','Цена*КолОбщ');
+  TblGoods.SortBy('Товар;Партия;Цена');
+  TblGoods.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;КодПроизводителя=Товар.КодПроизводителя');
+  TblGoods.SortBy('КодПроизводителя');
+    //удаляем 0-вые позиции, добавлено 16.09.02, замедляет выполнение отчета
+   TblGoods.Select;
+   TblGoods.SelectFirst;
+   while not TblGoods.EOF do begin
+     if TblGoods.КолОбщ <> 0
+     then TblGoods.SelectNext
+     else TblGoods.Delete;
+   end;
+  //
+  TblGoods.GroupTo('DocumentStr;Date','',TblDoc);
+end;
+
+end.

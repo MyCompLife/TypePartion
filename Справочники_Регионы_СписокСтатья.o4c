@@ -1,0 +1,94 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData, TLF, ADR, EML, BNK, RRR : ICDictionary;
+  Pk : Integer;
+  DateFrom, DateTo : DateTime;
+  Tbl : ICValueTable;
+  AccsBalance : ICAccs;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := CreateObject('Справочники.Регионы');
+  Pk := Form.GetPrintKind;
+  Tbl := Form.GetParams[0];
+  DateFrom := Form.GetParams[1];
+  DateTo := Form.GetParams[2];
+  lbBegDate.Caption := VarAsStr(DateFrom);
+  lbEndDate.Caption := VarAsStr(DateTo);
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    if Pk = 0 then
+      begin
+        MasterData := Form.GetMean;
+        MasterData.SelectBookmarks;
+        MasterData.SortByName;
+      end
+    else
+      begin
+        if Pk = pkWindow then
+          MasterData.AssignSelectParams(Form.GetMean);
+        MasterData.SortByName;
+        MasterData.Select;
+      end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Name'] := MasterData.Название;
+    end;
+end;
+
+procedure Structure1_Root_DetalAcc_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  Bank : ICDictionary;
+begin
+  if Index = 0 then
+    begin
+      Tbl.Select;
+    end;
+  Accept := Tbl.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['Article'] := Tbl.Артикул;
+      if VarAsBool(Tbl.@Статья.IsFocused) then
+        Value['Name'] := Tbl.Статья.Название;
+      Value['Summa'] := Tbl.Сумма;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndACC:TRBDetailBand
+Label50:TRBLabel
+Label51:TRBLabel
+Label52:TRBLabel
+bndROOT:TRBDetailBand
+Label2:TRBLabel
+lbName:TRBLabel
+Label1:TRBLabel
+lbBegDate:TRBLabel
+lbEndDate:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Band9:TRBBand
+Band1:TRBBand
+Label28:TRBLabel
+Label30:TRBLabel
+Label32:TRBLabel
+Structure1:TRBStructure

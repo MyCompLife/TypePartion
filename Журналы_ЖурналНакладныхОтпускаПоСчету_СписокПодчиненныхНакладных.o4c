@@ -1,0 +1,157 @@
+interface
+
+uses
+  System, DispIntf, »нтерфейс, ConstNames, –асчеты, –абота—ƒокументами¬∆урналах,
+  ѕодключениеƒоп»нтерфейса;
+
+implementation
+
+var
+  Options : ICOptions;
+  MasterData : ICJournal;
+  Constants : IC4VPAConst;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  i : Integer;
+begin
+  Options := GetOptions;
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  miDocMove.Visible := GetUDASet('viewdocmove'); 
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    if MasterData.GetDocState > 0 then
+      Index1 := 10
+    else
+      Index1 := 9;
+end;
+{$D+}
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure pmiFix_Click(Sender : TObject);
+var
+  OJ : Variant;
+begin
+  OJ := MasterData.GetOwnerJournal;
+  if VarAsBool(OJ.IsFocused) and VarAsBool(OJ.IsType('∆урналы')) then
+    begin
+      OJ.Refresh;
+      OJ := OJ.GetOwnerJournal;
+      if VarAsBool(OJ.IsFocused) and VarAsBool(OJ.IsType('∆урналы')) then
+        OJ.Refresh;
+    end;
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    case MasterData.GetDocSign of
+      'јкт¬ыполненных–аботѕо—чету' :
+        begin
+          V := CreateObject('ќбработки.ѕеч”нивјкт'); //ѕеч”нивјкт
+          V.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc())
+        end;
+      'Ќакладна€ќтпускаѕо—чету' :
+        begin
+          V := CreateObject('ќбработки.ѕеч”нивЌакладна€ќтпуска');
+          V.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc())
+        end;
+    end;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender: TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('ќбработки.ƒвижениеѕоƒокументу');
+      P.Execute('ƒвижениеѕоƒокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.»нфо»зменений');
+  V.Execute('»нфо»зменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbSelect:TO4ToolButton
+tbDelimiter3:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbParam:TO4ToolButton
+pnAdditInterface:TO4Panel
+pnForFiscalPrinter:TO4Panel
+tsState:TO4TabSet
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem

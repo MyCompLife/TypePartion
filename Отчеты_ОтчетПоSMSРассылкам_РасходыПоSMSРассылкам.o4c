@@ -1,0 +1,289 @@
+interface
+
+uses
+  System, DispIntf, ConstNames,  Расчеты, Reports;
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  Constants : IC4VPAConst;
+  V : ICReport;
+  DateFrom, DateTo : DateTime;
+  ReportTbl : ICValueTable;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  ReportTbl := CreateObject('ТаблицаЗначений');
+  ReportTbl.AddColumn('Партнер',vtcLink,0);  
+  ReportTbl.AddColumn('ПолноеНазваниеПартнера',vtcString,100);
+  ReportTbl.AddColumn('КоличествоSMS',vtcFFT,0);
+  ReportTbl.AddColumn('Сумма',vtcFFT,2);
+  ReportTbl.Open;
+end;
+
+
+
+procedure Form_Open(Sender : TObject);
+begin
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);  
+  CreateObjects;
+end;
+
+procedure SetMenuDatesCL(Sender : TObject; var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+var
+  Prd : Variant;
+  Year,Month : Integer;
+begin
+  if (Sender as TO4MenuItem).Tag>18 then
+   Year := GetYear(CurrentDate)
+  else
+   Year := GetYear(DateTo);
+  Month := GetMonth(CurrentDate);
+  case (Sender as TO4MenuItem).Tag of
+    0 :
+      Prd := ArrayOf(1, 1, 6, 30); //первое полугодие
+    1 :
+      Prd := ArrayOf(1, 1, 3, 31); //первый квартал
+    2 :
+      Prd := ArrayOf(1, 1, 1, 31); //январь
+    3 :
+      begin //февраль
+        Prd := ArrayOf(2, 1, 2, 28);
+        if IsLeapYear(Year) then
+          Prd[3] := 29;
+      end;
+    4 :
+      Prd := ArrayOf(3, 1, 3, 31); //март
+    5 :
+      Prd := ArrayOf(4, 1, 6, 30); //второй квартал
+    6 :
+      Prd := ArrayOf(4, 1, 4, 30); //апрель
+    7 :
+      Prd := ArrayOf(5, 1, 5, 31); //май
+    8 :
+      Prd := ArrayOf(6, 1, 6, 30); //июнь
+    9 :
+      begin //предыдущий год
+        Prd := ArrayOf(1, 1, 12, 31);
+        Year := GetYear(CurrentDate);
+        Dec(Year);
+      end;
+    10 :
+      Prd := ArrayOf(7, 1, 12, 31); //второе полугодие
+    11 :
+      Prd := ArrayOf(7, 1, 9, 30); //третий квартал
+    12 :
+      Prd := ArrayOf(7, 1, 7, 31); //июль
+    13 :
+      Prd := ArrayOf(8, 1, 8, 31); //август
+    14 :
+      Prd := ArrayOf(9, 1, 9, 30); //сентябрь
+    15 :
+      Prd := ArrayOf(10, 1, 12, 31); //четвертый квартал
+    16 :
+      Prd := ArrayOf(10, 1, 10, 31); //октябрь
+    17 :
+      Prd := ArrayOf(11, 1, 11, 30); //ноябрь
+    18 :
+      Prd := ArrayOf(12, 1, 12, 31); //декабрь
+    19:
+      Prd := ArrayOf(Month, GetDay(CurrentDate), Month, GetDay(CurrentDate)); // текущий день
+    20: begin                         // текущий месяц
+         Prd := ArrayOf(Month, 1, Month, 31);
+         case Month of
+          1,3,5,7,8,10,12 : Prd[3] := 31;
+                 4,6,9,11 : Prd[3] := 30;
+                        2 : if IsLeapYear(Year) then Prd[3] := 29 else Prd[3] := 28;
+         end;
+        end;
+    21: case Month of  // текущий квартал
+         1,2,3    : Prd := ArrayOf(1, 1, 3, 31);
+         4,5,6    : Prd := ArrayOf(4, 1, 6, 30);
+         7,8,9    : Prd := ArrayOf(7, 1, 9, 30);
+         10,11,12 : Prd := ArrayOf(10, 1, 12, 31);
+        end;
+    22:  Prd := ArrayOf(1, 1, 12, 31); //текущий год (весь, 22)
+    //23:   // предыдущий день
+    24: begin  // предыдущий месяц
+          if month>1 then
+           dec(Month)
+          else
+           begin
+            Dec(Year);
+            Month:=12;
+           end;
+          Prd := ArrayOf(Month, 1, Month, 31);
+          case Month of
+           1,3,5,7,8,10,12 : Prd[3] := 31;
+                  4,6,9,11 : Prd[3] := 30;
+                         2 : if IsLeapYear(Year) then Prd[3] := 29 else Prd[3] := 28;
+          end;
+        end;
+     25: case Month of  // текущий квартал
+          1,2,3    : begin
+                      Dec(Year);
+                      Prd := ArrayOf(10, 1, 12, 31);
+                     end;
+          4,5,6    : Prd := ArrayOf(1, 1, 3, 31);
+          7,8,9    : Prd := ArrayOf(4, 1, 6, 30);
+          10,11,12 : Prd := ArrayOf(7, 1, 9, 30);
+        end;
+  end;
+  if (Sender as TO4MenuItem).Tag = 23 then
+   begin
+    DateFrom := CurrentDate-1;
+    DateTo := CurrentDate-1;
+   end
+  else
+   begin
+    DateFrom := EncodeDate(Year, Prd[0], Prd[1]);
+    DateTo := EncodeDate(Year, Prd[2], Prd[3]);
+   end;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+procedure GetValueTbl;
+Var
+  i, j, Znamenatel, SortType : Integer;
+  TotalSum, TotalSumAll : Decimal;
+  tmpTbl: ICValueTable;
+begin
+  try
+    CursorVis := WaitCursorStart;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    ReportTbl.CopyDataToServer;
+    V.RunThreadProcess(Server.GetRunReportEP(ReportTbl.SrvMean,DateFrom, DateTo),ReportRunning);
+    ReportTbl.CopyDataFromServer;
+    ReportTbl.AddToXGrid(CtrlToVar(XGrid), 'Tbls', 'Партнер;ПолноеНазваниеПартнера;КоличествоSMS;Сумма' , 1, ReportTbl.LineCount-1);
+    ReportTbl.AddToXGrid(CtrlToVar(XGrid), 'Total', 'Партнер;ПолноеНазваниеПартнера;КоличествоSMS;Сумма' , ReportTbl.LineCount, 1);
+    XGrid.Cells(1, 1, XGrid.RowCount, 1).AdjustColWidths(0);
+    XGrid.Cell(1, 1).Value := XGrid.Cell(1, 1).Value + ' ' + DateToStr(DateFrom) + '-' + DateToStr(DateTo);
+    XGrid.Cell(XGrid.RowCount, 1  ).Value := 'Всього';
+    //
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+begin
+  GetValueTbl;
+  tbPrint.Enabled := True;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(V.GetActiveFormComment(), True);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools1.Visible := not XGridTools1.Visible;
+  if XGridTools1.Visible then
+    tbShowTools.ImageIndex := 98
+  else
+    tbShowTools.ImageIndex := 44;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDatesCL(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+
+procedure tbShowTools_Click(Sender : TObject);
+begin
+  XGridTools1.Visible := not XGridTools1.Visible;
+  if XGridTools1.Visible then
+    tbShowTools.ImageIndex := 98
+  else
+    tbShowTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbShowTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+Panel8:TO4Panel
+Label1:TO4Label
+Label4:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+XGridTools1:TXGridTools
+GRD1:TO4XGrid
+XGrid:TO4XGrid
+TableValueSource1:TO4TableValueSource
+pmDates:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+MenuItem4:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem6:TO4MenuItem
+MenuItem8:TO4MenuItem
+MenuItem10:TO4MenuItem
+MenuItem11:TO4MenuItem
+MenuItem12:TO4MenuItem
+MenuItem13:TO4MenuItem
+MenuItem15:TO4MenuItem
+miLastDay:TO4MenuItem
+miLastMonth:TO4MenuItem
+miLastQuartal:TO4MenuItem
+MenuItem16:TO4MenuItem
+MenuItem18:TO4MenuItem
+MenuItem19:TO4MenuItem
+MenuItem20:TO4MenuItem
+MenuItem21:TO4MenuItem
+MenuItem23:TO4MenuItem
+MenuItem24:TO4MenuItem
+MenuItem25:TO4MenuItem
+MenuItem26:TO4MenuItem
+MenuItem28:TO4MenuItem
+MenuItem29:TO4MenuItem
+MenuItem30:TO4MenuItem
+MenuItem31:TO4MenuItem
+miThisDay:TO4MenuItem
+miThisMonth:TO4MenuItem
+miThisQuartal:TO4MenuItem
+MenuItem32:TO4MenuItem

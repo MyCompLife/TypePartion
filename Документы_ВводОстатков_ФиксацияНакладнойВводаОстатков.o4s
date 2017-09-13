@@ -1,0 +1,104 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация;
+
+implementation
+
+var
+  AccGood, AccPartGood, AccReserv, AccPartner, AccsPart, AccsGoodCurrent, AccsModelCurrent : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  PartGoodID : Double;
+  Count, Total : Integer;
+  Sum, SumNT, Tax, Col, CurSum : Decimal;
+begin
+  DocDate := Doc.GetDate;
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  Constants := GetConstants;
+  while Doc.SelectNextLine do
+    begin
+      if not VarAsBool(Doc.Товар.Услуга) then
+        begin
+          СуммаНДС(Doc, Sum, SumNT, Tax, Col);
+          CurSum := Doc.ЦенаВВалюте * Col;
+          // партии товаров
+          PartGoodID := AppendGoodsConsignAtIncome(Doc, AccPartGood);
+          //Остатки товаров
+          MakeGoodMotion(AccGood, Doc, PartGoodID, midInputRest,
+            ArrayOf(Col, SumNT, Tax, Sum, Tax, 0, CurSum, CurSum));
+          //oстатки товара на сегодня
+          MakeGoodMotionCurrent(AccsGoodCurrent, Doc, midIncome, Col);
+          //oстатки товара по моделям на сегодня;
+//          MakeModelMotionCurrent(AccsModelCurrent, Doc, midIncome, Col);
+        end;
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then 
+        begin
+          Doc.NotifyClient(msgProceed, Count, Total);
+          if Doc.Terminated then
+            break;
+        end;
+      inc(Count);
+    end;
+
+    Accept := not Doc.Terminated;
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  case Doc.GetDocState of
+    1 :
+      ChangeStateUp(Doc, Accept);
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  SumNt, SumInNt : Decimal;
+begin
+  case StrLowerCase(Synonym) of
+    'суммастрокибезндс' :
+      begin
+        SumNt := Doc.ЦенаБезНДС * Doc.Количество;
+        if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+          Value := RoundFloat(SumNt, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС)
+        else
+          Value := SumNt;
+      end;
+    'суммастроки' :
+      Value := Doc.ЦенаБезНДС * Doc.Количество * (1 + Doc.СтавкаНДС / 100);
+    'суммандсстроки' :
+      Value := Doc.ЦенаБезНДС * Doc.Количество * Doc.СтавкаНДС / 100;
+  end
+end;
+
+end.

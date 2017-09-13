@@ -1,0 +1,156 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation 
+
+var
+ MasterData: ICDictionary;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  ResetActive(MasterData);
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+ MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin                          
+  if MasterData.ФонАналитика1 = Null then begin MasterData.Edit; MasterData.ФонАналитика1 := 10337791; MasterData.Post; end;
+  csDAo1.Color := MasterData.ФонАналитика1;
+  edStyleAo1.ItemIndex := MasterData.СтильШрифтаАнвлитики1;
+  if MasterData.РозмерШрифтаАнвлитики1 = 8 then edSizeAo1.ItemIndex := 0;
+  if MasterData.РозмерШрифтаАнвлитики1 = 10 then edSizeAo1.ItemIndex := 1;
+  if MasterData.РозмерШрифтаАнвлитики1 = 12 then edSizeAo1.ItemIndex := 2;
+  if MasterData.РозмерШрифтаАнвлитики1 = 14 then edSizeAo1.ItemIndex := 3;
+  if MasterData.РозмерШрифтаАнвлитики1 = 18 then edSizeAo1.ItemIndex := 4;
+  if MasterData.РозмерШрифтаАнвлитики1 = 24 then edSizeAo1.ItemIndex := 5;
+  if MasterData.ФонАналитика2 = Null then begin MasterData.Edit; MasterData.ФонАналитика2 := 13434828; MasterData.Post; end;
+
+  csDAo2.Color := MasterData.ФонАналитика2;
+  edStyleAo2.ItemIndex := MasterData.СтильШрифтаАнвлитики2;
+  if MasterData.РозмерШрифтаАнвлитики2 = 8 then edSizeAo2.ItemIndex := 0;
+  if MasterData.РозмерШрифтаАнвлитики2 = 10 then edSizeAo2.ItemIndex := 1;
+  if MasterData.РозмерШрифтаАнвлитики2 = 12 then edSizeAo2.ItemIndex := 2;
+  if MasterData.РозмерШрифтаАнвлитики2 = 14 then edSizeAo2.ItemIndex := 3;
+  if MasterData.РозмерШрифтаАнвлитики2 = 18 then edSizeAo2.ItemIndex := 4;
+  if MasterData.РозмерШрифтаАнвлитики2 = 24 then edSizeAo2.ItemIndex := 5; 
+  
+  csDAo3.Color := MasterData.ФонАналитика3;
+  edStyleAo3.ItemIndex := MasterData.СтильШрифтаАнвлитики3;
+  if MasterData.РозмерШрифтаАнвлитики3 = 8 then edSizeAo3.ItemIndex := 0;
+  if MasterData.РозмерШрифтаАнвлитики3 = 10 then edSizeAo3.ItemIndex := 1;
+  if MasterData.РозмерШрифтаАнвлитики3 = 12 then edSizeAo3.ItemIndex := 2;
+  if MasterData.РозмерШрифтаАнвлитики3 = 14 then edSizeAo3.ItemIndex := 3;
+  if MasterData.РозмерШрифтаАнвлитики3 = 18 then edSizeAo3.ItemIndex := 4;
+  if MasterData.РозмерШрифтаАнвлитики3 = 24 then edSizeAo3.ItemIndex := 5;
+
+  cbxCodeAO2.Checked := MasterData.ОтображатьКодТовара;
+end;
+
+procedure pmiCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+//
+end;
+
+procedure MDS_Validate(Sender : TObject);
+begin
+  MasterData.ФонАналитика1 := csDAo1.Color;
+  if edSizeAo1.ItemIndex = 0 then MasterData.РозмерШрифтаАнвлитики1 := 8;
+  if edSizeAo1.ItemIndex = 1 then MasterData.РозмерШрифтаАнвлитики1 := 10;
+  if edSizeAo1.ItemIndex = 2 then MasterData.РозмерШрифтаАнвлитики1 := 12;
+  if edSizeAo1.ItemIndex = 3 then MasterData.РозмерШрифтаАнвлитики1 := 14;
+  if edSizeAo1.ItemIndex = 4 then MasterData.РозмерШрифтаАнвлитики1 := 18;
+  if edSizeAo1.ItemIndex = 5 then MasterData.РозмерШрифтаАнвлитики1 := 24;
+  MasterData.СтильШрифтаАнвлитики1 := edStyleAo1.ItemIndex;      
+
+  MasterData.ФонАналитика2 := csDAo2.Color;
+  if edSizeAo2.ItemIndex = 0 then MasterData.РозмерШрифтаАнвлитики2 := 8;
+  if edSizeAo2.ItemIndex = 1 then MasterData.РозмерШрифтаАнвлитики2 := 10;
+  if edSizeAo2.ItemIndex = 2 then MasterData.РозмерШрифтаАнвлитики2 := 12;
+  if edSizeAo2.ItemIndex = 3 then MasterData.РозмерШрифтаАнвлитики2 := 14;
+  if edSizeAo2.ItemIndex = 4 then MasterData.РозмерШрифтаАнвлитики2 := 18;
+  if edSizeAo2.ItemIndex = 5 then MasterData.РозмерШрифтаАнвлитики2 := 24;
+  MasterData.СтильШрифтаАнвлитики2 := edStyleAo2.ItemIndex;   
+
+  MasterData.ФонАналитика3 := csDAo3.Color;
+  if edSizeAo3.ItemIndex = 0 then MasterData.РозмерШрифтаАнвлитики3 := 8;
+  if edSizeAo3.ItemIndex = 1 then MasterData.РозмерШрифтаАнвлитики3 := 10;
+  if edSizeAo3.ItemIndex = 2 then MasterData.РозмерШрифтаАнвлитики3 := 12;
+  if edSizeAo3.ItemIndex = 3 then MasterData.РозмерШрифтаАнвлитики3 := 14;
+  if edSizeAo3.ItemIndex = 4 then MasterData.РозмерШрифтаАнвлитики3 := 18;
+  if edSizeAo3.ItemIndex = 5 then MasterData.РозмерШрифтаАнвлитики3 := 24;
+  MasterData.СтильШрифтаАнвлитики3 := edStyleAo3.ItemIndex;
+
+  MasterData.ОтображатьКодТовара := cbxCodeAO2.Checked;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel3:TO4Panel
+btnCancel:TO4Button
+btnOk:TO4Button
+Panel1:TO4Panel
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem
+PageControl1:TO4PageControl
+TabSheet1:TTabSheet
+TabSheet2:TTabSheet
+Label1:TO4Label
+DBEdit1:TO4DBEdit
+DBEdit4:TO4DBEdit
+Label4:TO4Label
+Label11:TO4Label
+DBEdit5:TO4DBEdit
+DBEdit6:TO4DBEdit
+Label12:TO4Label
+Label2:TO4Label
+DBEdit2:TO4DBEdit
+DBEdit3:TO4DBEdit
+Label15:TO4Label
+Label16:TO4Label
+DBEdit7:TO4DBEdit
+DBEdit8:TO4DBEdit
+Label17:TO4Label
+Label18:TO4Label
+DBEdit9:TO4DBEdit
+GroupBox7:TO4GroupBox
+Label3:TO4Label
+csDAo3:TO4ColorSelector
+GroupBox8:TO4GroupBox
+Label13:TO4Label
+Label14:TO4Label
+edSizeAo3:TO4Edit
+edStyleAo3:TO4Edit
+GroupBox3:TO4GroupBox
+Label6:TO4Label
+csDAo1:TO4ColorSelector
+GroupBox5:TO4GroupBox
+Label5:TO4Label
+Label9:TO4Label
+edSizeAo1:TO4Edit
+edStyleAo1:TO4Edit
+GroupBox4:TO4GroupBox
+Label8:TO4Label
+GroupBox6:TO4GroupBox
+Label7:TO4Label
+Label10:TO4Label
+edSizeAo2:TO4Edit
+edStyleAo2:TO4Edit
+csDAo2:TO4ColorSelector
+cbxCodeAO2:TO4CheckBox
+Label19:TO4Label
+DBEdit10:TO4DBEdit

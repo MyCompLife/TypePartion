@@ -1,0 +1,722 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСоСправочникамиCL, Пользователи;
+
+implementation
+
+var
+  ScrollLock, LockCalc, LockPost : Boolean;
+  CursorVis : TCursor;
+  UseConst : IC4VPAConst;
+  MasterData, Store : ICDictionary;
+  Stores : ICValueList;
+  TblStore, TblPartGood: ICValueTable;
+  LookStore, ChangeSort, UseLevels : Boolean;
+  OneGoodCount : Double;
+  ChangeImage : Integer;
+  Opt : ICOptions;
+  AccsGoodRes, AccsGoodCurrent : ICAccs; 
+  FieldName : String;   
+
+  ManufacturerTbl, GroupTbl: ICValueTable;
+
+//*****************************************************
+procedure GoodsFilter(FieldName: String; Tbl: ICValueTable);
+begin
+  MasterData.DisableControls;
+  if VarAsBool(Tbl._Default[FieldName + 'Товара'].IsFocused) then
+    begin
+      MasterData.SetFieldFilter(FieldName,'=',Tbl._Default[FieldName + 'Товара'],'','',Null);
+      MasterData.Select;
+    end
+  else
+    begin
+      MasterData.CancelFieldFilter(FieldName);
+      MasterData.Select;
+    end;
+  MasterData.EnableControls;
+end;
+
+procedure TVS_VPAAfterScroll(Sender: TObject);
+var
+  FieldName: String;
+begin
+  case (Sender as TO4TableValueSource).Name of
+    'TVSManufacturer': GoodsFilter('Производитель', ManufacturerTbl);
+    'TVSGroup': GoodsFilter('Группа', GroupTbl);
+  end;
+end;
+
+{$D-}
+procedure dbgManufacturer_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if ManufacturerTbl.Order = 0 then
+    begin
+      if not Highlight then
+        BackColor := 10942461
+      else
+        begin
+          BackColor := 703486;
+          DrawFont.Color := clBlack;
+        end;
+    end;
+end;
+
+procedure dbgGroup_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if GroupTbl.Order = 0 then
+    begin
+      if not Highlight then
+        BackColor := 10942461
+      else
+        begin
+          BackColor := 703486;
+          DrawFont.Color := clBlack;
+        end;
+    end;
+end;
+{$D+}
+//*****************************************************
+
+procedure TVS_VPATimedAfterScroll(Sender: TObject);
+begin
+  if VarAsBool(GroupTbl.@ГруппаТовара.IsFocused) then
+    begin
+      MasterData.SetFieldFilter('Производитель','=',GroupTbl.ГруппаТовара,'','',Null);
+      MasterData.Select;
+    end
+  else
+    begin
+      MasterData.CancelFieldFilter('Производитель');
+      MasterData.Select;
+    end;
+end;
+ 
+{$D-}
+procedure dbgGrouop_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if not VarAsBool(GroupTbl.@ГруппаТовара.IsFocused) then
+    begin
+      if not Highlight then
+        BackColor := 10942461
+      else
+        begin
+          BackColor := 703486;
+          DrawFont.Color := clBlack;
+        end;
+    end;
+end;
+{$D+}
+//*****************************************************
+
+
+procedure SetCalcField(DT : DateTime; Stores : ICValueList; Index : Integer);
+var
+  Cond : string;
+begin
+  MasterData.ClearCalcFieldInDBServer;
+  if Stores.ValidIndex(Stores.CurIndex) and (Stores.CurIndex <> 0) then
+    Store := Stores.GetValue(Stores.CurIndex)
+  else
+    nil(Store);
+  if miFilterNoZero.Checked then
+    Cond := '>0';
+  MasterData.SetCalcFieldInDBServer('КоличествоНаСкладах', AccsGoodCurrent,
+    RoundDate(DT, rdDay, True), ArrayOf('Товар', Store), 'КолОбщ', amtBoth, Cond);
+  if miReserv.Checked then
+    Cond := '>0'
+  else
+    Cond := '';
+  MasterData.SetCalcFieldInDBServer('КолВРез', AccsGoodRes,
+    RoundDate(DT, rdDay, True), ('Товар'), 'КолОбщ', amtBoth, Cond);
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  LockCalc := True;
+  try
+    UseConst := GetConstants;
+    server.InitSrvData;
+    MasterData := MDS.GetMean;  
+    Masterdata.SetFieldFilter('ПометкаУдаление','<>',-1,'','',Null);
+    Opt := GetOptions;
+    SetColors(UseConst);
+    miFilterNoZero.Checked := VarAsBool(Opt.GetServerPrm(CheckZero));
+    LookStore := True;
+    UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+    TblStore := CreateObject('ТаблицаЗначений');
+    TblPartGood := CreateObject('ТаблицаЗначений');
+    TblPartGood.AddColumn('Товар', vtcLink, 0);
+    TblPartGood.AddColumn('Склад', vtcLink, 0);
+    TblPartGood.AddColumn('Партнер', vtcLink, 0);
+    TblPartGood.AddColumn('Партия', vtcFloat, 0);
+    TblPartGood.AddColumn('КолОбщ', vtcFFT, 5);
+    TblPartGood.AddColumn('ВхЦенаБезНДС', vtcFFT, 7);
+    TblPartGood.AddColumn('Валюта', vtcLink, 0);
+    TblPartGood.AddColumn('Курс', lftFFT, 7);
+    TblPartGood.AddColumn('ВхЦенаВал', vtcFFT, 7);
+    TblPartGood.AddColumn('ДатаПр', vtcDate, 0);
+    TblPartGood.AddColumn('СумВх', lftFFT, 7);
+    TblPartGood.AddColumn('СумВалВх', lftFFT, 7);
+    TblPartGood.AddColumn('СтавкаНДС', lftInteger, 0);
+    TblPartGood.Open;
+    TblPartGood.SetColumnFormat('ВхЦенаБезНДС', UseConst.ФорматЦеныГРН);
+    TblPartGood.SetColumnFormat('ВхЦенаВал', UseConst.ФорматЦеныВал);
+    TblPartGood.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+    TblPartGood.SetColumnFormat('Курс', '0.00###');
+    Store := CreateObject('Справочники.Склады');
+    tblStore.TblName := 'tblStore';
+    TblPartGood.Tblname := 'tblPartGood';
+    AccsGoodRes := CreateObject('Аккумуляторы.ТоварыВРезерве');
+    AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+    if VarAsBool(UseConst.ПоказыватьЦеныГрн) then
+      MasterData.SetSrvOnCalcFields(server.SrvCalcFieldsEP);
+  finally
+    LockCalc := False;
+  end
+end;
+
+procedure eDate_Change(Sender : TObject);
+begin
+  if not LockCalc then
+    begin
+      SetCalcField(StrToDateDef(eDate.Text, CurrentDateTime), Stores, Stores.CurIndex);
+      server.SetStoreParams(StrToDateDef(eDate.Text, CurrentDateTime), Stores.SrvMean, Stores.CurIndex);
+      RefreshDataWithoutCtg(MDS, dbtCtg, MasterData);
+      Store := Stores.GetValue(Stores.CurIndex);
+      MasterData.Params['ВыбранныйСклад'] := Store;
+    end;
+end;
+
+procedure MDS_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  Accept := VarAsBool(Source.IsFocused);
+  MDS.AfterScrollLock := True;
+  CursorVis := WaitCursorStart;
+end;
+
+procedure MDS_VPAAfterMove(Sender : TObject);
+begin
+  MDS.AfterScrollLock := False;
+  SetCursor(CursorVis);
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  //  if ScrollLock then exit;
+  TblStore.UseDataSource(0);
+  TblPartGood.UseDataSource(0);
+  try
+    TblPartGood.Clear;
+    if TblStore.Active then
+      TblStore.Clear;
+    if MasterData.IsFocused and (not (MasterData.Услуга = -1)) and MasterData.SetSrvToClientPos then
+      begin
+        TblPartGood.CopyDataToServer();
+        server.GetStoreList(MasterData.SrvMean, TblStore.SrvMean, TblPartGood.SrvMean, miViewEmptyPart.Checked);
+        TblStore.CopyDataFromServer;
+        TblStore.SortBy('Активность');
+        TblStore.SelectFirst;
+        TblStore.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+        TblPartGood.CopyDataFromServer;
+        TblStore.SrvMean.Clear;
+        TblPartGood.SrvMean.Clear;
+        TblPartGood.UseMaster(TblStore);
+        TblPartGood.SortBy('-ВхЦенаБезНДС;Партнер');
+      end;
+  finally
+    TblStore.UseDataSource(CtrlToVar(TVSStore));   
+    TblPartGood.DoCalculation('Курс','ВхЦенаБезНДС/ВхЦенаВал');
+    TblPartGood.UseDataSource(CtrlToVar(TVSPartGood));
+  end;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  Store : ICDictionary;
+  Index : Integer;
+  TmpStores : ICValueList;
+begin
+  LockCalc := True;
+  try
+    if IsObject(Params) and VarAsBool(Params.IsType('СписокЗначений')) then
+      begin
+        if IsNil(Stores) then
+          Stores := CreateObject('СписокЗначений')
+        else
+          begin
+            Stores.UseControl(0);
+            Stores.Clear;
+          end;
+        TmpStores := Params;
+        Index := 0;
+        repeat
+          Stores.InsertValue(Index, TmpStores.GetStr(Index), TmpStores.GetValue(Index));
+          Index := Index + 1;
+        until not TmpStores.ValidIndex(Index);
+      end
+    else
+      begin
+        Stores := CreateObject('СписокЗначений');
+        Store := CreateObject('Справочники.Склады');
+        Stores.AddValue(Trans('Все склады'), Null);
+        Store.Select;
+        if Store.FindByField('Активность', True, False) then
+          Stores.AddValue(Store.Название, Store);
+        Store.Select;
+        while Store.SelectNext do
+          if not Store.Активность = True then
+            Stores.AddValue(Store.Название, Store); // или ('',S)
+      end;
+    Stores.UseControl(CtrlToVar(eStores));
+    Stores.CurIndex := 0;
+    Store := Stores.GetValue(Stores.CurIndex);
+    MasterData.Params['ВыбранныйСклад'] := Store;
+    Stores.CopyDataToServer;
+    eDate.Text := dateToStr(CurrentDate);
+    server.SetStoreParams(CurrentDate, Stores.SrvMean, Stores.CurIndex);
+    TblPartGood.SortBy('-ВхЦенаБезНДС');
+    case VarAsInt(Params) of
+      0 :
+        miPrice1.Checked := True;
+      1 :
+        miPrice2.Checked := True;
+      2 :
+        miPrice3.Checked := True;
+    end;
+    MasterData.Params['Цена'] := Params;
+    TblStore.Params['Цена'] := Params;
+    TblPartGood.Params['Цена'] := Params;
+
+    SetCalcField(StrToDateDef(eDate.Text, CurrentDateTime), Stores, Stores.CurIndex);
+  finally
+    LockCalc := False;
+  end;
+end;
+
+{$D-}
+procedure dbgData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if MasterData.IsFocused and (not MasterData.FieldIsNull('КоличествоНаСкладах')) and
+     MasterData.IsFocused and (MasterData.КоличествоНаСкладах <= 0) then
+    if Highlight then
+      begin
+        BackColor := BlZeroSel;
+        DrawFont.Color := BlFZeroSel;
+      end
+    else
+      begin
+        BackColor := BlZero;
+        DrawFont.Color := BlFZero;
+      end;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure miViewEmptyPart_Click(Sender : TObject);
+begin
+  miViewEmptyPart.Checked := not miViewEmptyPart.Checked;
+  MDS_VPATimedAfterScroll(MDS);
+end;
+
+procedure miViewStore_Click(Sender : TObject);
+begin
+  miViewStore.Checked := not miViewStore.Checked;
+  LookStore := miViewStore.Checked;
+  Panel3.Visible := LookStore;
+  Splitter2.Visible := LookStore;
+  MDS_VPATimedAfterScroll(MDS);
+end;
+
+
+procedure miFilterNoZero_Click(Sender : TObject);
+begin
+  miFilterNoZero.Checked := not miFilterNoZero.Checked;
+  SetCalcField(StrToDateDef(eDate.Text, CurrentDateTime), Stores, Stores.CurIndex);
+  RefreshDataWithoutCtg(MDS, dbtCtg, MasterData);
+end;
+
+procedure pmiCopy_VPABeforeActionClick(Sender : TObject);
+var
+  CopyFrom : ICDictionary;
+begin
+  CopyFrom := CreateObject('Справочники.Товары');
+  if CopyFrom.Find(MasterData) then
+    MasterData.Params['CopyFrom'] := CopyFrom
+  else
+    MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure tbAdd_VPABeforeActionClick(Sender : TObject);
+begin
+  MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure Sort(Sender : TObject);
+begin
+  if TblPartGood.IsFocused then
+    begin
+      miSortByPrice.ImageIndex := -1;
+      miSortByCnt.ImageIndex := -1;
+      miSortByDate.ImageIndex := -1;
+
+      if ChangeImage = (Sender as TO4MenuItem).Tag then
+        begin
+          if ChangeSort then
+            begin
+              case (Sender as TO4MenuItem).Tag of
+                0 :
+                  TblPartGood.SortBy('-ВхЦенаБезНДС');
+                1 :
+                  TblPartGood.SortBy('-КолОбщ');
+                2 :
+                  TblPartGood.SortBy('ДатаПр');
+              end;
+              ChangeSort := False;
+              (Sender as TO4MenuItem).ImageIndex := 225
+            end
+          else
+            begin
+              case (Sender as TO4MenuItem).Tag of
+                0 :
+                  TblPartGood.SortBy('ВхЦенаБезНДС');
+                1 :
+                  TblPartGood.SortBy('КолОбщ');
+                2 :
+                  TblPartGood.SortBy('-ДатаПр');
+              end;
+              ChangeSort := True;
+              (Sender as TO4MenuItem).ImageIndex := 224
+            end
+        end
+      else
+        begin
+          case (Sender as TO4MenuItem).Tag of
+            0 :
+              TblPartGood.SortBy('ВхЦенаБезНДС');
+            1 :
+              TblPartGood.SortBy('КолОбщ');
+            2 :
+              TblPartGood.SortBy('-ДатаПр');
+          end;
+          ChangeSort := True;
+          (Sender as TO4MenuItem).ImageIndex := 224
+        end;
+
+      miSortByPrice.Checked := False;
+      miSortByCnt.Checked := False;
+      miSortByDate.Checked := False;
+      case (Sender as TO4MenuItem).Tag of
+        0 :
+          miSortByPrice.Checked := True;
+        1 :
+          miSortByCnt.Checked := True;
+        2 :
+          miSortByDate.Checked := True;
+      end;
+      ChangeImage := (Sender as TO4MenuItem).Tag;
+    end
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'panel1', Panel1.Height);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itDropForm;
+  MakeCnfgInterface(MasterData, Form, ManufacturerTbl, GroupTbl);
+  MakeStandartInterface(MasterData, Form, 'tbrData', 'dbgData');
+  (dbgPart.PosColumns.Items[0] as TO4GridColumn).Visible := UseConst.УчетДата;
+  (dbgPart.PosColumns.Items[1] as TO4GridColumn).Visible := not UseConst.УчетПоСреднейСтоим;
+  tsFilter.Down := GetFilterPanel(MasterData.GetSign);
+  pFilter.Visible := tsFilter.Down;
+
+  dbgManufacturer.Height := VarAsInt(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'panel1'),116);
+end;
+
+procedure miPrice1_Click(Sender : TObject);
+begin
+  MasterData.Params['Цена'] := (Sender as TComponent).tag;
+  TblStore.Params['Цена'] := (Sender as TComponent).tag;
+  TblPartGood.Params['Цена'] := (Sender as TComponent).tag;
+  miPrice1.Checked := False;
+  miPrice2.Checked := False;
+  miPrice3.Checked := False;
+  case (Sender as TComponent).Tag of
+    0 :
+      miPrice1.Checked := True;
+    1 :
+      miPrice2.Checked := True;
+    2 :
+      miPrice3.Checked := True;
+    else
+      exit;
+  end;
+
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+var
+  TmpSender : TObject;
+begin
+  case StrLowerCase(ProcID) of
+    'moveall' :
+      MDS.AfterScrollLock := True;
+    'stop' :
+      begin
+        MDS.AfterScrollLock := False;
+        MDS_VPATimedAfterScroll(TmpSender);
+      end;
+    else
+      TblPartGood.Locate('Партия', InParams);
+  end;
+end;
+
+procedure miReserv_Click(Sender : TObject);
+begin
+  miReserv.Checked := not miReserv.Checked;
+  SetCalcField(StrToDateDef(eDate.Text, CurrentDateTime), Stores, Stores.CurIndex);
+  RefreshDataWithoutCtg(MDS, dbtCtg, MasterData);
+end;
+
+procedure miProperty_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('Обработки.СвойстваТовара');
+      dialog.Execute('СвойстваТовара', MasterData);
+    end;
+end;
+
+procedure miPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null)
+end;
+
+procedure miEditPrice_Click(Sender: TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('Обработки.ИзменениеЦеныТовара');
+      dialog.Execute('ИзменениеЦены', MasterData);
+    end;
+end;  
+
+procedure FilterMean;
+begin
+  Case eFieldFilter.Text of
+    'Название' : FieldName := 'НазвТовара';
+  else
+    FieldName := eFieldFilter.Text;
+  end;
+  MasterData.SetFieldFilter(FieldName,'Like', '%' + eGoodsFilter.Text + '%','','',Null);
+  MasterData.Refresh;
+  form.ActiveControl := dbgData;
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  FilterMean
+end;
+
+procedure eGoodsFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if key=13 then
+    FilterMean
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+end;
+
+procedure tsFilter_Click(Sender: TObject);
+begin
+  pFilter.Visible := tsFilter.Down;
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+  SetFilterPanel(MasterData.GetSign, tsFilter.Down);
+end;  
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if VarAsBool(MasterData.ПометкаУдаление) then
+       Index1 := 51;
+    end;
+end;
+{$D+}
+
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+Var
+  CatDic : ICDictionary;
+begin
+ if LockPost then exit;
+ CatDic := CreateObject('Справочники.Товары');
+ CatDic.IncludeLevels(true);
+ CatDic.IncludeOnlyLevels(true);
+ if CatDic.Find(MasterData.@Категория) and not IsObjEQ(MasterData.GetParent,CatDic)  then
+   begin
+     LockPost := true;
+     MasterData.Edit;
+     MasterData.Категория := MasterData.GetParent;
+     MasterData.POst;
+     MasterData.ApplyUpdates;
+     LockPost := False;
+   end;
+
+
+end;
+
+procedure tbGoodsToDel_Click(Sender: TObject);
+var x,y : integer;
+begin
+ tbGoodsToDel.GetScreenPos(x,y);
+ pmGoodsToDel.Popup(x,y+tbGoodsToDel.Height);
+end;
+
+procedure miAllGoods_Click(Sender: TObject);
+begin
+ (Sender as TO4MenuItem).Checked := true;
+ case (Sender as TO4MenuItem).Tag of
+  0: MasterData.CancelFieldFilter('ПометкаУдаление');
+  1: Masterdata.SetFieldFilter('ПометкаУдаление','=',-1,'','',Null);
+  2: Masterdata.SetFieldFilter('ПометкаУдаление','<>',-1,'','',Null);
+ end;
+ Masterdata.Refresh;
+end;
+
+procedure miGoods0_Click(Sender: TObject);
+begin
+  MasterData.Params['CardType'] := (Sender as TO4MenuItem).Tag;
+  MasterData.SetFieldFilter('ТипКарточки','=',(Sender as TO4MenuItem).Tag,'','',Null);
+  (Sender as TO4MenuItem).Checked := true;
+  MasterData.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbtCtg:TO4DBTreeView
+dbgGroup:TO4DBGrid
+dbgManufacturer:TO4DBGrid
+Panel2:TO4Panel
+Splitter2:TO4Splitter
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbOption:TO4ToolButton
+tbGoodsToDel:TO4ToolButton
+tbDelimiter3:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+ToolButton3:TO4ToolButton
+tsFilter:TO4ToolButton
+tbDelimiter4:TO4ToolButton
+tbPrice:TO4ToolButton
+dbgData:TO4DBGrid
+Panel4:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+eDate:TO4Edit
+eStores:TO4Edit
+Panel3:TO4Panel
+Splitter3:TO4Splitter
+dbgStore:TO4DBGrid
+dbgPart:TO4DBGrid
+pFilter:TO4Panel
+CodePanel:TO4Panel
+eGoodsFilter:TO4Edit
+eFieldFilter:TO4Edit
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+MDS:TO4DataSource
+TVSStore:TO4TableValueSource
+TVSPartGood:TO4TableValueSource
+pmOptions:TO4PopupMenu
+miViewStore:TO4MenuItem
+miViewEmptyPart:TO4MenuItem
+miFilterNoZero:TO4MenuItem
+miReserv:TO4MenuItem
+miFilter:TO4MenuItem
+miGoods0:TO4MenuItem
+miGoods1:TO4MenuItem
+miGoods2:TO4MenuItem
+pmSort:TO4PopupMenu
+miSortByPrice:TO4MenuItem
+miSortByCnt:TO4MenuItem
+miSortByDate:TO4MenuItem
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miCopy:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+miDelimiter4:TO4MenuItem
+miEditPrice:TO4MenuItem
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+pmPrice:TO4PopupMenu
+miPrice1:TO4MenuItem
+miPrice2:TO4MenuItem
+miPrice3:TO4MenuItem
+TVSManufacturer:TO4TableValueSource
+TVSGroup:TO4TableValueSource
+pmGoodsToDel:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem

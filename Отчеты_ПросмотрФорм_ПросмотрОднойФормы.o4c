@@ -1,0 +1,22 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+implementation
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case ProcID of
+    'ReadOneXGrid' :
+      xgMain.LoadFromString(InParams.Шаблон);
+    'Print' :
+      xgMain.Print('', not GetOptions.GetServerPrm(DirectPrint));
+    'ExportToExcel' :
+      xgMain.ExportToExcel;
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+xgMain:TO4XGrid

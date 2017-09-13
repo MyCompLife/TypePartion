@@ -1,0 +1,205 @@
+object Form: TO4PrintForm
+  Left = 4
+  Top = 2
+  Width = 227
+  Height = 151
+  Frame.Color = clBlack
+  Frame.DrawTop = False
+  Frame.DrawBottom = False
+  Frame.DrawLeft = False
+  Frame.DrawRight = False
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = ()
+  Translat.ScanedProps.Props = ()
+  Translat.LangDict.Cols = ()
+  Translat.LangDict.Words = ()
+  PrintTypes = [ptGraph]
+  DataStructure = Structure1
+  Page.Columns = 1
+  Page.Orientation = poPortrait
+  Page.PaperSize = Custom
+  Page.Values = (
+    0
+    400
+    50
+    600
+    70
+    0
+    0)
+  Font.Charset = RUSSIAN_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -13
+  Font.Name = 'Times New Roman'
+  Font.Style = []
+  Units = MM
+  Zoom = 100
+  PrinterSettings.Copies = 1
+  PrinterSettings.Duplex = False
+  PrinterSettings.FirstPage = 0
+  PrinterSettings.LastPage = 0
+  PrinterSettings.OutputBin = Auto
+  VPAOnBeginPrint.EventName = 'Form_BeginPrint'
+  object bndDET: TRBDetailBand
+    Left = 26
+    Top = 19
+    Width = 201
+    Height = 127
+    Frame.Color = clBlack
+    Frame.DrawTop = False
+    Frame.DrawBottom = False
+    Frame.DrawLeft = False
+    Frame.DrawRight = False
+    Options = [PrintOnNewPage, PrintOnNewColumn, PrintingAutoHeight]
+    Size.Values = (
+      336.020833333333
+      531.8125)
+    TableSign = 'ROOT'
+    object BarCode: TRBBarCode
+      Left = 31
+      Top = 95
+      Width = 166
+      Height = 27
+      Frame.Color = clBlack
+      Frame.DrawTop = False
+      Frame.DrawBottom = False
+      Frame.DrawLeft = False
+      Frame.DrawRight = False
+      Size.Values = (
+        71.4375
+        82.0208333333333
+        251.354166666667
+        439.208333333333)
+      AutoSize = False
+      BarCodeType = bcCode128C
+      ShowText = bcoNone
+      ShowTextPosition = stpBottomCenter
+      Text = '020112345678123456'
+    end
+    object lbGoodName: TRBLabel
+      Left = 2
+      Top = 0
+      Width = 194
+      Height = 64
+      Frame.Color = clBlack
+      Frame.DrawTop = False
+      Frame.DrawBottom = False
+      Frame.DrawLeft = False
+      Frame.DrawRight = False
+      Size.Values = (
+        169.333333333333
+        5.29166666666667
+        0
+        513.291666666667)
+      Alignment = taCenter
+      Caption = 'Назва Назва Назва Назва Назва Назва НазваНазва Назва Назва'
+      TableField = 'Name'
+      TableSign = 'ROOT'
+      Font.Charset = RUSSIAN_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -16
+      Font.Name = 'Times New Roman'
+      Font.Style = [fsBold]
+      ParentFont = False
+      Layout = tlCenter
+      Lines.Strings = (
+        'Назва Назва Назва Назва Назва Назва НазваНазва Назва Назва')
+      Transparent = True
+      WordWrap = True
+    end
+    object lbPriceTitle: TRBLabel
+      Left = 45
+      Top = 69
+      Width = 39
+      Height = 22
+      Frame.Color = clBlack
+      Frame.DrawTop = False
+      Frame.DrawBottom = False
+      Frame.DrawLeft = False
+      Frame.DrawRight = False
+      Size.Values = (
+        58.2083333333333
+        119.0625
+        182.5625
+        103.1875)
+      AutoSize = True
+      Alignment = taLeftJustify
+      Caption = 'Ціна:'
+      Color = clWhite
+      Font.Charset = RUSSIAN_CHARSET
+      Font.Color = clBlack
+      Font.Height = -19
+      Font.Name = 'Times New Roman'
+      Font.Style = []
+      ParentColor = False
+      ParentFont = False
+      Layout = tlCenter
+      Lines.Strings = (
+        'Ціна:')
+      Transparent = False
+      WordWrap = False
+    end
+    object lbPrice: TRBLabel
+      Left = 89
+      Top = 69
+      Width = 65
+      Height = 23
+      Frame.Color = clBlack
+      Frame.DrawTop = False
+      Frame.DrawBottom = False
+      Frame.DrawLeft = False
+      Frame.DrawRight = False
+      Size.Values = (
+        60.8541666666667
+        235.479166666667
+        182.5625
+        171.979166666667)
+      AutoSize = True
+      Alignment = taLeftJustify
+      Caption = '9999.99'
+      DisplayFormat = '0.00'
+      TableField = 'Price'
+      TableSign = 'ROOT'
+      Font.Charset = RUSSIAN_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -19
+      Font.Name = 'Times New Roman'
+      Font.Style = [fsBold]
+      ParentFont = False
+      Layout = tlCenter
+      Lines.Strings = (
+        '9999.99')
+      Transparent = True
+      WordWrap = False
+    end
+  end
+  object Structure1: TRBStructure
+    Tables = <
+      item
+        Name = 'ROOT'
+        Text = 'Корень'
+        Fields = <
+          item
+            Name = 'Name'
+            Text = 'Название'
+            FieldType = rbString
+          end
+          item
+            Name = 'Summa'
+            FieldType = rbFloat
+          end
+          item
+            Name = 'Weight'
+            FieldType = rbFloat
+          end
+          item
+            Name = 'Price'
+            FieldType = rbFloat
+          end>
+        Details = <>
+        VPAOnGetData.EventName = 'Structure1_ROOT_GetData'
+      end>
+    Left = 65533
+    Top = 65534
+  end
+end

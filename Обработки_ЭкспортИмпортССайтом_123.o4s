@@ -1,0 +1,199 @@
+interface
+uses
+  System, DispIntf, Reports, ConstNames;
+
+
+implementation
+
+var
+  AccsGood, AccsPartGood : ISAccs;
+  TblPartGood, GoodsTbl, StoreTbl, CtgTbl : ISValueTable;
+  PartGoodList,PartList, GoodsList, Stores : ISValueList;
+  Partner, Store : Variant;
+  Date : DateTime;
+  ShowCodeUnitname : boolean;
+  UseLevel : boolean;
+  Items : ISDictionary;
+  DataDir : string;
+  TxtList : TStringList;
+  Course, MinCount: Decimal;
+
+function FileNamesDoc(FileName:String):String;server;
+begin
+  DataDir := FileName;
+end;
+
+procedure ExportTxt;
+begin
+  try
+    TxtList := CreateStringList;
+    GoodsTbl.Select;
+    while GoodsTbl.SelectNext do
+      begin
+        TxtList.Add(VarAsStr(GoodsTbl.НазвТовара)+'|'+ VarAsStr(GoodsTbl.Код)+'|'+ VarAsStr(GoodsTbl.Цена)+'|'+
+                    VarAsStr(GoodsTbl.КодКатегории)+'|'+ VarAsStr(GoodsTbl.Категория)+'|'+ VarAsStr(GoodsTbl.Информация));
+      end;
+  finally
+    TxtList.SaveToFile(DataDir);
+    TxtList.Free
+  end;
+end;
+
+procedure CreateSrvObjects; server;
+begin
+ AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+ AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+ TblPartGood := CreateObject('ТаблицаЗначений');
+ TblPartGood.Close();
+ TblPartGood.AddColumn('DimensionID', lftFloat, 0);
+
+ TblPartGood.Open();
+ PartList := CreateObject('СписокЗначений');
+ PartGoodList := CreateObject('СписокЗначений');
+ Stores := CreateObject('СписокЗначений');
+end;
+
+function SetFilters : boolean;
+begin
+  Result := true;
+  if (not IsNil(Partner)) and VarAsBool(Partner.IsFocused) then
+    begin
+      TblPartGood.Clear();
+      AccsPartGood.SetFieldFilter('Партнер', Partner);
+      AccsPartGood.AppendMotionToValueTable(0, Date, amtBoth, 'DimensionID', -1, TblPartGood);
+      TblPartGood.GroupToList('DimensionID', PartList);
+      AccsGood.SetFieldFilter('Партия', PartList);
+      Result := (PartList.Count <> 0);
+      if Result then
+        AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Партия;КолОбщ=Количество', GoodsTbl);
+    end
+  else
+    AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Партия;КолОбщ=Количество', GoodsTbl);
+    GoodsTbl.GroupBy('Товар','Количество');
+end;
+
+procedure SetGoods(Doc:ISProcessing; var Accept : boolean);
+var
+ Dims: Double;
+ b: boolean;
+ MotionID: Integer;
+ ЗначенияПрихода, ЗначенияОтпуска, CtgName: String;
+ Ctg, GoodDic : ISDictionary;
+ i, total, count: Integer;
+ tmpTbl: ISValueTable;
+begin
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+  AccsPartGood.ClearFieldBuffers();
+  AccsPartGood.ClearFieldFilters();
+  PartList.Clear();
+  Date := RoundDate(Date, rdDay, true);
+  GoodsTbl.Clear();
+  GoodsTbl.SortBy('');
+  AccsGood.SetCtgFieldFilter('Товар',GoodsList);
+  Stores.Clear;
+  StoreTbl.GroupToList('Склад',Stores);
+  AccsGood.SetFieldFilter('Склад',Stores);
+  AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Партия;КолОбщ=Количество', GoodsTbl);
+  GoodsTbl.GroupBy('Товар','Количество');
+
+  tmpTbl := CreateObject('ValueTable');
+  GoodsTbl.CopyColumnsTo(tmpTbl);
+  tmpTbl.Open;
+
+  //-------------------Заполнение категорий------------------------
+  Accept := True;
+  GoodDic := CreateObject('Справочники.Товары');
+  GoodsTbl.Select;
+  total := GoodsTbl.LineCount;
+  count := 1;
+  while GoodsTbl.SelectNext do
+    begin
+      if VarAsBool(GoodsTbl.Товар.GetParent.IsFocused) then
+        begin
+          GoodsTbl.Edit;
+          GoodsTbl.Категория := GoodsTbl.Товар.GetParent;
+          GoodsTbl.Post;
+        end;
+      Doc.NotifyClient('Подбор категорий: ' + IntToStr(count) + ' / ' + IntToStr(total),count,total);
+      inc(count);
+    end;
+   GoodsTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;НазвТовара=Товар.НазвТовара;' +
+                       'Цена=Товар.Цена;ЦенаОпт=Товар.ОптЦена;Информация=Товар.Информация' +
+                       'КодКатегории=Категория.Код;МинКолНаСайт=Категория.МинЗапас;НазвКатегория=Категория.НазвТовара');
+  //-- удаляем позиции у которых к-во в наличии меньше мин. остатка по категории
+  GoodsTbl.Select;
+  while GoodsTbl.SelectNext do
+    begin
+      if (GoodsTbl.Количество < VarAsDec(GoodsTbl.МинКолНаСайт)) then
+        begin
+          GoodsTbl.Delete;
+          GoodsTbl.Select;
+        end;
+    end;
+  GoodsTbl.SortBy('КодКатегории');
+
+  GoodDic := CreateObject('Справочники.Товары');
+  Ctg := CreateObject('Справочники.Товары');
+  Ctg.IncludeOnlyLevels(true);
+  total := GoodsList.Count;
+  count := 1;
+  for i := 0 to GoodsList.Count - 1 do
+    begin
+      if Ctg.Find(GoodsList.GetValue(i)) then
+        begin
+          CtgTbl.Append;
+          CtgTbl.Code := Ctg.Код;
+          CtgTbl.Name := Ctg.НазвТовара;
+          if VarAsBool(Ctg.GetParent.IsFocused) then
+            CtgTbl.Parent := Ctg.GetParent.Код
+          else
+            CtgTbl.Parent := 0;
+          CtgTbl.ValueStrID := FloatToHexStr(Ctg.GetUniID);
+          CtgTbl.Post;
+
+          GoodDic.SetFieldFilter('ОтображатьНаСайте','=',true,'','',Null);
+          GoodDic.UseParent(Ctg);
+          GoodDic.Select;
+          GoodsTbl.SortBy('Товар');
+          while GoodDic.SelectNext do
+            if not GoodsTbl.Find(GoodDic) then
+              begin
+                GoodsTbl.Append;
+                GoodsTbl.Товар := GoodDic;
+                GoodsTbl.Категория := Ctg; 
+                GoodsTbl.Post;
+              end;
+        end;
+
+      Doc.NotifyClient('Подбор товаров по категориям: ' + IntToStr(count) + ' / ' + IntToStr(total),count,total);
+      inc(count);
+    end;
+  GoodsTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;НазвТовара=Товар.НазвТовара;' +
+                      'Цена=Товар.Цена;ЦенаОпт=Товар.ОптЦена;Информация=Товар.Информация;' +
+                      'КодКатегории=Категория.Код;НазвКатегория=Категория.НазвТовара');
+  ExportTxt;
+end;
+
+
+function GetRunReportEP(GoodsTbls, StoreTbls, CtgTbls : ISValueTable; GoodLists : ISValueList;
+                        Partners, Stores : Variant; ShowCodeUnitnames, UseLevels : boolean;
+                        AItems : ISDictionary;
+                        Dates : DateTime; MinCountS : Decimal) : Variant; server;
+begin
+ GoodsTbl := GoodsTbls;
+ GoodsList := GoodLists;
+ StoreTbl := StoreTbls;
+ CtgTbl := CtgTbls;
+ Partner := Partners;
+ Store := Stores;
+ Date := Dates;
+ ShowCodeUnitname := ShowCodeUnitnames;
+ UseLevel := UseLevels;
+ Items := AItems;
+ MinCount := MinCountS;
+// Course := CourseS;
+ Result := EntryPoint(SetGoods);
+end;
+
+end.

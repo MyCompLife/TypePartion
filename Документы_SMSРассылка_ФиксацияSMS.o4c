@@ -1,0 +1,19 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, РаботаСЖурналомИзменений;
+
+implementation
+var FullName : string;
+
+
+procedure CanDelete(Data: Variant; var Accept: boolean);
+begin
+  FullName := CanFixDel(Data, Accept, DecGood, UniDel, DelAck);
+  if Accept then
+    ChangeDoc(clmtDelete, Data);
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

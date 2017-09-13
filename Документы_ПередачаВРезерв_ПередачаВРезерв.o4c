@@ -1,0 +1,269 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСЖурналомИзменений;
+
+implementation
+
+procedure bFresh_Click(Sender : TObject); forward;
+
+var
+  ChangeLock, DropMode, LockCalc, ScrollLock, isSave, AddDoc  : Boolean;
+  TmpTbl : ICValueTable;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MasterData : ICDocuments;
+  CursorVis : TCursor;
+  LinkDict : ICDictionary;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  TmpTbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure CheckControls;
+begin
+  if MasterData.GetDocState > 0 then
+    exit;
+  if MasterData.LinesCount() = 0 then
+    begin
+      eCountPack.Enabled := False;
+      ePack.Enabled := False;
+    end
+  else
+    begin
+      eCountPack.Enabled := True;
+      ePack.Enabled := True;
+    end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+var
+  S : ICDictionary;
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  LockCalc := False;
+  CreateObjects;
+  SetColors(Constants);
+  MasterData.SetSrvTableOnCalcFields(server.GetCalcParams(MasterData.GetDate()));
+end;
+
+procedure btnBrowser_Click(Sender : TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.Товары', 'ПодборТоваровСоСкладов', Null);
+end;
+
+procedure TDS_StartDrop(Source : Variant; var Accept : Boolean);
+begin
+  LockCalc := True;
+  MasterData.UpdateLine(True);
+  DropMode := True;
+  ScrollLock := True;
+  MasterData.TableAutoCalcFields := False;
+  CursorVis := WaitCursorStart;
+end;
+
+procedure TDS_Drop(Source : Variant; var Accept : Boolean);
+var
+  Count : Decimal;
+  s : string;
+begin
+  Count := 1;
+  if VarAsBool(Source.IsType('ТаблицаЗначений')) then
+    Accept := False;
+  if not Accept then
+    exit;
+
+  S := VarAsStr(Source.NameField);
+  //перемещение из справочника товаров
+  if not MasterData.FindLineBy('Товар', Source) then
+    begin
+      if VarAsBool(Options.GetServerPrm(CountAck)) and not StdInpDec(inpGoodCount + s, Count) then
+        Accept := MessageDlg(EnterAsk, mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo;
+      if not Accept then
+        exit;
+      MasterData.AppendLine;
+      MasterData.Товар := Source;
+      MasterData.AssignFields('Код;ЕдИзм', Source);
+      MasterData.Количество := Count;
+      MasterData.КолВРезерве := Source.КолВРез;
+      MasterData.PostLine;
+    end;
+end;
+
+procedure TDS_EndDrop(Source : Variant);
+begin
+  DropMode := False;
+  ScrollLock := True;
+  LockCalc := False;
+  SetCursor(CursorVis);
+  MasterData.TableAutoCalcFields := True;
+end;
+
+procedure eTransSummaNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    begin
+      CheckControls;
+      eRespons.Enabled := GetUDASet('changeresp');
+    end;
+  nbList.PageIndex := 0;
+end;
+
+procedure ePriceNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateLine(True);
+end;
+
+procedure TDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  if ChangeLock or DropMode then
+    exit;
+  try
+    ChangeLock := True;
+    case StrLowerCase(FieldName) of
+      'количествоупаковок' :
+        if VarAsBool(MasterData.Упаковка.IsFocused) then
+          MasterData.Количество := MasterData.Упаковка.Количество * MasterData.КоличествоУпаковок;
+      'количество' :
+        if VarAsBool(MasterData.Упаковка.IsFocused) and (MasterData.Упаковка.Количество <> 0) then
+          MasterData.КоличествоУпаковок := MasterData.Количество / MasterData.Упаковка.Количество;
+    end;
+  finally
+    ChangeLock := False
+  end
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin  
+  AddDoc := true;
+  MasterData.TableAutoCalcFields := False;
+  LockCalc := True;
+  try
+    MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+    MasterData.ОкончаниеРезерва := GetNextDateRes(MasterData.ДатаДокумента, Constants);
+  finally
+    LockCalc := False;
+    MasterData.TableAutoCalcFields := True;
+  end;
+end;
+
+procedure ePack_ActionExecute(Sender : TObject);
+var
+  Count : Decimal;
+begin
+  Count := 1;
+  if VarAsBool(Options.GetServerPrm(CountAck)) then
+    StdInpDec(inpPackCount, Count);
+  MasterData.КоличествоУпаковок := Count;
+  MasterData.Количество := MasterData.Упаковка.Количество * MasterData.КоличествоУпаковок;
+end;
+
+procedure bFresh_Click(Sender : TObject);
+begin
+  CursorVis := WaitCursorStart;
+  try
+    MasterData.SaveContents('', TmpTbl);
+    TmpTbl.CopyDataToServer();
+    server.GetResCount(TmpTbl.SrvMean);
+    TmpTbl.CopyDataFromServer;
+    TmpTbl.SrvMean.Clear;
+    MasterData.LoadContents('', TmpTbl);
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure TDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if ScrollLock then
+    exit;
+  CheckControls;
+  if miLinkDict.Checked and not IsNil(LinkDict) then
+    LinkDict.Find(MasterData.@Товар);
+end;
+
+procedure miLinkDict_Click(Sender : TObject);
+begin
+  miLinkDict.Checked := not miLinkDict.Checked;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel4:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label26:TO4Label
+Label6:TO4Label
+Label7:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+ePartner:TO4DBEdit
+eDateReserv:TO4DBEdit
+nbList:TO4Notebook
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+Panel7:TO4Panel
+ToolBar1:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+dbgListData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel5:TO4Panel
+Label11:TO4Label
+Label12:TO4Label
+eCountPack:TO4DBEdit
+ePack:TO4DBEdit
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+pmList:TO4PopupMenu
+miLinkDict:TO4MenuItem
+miDelRec:TO4MenuItem
+miRefresh:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem

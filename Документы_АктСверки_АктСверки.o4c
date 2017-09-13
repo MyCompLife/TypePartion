@@ -1,0 +1,89 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСЖурналомИзменений;
+
+implementation
+var
+  Options : ICOptions;
+  MasterData: ICDocuments;
+  Constants : IC4VPAConst;
+  AddDoc: Boolean;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  Options := GetOptions;
+end;
+
+procedure tbsHeader_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ nbHed.PageIndex := NewTab;
+end;
+
+procedure tbPrintXGrid_Click(Sender : TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+
+procedure tbExportXLS_Click(Sender: TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    eRespons.Enabled := GetUDASet('changeresp');  
+  if VarAsStr(MasterData.XGrid)<>'' then
+    XGrid.LoadFromString(MasterData.XGrid);
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  if AddDoc then
+    ChangeDoc(clmtAppend,MasterData)
+  else
+    ChangeDoc(clmtEdit,MasterData);
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+ AddDoc := true;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+nbHed:TO4Notebook
+Label1:TO4Label
+Label2:TO4Label
+Label26:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+Label5:TO4Label
+Label6:TO4Label
+Label7:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+ePartner:TO4DBEdit
+eDateFrom:TO4DBEdit
+eDateTo:TO4DBEdit
+dbeSum:TO4DBEdit
+dbeCurency:TO4DBEdit
+dbmComment:TO4DBMemo
+Panel2:TO4Panel
+Panel3:TO4Panel
+btnOK:TO4Button
+btnCancel:TO4Button
+tbsHeader:TO4TabSet
+XGrid:TO4XGrid
+ToolBar1:TO4ToolBar
+tbPrintXGrid:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbExportXLS:TO4ToolButton
+MDS:TO4DataSource

@@ -1,0 +1,279 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, РаботаСОбъектами, РаботаСТаблицамиЗначений, РаботаСТаблицамиЗначенийCL,
+  РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  CheckTbl, TempTbl: ICValueTable;
+  V: ICProcessing;
+  Doc: ICDocuments;
+  GoodsDic: ICDictionary;
+  Constants: IC4VPAConst;
+  LockCalc: Boolean;
+  OldAcceptDoc : integer;
+
+procedure SaveChangeJrn(Doc:ICDocuments);
+begin
+ if VarAsInt(Doc.Подтверждена)=1 then
+   ChangeDoc(clmtConfirmed, Doc)
+ else
+ if (VarAsInt(Doc.Подтверждена)=0) and (OldAcceptDoc=1) then
+   ChangeDoc(clmtCancelConfirmed, Doc)
+end;
+
+function CheckGoods: boolean;
+begin
+  if CheckTbl.Total('Add') = CheckTbl.LineCount then
+    result := true
+  else
+    result := false;
+end;
+
+function GetAddValue(Tbl: ICValueTable): integer;
+begin
+  if CheckTbl.КолОбщ = CheckTbl.Количество then
+    result := 1
+  else
+    result := 0;
+end;
+
+procedure CreateTbl(var CheckTbl: ICValueTable);
+begin
+  CheckTbl := CreateObject('ValueTable');
+  CheckTbl.AddColumn('НомСтроки',vtcInteger,0);
+  CheckTbl.AddColumn('Код',vtcString,20);
+  CheckTbl.AddColumn('Товар',vtcLink,0);
+  CheckTbl.AddColumn('ЕдИзм',vtcLink,0);
+  CheckTbl.AddColumn('Количество',vtcFFt,5);
+  CheckTbl.AddColumn('КолОбщ',vtcFFt,5);
+  CheckTbl.AddColumn('Add',vtcInteger,0);
+  CheckTbl.Open;
+  CheckTbl.SetColumnFormat('Количество','0.#####');
+  CheckTbl.SetColumnFormat('КолОбщ','0.#######');
+  CheckTbl.DoCalculation('Add', '0');
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  i: Integer;
+begin
+  Constants := GetConstants;
+  SetColors(Constants);
+  V := Mean;
+  Doc := Params;
+  OldAcceptDoc := VarAsInt(Doc.Подтверждена);
+  PDoc.Caption := Doc.GetName + ' №' + Doc.НомерДокумента + ' ' + VarAsStr(Doc.ДатаДокумента);
+  CheckTbl := CreateTblFromBLOB(Doc.ТаблПодтверждение);
+  if IsNil(CheckTbl) then
+    CreateTbl(CheckTbl)
+  else
+    begin
+      CreateTbl(TempTbl);
+      for i := 0 to TempTbl.GetColumnCount-1 do
+        if CheckTbl.HasField(TempTbl.GetColumnName(i)) then //проверка на совпадение названий полей
+          begin //проверка на совпадение типов полей
+            if CheckTbl.GetColumnDataType(CheckTbl.GetColumnIndex(TempTbl.GetColumnName(i))) <>
+              TempTbl.GetColumnDataType(i) then
+                begin
+                  CheckTbl.Clear;
+                  CheckTbl.Close;
+                  CreateTbl(CheckTbl);
+                  break;
+                end;
+          end
+        else
+          begin
+            CheckTbl.Clear;
+            CheckTbl.Close;
+            CreateTbl(CheckTbl);
+            break;
+          end;
+    end;
+  CheckTbl.DoCalculation('Количество','0');
+  CheckTbl.SortBy('Товар');
+  Doc.AppendLinesTo('Товар;Количество',CheckTbl);
+  CheckTbl.GroupBy('Товар','КолОбщ;Количество');
+  CheckTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  CheckTbl.Select;
+  while CheckTbl.SelectNext do
+    begin
+      CheckTbl.Edit;
+      CheckTbl.Add := GetAddValue(CheckTbl);
+      CheckTbl.Post;
+    end;
+  pStatus.Visible := CheckGoods;
+  CheckTbl.UseDataSource(CtrlToVar(TVSData));
+  GoodsDic := CreateObject('Справочники.Товары');
+end;
+
+procedure CalcCount(var Count : Decimal; s : string; var Accept : Boolean);
+begin
+  if VarAsBool(GetOptions.GetServerPrm(CountAck)) and not StdInpDec(inpGoodCount + s, Count) then
+    Accept := MessageDlg(EnterAsk, mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo;
+end;
+
+procedure pmFind_Click(Sender: TObject);
+var
+  Count: Decimal;
+  Accept: Boolean;
+begin
+  LockCalc := true;
+  Accept := true;
+  CheckTbl.SortBy('Товар');
+  Count := 1;
+  if GoodsDic.FindByField('Код',edGoods.Text,false) then
+    begin
+      if GoodsDic.HasField('КолВУпаковке') and GoodsDic.КолВУпаковке > 1 then
+        Count := GoodsDic.КолВУпаковке*Count;
+      if not cbxCount.Checked then
+        begin
+          CalcCount(Count, GoodsDic.NameField, Accept);
+        end;
+      if not Accept then
+        exit;
+      if CheckTbl.Find(GoodsDic) then
+        begin
+          CheckTbl.Edit;
+          CheckTbl.КолОбщ := CheckTbl.КолОбщ + Count;
+          CheckTbl.Add := GetAddValue(CheckTbl);
+          CheckTbl.Post;
+          edGoods.Text := '';
+          pStatus.Visible := CheckGoods;
+        end
+      else
+        begin
+          CheckTbl.DisableControls;
+          CheckTbl.Append;
+          CheckTbl.Товар := GoodsDic;
+          CheckTbl.КолОбщ := Count;
+          CheckTbl.Количество := 0;
+          CheckTbl.Add := 0;
+          CheckTbl.Post;
+          CheckTbl.EnableControls;
+          CheckTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+          edGoods.Text := '';
+          pStatus.Visible := false;
+        end;
+    end
+  else
+    ShowMessage('Товар не найден!');
+  LockCalc := false;
+end;
+
+procedure miActiveBarCode_Click(Sender: TObject);
+begin
+  edGoods.SetFocus;
+end;
+
+{$D-}
+procedure dbgListData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if VarAsBool(CheckTbl.@Товар.IsFocused) and (CheckTbl.Количество <> CheckTbl.КолОбщ) then
+    if Highlight then
+      begin
+        BackColor := BlZeroSel;
+        DrawFont.Color := BlFZeroSel;
+      end
+    else
+      begin
+        BackColor := BlZero;
+        DrawFont.Color := BlFZero;
+      end;
+end;
+{$D+}
+
+procedure TVSData_VPAAfterScroll(Sender: TObject);
+begin
+  if LockCalc then
+    exit;
+  pStatus.Visible := CheckGoods
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+  V.Params['OK'] := true;
+  Doc.Edit;
+  Doc.ТаблПодтверждение := WritePropsToBlob(CheckTbl);
+  Doc.Подтверждена := 1;
+  Doc.Post;
+  Doc.ApplyUpdates;  
+  SaveChangeJrn(Doc);
+end;
+
+procedure Form_Show(Sender: TObject);
+begin
+  edGoods.SetFocus;
+end;
+
+procedure TVSData_FieldChange(FieldName: string; Value: Variant);
+begin
+  if LockCalc then
+    exit;
+  if FieldName = 'КолОбщ' then
+    CheckTbl.Add := GetAddValue(CheckTbl);
+end;
+
+procedure TVSData_VPAAfterPost(Sender: TObject);
+begin
+  pStatus.Visible := CheckGoods;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if MessageDlg('Сохранить табличную часть?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrYes then
+    begin
+      Doc.Edit;
+      Doc.ТаблПодтверждение := WritePropsToBlob(CheckTbl);
+      Doc.Подтверждена := AbsD(VarAsInt(CheckGoods));
+      Doc.Post;
+      Doc.ApplyUpdates; 
+      SaveChangeJrn(Doc);
+    end;
+  CanClose := true;
+end;
+
+procedure MenuItem1_Click(Sender: TObject);
+begin
+  CheckTbl.DoCalculation('КолОбщ','0');
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+var V: ICProcessing;
+begin
+  LockCalc := true;
+  CheckTbl.DisableControls;
+  V := CreateObject('Обработки.ПодтверждениеНаличияТовара');
+  V.Execute('Печать',ArrayOf(CheckTbl,Doc));
+  CheckTbl.EnableControls;
+  LockCalc := false;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+MainPanel:TO4Panel
+Label6:TO4Label
+CodePanel:TO4Panel
+edGoods:TO4Edit
+btOK:TO4Button
+tbrSource:TO4ToolBar
+tbPrint:TO4ToolButton
+ToolButton1:TO4ToolButton
+cbxCount:TO4CheckBox
+dbgListData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btCancel:TO4Button
+pStatus:TO4Panel
+pDoc:TO4Panel
+pmBarCode:TO4PopupMenu
+pmFind:TO4MenuItem
+TVSData:TO4TableValueSource
+pmData:TO4PopupMenu
+miActiveBarCode:TO4MenuItem
+pm1:TO4PopupMenu
+MenuItem1:TO4MenuItem

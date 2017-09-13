@@ -1,0 +1,273 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 500
+  Height = 300
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    221
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'dbgData.PosColumns[  0].Title.Caption'
+    0
+    #1'-1'#1'Реализатор'
+    'dbgData.PosColumns[  1].Title.Caption'
+    0
+    #1'-1'#1'Телефон'
+    'miAdd.Caption'
+    0
+    #1'-1'#1'Добавить'
+    'miAdd.Hint'
+    0
+    #1'-1'#1'Добавить'
+    'miDelete.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'miDelete.Hint'
+    0
+    #1'-1'#1'Удалить'
+    'miEdit.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'miEdit.Hint'
+    0
+    #1'-1'#1'Изменить'
+    'miPrint.Caption'
+    0
+    #1'-1'#1'Печатать'
+    'miPrint.Hint'
+    0
+    #1'-1'#1'Печатать'
+    'miRefresh.Caption'
+    0
+    #1'-1'#1'Обновить'
+    'miRefresh.Hint'
+    0
+    #1'-1'#1'Обновить'
+    'miSort.Caption'
+    0
+    #1'-1'#1'Сортировать'
+    'miSort.Hint'
+    0
+    #1'-1'#1'Сортировать'
+    'tbsState.Tabs[  0]'
+    0
+    #1'-1'#1'Активные'
+    'tbsState.Tabs[  1]'
+    0
+    #1'-1'#1'Закрытые')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  ActiveControl = dbgData
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object tsState: TO4TabSet
+    Left = 0
+    Top = 248
+    Width = 500
+    Height = 21
+    Align = alBottom
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -11
+    Font.Name = 'MS Sans Serif'
+    Font.Style = []
+    SelectedColor = clWindow
+    Style = tsOwnerDraw
+    TabHeight = 17
+    Tabs.Strings = (
+      'Активные'
+      'Закрытые')
+    TabIndex = 0
+    UnselectedColor = clBtnFace
+    SecondSelect = -1
+    VPAOnChange.EventName = 'tsState_Change'
+    SecondSelectFont.Charset = DEFAULT_CHARSET
+    SecondSelectFont.Color = clBlue
+    SecondSelectFont.Height = -11
+    SecondSelectFont.Name = 'MS Sans Serif'
+    SecondSelectFont.Style = []
+  end
+  object dbgData: TO4DBGrid
+    Left = 0
+    Top = 0
+    Width = 500
+    Height = 248
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    DragDisabled = False
+    Options = [dgTitles, dgColumnResize, dgColLines, dgRowLines, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = MDS
+    PopupMenu = pmData
+    ReadOnly = True
+    TabOrder = 0
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'ПолноеНазвание'
+        Title.Caption = 'Реализатор'
+        Width = 358
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.06.2002'
+      end
+      item
+        O4FieldName = 'Телефон'
+        Title.Caption = 'Телефон'
+        Width = 136
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.06.2002'
+      end>
+  end
+  object BottomPanel: TO4Panel
+    Left = 0
+    Top = 269
+    Width = 500
+    Height = 31
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    BevelInner = bvRaised
+    BevelOuter = bvLowered
+    TabOrder = 2
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 323
+      Top = 2
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 15
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actSelect
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object MDS: TO4DataSource
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 113
+    Top = 115
+  end
+  object pmData: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 296
+    Top = 79
+    object miAdd: TO4MenuItem
+      Caption = 'Добавить'
+      Hint = 'Добавить'
+      ImageIndex = 0
+      ShortCut = 45
+      O4Action = actAdd
+      SortMenuParent = False
+    end
+    object miEdit: TO4MenuItem
+      Caption = 'Изменить'
+      Hint = 'Изменить'
+      ImageIndex = 1
+      ShortCut = 113
+      O4Action = actEdit
+      SortMenuParent = False
+    end
+    object miDelete: TO4MenuItem
+      Caption = 'Удалить'
+      Hint = 'Удалить'
+      ImageIndex = 2
+      ShortCut = 46
+      O4Action = actDel
+      SortMenuParent = False
+    end
+    object MenuItem1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miPrint: TO4MenuItem
+      Caption = 'Печатать'
+      Enabled = False
+      Hint = 'Печатать'
+      ImageIndex = 93
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem3: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSort: TO4MenuItem
+      Caption = 'Сортировать'
+      Hint = 'Сортировать'
+      ImageIndex = 37
+      O4Action = actSelect
+      SortMenuParent = True
+    end
+    object MenuItem4: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miRefresh: TO4MenuItem
+      Caption = 'Обновить'
+      Hint = 'Обновить'
+      ImageIndex = 39
+      VPAOnClick.EventName = 'miRefresh_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object actGridParam: TO4MenuItem
+      Caption = 'Настройки'
+      Hint = 'Настройки'
+      ImageIndex = 48
+      O4Action = actNone
+      SortMenuParent = False
+    end
+  end
+end

@@ -1,0 +1,226 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Plan, Plan1 : ICPlan;
+  ChangeLock : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  Plan := MDS.GetMean;
+end;
+
+procedure rbgActive_Click(Sender : TObject);
+begin
+  // устанавливаем свойства счета
+  if ChangeLock then
+    exit;
+  Plan.IsActive := rbgActive.ItemIndex + 1;
+  Plan.IsCurrency := chbCurrency.Checked;
+  Plan.IsSingle := chbSingle.Checked;
+  Plan.IsCount := chbCount.Checked;
+  if rbgActive.ItemIndex = 2 then
+    eSaldo.Enabled := True
+  else
+    begin
+      eSaldo.Enabled := False;
+      eSaldo.ItemIndex := 0;
+    end;
+end;
+
+function GetParentAOCount : Integer;
+var
+  Parent : ICPlan;
+begin
+  Parent := Plan.GetParent;
+  if Parent.IsFocused then
+    Result := Parent.AOCount
+  else
+    Result := 0;
+end;
+
+procedure chbUseAO_Click(Sender : TObject);
+var
+  i : Integer;
+  PrevChangeLock : Boolean;
+  ParentAOCount : Integer;
+  CheckBox, Nobody : TO4CheckBox;
+begin
+  ParentAOCount := GetParentAOCount;
+  PrevChangeLock := ChangeLock;
+  ChangeLock := True;
+  try
+    if not chbUseAO.Checked then
+      for i := 1 to Plan.AOCount do
+        if i > ParentAOCount then
+          Plan.AOType[i] := '';
+    for i := grpAOBox.ControlCount - 1 downto 0 do
+      begin
+        if grpAOBox.Controls[i] is TO4CheckBox then
+          CheckBox := grpAOBox.Controls[i] as TO4CheckBox
+        else
+          CheckBox := Nobody;
+        if grpAOBox.Controls[i].Tag > Plan.AOCount then
+          if not IsNil(CheckBox) then
+            begin
+              CheckBox.Checked := False;
+              CheckBox.Enabled := chbUseAO.Checked and
+                (CheckBox.Tag = ParentAOCount + 1) and (CheckBox.Tag > ParentAOCount);
+            end
+          else
+        else
+          if not IsNil(CheckBox) then
+            begin
+              CheckBox.Checked := True;
+              CheckBox.Enabled := (CheckBox.Tag = Plan.AOCount) and (CheckBox.Tag > ParentAOCount);
+            end;
+        if not IsNil(CheckBox) then
+          (Form.FindComponent('edAO' + IntToStr(CheckBox.Tag)) as TO4DBEdit).Enabled := CheckBox.Enabled
+      end;
+    if not (PrevChangeLock or (chbAO1.Enabled or chbAO1.Checked)) then
+      chbAO1.Enabled := True
+  finally
+    ChangeLock := False
+  end
+end;
+
+procedure CheckBox5_Click(Sender : TObject);
+var
+  CheckBox : TO4CheckBox;
+  ParentAOCount : Integer;
+begin
+  ParentAOCount := GetParentAOCount;
+  CheckBox := Sender as TO4CheckBox;
+  (Form.FindComponent('edAO' + IntToStr(CheckBox.Tag)) as TO4DBEdit).Visible := CheckBox.Checked;
+  (Form.FindComponent('edAO' + IntToStr(CheckBox.Tag)) as TO4DBEdit).Enabled :=
+    CheckBox.Tag > ParentAOCount;
+  if not ChangeLock then
+    begin
+      ChangeLock := True;
+      try
+        if not CheckBox.Checked then
+          begin
+            if CheckBox.Tag > 1 then
+              begin
+                (Form.FindComponent('chbAO' + IntToStr(CheckBox.Tag - 1)) as TO4CheckBox).Enabled :=
+                  CheckBox.Tag > ParentAOCount + 1;
+                (Form.FindComponent('edAO' + IntToStr(CheckBox.Tag - 1)) as TO4DBEdit).Enabled :=
+                  CheckBox.Tag > ParentAOCount + 1
+              end;
+            if CheckBox.Tag < 3 then
+              (Form.FindComponent('chbAO' + IntToStr(CheckBox.Tag + 1)) as TO4CheckBox).Enabled := False;
+            Plan.AOtype[CheckBox.Tag] := ''
+          end
+        else
+          begin
+            if CheckBox.Tag > 1 then
+              begin
+                (Form.FindComponent('chbAO' + IntToStr(CheckBox.Tag - 1)) as TO4CheckBox).Enabled := False;
+                (Form.FindComponent('edAO' + IntToStr(CheckBox.Tag - 1)) as TO4DBEdit).Enabled := False
+              end;
+            if (CheckBox.Tag = Plan.AOCount) and (CheckBox.Tag < 3) then
+              (Form.FindComponent('chbAO' + IntToStr(CheckBox.Tag + 1)) as TO4CheckBox).Enabled := True;
+          end
+      finally
+        ChangeLock := False
+      end
+    end
+end;
+
+procedure edAO1_ActionExecute(Sender : TObject);
+begin
+  Plan.UpdateRecord(True);
+  CheckBox5_Click(Form.FindComponent('chbAO' + IntToStr((Sender as TO4DBEdit).Tag)))
+end;
+
+procedure AnalizeParent;
+var
+  Parent : ICPlan;
+begin
+  Parent := Plan.GetParent;
+  rbgActive.Enabled := not Parent.IsFocused;
+end;
+
+procedure MapInfoToControls;
+begin
+  ChangeLock := True;
+  try
+    rbgActive.ItemIndex := Plan.IsActive - 1;
+    chbCount.Checked := Plan.IsCount;
+    chbCurrency.Checked := Plan.IsCurrency;
+    chbSingle.Checked := Plan.IsSingle;
+    chbUseAO.Checked := Plan.AOCount > 0;
+    AnalizeParent;
+    if rbgActive.ItemIndex = 2 then
+      eSaldo.Enabled := True
+    else
+      eSaldo.Enabled := False;
+    eSaldo.ItemIndex := Plan.“ип—альдо;
+  finally
+    ChangeLock := False;
+  end;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MapInfoToControls;
+  if Plan.AOCount > 0 then
+    CheckBox5_Click(Form.FindComponent('chbAO' + IntToStr(Plan.AOCount)))
+end;
+
+procedure DBEdit1_Change(Sender : TObject);
+begin
+  Plan.UpdateRecord(True);
+  MapInfoToControls;
+end;
+
+procedure eSaldo_Change(Sender : TObject);
+begin
+  Plan.“ип—альдо := eSaldo.ItemIndex;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  Plan.“ип—альдо := 0;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel2:TO4Panel
+LinkImage1:TO4LinkImage
+Panel3:TO4Panel
+Panel4:TO4Panel
+Button1:TO4Button
+Button2:TO4Button
+pgcMain:TO4PageControl
+TabSheet1:TTabSheet
+Label1:TO4Label
+Label2:TO4Label
+Label4:TO4Label
+DBEdit1:TO4DBEdit
+DBEdit2:TO4DBEdit
+rbgActive:TO4RadioGroup
+chbCount:TO4CheckBox
+chbCurrency:TO4CheckBox
+chbSingle:TO4CheckBox
+eSaldo:TO4Edit
+TabSheet2:TTabSheet
+grpAOBox:TO4GroupBox
+Label3:TO4Label
+chbAO1:TO4CheckBox
+chbAO2:TO4CheckBox
+chbAO3:TO4CheckBox
+edAO1:TO4DBEdit
+edAO2:TO4DBEdit
+edAO3:TO4DBEdit
+chbUseAO:TO4CheckBox
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiCancel:TO4MenuItem

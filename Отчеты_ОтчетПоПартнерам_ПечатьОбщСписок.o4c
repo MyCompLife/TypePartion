@@ -1,0 +1,128 @@
+interface
+uses
+  System, DispIntf, ConstNames, »нтерфейс, –асчеты, Reports, InitColors;
+
+implementation
+
+Var
+  GoodDic: ICDictionary;
+  V: ICProcessing;
+  PrintPartner, AttrPartTbl, PDocsTbl, PGoodsTbl, PDocsTypeTbl : ICValueTable;
+  TypeRepport, AnalitField : String;
+  —умќбщ¬ал, —умќбщћин, s1, s2, s3, s4 : Variant;
+  i : integer;
+
+procedure XGrid_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  case Hsect of
+    'Hed' :
+     begin
+       Vars.Period := PrintPartner.Params['Period'];
+     end;
+     'Part' :
+     begin        
+       if i = 0 then
+         begin
+           Vars.Name := '¬сього:';
+           Vars.CurrName := '';
+           Vars.SumBeg := s1;
+           Vars.SumIn := s2;
+           Vars.SumOut := s3;
+           Vars.SumEnd := s4;
+         end
+       else
+         begin
+           if (AnalitField<>'') and VarAsBool(PrintPartner.@јналитика¬заиморасчета.IsFocused) and VarAsBool(PrintPartner.@ѕартнер.IsFocused) then
+             Vars.Name := VarAsStr(PrintPartner.ѕартнер.NameField)+'('+VarAsStr(PrintPartner.јналитика¬заиморасчета.NameField)+')'
+           else
+             Vars.Name := PrintPartner.ѕартнер;
+           Vars.CurrName := PrintPartner.¬алюта;
+           Vars.SumBeg := PrintPartner.—умЌач;
+           Vars.SumIn := —умќбщ¬ал;
+           Vars.SumOut := —умќбщћин;
+           Vars.SumEnd := PrintPartner.—ум он;
+           s1 := s1 + PrintPartner.—умЌач;
+           s2 := s2 + —умќбщ¬ал;
+           s3 := s3 + —умќбщћин;
+           s4 := s4 + PrintPartner.—ум он;
+         end;
+     end;
+  end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  FieldsStr: String;
+  Fields: Variant;
+  SectionMastertHed, SectionMasterDet: String;
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  V := Mean;
+  PrintPartner := Params;     
+  PDocsTbl := PrintPartner.Params['PDocsTbl'];
+  if PrintPartner.HasParam('AnalitField') then
+    AnalitField := VarAsStr(PrintPartner.Params['AnalitField']);
+  Xgrid.ClearAll;
+  Xgrid.AddSection('Hed');
+  Xgrid.AddSection('HedPart');
+  i := 1;
+  s1 := 0; s2 := 0; s3 := 0; s4 := 0;
+  PrintPartner.Select;
+  while PrintPartner.SelectNext do 
+    begin
+     —умќбщ¬ал := 0;
+     —умќбщћин := 0;
+     PDocsTbl.SortBy('ѕартнер;¬алюта'+AnalitField);
+     if AnalitField<>'' then
+       PDocsTbl.SetRange(ArrayOf(PrintPartner.@ѕартнер,PrintPartner.@¬алюта,PrintPartner.@јналитика¬заиморасчета),
+                        ArrayOf(PrintPartner.@ѕартнер,PrintPartner.@¬алюта,PrintPartner.@јналитика¬заиморасчета))
+     else
+       PDocsTbl.SetRange(ArrayOf(PrintPartner.@ѕартнер,PrintPartner.@¬алюта),
+                         ArrayOf(PrintPartner.@ѕартнер,PrintPartner.@¬алюта));
+     PDocsTbl.Select;
+     while PDocsTbl.SelectNext do
+       begin
+         if PDocsTbl.—умќбщ¬ал > 0 then
+           —умќбщћин := —умќбщћин + AbsD(PDocsTbl.—умќбщ¬ал)
+         else
+           —умќбщ¬ал := —умќбщ¬ал + AbsD(PDocsTbl.—умќбщ¬ал);
+       end;  
+     Xgrid.AddSection('Part');  
+    end;
+  i := 0;
+  Xgrid.AddSection('Part');
+  tbPrint.Enabled := true;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+ XGridTools.Visible := not XGridTools.Visible;
+ if XGridTools.Visible
+  then tbXTools.ImageIndex := 98 else tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+Panel2:TO4Panel
+Panel3:TO4Panel
+btCancel:TO4Button
+TVSStore:TO4TableValueSource

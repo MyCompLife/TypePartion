@@ -1,0 +1,377 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСДокументамиВЖурналах,
+  Пользователи, РаботаСПеременными, ДополнительныйФункционал;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  PrintList : ICValueList; 
+  PrintFormsTbl: ICValueTable;
+  PreView : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+var
+  i : Integer;
+  Strs : Variant;
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  SetColors(Constants);
+end;
+
+{procedure GetPrintersList(var PrintList: ICValueList; var edPrinters: TO4Edit);
+var
+  Prints, Print : String;
+  PCnt: Integer;
+  PrinterName: String;
+begin
+  PrintList := CreateObject('СписокЗначений');
+  Prints := GetPrinterNames;
+  for PCnt := 1 to WordCount(Prints ,#10) do
+    PrintList.AddValue(ExtractWord(PCnt,Prints,#10),null);
+  for PCnt := 0 to PrintList.Count-1 do
+    begin
+      Print := PrintList.GetStr(PCnt);
+      PrintList.SetStr(PCnt, ReplaceOneStrWithAnother(Print, #13,''));
+    end;
+  PrintList.SortByStr(true);
+  PrintList.UseControl(CtrlToVar(edPrinters));
+  PrinterName := VarAsStr(Options.GetServerPrm('АктивныйПринтер' + MasterData.GetSign + Form.Caption));
+  PrintList.CurIndex := PrintList.FindByStr(PrinterName);
+end; }
+
+procedure PrintOnUserDevice(ProcName, FormName, PrinterName: String; Data: Variant; Preview: Boolean; PrintOnlyFixDoc: Boolean  = false);
+var
+  V : ICProcessing;
+begin
+  if not VarAsBool(Data.IsFocused) then
+    exit;
+  if PrintOnlyFixDoc and (Data.GetDocState = 0) then
+    begin
+      MessageDlg('Вам запрещено печатать неутвержденный чек!',mtWarning,mbOk);
+      exit;
+    end;
+  SetActivePrinter(PrinterName);
+  V := CreateObject(ProcName);
+  V.PrintForm(FormName, Preview, Data);
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;      
+  ItemMenu : TO4MenuItem;
+begin
+  Options := GetOptions;
+  MakeInterface(tbrData, Nobody, dbgData);  
+  miDocMove.Visible := GetUDASet('viewdocmove'); 
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  GetPrintersList(PrintList, edPrinters, MasterData.GetSign);
+  MakeUserInterface(MasterData.GetSign, pPrintPrm, PreView, PrintFormsTbl);
+  if IsNil(Users) then
+    Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    begin
+      if VarAsBool(Users.@Регион.IsFocused) and VarAsBool(Users.ОтборПоРегиону) then
+        MasterData.SetFieldFilter('Регион','=',Users.Регион,'','',Null);
+      if VarAsBool(Users.ОтборПоПользователю) then
+        MasterData.SetFieldFilter('Партнер','=',Users.Служащий,'','',Null);
+    end;
+  if not isNil(PrintFormsTbl) then
+    begin
+      btnPrint.Style := tbsDropDown;
+      btnPrint.DropdownMenu := pmPrintForms;
+      if PrintFormsTbl.LineCount = 0 then
+        btnPrint.Enabled := false; //если не указана печ.форма или не спозиционирован документ, тогда блокируется кнопка печати
+      pmiPrintOne.Enabled := btnPrint.Enabled;
+      PrintFormsTbl.DoNumbering('НомСтроки',1,1);
+      PrintFormsTbl.Select;
+      while PrintFormsTbl.SelectNext do
+        begin
+          ItemMenu := form.FindComponent('miPrinForm' + VarAsStr(PrintFormsTbl.НомСтроки)) as TO4MenuItem;
+          ItemMenu.Caption := PrintFormsTbl.ПечФорма;
+          ItemMenu.Visible := true;
+          ItemMenu.Tag := PrintFormsTbl.НомСтроки;
+          if PrintFormsTbl.НомСтроки = 1 then
+            ItemMenu.Default := true;
+        end;
+    end;
+end;
+
+procedure miPrintActive_Click(Sender : TObject);
+begin
+  // MasterData.PrintForm('', false, 0, Null)
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+var
+  V : ICProcessing;
+  PrinterName: String;
+begin
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintOnUserDevice('Обработки.ПечУнивЖурнала', 'ПечУнивЖурналаСТипомИВалютой', PrinterName, MasterData, PreView)
+end;
+
+procedure btnPrint_Click(Sender : TObject);
+var
+  PrinterName: String;
+  ObjTag : Integer;
+begin
+  if Sender.ClassName = 'TO4ToolButton' then
+    ObjTag := (Sender as TO4ToolButton).Tag;
+  if Sender.ClassName = 'TO4MenuItem' then
+    ObjTag := (Sender as TO4MenuItem).Tag;
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintFormsTbl.SortBy('НомСтроки');
+  if PrintFormsTbl.Find(ObjTag) then
+    PrintOnUserDevice('Обработки.ПечВводОстатков', PrintFormsTbl.ПечФорма, PrinterName, MasterData.GetDoc, PreView);
+{var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      V := CreateObject('Обработки.ПечВводОстатков');
+      V.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc());
+    end;  }
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if MasterData.GetDocState > 0 then
+    Index1 := 10
+  else
+    Index1 := 9;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh();
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure DBMemo1_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData);
+end;
+
+function GetEmplByName(EmplName : string) : ICDictionary;
+Var
+  Respons: ICDictionary;
+begin
+  //  ExtractHumanName(EmplName);
+  if IsNil(Respons) then
+    Respons := CreateObject('Справочники.Служащие');
+  if Respons.FindByField('ПолноеНазвание', EmplName, False) then
+    begin
+      Result := Respons;
+    end
+  else
+    nil(Result);
+end;
+
+procedure miCreateDocBarCode_Click(Sender: TObject);
+var
+  TblOwnerDoc : ICValueTable;
+  DocOwner, Doc : ICDocuments;
+  i: Integer;
+  CntInPack : Decimal;
+begin
+   DocOwner := MasterData.GetDoc;
+   Doc := CreateObject('Документы.ПечатьШтрихКодов');
+   Doc.Select;
+   Doc.Append;
+   Doc.ДатаДокумента := CurrentDateTime;
+   Doc.Партнер := GetEmplByName(GetUserName);
+
+   DocOwner.SelectLines;
+   while DocOwner.SelectNextLine do
+     begin
+       if VarAsBool(DocOwner.Товар.Модель.IsFocused) then
+         CntInPack := DocOwner.Товар.Модель.КолВУпаковке;
+       if CntInPack = 0 then
+         CntInPack := 1;
+       Doc.AppendLine;
+       Doc.Товар := DocOwner.Товар;
+       Doc.Цена := DocOwner.Товар.Цена;
+       i := VarAsInt(Int(DocOwner.Количество/CntInPack));
+         if  Frac(DocOwner.Количество/CntInPack) <> 0 then
+          inc(i);
+       Doc.Количество := i;
+       Doc.PostLine;
+     end;
+  Doc.Post;
+  ShowMessage('Документ создан успешно.');
+end;
+
+
+procedure miUpdatesPrice_Click(Sender: TObject);
+var
+  Tbl : ICValueTable;
+  AccsPartGoods : ICAccs;
+  Sum, SumIn : Variant;
+  Doc : ICDocuments;
+begin
+  if MasterData.GetDocState > 0 then
+    begin
+      ShowMessage('Изменение запрещено для утвержденного документа.');
+      exit;
+    end;
+  Sum := 0;
+  SumIn := 0;
+  Doc := MasterData.GetDoc;
+  Doc.Edit;
+  Doc.SelectLines;
+  while Doc.SelectNextLine do
+    begin
+      Doc.EditLine;
+      Doc.ЦенаБезНДС := Doc.Товар.ВхЦена;
+      ЦенаНДС(Doc, True);
+      Doc.ЦенаВВалюте := Doc.Цена * Doc.КурсТовара;
+      Doc.ЦенаРозн := Doc.Товар.Цена;
+      Doc.ОптЦена := Doc.Товар.ОптЦена;
+      Doc.КрОптЦена := Doc.Товар.КрОптЦена;
+      Sum := Sum + (Doc.Цена*Doc.Количество);
+      SumIn := SumIn + (Doc.ЦенаВВалюте*Doc.Количество);
+      Doc.PostLine;
+    end;
+  Doc.Сумма := Sum;
+  Doc.СуммаБезНДС := Sum;
+  Doc.СуммаНДС := 0;
+  Doc.СуммаВВалюте := SumIn;
+  Doc.Post;
+  Doc.ApplyUpdates;
+  if Doc.GetDocState <> 0 then
+    begin
+      Doc.StateDown;
+      Doc.StateUp;
+    end;
+  MasterData.Refresh();
+end;
+
+procedure pmiPrintBarCode_Click(Sender : TObject);
+var
+  PrinterName: String;
+begin
+  if not MasterData.IsFocused then
+    exit;
+  PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintOnUserDevice('Обработки.ПечатьШтрихКодовИЦенников', 'ПечатьШтрихКодТермопринтерУпаковки40х25ВводОстатков', PrinterName, MasterData, true)
+end;
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  SaveUserActivePrinter(PrinterName, MasterData.GetSign);
+//  Options.SetServerPrm('АктивныйПринтер' + MasterData.GetSign + Form.Caption, PrinterName);
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+btnPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+pPrintPrm:TO4Panel
+Label4:TO4Label
+btSaveActivPrinter:TO4Button
+edPrinters:TO4Edit
+DBMemo1:TO4DBMemo
+tsState:TO4TabSet
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+miUp:TO4MenuItem
+miDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+pmiPrintBarCode:TO4MenuItem
+MenuItem2:TO4MenuItem
+miSort:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem3:TO4MenuItem
+miRefresh:TO4MenuItem
+MenuItem6:TO4MenuItem
+miUpdatesPrice:TO4MenuItem
+MenuItem4:TO4MenuItem
+miCreateDocBarCode:TO4MenuItem
+miDocMove:TO4MenuItem
+MDS:TO4DataSource
+pmPrintForms:TO4PopupMenu
+miPrinForm1:TO4MenuItem
+miPrinForm2:TO4MenuItem
+miPrinForm3:TO4MenuItem
+miPrinForm4:TO4MenuItem
+miPrinForm5:TO4MenuItem
+miPrinForm6:TO4MenuItem
+miPrinForm7:TO4MenuItem
+miPrinForm8:TO4MenuItem
+miPrinForm9:TO4MenuItem
+miPrinForm10:TO4MenuItem
+miInfoChange:TO4MenuItem

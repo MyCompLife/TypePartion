@@ -1,0 +1,43 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, РаботаСЖурналомИзменений;
+
+implementation
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  CanFixDel(Doc, Accept, '', UniFix, FixAck);
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+begin      
+  ChangeDoc(clmtStateUp, Doc);
+  Doc.SendEvent(evOrder, Unassigned, False);
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  CanFixDel(Doc, Accept, '', UniUnFix, FixAck);
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin
+  ChangeDoc(clmtStateDown, Doc);
+  Doc.SendEvent(evOrder, Unassigned, False);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  CanFixDel(Doc, Accept, '', UniDel, DelAck); 
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoDelete(Doc : ICDocuments);
+begin     
+  Doc.SendEvent(evOrder, Unassigned, False);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

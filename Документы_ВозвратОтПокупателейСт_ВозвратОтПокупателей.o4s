@@ -1,0 +1,44 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation 
+
+var
+  AccGood : ISAccs;
+  Date : DateTime;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure InitSrvData; server;
+begin
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccGood.IncludeZeroRest := True;
+  Date := RoundDate(CurrentDate, rdDay, True);
+end;
+
+procedure GetMyGoodCount(tmpCtx : ISValueTable); server;
+begin
+  tmpCtx.Select();
+  while tmpCtx.SelectNext() do
+    if tmpCtx.Партия <> 0 then
+      begin
+        AccGood.SetFieldFilter('Партия', tmpCtx.Партия);
+        AccGood.CalcGroupRestDirect(Date, tmpCtx.@Товар);
+        tmpCtx.Edit();
+        tmpCtx.КВозврату := AccGood.КолОбщ;
+        tmpCtx.Post();
+      end;
+  // GetGoodCount(tmpCtx, Date, AccsGoods);
+end;
+
+end.

@@ -1,0 +1,71 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+var
+  TblGoods : ICValueTable;
+  CursorVis : TCursor;
+  UseConst : IC4VPAConst;
+
+procedure MDS_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+  TVSGoods.AfterScrollLock := True;
+  CursorVis := WaitCursorStart;
+end;
+
+procedure MDS_VPAAfterMove(Sender : TObject);
+begin
+  TVSGoods.AfterScrollLock := False;
+  SetCursor(CursorVis);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      TblGoods := Params;
+      UseConst := GetConstants;
+      Params.SetColumnFormat('ВхЦенаБезНДС', UseConst.ФорматЦеныГРН);
+      Params.SetColumnFormat('ВхЦенаВал', UseConst.ФорматЦеныВал);
+      Params.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+      Params.SetColumnFormat('КолКСпис', UseConst.ФорматКол);
+      Params.SortBy('Товар');
+      Params.UseDataSource(CtrlToVar(TVSGoods));
+    end;
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  TblGoods.SortBy('Код;Товар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  TblGoods.SortBy('Товар;Код');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  TblGoods.Locate('Товар', InParams);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel5:TO4Panel
+dbgGoods:TO4DBGrid
+TVSGoods:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem

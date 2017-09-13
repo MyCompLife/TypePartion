@@ -1,0 +1,33 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  UseConst : IC4VPAConst;
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      UseConst := GetConstants;
+      Params.SetColumnFormat('Цена', UseConst.ФорматЦеныГРН);
+      Params.SetColumnFormat('Количество', UseConst.ФорматКол);
+      Params.UseDataSource(CtrlToVar(TVSGood));
+    end;
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+DBGrid1:TO4DBGrid
+TVSGood:TO4TableValueSource

@@ -1,0 +1,29 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+
+procedure FillPayTblS(Doc:ISDocuments; PayTbl :ISValueTable; IsPayOut:Boolean=true);  server;
+var Jrn : ISJournal;
+    tmpTbl : ISValueTable;
+begin
+ if IsPayOut then
+   Jrn := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп')
+ else
+   Jrn := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+ Jrn.SetDocMultiStateRange('1;2');
+ Jrn.UseMaster(Doc);
+ Jrn.Select;
+ While Jrn.SelectNext do
+   begin
+     PayTbl.Append;
+     PayTbl.DocSign := Jrn.GetDocSign;
+     PayTbl.Sum := VarAsDec(Jrn.—умма);
+     PayTbl.Post;
+   end;
+ PayTbl.GroupBy('DocSign','Sum');
+end;
+
+end.

@@ -1,0 +1,53 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Files: String;
+  FilesTbl : ICValueTable;
+  MasterData : ICProcessing;
+
+procedure CreatObject;
+begin
+  FilesTbl := CreateObject('ТаблицаЗначений');
+  FilesTbl.AddColumn('НазвФайла', lftString, 250);
+  FilesTbl.Open;
+end;
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  Cnt: Integer;
+begin
+  MasterData := Mean;
+  Files := Params;
+  CreatObject;
+  for Cnt := 1 to WordCount(Files ,#13) do
+    begin
+      FilesTbl.Append;
+      FilesTbl.НазвФайла := ExtractWord(Cnt,Files,#13);
+      FilesTbl.Post;
+    end;
+  FilesTbl.SortBy('НазвФайла');
+  FilesTbl.UseDataSource(CtrlToVar(TVS));
+//  FilesTbl.Select;
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+  if FilesTbl.IsFocused then
+    MasterData.Params['File'] := FilesTbl.НазвФайла;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+PMain:TO4Panel
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+dbgGrid:TO4DBGrid
+TVS:TO4TableValueSource

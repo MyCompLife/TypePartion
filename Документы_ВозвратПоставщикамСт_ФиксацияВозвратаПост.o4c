@@ -1,0 +1,84 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€, –абота—∆урналом»зменений;
+
+implementation
+
+var
+  ApplyTbl : ICValueTable;
+  AccsGood, AccsPart : ICAccs;
+  FullName : string;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniFix, FixAck);
+  if Accept then
+    case Doc.GetDocState of
+      0 :
+        begin
+          ApplyTbl := CreateObject('“аблица«начений');
+          AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+          CheckAllRestrictions(Doc, ApplyTbl, FullName, Accept, False);
+        end;
+      1 :
+        ;
+    end;
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+begin
+  case Doc.GetDocState of
+    1 :
+      begin
+        if not Doc.RunThreadProcess(server.GetChangeStateUpEP(AccsGood.SrvMean, ApplyTbl.SrvMean), UniFixProgress + FullName) then
+          raise(emsgFixFail);  
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.SendEvent(evCount, Unassigned, False);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniUnFix, FixAck);
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin     
+  ChangeDoc(clmtStateDown, Doc);
+  Doc.SendEvent(evCount, Unassigned, False);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniDel, DelAck); 
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoDelete(Doc : ICDocuments);
+begin   
+  Doc.SendEvent(evCount, Unassigned, False);
+end;
+
+procedure CanChangeBuhStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  if (not Doc.ISGroupAction) or (Doc.FirstInGroupAction) then
+    begin
+      Doc.BuhWizard := CreateObject('Ѕух”чет.Ѕух”чет').CreateWizard();
+      Accept := Doc.BuhWizard.OpenAskForm(Doc);
+    end
+  else
+    Accept := Doc.BuhWizard.AsceptUp;
+end;
+
+procedure DoChangeBuhStateUp(Doc : ICDocuments);
+begin
+  Doc.BuhWizard.DocStateUp(Doc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

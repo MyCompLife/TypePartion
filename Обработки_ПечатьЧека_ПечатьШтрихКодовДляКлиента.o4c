@@ -1,0 +1,85 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  Tbl  : ICValueTable;
+  i,j,k,x: Integer;
+  Constants : IC4VPAConst;
+  IsCountDlg : Boolean;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  Constants := GetConstants;
+  Tbl := CreateObject('ТаблицаЗначений');
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар','Количество');
+  Tbl.SortBy('Товар');
+  Tbl.Select;
+  Tbl.SelectFirst;
+  StdInpInt('Пропустить штрихкодов:',k);
+  x := 1;
+  StdInpInt('Укажите множитель к количеству штрихкодов:', x);
+  i := Tbl.Количество*x;
+  IsCountDlg := Bits(MessageDlg('Выводить все позиции по документу?', mtConfirmation,ArrayOf(mbYes,mbNo))) and Bits(mrYesToAll,mrYes) <> 0;
+  if not IsCountDlg then
+    if not StdInpInt(VarAsStr(Tbl.Товар.НазвТовара) + '  ' + VarAsStr(Tbl.Товар.Код),i) then
+      i:=0;//Exit;
+  i:=i+k;
+  j:=0;
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if j < i then
+    begin
+      Accept := true;
+      j := j+1;
+    end
+  else
+    begin
+      Repeat
+        Accept := Tbl.SelectNext();
+        i := Tbl.Количество*x;
+        if not Accept then Exit;
+        if not IsCountDlg then
+          if not StdInpInt(VarAsStr(Tbl.Товар.НазвТовара) + '  ' + VarAsStr(Tbl.Товар.Код),i) then
+            i := 0;//Exit;
+        j := 1;
+      until i <> 0;
+    end;
+  begin
+    if k <> 0 then
+      begin
+        bndDET.Frame.Color := clWhite;
+        Image.Transparent := false;
+        k := k-1;
+      end
+    else
+      begin
+        bndDET.Frame.Color:=clBlack;
+        Image.Transparent:=true;
+      end;
+    BarCode.Text := Tbl.Товар.Код;
+    with Table do
+      begin
+        Value['Code'] := Tbl.Товар.Код;
+        Value['Name'] := Tbl.Товар.НазвТовара;
+        Value['BCode'] := Tbl.Товар.Код;
+      end;
+  end;
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+BarCode:TRBBarCode
+Label5:TRBLabel
+Image:TRBImage
+Structure1:TRBStructure

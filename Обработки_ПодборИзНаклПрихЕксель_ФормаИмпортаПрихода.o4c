@@ -1,0 +1,1389 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСТаблицамиЗначенийCL, Расчеты, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками, РаботаСОфиснымиПрограмами, РаботаСFtp;
+
+implementation
+const SaveComponentList = 'edBeginRow;edEndRow;cbSuppCode;cbBarCode;cbName;cbUnitName;cbCount;cbInPriceNT;cbCurInPrice;edSuppCode;edBarCode;edName;edUnitName;edCount;edInPriceNT;ePercent;rgTypeImport;cbSupplier;cbCtg;edCtg';
+      edComponentList = 'edSuppCode;edBarCode;edName;edUnitName;edCount;edInPriceNT;edCtg';
+var
+    MasterProc : ICProcessing;
+    Constants : IC4VPAConst;
+    Options : ICOPtions;
+    BeginRow, EndRow : integer;
+    CurrencyDic, PartnerDic : ICDictionary;
+    ChangeLock : Boolean;
+    FormatTbl : ICValueTable;
+    ContentTbl : ICValueTable;
+    V : IcProcessing;
+    PostByGoodDic, CheckPostByGoodDic, GoodsDic, BarCodeDic, SuppDic, CtgDefDic: IcDictionary;
+    Doc : IcDocuments;
+    DateDoc : DateTime;
+    Collection : ICCollection;
+    IsLoadFromFtp : Boolean;
+    LoadedFileFtp : String;
+
+function GetCode(Article : Integer): String;
+var
+  i : integer;
+  BarCode: String;
+begin
+  BarCode := IntToStr(Article);
+  i := Constants.ШтрихКодТовараВнутреннийКолСимв;
+  while StrLength(BarCode) < i do
+    begin
+      BarCode := '0' + BarCode;
+    end;
+  Result := BarCode;
+end;
+
+procedure RefreshVCL;
+var GridBeginRow, GridEndRow : integer;
+begin
+  miBarCode.Visible := cbBarCode.Checked;
+  miSuppCode.Visible := cbSuppCode.Checked;
+  miName.Visible := cbName.Checked;
+  miUnitName.Visible := cbUnitName.Checked;
+  miCount.Visible := cbCount.Checked;
+  miInPrice.Visible := cbInPriceNT.Checked; 
+  miCtg.Visible := cbCtg.Checked;
+  edSuppCode.Enabled := cbSuppCode.Checked;
+  edName.Enabled := cbName.Checked;
+  edUnitName.Enabled := cbUnitName.Checked;
+  edCount.Enabled := cbCount.Checked;
+  edInPriceNT.Enabled := cbInPriceNT.Checked;
+  edSupplier.Enabled := cbSupplier.Checked;  
+  edCtg.Enabled := cbCtg.Checked;
+  GridBeginRow := BeginRow;
+  if GridBeginRow<1 then GridBeginRow := 1;
+  if GridBeginRow>InXGrid.RowCount then
+    GridBeginRow := InXGrid.RowCount;
+  GridEndRow   := EndRow;
+  if GridEndRow<1 then GridEndRow := 1;
+  if GridEndRow<GridBeginRow then
+    GridEndRow := GridBeginRow;
+  if GridEndRow>InXGrid.RowCount then
+    GridEndRow := InXGrid.RowCount;    
+  InXGrid.Cells(1,1,InXGrid.RowCount,InXGrid.ColCount).BkColor := clWindow;
+
+  if cbSuppCode.Checked and (edSuppCode.ItemIndex<>-1) then
+   InXGrid.Cells(GridBeginRow,edSuppCode.ItemIndex+1,GridEndRow,edSuppCode.ItemIndex+1).BkColor := edSuppCode.Color;
+  if cbBarCode.Checked and (edBarCode.ItemIndex<>-1) then
+   InXGrid.Cells(GridBeginRow,edBarCode.ItemIndex+1,GridEndRow,edBarCode.ItemIndex+1).BkColor := edBarCode.Color;
+  if cbName.Checked and (edName.ItemIndex<>-1) then
+   InXGrid.Cells(GridBeginRow,edName.ItemIndex+1,GridEndRow,edName.ItemIndex+1).BkColor := edName.Color;
+  if cbUnitName.Checked and (edUnitName.ItemIndex<>-1) then
+   InXGrid.Cells(GridBeginRow,edUnitName.ItemIndex+1,GridEndRow,edUnitName.ItemIndex+1).BkColor := edUnitName.Color;
+  if cbCount.Checked and (edCount.ItemIndex<>-1) then
+   InXGrid.Cells(GridBeginRow,edCount.ItemIndex+1,GridEndRow,edCount.ItemIndex+1).BkColor := edCount.Color; 
+  if cbInPriceNT.Checked and (edInPriceNT.ItemIndex<>-1) then
+   InXGrid.Cells(GridBeginRow,edInPriceNT.ItemIndex+1,GridEndRow,edInPriceNT.ItemIndex+1).BkColor := edInPriceNT.Color;   
+  if cbCtg.Checked and (edCtg.ItemIndex<>-1) then
+   InXGrid.Cells(GridBeginRow,edCtg.ItemIndex+1,GridEndRow,edCtg.ItemIndex+1).BkColor := edCtg.Color;
+  InXGrid.Refresh;
+end;
+
+
+
+procedure WriteFormatToDic(Dic:ICDictionary);
+var i:integer;
+    CurComponentName : string;
+    CurComponent : TComponent;
+begin
+  if not Dic.HasField('ФорматИмпортаXLSТовары') then
+    begin
+      ShowMessage('У справочника "'+Dic.GetSign+'" не поля "ФорматИмпортаXLSТовары"');
+      exit;
+    end;
+  Nil(FormatTbl); 
+  FormatTbl := CreateObject('ТаблицаЗначений');
+  FormatTbl.AddColumn('TypeComponent',vtcString,50);
+  FormatTbl.AddColumn('NameComponent',vtcString,50);
+  FormatTbl.AddColumn('StrValue',vtcString,50);
+  FormatTbl.AddColumn('IntValue',vtcInteger,0);
+  FormatTbl.Open;
+  for i:=1 to WordCount(SaveComponentList,';') do
+    begin
+      CurComponentName := ExtractWord(i,SaveComponentList,';');
+      CurComponent := Form.FindComponent(CurComponentName);
+      if not isNil(CurComponent) then
+      case CurComponent.ClassName of
+       'TO4CheckBox' : 
+         if VarAsBool((CurComponent as TO4CheckBox).Enabled) then
+           begin
+             FormatTbl.Append;
+             FormatTbl.TypeComponent := 'TO4CheckBox';
+             FormatTbl.NameComponent := CurComponentName;
+             FormatTbl.IntValue := VarAsInt((CurComponent as TO4CheckBox).Checked);
+             FormatTbl.Post;
+           end;
+       'TO4Edit' :
+         begin
+           FormatTbl.Append;
+           FormatTbl.TypeComponent := 'TO4Edit';
+           FormatTbl.NameComponent := CurComponentName;
+           if (CurComponent as TO4Edit).EditStyle = fesDropDownListBox then
+             FormatTbl.IntValue := VarAsInt((CurComponent as TO4Edit).ItemIndex)
+           else
+             FormatTbl.StrValue := VarAsInt((CurComponent as TO4Edit).Text);
+           FormatTbl.Post;
+         end;   
+       'TO4RadioGroup' :
+         begin
+           FormatTbl.Append;
+           FormatTbl.TypeComponent := 'TO4RadioGroup';
+           FormatTbl.NameComponent := CurComponentName;
+           FormatTbl.IntValue := VarAsInt((CurComponent as TO4RadioGroup).ItemIndex);
+           FormatTbl.Post;
+         end;
+      end;
+    end;
+  Dic.Edit;
+  Dic.ФорматИмпортаXLSТовары := WritePropsToBlob(FormatTbl);
+  Dic.Post;
+  Dic.ApplyUpdates;
+end;
+
+procedure ReadFormatFromDic(Dic:ICDictionary);
+var FindCheckBox : TO4CheckBox;
+    FindEdit : TO4Edit;
+    FindRadioGroup : TO4RadioGroup;
+begin
+  FormatTbl := CreateTblFromBLOB(Dic.ФорматИмпортаXLSТовары);
+  if not IsNil(FormatTbl) then
+    begin
+      FormatTbl.Select;
+      While FormatTbl.SelectNext do
+        begin
+          case VarAsStr(FormatTbl.TypeComponent) of
+            'TO4CheckBox' :
+              begin
+                FindCheckBox := (Form.FindComponent(VarAsStr(FormatTbl.NameComponent)) as TO4CheckBox);
+                if not IsNil(FindCheckBox) and FindCheckBox.Enabled then
+                  FindCheckBox.Checked := VarAsBool(FormatTbl.IntValue);
+              end;
+            'TO4Edit' :
+              begin
+                FindEdit := (Form.FindComponent(VarAsStr(FormatTbl.NameComponent)) as TO4Edit);
+                if not IsNil(FindEdit) then 
+                  begin 
+                    if FindEdit.EditStyle = fesDropDownListBox then
+                      FindEdit.ItemIndex := VarAsInt(FormatTbl.IntValue)
+                    else
+                      FindEdit.Text := VarAsStr(FormatTbl.StrValue);
+                  end;
+              end;  
+            'TO4RadioGroup' :
+              begin
+                FindRadioGroup := (Form.FindComponent(VarAsStr(FormatTbl.NameComponent)) as TO4RadioGroup);
+                if not IsNil(FindRadioGroup) then
+                  FindRadioGroup.ItemIndex := VarAsInt(FormatTbl.IntValue);
+              end;
+          end;
+        end; 
+        edEndRow.Text := edBeginRow.Text;
+        BeginRow := StrToIntDef(edBeginRow.Text,1);
+        if BeginRow<1 then BeginRow := 1;
+        EndRow  := StrToIntDef(edEndRow.Text,1);
+        if EndRow<1 then EndRow := 1;
+        if EndRow<BeginRow then EndRow := BeginRow;
+    end;   
+  CurrencyDic := CreateObject('Справочники.Валюты');
+  if (Dic.HasField('Валюта') and VarAsBool(Dic.@Валюта.IsFocused) and CurrencyDic.Find(Dic.@Валюта)) or
+      CurrencyDic.FindByField('НацВалюта',true, false) then
+    edCurInPrice.Text := CurrencyDic.CodeField
+  else
+    begin
+      edCurInPrice.Text := '';
+      Nil(CurrencyDic);
+    end;
+end;
+       
+Procedure GetNaklListFromFtp(Partner : IcDictionary);
+var
+  i, DocCount : Integer;
+  ResMeesage, XMLDocsPathFTP, FileName, DocNumber, DocDateStr : String;
+  FileList : TStringList; 
+  DocDate : DateTime;
+Begin
+  If not IsObjFocused(Partner.@FtpОбмена) then
+    begin
+      ShowMessage('В партнера не указан ftp-сервер для обмена!');
+      Exit;
+    end;
+  if InitializationFtpConnect(Partner.FtpОбмена, ResMeesage)  then
+    try
+      XMLDocsPathFTP := '/';
+      if VarAsStr(Partner.FtpПапкаОбменНакл)<>'' then
+        XMLDocsPathFTP := XMLDocsPathFTP+VarAsStr(Partner.FtpПапкаОбменНакл)+'/';
+        ResMeesage := GetFileList(XMLDocsPathFTP);
+        FileList := CreateStringList;
+        FileList.Text := ResMeesage;
+        DocCount := 0;
+        for i := 0 to FileList.Count-1 do
+          begin
+            FileName := FileList.Strings[i];
+            if StrPos('NaklDoc',FileName)>0 then
+              Begin
+                 inc(DocCount);
+                 DocNumber := ExtractWord(2,FileName,'-');
+                 DocDateStr := ExtractWord(3,FileName,'-');
+                 DocDateStr := ExtractWord(1,DocDateStr,'.');
+                 DocDate := StrToInt(DocDateStr);
+                 (Form.FindComponent('miNakl'+IntToStr(DocCount)) as TO4MenuItem).Caption := 'Накладна №'+DocNumber+' від '+DateToStr(DocDate);
+//                 (Form.FindComponent('miNakl'+IntToStr(DocCount)) as TO4MenuItem).Hint := XMLDocsPathFTP+FileName;
+                 (Form.FindComponent('miNakl'+IntToStr(DocCount)) as TO4MenuItem).Hint := FileName;
+                 (Form.FindComponent('miNakl'+IntToStr(DocCount)) as TO4MenuItem).Visible := true;
+              end;
+          end;
+        if DocCount = 0 then
+          begin
+            miNakl1.Caption := 'Нет накладных для импорта';
+            miNakl1.Hint := 'NoDocs';
+            miNakl1.Visible := true;
+          end;
+    finally
+        FtpManagerClose;
+    end
+  else
+    ShowMessage('Нет связи с FTP-сервером'+#13+ResMeesage);
+
+end;
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var TestOLE : OLEVariant; 
+    ExcelOK, OPenOfficeOK : Boolean;
+begin
+  MasterProc := Mean;
+  ChangeLock := true;
+  Constants := GetConstants;
+  Options := GetOptions;
+  server.CreateSrvObjects;
+  ExcelOK := true;
+  try
+    TestOLE :=  CreateOleObject('Excel.Application');
+    Nil(TestOLE);
+  except
+    ExcelOK := false;
+  end; 
+  OPenOfficeOK := true;
+  try
+    TestOLE :=  CreateOleObject('com.sun.star.ServiceManager');
+    Nil(TestOLE);
+  except
+    OPenOfficeOK := false;
+  end;       
+  if not (ExcelOK or OPenOfficeOK) then
+    raise('На Вашем компютере не установлены ни MS Excel ни OpenOffice!');
+
+  Doc  := Params;
+  if IsObjFocused(Doc) then
+    begin
+     if Doc.HasHeaderField('Партнер') then
+       PartnerDic := Doc.Партнер;
+     if not Doc.HasTableField('Партнеры') then
+       begin
+         cbSupplier.Visible := false;
+         edSupplier.Visible := false;
+         gpColumns.Height := gpColumns.Height - 40;
+       end;
+    end
+  else
+   Raise('Не задан документ');
+
+  if IsObjFocused(PartnerDic) then
+    begin
+      lbPartner.Caption := 'Партнер: '+VarAsStr(PartnerDic.ПолноеНазвание);
+      if PartnerDic.HasField('ФорматИмпортаXLSТовары') then
+        ReadFormatFromDic(PartnerDic);
+      if VArAsBool(PartnerDic.ОбменЧерезFtp) then
+        begin
+          tbFtpFilesList.Visible := True;
+          GetNaklListFromFtp(PartnerDic);
+        end;
+    end;
+  rgTypeImport.Enabled := ExcelOK and OPenOfficeOK;
+  if not ExcelOK and (rgTypeImport.ItemIndex=0) then
+    rgTypeImport.ItemIndex := 1;
+  if not OPenOfficeOK and (rgTypeImport.ItemIndex=1) then
+    rgTypeImport.ItemIndex := 0;
+
+  v:= Mean;
+  ContentTbl := CreateObject('ValueTable');
+  ContentTbl.AddColumn('Товар', vtcLink,0);
+  ContentTbl.AddColumn('НазвТовара', vtcString,150);
+
+  ContentTbl.AddColumn('Код', vtcString,20);
+  ContentTbl.AddColumn('НомПоз', vtcInteger,0);
+
+  ContentTbl.AddColumn('ЕдИзм', vtcLink,0);
+  ContentTbl.AddColumn('КодПоставщика', vtcString,20);  
+  ContentTbl.AddColumn('ШтрихКод', vtcString,15);
+  ContentTbl.AddColumn('Валюта', vtcLink,0);
+  ContentTbl.AddColumn('Количество', vtcFFt,5);
+  ContentTbl.AddColumn('Цена', vtcFFt,7);
+  ContentTbl.AddColumn('СуммаСтр', vtcFFt,7);
+  ContentTbl.AddColumn('Партнеры', vtcLink,0);  
+  ContentTbl.AddColumn('Категория', vtcString,150);
+  ContentTbl.Open;
+
+
+  BarCodeDic := CreateObject('Справочники.ШтрихКодыТоваров');
+  GoodsDic := CreateObject('Справочники.Товары');
+  PostByGoodDic := CreateObject('Справочники.ПоставщикиТоваров');
+  CheckPostByGoodDic := CreateObject('Справочники.ПоставщикиТоваров');
+  GoodsDic := CreateObject('Справочники.Товары');
+  CtgDefDic := CreateObject('Справочники.Товары');
+  CtgDefDic.IncludeOnlyLevels(true);
+  Collection := CreateObject('Коллекции.ЕдИзм');
+
+  ChangeLock := false; 
+  RefreshVCL;
+end;
+
+
+
+procedure edBeginRow_Change(Sender: TObject); 
+var tmpInt : Integer;
+begin
+ tmpInt := StrToIntDef(edBeginRow.Text,-1);
+ if tmpInt>0 then
+   begin
+     BeginRow := tmpInt;
+     RefreshVCL;
+   end;
+end;
+
+procedure tbBRowDown_Click(Sender: TObject);
+begin
+ if BeginRow>1 then
+   begin
+     dec(BeginRow);
+     edBeginRow.Text := IntToStr(BeginRow);
+   end;
+end;
+
+procedure tbBRowUp_Click(Sender: TObject);
+begin
+ if BeginRow<InXGrid.RowCount then
+   begin
+     inc(BeginRow);
+     edBeginRow.Text := IntToStr(BeginRow);  
+     if BeginRow>EndRow then
+       begin
+         EndRow := BeginRow;
+         edEndRow.Text := IntToStr(EndRow);
+       end;
+   end;
+end;
+
+
+procedure edEndRow_Change(Sender: TObject);
+var tmpInt : Integer;
+begin
+ tmpInt := StrToIntDef(edEndRow.Text,-1);
+ if tmpInt>0 then
+   begin
+     EndRow := tmpInt;  
+     RefreshVCL;
+   end;
+end;  
+
+
+
+procedure tbERowDown_Click(Sender: TObject);
+begin
+ if (EndRow>1) and (EndRow>BeginRow) then
+   begin
+     dec(EndRow);
+     edEndRow.Text := IntToStr(EndRow);
+   end;
+end;
+
+procedure tbERowUp_Click(Sender: TObject);
+begin
+ if EndRow<InXGrid.RowCount then
+   begin
+     inc(EndRow);
+     edEndRow.Text := IntToStr(EndRow);
+   end;
+end;
+
+procedure edCurInPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+begin
+ if IsNil(CurrencyDic) then
+   CurrencyDic := CreateObject('Справочники.Валюты');
+ if CurrencyDic.SelectInForm('ВыборВалюты',DefName, Null) then
+   edCurInPrice.Text := DefName;
+end;
+
+procedure edCurInPrice_ActionClear(Sender: TObject);
+begin
+  edCurInPrice.Text := '';
+  Nil(CurrencyDic);
+end;
+
+procedure miBeginRow_Click(Sender: TObject);
+begin
+  BeginRow := InXGrid.Row;
+  edBeginRow.Text := IntToStr(BeginRow);
+  if EndRow<BeginRow then
+    begin
+      EndRow := BeginRow;
+      edEndRow.Text := edBeginRow.Text;
+    end; 
+  RefreshVCL;
+end;
+
+procedure miEndRow_Click(Sender: TObject);
+begin
+  EndRow := InXGrid.Row;
+  edEndRow.Text := IntToStr(EndRow);
+  if EndRow<BeginRow then
+    begin
+      BeginRow := EndRow;
+      edBeginRow.Text := edEndRow.Text;
+    end;  
+  RefreshVCL;
+end;
+
+procedure cbCode_Click(Sender: TObject);
+begin
+ RefreshVCL;
+end;
+
+
+procedure miCode_Click(Sender: TObject); 
+var ColNum, Tag, i:integer;   
+    CurEd : TComponent;
+begin
+  if ChangeLock then exit;
+ try
+   ChangeLock := true;
+   if Sender.ClassName='TO4MenuItem' then
+     begin
+       ColNum := InXGrid.Col-1;
+       Tag := (Sender as TO4MenuItem).Tag;
+     end
+   else
+   if Sender.ClassName='TO4Edit' then
+     begin
+       ColNum := (Sender as TO4Edit).ItemIndex;
+       Tag := (Sender as TO4Edit).Tag;
+     end;
+
+   if (ColNum>=0) then
+   if (ColNum<=edSuppCode.Items.Count-1) then
+     begin  
+       for i:=1 to WordCount(edComponentList,';') do
+         begin
+           CurEd := Form.FindComponent(ExtractWord(i,edComponentList,';'));
+           if not IsNil(CurEd) then
+             begin
+               if ((CurEd as TO4Edit).Tag=Tag) then
+                 (CurEd as TO4Edit).ItemIndex := ColNum
+               else
+               if (ColNum=(CurEd as TO4Edit).ItemIndex) then
+                 begin
+                   (CurEd as TO4Edit).ItemIndex := -1;
+                   (CurEd as TO4Edit).Text := '';
+                 end;
+             end;
+         end;
+       RefreshVCL;
+     end
+   else
+     ShowMessage('Номер столбца должен быть меньше '+IntToStr(edSuppCode.Items.Count));
+ finally
+    ChangeLock := false;
+ end;
+end;
+
+
+
+
+
+procedure tbSaveFormat_Click(Sender: TObject);
+begin
+ if IsObjFocused(PartnerDic) then
+   begin
+     if PartnerDic.HasField('ФорматИмпортаXLSТовары') then
+       begin
+         if MessageDlg('Вы действительно хотите сохранить структуру импорта для "'+VarAsStr(PartnerDic.ПолноеНазвание)+'"?'
+                       ,mtInformation,ArrayOf(mbYes,mbNo))=mrYes then
+           WriteFormatToDic(PartnerDic);
+       end
+     else
+       ShowMessage('В справочник "'+PartnerDic.GetName+'" нет возможности сохранять структуру импорта!');
+   end
+ else
+   ShowMessage('Партнер не задан!');
+end;
+
+procedure tbClearFormat_Click(Sender: TObject); 
+var i:integer;
+    CurComponentName : string;
+    CurComponent : TComponent;
+begin
+ if IsObjFocused(PartnerDic) and PartnerDic.HasField('ФорматИмпортаXLSТовары') and
+    (MessageDlg('Вы действительно хотите очистить структуру импорта для "'+VarAsStr(PartnerDic.ПолноеНазвание)+'"?'
+               ,mtInformation,ArrayOf(mbYes,mbNo))=mrYes) then
+   begin
+     PartnerDic.Edit;
+     PartnerDic.ФорматИмпортаXLSТовары := Null;
+     PartnerDic.Post;
+     PartnerDic.ApplyUpdates;  
+     try
+       ChangeLock := true;
+       for i:=1 to WordCount(SaveComponentList,';') do
+         begin
+           CurComponentName := ExtractWord(i,SaveComponentList,';');
+           CurComponent := Form.FindComponent(CurComponentName);
+           case CurComponent.ClassName of
+            'TO4CheckBox' :
+              begin
+                if (CurComponent as TO4CheckBox).Enabled then
+                  (CurComponent as TO4CheckBox).Checked := false;
+              end;
+            'TO4Edit' :
+              begin
+                if (CurComponent as TO4Edit).EditStyle = fesDropDownListBox then
+                  begin
+                    (CurComponent as TO4Edit).ItemIndex := -1;
+                    (CurComponent as TO4Edit).Text := '';
+                  end
+                else
+                if (CurComponent as TO4Edit).Enabled then
+                  (CurComponent as TO4Edit).Text := '';
+              end;
+           end;
+           BeginRow := 1;
+           EndRow :=1;  
+           edBeginRow.Text := '1';
+           edEndRow.Text := '1';
+         end;
+     finally
+      ChangeLock := false;
+      RefreshVCL;
+     end;
+   end;
+end;
+
+procedure tbOpenFormat_Click(Sender: TObject);  
+var FindPartnerDic : ICDictionary;   
+    DefName : string;
+begin
+ if IsObjFocused(PartnerDic) then
+   FindPartnerDic := CreateObject('Справочники.'+PartnerDic.GetSign)
+ else
+   FindPartnerDic := CreateObject('Справочники.ЮрПартнеры');
+ if FindPartnerDic.SelectInForm('',DefName,Null) then
+   begin
+     ReadFormatFromDic(FindPartnerDic);
+     RefreshVCL;
+   end;
+end;
+
+Procedure RefreshTbl;
+var
+  i : Integer;
+begin
+  ContentTbl.SortBy('НомПоз');
+  for i:=3 to XGrid.RowCount-1 do
+    if ContentTbl.Find(i-2) then
+      begin
+        ContentTbl.Edit;
+        if VarAsDec(XGrid.Cell(i,7).Value) <> VarAsDec(ContentTbl.Количество) then
+          ContentTbl.Количество := XGrid.Cell(i,7).Value;
+        if VarAsDec(XGrid.Cell(i,9).Value) <> VarAsDec(ContentTbl.Цена) then
+          ContentTbl.Цена := VarAsDec(XGrid.Cell(i,9).Value);  
+        if cbSupplier.Checked then
+          ContentTbl.Партнеры := SuppDic;
+        ContentTbl.Post;
+      end;
+  ContentTbl.Select;
+  ContentTbl.DoCalculation('СуммаСтр','Количество*Цена');
+end;  
+
+Procedure AddGoodToXGtid(Tbl : IcValueTable);
+Var
+  i : Integer;
+begin
+ ContentTbl.SelectFirst;
+ XGrid.ClearAll;
+ XGrid.Visible:=False;
+ XGrid.AddSection('Hed');  
+ i:=1;
+ Tbl.Select;
+ While Tbl.SelectNext do
+   begin
+     Tbl.AddToXGrid(CtrlToVar(XGrid),'Good','НомПоз;КодПоставщика;ШтрихКод;Код;НазвТовара;ЕдИзм;Количество;Валюта;Цена;СуммаСтр',i,1);
+     if not VarAsBool(Tbl.@Товар.IsFocused) then
+       XGrid.Cells(XGrid.RowCount,1,XGrid.RowCount,XGrid.ColCount).BkColor := 371190
+     else
+       XGrid.Cells(XGrid.RowCount,1,XGrid.RowCount,XGrid.ColCount).BkColor := 536870911;
+     inc(i);
+   end;
+ XGrid.AddSection('Total');
+ XGrid.Cell(XGrid.RowCount,XGrid.ColCount).Value :=  Tbl.Total('СуммаСтр');
+
+ XGrid.Visible:=True;
+
+end;   
+
+function CheckSuppCodes(GoodDict:ICDictionary):boolean;
+var OwnerGoodDic : ICDictionary;
+begin
+  Result := false;
+  CheckPostByGoodDic.SetFieldFilter('Партнер','=',PartnerDic,'','',Null);
+  // Проверка на дубликаты кодов товара у поставщика
+  if (cbSuppCode.Checked and (StrTrim(VarAsStr(ContentTbl.КодПоставщика))<>'')) then
+    begin
+      CheckPostByGoodDic.SetFieldFilter('КодПоставщика','=',StrTrim(VarAsStr(ContentTbl.КодПоставщика)),'','',Null);
+      if CheckPostByGoodDic.Select then
+        While CheckPostByGoodDic.SelectNext do
+          begin
+            OwnerGoodDic := CheckPostByGoodDic._GetOwner;
+            if not IsObjEQ(OwnerGoodDic,GoodDict) and (PostByGoodDic.Find(CheckPostByGoodDic)) then
+              begin
+                if MessageDlg('Код товара у поставщика '+VarAsStr(ContentTbl.КодПоставщика)+' уже привязан к товару "'+
+                               VarAsStr(OwnerGoodDic.NameField)+'"'+#13+
+                            'Перепривязать его к товару "'+VarAsStr(GoodDict.NameField)+'"?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+                  begin
+                    PostByGoodDic.Delete;
+                    PostByGoodDic.ApplyUpdates;
+                  end
+                else
+                  exit;
+              end;
+          end;
+    end;
+
+
+ Result := true;
+end;
+
+function ExtractGoodName(s:string) : string;
+begin
+ if StrPos('Товар не найден  (',s)<>0 then
+   StrDelete(s,StrPos('Товар не найден',s),18);
+ if (StrLength(s)>0) and (S[StrLength(s)]=')') then
+   StrDelete(s,StrLength(s),1);  
+ Result := S;
+end;
+
+procedure miAddAllGood_Click(Sender: TObject);   
+Var
+  GoodDict, Ctg : IcDictionary;
+  Count,Total, AddGoodCount : integer;
+  CtgName, s : string;
+begin
+ if edCtgDef.Text='' then
+   ShowMessage('Укажите категорию по умолчанию!')
+ else
+ if MessageDlg('Добавить все товары?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+   begin           
+    RefreshTbl;
+    GoodDict := CreateObject('Справочники.Товары');
+    Ctg      := CreateObject('Справочники.Товары');   
+    Ctg.IncludeOnlyLevels(true);
+    if not cbCtg.Checked and not Ctg.FindByName(edCtgDef.Text,false) then
+      begin
+        Ctg.AppendLevel;
+        Ctg.NameField := edCtgDef.Text;
+        Ctg.Post;
+        Ctg.ApplyUpdates;
+      end;
+    ContentTbl.Select;
+    Count := 0;
+    Total := ContentTbl.LineCount; 
+    AddGoodCount := 0;
+    While ContentTbl.SelectNext do
+      begin 
+        if not VarAsBool(ContentTbl.@Товар.IsFocused) then
+          begin   
+            if cbCtg.Checked then
+              begin
+                CtgName := VarAsStr(ContentTbl.Категория);
+                if CtgName='' then
+                  CtgName := edCtgDef.Text;
+                if not Ctg.FindByName(CtgName,false) then
+                  begin
+                    Ctg.AppendLevel;
+                    Ctg.NameField := CtgName;
+                    Ctg.Post;
+                    Ctg.ApplyUpdates;
+                  end;
+              end;
+            GoodDict.Append;
+            if VarAsBool(Constants.ИспОбщНаценки) then
+              begin
+                GoodDict.ПрНацЦена := VarAsDec(Constants.ПрНацЦена);
+                GoodDict.ПрНацОптЦена := VarAsDec(Constants.ПрНацОптЦена);
+                GoodDict.ПрНацКрОптЦена := VarAsDec(Constants.ПрНацКрОптЦена);
+              end
+            else
+              GoodDict.AssignFields('ПрНацЦена;ПрНацОптЦена;ПрНацКрОптЦена',Ctg);
+
+            GoodDict.ВалютаВхЦена := ContentTbl.@Валюта;
+
+            if IsObjFocused(Constants.ВалютаЦенаУмолч) then
+              GoodDict.ВалютаЦена := Constants.ВалютаЦенаУмолч
+            else
+              GoodDict.ВалютаЦена := ContentTbl.@Валюта;
+
+            if IsObjFocused(Constants.ВалютаОптЦенаУмолч) then
+              GoodDict.ВалютаОптЦена := Constants.ВалютаОптЦенаУмолч
+            else
+              GoodDict.ВалютаОптЦена := ContentTbl.@Валюта;
+
+            if IsObjFocused(Constants.ВалютаКрОптЦенаУмолч) then
+              GoodDict.ВалютаКрОптЦена := Constants.ВалютаКрОптЦенаУмолч
+            else
+              GoodDict.ВалютаКрОптЦена := ContentTbl.@Валюта;
+            GoodDict.Услуга := 0;
+            GoodDict.БезКоличества := 0;
+            GoodDict.КодПроизводителя := '';
+            GoodDict.Штрихкод := '';
+            GoodDict.ТипКарточки := 0;
+            GoodDict.Артикул := GetNextNumberForField('Справочники.Товары', 'Артикул', false, '');
+            GoodDict.Код := GetCode(GoodDict.Артикул);
+            s := VarAsStr(ContentTbl.НазвТовара);
+            if StrPos('Товар не найден  (',s)<>0 then
+             StrDelete(s,StrPos('Товар не найден',s),18);
+            if (StrLength(s)>0) and (S[StrLength(s)]=')') then
+              StrDelete(s,StrLength(s),1);
+            GoodDict.НазвТовара := s;
+            GoodDict.ВхЦена := VarAsDec(ContentTbl.Цена);
+            GoodDict.ЕдИзм := ContentTbl.@ЕдИзм;
+            GoodDict.Категория := Ctg;
+            GoodDict.SetParent(Ctg);
+            GoodDict.Post;
+            GoodDict.ApplyUpdates;  
+            inc(AddGoodCount);
+            if cbSuppCode.Checked and (StrTrim(VarAsStr(ContentTbl.КодПоставщика))<>'') and 
+               IsObjFocused(PartnerDic) and CheckSuppCodes(GoodDict) then
+              begin
+                PostByGoodDic.Select;
+                PostByGoodDic.Append;
+                PostByGoodDic.Партнер := PartnerDic;
+                PostByGoodDic.Код := PartnerDic.Код;
+                PostByGoodDic.КодПоставщика := StrTrim(VarAsStr(ContentTbl.КодПоставщика));
+                PostByGoodDic.SetMaster(GoodDict);
+                PostByGoodDic.Post;
+                PostByGoodDic.ApplyUpdates;
+              end;
+
+             if (VarAsStr(ContentTbl.ШтрихКод)<>'') and not BarCodeDic.FindByCode(VarAsStr(ContentTbl.ШтрихКод),false) then
+               begin
+                 BarCodeDic.Append;
+                 BarCodeDic.Код := VarAsStr(ContentTbl.ШтрихКод);
+                 BarCodeDic.SetMaster(GoodDict);
+                 BarCodeDic.Активность := false;
+                 BarCodeDic.Количество := 1;
+                 BarCodeDic.Идентификатор := '0';
+                 BarCodeDic.Post;
+                 BarCodeDic.ApplyUpdates;
+               end;
+
+            ContentTbl.Edit;
+            ContentTbl.Товар := GoodDict;
+            ContentTbl.НазвТовара := GoodDict.NameField;
+            ContentTbl.Категория := Ctg.NameField;
+            ContentTbl.Post;
+          end;
+        inc(Count);
+        SysProgress(0,Total,Count,'Добавление товаров');
+      end;
+    SysProgress(0,0,0,''); 
+    AddGoodToXGtid(ContentTbl); 
+    ShowMessage('Добавлено '+IntToStr(AddGoodCount)+' товаров!');
+   end;
+end;
+
+procedure miAddGood_Click(Sender: TObject);
+Var
+  GoodDict : IcDictionary;
+  LastRow : integer;
+begin
+  GoodDict := CreateObject('Справочники.Товары');
+
+ if  (XGrid.SelectedCells.Row1 > 2) and (XGrid.SelectedCells.Row1<XGrid.RowCount) then
+   begin
+     LastRow := XGrid.Row;
+     RefreshTbl;
+     ContentTbl.SortBy('НомПоз');
+     ContentTbl.Select;
+     if ContentTbl.Find(XGrid.SelectedCells.Row1-2) and not VarAsBool(ContentTbl.@Товар.IsFocused) then
+       begin
+         PostByGoodDic.SetFieldFilter('Партнер','=',PartnerDic,'','',Null);
+         GoodDict.Select;
+         GoodDict.Params['ImportTbl'] := ContentTbl;
+         GoodDict.Params['IsPostGoodParam'] := True;
+         GoodDict.EditInForm('Товар',0);
+         if GoodDict.HasParam('PostGood') and GoodDict.Find(GoodDict.Params['PostGood']) then
+           begin
+             GoodDict.Params['PostGood'] := Null;
+             if cbSuppCode.Checked and (StrTrim(VarAsStr(ContentTbl.КодПоставщика))<>'') and 
+                IsObjFocused(PartnerDic) and CheckSuppCodes(GoodDict) then
+               begin
+                 PostByGoodDic.Select;
+                 PostByGoodDic.Append;
+                 PostByGoodDic.Партнер := PartnerDic;
+                 PostByGoodDic.Код := PartnerDic.Код;
+                 PostByGoodDic.КодПоставщика := StrTrim(VarAsStr(ContentTbl.КодПоставщика));
+                 PostByGoodDic.SetMaster(GoodDict);
+                 PostByGoodDic.Post;
+                 PostByGoodDic.ApplyUpdates;
+               end;
+
+              if (VarAsStr(ContentTbl.ШтрихКод)<>'') and not BarCodeDic.FindByCode(VarAsStr(ContentTbl.ШтрихКод),false) then
+                begin
+                  BarCodeDic.Append;
+                  BarCodeDic.Код := VarAsStr(ContentTbl.ШтрихКод);
+                  BarCodeDic.SetMaster(GoodDict);
+                  BarCodeDic.Активность := false;
+                  BarCodeDic.Количество := 1;
+                  BarCodeDic.Идентификатор := '0';
+                  BarCodeDic.Post;
+                  BarCodeDic.ApplyUpdates;
+                end;
+
+              ContentTbl.Edit;
+              ContentTbl.Товар := GoodDict;
+
+              ContentTbl.AssignFields('Код;НазвТовара;ЕдИзм',GoodDict);
+              ContentTbl.Post;
+
+              ContentTbl.Select;
+              ContentTbl.DoCalculation('СуммаСтр','Количество*Цена');
+              AddGoodToXGtid(ContentTbl);
+              XGrid.Row := LastRow;
+           end;
+       end;
+   end;
+
+
+end;       
+
+
+
+procedure miSelectGood_Click(Sender: TObject);
+Var
+  GoodName : String;
+  GoodDict : IcDictionary;   
+  LastRow : integer;
+begin
+  GoodDict := CreateObject('Справочники.Товары');
+
+ if  (XGrid.SelectedCells.Row1 > 2) and (XGrid.SelectedCells.Row1<XGrid.RowCount) then
+   begin
+     RefreshTbl;
+     ContentTbl.SortBy('НомПоз');
+     ContentTbl.Select;
+     if ContentTbl.Find(XGrid.SelectedCells.Row1-2) and not VarAsBool(ContentTbl.@Товар.IsFocused) then
+       begin   
+         LastRow := XGrid.Row;
+         GoodName := VarAsStr(ContentTbl.НазвТовара);
+         GoodDict.Params['LinkGoodName'] := StrCopy(GoodName,19,StrLength(GoodName)-19);
+         if GoodDict.SelectInForm('ВыборТовара', GoodName, Null) then
+           begin
+              PostByGoodDic.SetFieldFilter('Партнер','=',PartnerDic,'','',Null);
+              if CheckSuppCodes(GoodDict) then
+                begin
+                  if cbSuppCode.Checked and (StrTrim(VarAsStr(ContentTbl.КодПоставщика))<>'') and
+                     not PostByGoodDic.FindByCode(StrTrim(VarAsStr(ContentTbl.КодПоставщика)),false) then
+                    begin
+                      PostByGoodDic.Append;
+                      PostByGoodDic.Партнер := PartnerDic;
+                      PostByGoodDic.Код := PartnerDic.Код;
+                      PostByGoodDic.КодПоставщика := StrTrim(VarAsStr(ContentTbl.КодПоставщика));
+                      PostByGoodDic.SetMaster(GoodDict);
+                      PostByGoodDic.Post;
+                      PostByGoodDic.ApplyUpdates;
+                    end;   
+
+                  if (VarAsStr(ContentTbl.ШтрихКод)<>'') then
+                    begin
+                      if BarCodeDic.FindByCode(VarAsStr(ContentTbl.ШтрихКод),false)  then
+                        BarCodeDic.Edit
+                      else
+                        begin
+                          BarCodeDic.Append;
+                          BarCodeDic.Код := VarAsStr(ContentTbl.ШтрихКод);
+                          BarCodeDic.Активность := false;
+                          BarCodeDic.Количество := 1;
+                          BarCodeDic.Идентификатор := '0';
+                        end;
+                      BarCodeDic.SetMaster(GoodDict);
+                      BarCodeDic.Post;
+                      BarCodeDic.ApplyUpdates;
+                    end;
+
+                  ContentTbl.Edit;
+                  ContentTbl.Товар := GoodDict;
+                  ContentTbl.Количество := 1;
+                  ContentTbl.AssignFields('Код;НазвТовара;ЕдИзм',GoodDict);
+                  ContentTbl.Post;
+
+                  ContentTbl.Select;
+                  ContentTbl.DoCalculation('СуммаСтр','Количество*Цена');
+                  AddGoodToXGtid(ContentTbl); 
+                  XGrid.Row := LastRow;
+                end;
+
+           end;
+       end;
+   end;
+
+end;    
+
+procedure tbRefresh_Click(Sender: TObject);
+begin
+  RefreshTbl;
+  AddGoodToXGtid(ContentTbl);
+end;
+
+procedure tbRun_Click(Sender: TObject);
+Var
+  i : integer;
+  Price : Decimal;
+  Percent, TmpDec : Decimal;
+  CollComment, BarCode : string;
+begin
+  Percent := StrToDecDef(ePercent.Text,-1);
+  if Percent<0 then
+    begin
+      ShowMessage('% Скидки введен не верно!');
+      exit;
+    end;
+  Xgrid.ClearAll;
+  ContentTbl.Clear;
+  if not (cbSuppCode.Checked or cbBarCode.Checked) then
+   ShowMessage('Выберите либо поиск по коду партнера либо по штрихкоду!')
+  else
+  if (InXGrid.ColCount<1) and (InXGrid.RowCount<1) then
+    ShowMessage('Откройте файл с товарами!')
+  else
+  if not IsObjFocused(CurrencyDic) then
+    ShowMessage('Выберите валюту')
+  else
+  if BeginRow>EndRow then
+    ShowMessage('Начальная строка не может быть больше конечной!')
+  else
+  if BeginRow>InXGrid.RowCount then
+    ShowMessage('Начальная строка больше количества строк в документе')
+  else
+  if EndRow>InXGrid.RowCount then
+    ShowMessage('Конечная строка больше количества строк в документе')
+  else
+  if cbSuppCode.Checked and (edSuppCode.ItemIndex=-1) then
+    ShowMessage('Выберите столбец кода поставщика')
+  else   
+  if cbBarCode.Checked and (edBarCode.ItemIndex=-1) then
+    ShowMessage('Выберите столбец штрихкода')
+  else
+  if (edSuppCode.ItemIndex+1)>InXGrid.ColCount then
+    ShowMessage('Номер столбца кода поставщика не может быть больше '+IntToStr(InXGrid.ColCount))
+  else
+    begin
+      PostByGoodDic.SetFieldFilter('Партнер','=',PartnerDic,'','',Null);
+      PostByGoodDic.Select; 
+      ProgressBar.Max := EndRow;
+      ProgressBar.Min := BeginRow;
+      ProgressBar.Position := BeginRow;
+      For i :=BeginRow to EndRow do
+        begin
+          BarCode := '';
+          if cbBarCode.Checked and (edBarCode.ItemIndex<>-1) then
+            BarCode := StrTrim(VarAsStr(InXGrid.Cell(i,edBarCode.ItemIndex+1).Value));
+          if (cbSuppCode.Checked and PostByGoodDic.FindByCode(VarAsStr(InXGrid.Cell(i,edSuppCode.ItemIndex+1).Value),false) and GoodsDic.Find(PostByGoodDic._GetOwner)) or
+            ((BarCode<>'') and BarCodeDic.FindByCode(BarCode,false) and GoodsDic.Find(BarCodeDic._GetOwner))  then
+            begin
+              ContentTbl.Append;
+              ContentTbl.Товар := GoodsDic;
+              if cbCount.Checked then
+               begin
+                 TmpDec := VarAsDec(InXGrid.Cell(i,edCount.ItemIndex+1).Value);
+                 if TmpDec > 0 then
+                   ContentTbl.Количество := TmpDec
+                 else
+                   ShowMessage('Не верно внесено количество у товара:'+#13+IntToStr(i)+' '+VarAsStr(GoodsDic.НазвТовара));
+               end
+              else
+                ContentTbl.Количество := 1;
+              ContentTbl.НомПоз := i-BeginRow+1;   
+              if cbSuppCode.Checked then
+                ContentTbl.КодПоставщика := VarAsStr(InXGrid.Cell(i,edSuppCode.ItemIndex+1).Value);
+              ContentTbl.AssignFields('Код;НазвТовара;ЕдИзм',GoodsDic);
+
+
+              if cbInPriceNT.Checked then
+               begin
+                 TmpDec := VarAsDec(InXGrid.Cell(i,edInPriceNT.ItemIndex+1).Value);
+                 if TmpDec > 0 then
+                   ContentTbl.Цена := TmpDec*(1-Percent/100)
+                 else
+                   ShowMessage('Не верно внесена цена у товара:'+#13+IntToStr(i)+' '+VarAsStr(GoodsDic.НазвТовара));
+
+               end;
+              ContentTbl.Валюта := CurrencyDic;
+              ContentTbl.ШтрихКод :=BarCode;
+              if cbCtg.Checked and (edCtg.ItemIndex<>-1) then
+                ContentTbl.Категория := VarAsStr(InXGrid.Cell(i,edCtg.ItemIndex+1).Value);
+              ContentTbl.Post;
+
+
+            end
+          else
+            begin
+              ContentTbl.Append;      
+              if cbSuppCode.Checked then
+                ContentTbl.КодПоставщика := VarAsStr(InXGrid.Cell(i,edSuppCode.ItemIndex+1).Value);
+              ContentTbl.НазвТовара := 'Товар не найден';
+              if cbName.Checked then
+               ContentTbl.НазвТовара := ContentTbl.НазвТовара + '  ('+VarAsStr(InXGrid.Cell(i,edName.ItemIndex+1).Value)+')';
+              if cbInPriceNT.Checked then
+               begin
+                 TmpDec := VarAsDec(InXGrid.Cell(i,edInPriceNT.ItemIndex+1).Value);
+                 if TmpDec > 0 then
+                   ContentTbl.Цена := TmpDec*(1-Percent/100)
+                 else
+                   ShowMessage('Не верно внесена цена у товара:'+#13+IntToStr(i)+' '+VarAsStr(GoodsDic.НазвТовара));
+               end;
+              if cbCount.Checked then
+               begin
+                 TmpDec := VarAsDec(InXGrid.Cell(i,edCount.ItemIndex+1).Value);
+                 if TmpDec > 0 then
+                   ContentTbl.Количество := TmpDec
+                 else
+                   ShowMessage('Не верно внесено количество у товара:'+#13+IntToStr(i)+' '+VarAsStr(GoodsDic.НазвТовара));
+               end
+              else
+                ContentTbl.Количество := 1;
+              ContentTbl.Валюта := CurrencyDic;
+              ContentTbl.НомПоз := i-BeginRow+1;
+              if  cbUnitName.Checked then
+                begin
+                 CollComment := StrTrim(VarAsStr(InXGrid.Cell(i,edUnitName.ItemIndex+1).Value));
+                 if CollComment<>'' then
+                   begin
+                     GenerateNewCollElem(Collection, CollComment);
+                     if Collection.FindByComment(CollComment, False) then
+                       ContentTbl.ЕдИзм := Collection;
+                   end;
+                end;
+              ContentTbl.ШтрихКод :=BarCode;    
+              if cbCtg.Checked and (edCtg.ItemIndex<>-1) then
+                ContentTbl.Категория := VarAsStr(InXGrid.Cell(i,edCtg.ItemIndex+1).Value);
+              ContentTbl.Post;
+            end; 
+          ProgressBar.Position := i;
+        end;   
+      ProgressBar.Position := BeginRow;
+      ContentTbl.SortBy('НомПоз');
+      ContentTbl.DoCalculation('СуммаСтр','Количество*Цена');
+      XGrid.Cells(2,1,XGrid.RowCount,4).AdjustColWidths(0);
+      ContentTbl.Select;
+      AddGoodToXGtid(ContentTbl);
+      tbRefresh.Enabled:=true;
+      miRefresh.Enabled:=true;
+      TabSet.TabIndex := 1;
+    end;
+end; 
+
+procedure GetPackCount(Data : IObject);
+var
+  DicPack : ICDictionary;
+begin
+  if VarAsBool(Data.HasField('КоличествоУпаковок')) and VarAsBool(Data.HasField('Упаковка')) then
+    begin
+      DicPack := Data.Упаковка;
+      if not DicPack.IsFocused then
+        exit;
+      if (VarAsDec(DicPack.Количество) <> 0) then
+        Data.КоличествоУпаковок := VarAsDec(Data.Количество) / DicPack.Количество;
+    end;
+end;
+
+
+
+
+procedure btOk_Click(Sender: TObject);
+var OutParam : Variant;
+    Count, Total : integer; 
+    ResMeesage : String;
+begin
+  RefreshTbl;
+  try
+    Doc.ExecProc(MasterProc,'startdrop',0,OutParam);
+    Doc.ClearContents;
+    ContentTbl.Select;
+    Count := 1;
+    Total := ContentTbl.LineCount;
+    while ContentTbl.SelectNext do
+      begin
+        if VarAsBool(ContentTbl.@Товар.IsFocused) then
+          Doc.ExecProc(MasterProc,'dropfromtable',ContentTbl,OutParam);
+        inc(Count);
+        SysProgress(0,Total,Count,'Добавление товаров');
+      end;
+    if Doc.HasField('ОзДокОснов') then
+      begin
+        Doc.ОзДокОснов := True;
+        Doc.ДокОснов := InXGrid.SaveToString;
+      end;
+  finally
+    SysProgress(0,0,0,'');
+    Doc.ExecProc(MasterProc,'enddrop',0,OutParam);
+
+    if IsLoadFromFtp then
+      begin
+        if InitializationFtpConnect(PartnerDic.FtpОбмена, ResMeesage)  then
+          try
+            DeleteFileFromFtp(LoadedFileFtp,ResMeesage);
+          finally
+            FtpManagerClose;
+          end;
+      end;
+  end;
+
+  Form.ModalResult := mrOk;
+  Form.Close;
+end;
+
+procedure btCancel_Click(Sender: TObject);
+begin
+  Form.ModalResult := mrCancel;
+  Form.Close;
+end;  
+
+
+
+procedure TabSet_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ Notebook.PageIndex := NewTab;
+end;
+
+
+procedure tbFile_Click(Sender: TObject);
+begin
+  case rgTypeImport.ItemIndex of
+    0 : Begin
+      with OpenDialog do
+         begin
+           Filter := 'Файлы Microsoft Excel|*.xls*';
+           Title := Trans('Определите путь к данным');
+         end;
+      if OpenDialog.Execute then
+        begin
+          ExcelImportToXGrid(OpenDialog.FileName,InXGrid, ProgressBar);
+          RefreshVCL;
+          tbRun.Enabled := true;
+        end;
+    end;
+    1 : Begin
+      with OpenDialog do
+         begin
+           Filter := 'Все файлы|*.*|Файлы OpenOffice Calc|*.odt|Файлы Microsoft Excel|*.xls*';
+           Title := Trans('Определите путь к данным');
+         end;
+      if OpenDialog.Execute then
+        begin
+          OpenOfficeImportToXGrid(OpenDialog.FileName,InXGrid, ProgressBar);
+          RefreshVCL;
+          tbRun.Enabled := true;
+        end;
+    end;
+  end;
+end;
+
+
+procedure miNakl_Click(Sender: TObject);
+Var
+  FileName, FileFtpPath, ResMeesage : String;
+begin
+  FileName := 'C:\Temp.xls';
+  if (Sender as TO4MenuItem).Hint = 'NoDocs' then
+    exit;
+  FileFtpPath := (Sender as TO4MenuItem).Hint;
+  if InitializationFtpConnect(PartnerDic.FtpОбмена, ResMeesage)  then
+    try
+      if not CopyFileFromFtp(FileName, FileFtpPath, ResMeesage)then
+        begin
+          ShowMessage('Произошла ошибка загрузки файла с Ftp: '+ResMeesage);
+          exit;
+        end;
+      case rgTypeImport.ItemIndex of
+        0 : ExcelImportToXGrid(FileName,InXGrid, ProgressBar);
+        1 : OpenOfficeImportToXGrid(FileName,InXGrid, ProgressBar);
+      end;
+      IsLoadFromFtp := True;
+      LoadedFileFtp := FileFtpPath;
+
+      RefreshVCL;
+      tbRun.Enabled := true;
+      DeleteFile(FileName);
+    finally
+      FtpManagerClose;
+    end
+  else
+    ShowMessage('Нет связи с FTP-сервером'+#13+ResMeesage);
+
+end;
+
+
+procedure btClearNullSuppCodes_Click(Sender: TObject);
+begin
+  ShowMessage(IntToStr(server.ClearNullSuppCodes));
+end;
+
+procedure miSuppPartner_Click(Sender: TObject); 
+var SelSuppDic : ICDictionary;    
+    DefName : string;
+begin
+ SelSuppDic := CreateObject('Справочники.'+(Sender as TO4MenuItem).Hint);
+ if SelSuppDic.SelectInForm('',DefName,Null) then
+   begin
+     Nil(SuppDic);
+     SuppDic := CreateObject('Справочники.'+(Sender as TO4MenuItem).Hint);
+     if SuppDic.Find(SelSuppDic) then  
+       edSupplier.Text := DefName;
+   end;
+end;
+
+procedure edSupplier_ActionClear(Sender: TObject);
+begin
+  Nil(SuppDic);  
+  edSupplier.Text := '';
+end;
+
+procedure edSupplier_ActionExecute(Sender: TObject);
+var x,y : integer;
+begin
+  edSupplier.GetScreenPos(x,y);
+  pmSupp.Popup(x,y+edSupplier.Height);
+end;
+
+procedure edCtgDef_ActionClear(Sender: TObject);
+begin
+ edCtgDef.Text := '';
+end;
+
+procedure edCtgDef_ActionExecute(Sender: TObject);   
+var DefName : string;
+begin
+ if CtgDefDic.SelectInForm('ВыборКатегории',DefName,Null) then
+   edCtgDef.Text := DefName;
+end;
+
+procedure tbFtpFilesList_Click(Sender: TObject);
+var
+  X, Y : Integer;
+begin
+  tbFtpFilesList.GetScreenPos(X, Y);
+  Y := Y + tbFtpFilesList.Height;
+  pmFtpNaklList.Popup(X, Y)
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbPartner:TO4Label
+Panel3:TO4Panel
+Panel5:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+Panel6:TO4Panel
+ProgressBar:TO4ProgressBar
+TabSet:TO4TabSet
+Notebook:TO4Notebook
+Panel1:TO4Panel
+Label6:TO4Label
+gbRows:TO4GroupBox
+Label2:TO4Label
+Label1:TO4Label
+ToolBar1:TO4ToolBar
+tbBRowDown:TO4ToolButton
+edBeginRow:TO4Edit
+ToolBar3:TO4ToolBar
+tbBRowUp:TO4ToolButton
+tbrERowDown:TO4ToolBar
+tbERowDown:TO4ToolButton
+edEndRow:TO4Edit
+tbrERowUp:TO4ToolBar
+tbERowUp:TO4ToolButton
+gpColumns:TO4GroupBox
+Label3:TO4Label
+cbSuppCode:TO4CheckBox
+edSuppCode:TO4Edit
+edName:TO4Edit
+edUnitName:TO4Edit
+edCount:TO4Edit
+edInPriceNT:TO4Edit
+edCurInPrice:TO4Edit
+cbName:TO4CheckBox
+cbUnitName:TO4CheckBox
+cbCount:TO4CheckBox
+cbInPriceNT:TO4CheckBox
+cbCurInPrice:TO4CheckBox
+cbBarCode:TO4CheckBox
+edBarCode:TO4Edit
+cbSupplier:TO4CheckBox
+edSupplier:TO4Edit
+cbCtg:TO4CheckBox
+edCtg:TO4Edit
+edCtgDef:TO4Edit
+ToolBar4:TO4ToolBar
+tbSaveFormat:TO4ToolButton
+tbOpenFormat:TO4ToolButton
+tbClearFormat:TO4ToolButton
+rgTypeImport:TO4RadioGroup
+Panel2:TO4Panel
+InXGrid:TO4XGrid
+ToolBar2:TO4ToolBar
+tbFile:TO4ToolButton
+tbFtpFilesList:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbRun:TO4ToolButton
+tbRefresh:TO4ToolButton
+ToolButton3:TO4ToolButton
+Panel7:TO4Panel
+Label7:TO4Label
+ePercent:TO4Edit
+XGrid:TO4XGrid
+OpenDialog:TO4OpenDialog
+pmInXGrid:TO4PopupMenu
+miBeginRow:TO4MenuItem
+miEndRow:TO4MenuItem
+MenuItem1:TO4MenuItem
+miSuppCode:TO4MenuItem
+miBarCode:TO4MenuItem
+miName:TO4MenuItem
+miUnitName:TO4MenuItem
+miCount:TO4MenuItem
+miInPrice:TO4MenuItem
+miCtg:TO4MenuItem
+pmXGrid:TO4PopupMenu
+miSelectGood:TO4MenuItem
+miAddGood:TO4MenuItem
+miAddAllGood:TO4MenuItem
+MenuItem3:TO4MenuItem
+miRefresh:TO4MenuItem
+pmSupp:TO4PopupMenu
+miSuppPartner:TO4MenuItem
+miSuppEmpl:TO4MenuItem
+pmFtpNaklList:TO4PopupMenu
+miNakl1:TO4MenuItem
+miNakl2:TO4MenuItem
+miNakl3:TO4MenuItem
+miNakl4:TO4MenuItem
+miNakl5:TO4MenuItem
+miNakl6:TO4MenuItem
+miNakl7:TO4MenuItem
+miNakl8:TO4MenuItem
+miNakl9:TO4MenuItem
+miNakl10:TO4MenuItem

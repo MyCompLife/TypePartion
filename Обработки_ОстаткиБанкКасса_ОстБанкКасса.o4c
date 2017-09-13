@@ -1,0 +1,118 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты;
+
+implementation
+
+var
+  AccBank, AccKassa: ICAccs;
+  tblBank, tblKassa: ICValueTable;
+  Date : DateTime;
+  J : ICJournal;
+  PartAcc, MyFirm, Currency : ICDictionary;
+
+procedure SetRests;
+begin
+  Date := RoundDate(StrToDate(eDate.Text), rdDay, True);
+  AccBank.ClearFieldBuffers();
+  AccKassa.ClearFieldBuffers();
+  tblBank.Clear();
+  tblKassa.Clear();
+  tblBank.UseDataSource(0);
+  tblKassa.UseDataSource(0);
+
+  AccBank.AppendRestToValueTable(Date, '–асч—чет;¬алюта;—умќбщ', tblBank);
+  AccKassa.AppendRestToValueTable(Date, ' асса;¬алюта;—умќбщ', tblKassa);
+  MyFirm.Select;
+  PartAcc.UseMasterAndSelect(MyFirm);
+  Currency.Select;
+  tblBank.DoGetLinks(' омментарий=–асч—чет. омментарий');
+  tblBank.SortBy('–асч—чет;¬алюта');
+  tblKassa.SortBy('¬алюта');
+  {
+   while PartAcc.SelectNext do
+   begin
+     while Currency.SelectNext do
+       begin
+         if not tblBank.Find(ArrayOf(PartAcc,Currency))  then
+         begin
+           tblBank.Append;
+           tblBank.–асч—чет := PartAcc;
+           tblBank.¬алюта := Currency;
+           tblBank.—умќбщ := 0;
+           tblBank.Post;
+         end;
+       end;
+     end;
+  }
+  while Currency.SelectNext do
+    begin
+      if not tblKassa.Find(Currency) then
+        begin
+          tblKassa.Append;
+          tblKassa.¬алюта := Currency;
+          tblKassa.—умќбщ := 0;
+          tblKassa.Post;
+        end;
+    end;
+  tblBank.UseDataSource(CtrlToVar(TVSBank));
+  tblKassa.UseDataSource(CtrlToVar(TVSKassa));
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  AccBank := CreateObject('јккумул€торы.ќстаткиЌа–асч—чет');
+  AccKassa := CreateObject('јккумул€торы.ќстаткиѕо ассе');
+  tblBank := CreateObject('“аблица«начений');
+  tblKassa := CreateObject('“аблица«начений');
+  PartAcc := CreateObject('—правочники.–асч—чета');
+  MyFirm := CreateObject('—правочники.¬ашеѕредпри€тие');
+  Currency := CreateObject('—правочники.¬алюты');
+
+  tblBank.Close();
+  tblBank.AddColumn('–асч—чет', lftLink, 0);
+  tblBank.AddColumn('¬алюта', lftLink, 0);
+  tblBank.AddColumn('—умќбщ', lftFFT, 2);
+  tblBank.AddColumn(' омментарий', lftString, 60);
+  tblBank.Open();
+
+  tblKassa.Close();  
+  tblKassa.AddColumn(' асса', lftLink, 0);
+  tblKassa.AddColumn('¬алюта', lftLink, 0);
+  tblKassa.AddColumn('—умќбщ', lftFFT, 2);
+  tblKassa.Open();
+
+  Date := CurrentDate;
+  eDate.Text := DateToStr(Date);
+  J := CreateObject('∆урналы.∆урналќстатковѕоЅанку» ассе');
+  J.OpenFormInplace('—писокќстатков', CtrlToVar(tsJournal));
+  SetRests;
+end;
+
+procedure Button1_Click(Sender : TObject);
+begin
+  SetRests;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Panel1:TO4Panel
+Label1:TO4Label
+eDate:TO4Edit
+Button1:TO4Button
+PageControl1:TO4PageControl
+TabSheet1:TTabSheet
+dbgBank:TO4DBGrid
+TabSheet2:TTabSheet
+dbgKassa:TO4DBGrid
+tsJournal:TTabSheet
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+TVSBank:TO4TableValueSource
+TVSKassa:TO4TableValueSource
+TVSKassaBlack:TO4TableValueSource

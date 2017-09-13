@@ -1,0 +1,82 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, УстановкаВажныхОбъектов,
+  ПечатьИВыводНаЭкран, Печать;
+
+implementation
+
+var
+  MasterData, MYF : ICDictionary;
+  Pk : Integer;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  MasterData := CreateObject('Справочники.Служащие');
+  Pk := Form.GetPrintKind;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    if Pk = 0 then
+      begin
+        MasterData := Form.GetMean;
+        MasterData.SelectBookmarks;
+        MasterData.SortByName;
+      end
+    else
+      begin
+        if Pk = pkWindow then
+          MasterData.AssignSelectParams(Form.GetMean);
+        MasterData.SortByName;
+        MasterData.Select;
+      end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Name'] := MasterData.ПолноеНазвание;
+      Value['TaxIndex'] := MasterData.НалогНом;
+      MYF.Select;
+      if VarAsBool(MYF.@Бухгалтер.IsFocused) then
+        Value['Finansist'] := GetShortPartName(MYF.Бухгалтер);
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndROOT:TRBDetailBand
+Label26:TRBLabel
+Label2:TRBLabel
+lbName:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+Label27:TRBLabel
+Label3:TRBLabel
+Label1:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label23:TRBLabel
+Label22:TRBLabel
+Structure1:TRBStructure

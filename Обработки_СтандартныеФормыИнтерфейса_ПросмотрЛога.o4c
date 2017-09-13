@@ -1,0 +1,51 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+implementation
+
+var
+  PrcCurrent : ICProcessing;
+
+procedure SaveLogToFile(AFileName, ALog : string; DoAppend : Boolean = False);
+var
+  slLog : TStringList;
+begin
+  slLog := CreateStringList;
+  try
+    if DoAppend and FileExists(AFileName) then
+      slLog.LoadFromFile(AFileName);
+    if slLog.Text <> '' then
+      slLog.Text := slLog.Text + #13;
+    slLog.Text := slLog.Text + ALog;
+    slLog.SaveToFile(AFileName);
+    Run('NotePad ' + AFileName,false);
+  finally
+    slLog.Free;
+    nil(slLog);
+  end;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  PrcCurrent := Mean;
+  mmLog.Lines.Text := Params[0];
+  odSaveLogFile.FileName := Params[1];
+end;
+
+procedure btSaveToFile_Click(Sender : TObject);
+begin
+  if odSaveLogFile.Execute then
+    SaveLogToFile(odSaveLogFile.FileName, mmLog.Lines.Text);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnBottom:TO4Panel
+pnButton:TO4Panel
+btCancel:TO4Button
+btSaveToFile:TO4Button
+pnMain:TO4Panel
+mmLog:TO4Memo
+odSaveLogFile:TO4OpenDialog

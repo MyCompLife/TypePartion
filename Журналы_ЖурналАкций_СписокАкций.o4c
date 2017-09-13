@@ -1,0 +1,139 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСПеременными, РаботаСДокументамиВЖурналах;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  PrintList : ICValueList; 
+  PrintFormsTbl: ICValueTable;
+  PreView : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  SetColors(Constants);
+end;
+
+
+
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;      
+  ItemMenu : TO4MenuItem;
+begin
+  Options := GetOptions; 
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  MakeInterface(tbrData, Nobody, dbgData);
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if MasterData.GetDocState > 0 then
+    Index1 := 10
+  else
+    Index1 := 9;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh();
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure DBMemo1_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData);
+end;
+
+
+procedure miCopyDoc_Click(Sender: TObject);
+var
+  OldDoc, NewDoc : ICDocuments;
+begin
+  if not MasterData.IsFocused or (MasterData.GetDocSign<>'Акция') then
+    exit;
+  OldDoc := MasterData.GetDoc;
+  NewDoc := CreateObject('Документы.' + OldDoc.GetSign);
+  NewDoc.Params['OldDoc'] := OldDoc;
+  NewDoc.EditInForm('', 0);
+  MasterData.Refresh;
+  MasterData.FindDoc(NewDoc);
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+DBMemo1:TO4DBMemo
+tsState:TO4TabSet
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+miCopyDoc:TO4MenuItem
+pmiEdit:TO4MenuItem
+miUp:TO4MenuItem
+miDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+miSort:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem3:TO4MenuItem
+miRefresh:TO4MenuItem
+MDS:TO4DataSource
+miInfoChange:TO4MenuItem

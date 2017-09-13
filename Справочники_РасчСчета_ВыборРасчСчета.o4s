@@ -1,0 +1,19 @@
+interface
+
+uses 
+  System, DispIntf;
+
+implementation
+
+procedure CalcFields(Mean : ISDictionary);
+begin
+  if VarAsBool(Mean.@Банк.IsFocused) then
+    Mean.МФОбанка := Mean.Банк.МФО;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  Result := EntryPoint(CalcFields);
+end;
+
+end.

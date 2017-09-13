@@ -1,0 +1,39 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation    
+
+var 
+  LangList: ICValueList;
+  V: ICProcessing;
+
+procedure Form_Open(Sender: TObject);
+begin
+  LangList := CreateObject('ValueList');
+  LangList.AddValue('Украинский','ua');
+  LangList.AddValue('Русский','ru');  
+  LangList.AddValue('Английский','en'); 
+  LangList.SortByStr(true);
+  LangList.UseControl(CtrlToVar(edLang)); 
+  LangList.CurIndex := 0;
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+  V.Params['lang'] := LangList.GetValue(LangList.CurIndex)+'|'+ LangList.GetStr(LangList.CurIndex);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+edLang:TO4Edit

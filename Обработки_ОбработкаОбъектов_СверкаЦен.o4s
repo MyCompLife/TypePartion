@@ -1,0 +1,125 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation
+
+Var
+  TblConsgGoodFilter, TblGoods, DocListTbl : ISValueTable;
+  Accs, AccsPartGood : ISAccs;
+  Constants : IS4VPAConst;
+  Part : Extended;
+  PTbl : ISValueTable;
+
+Procedure CreateSrvObjects(STblGoods, SDocListTbl: ISValueTable); server;
+begin
+  TblGoods := STblGoods;
+  DocListTbl := SDocListTbl;
+  Constants := GetConstants;
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+end;
+
+Procedure GetReportData(i: Integer); server;
+var
+  TempTbl: ISValueTAble;
+  Fields: String;
+  Expression: String;
+begin
+  Case i of
+{   0: begin
+     Accs := CreateObject('Аккумуляторы.ПартииТоваров');
+     Fields := 'Товар;DimensionID=Партия;КолОбщ;СумОбщ';
+     Expression := 'СумОбщ/КолОбщ';
+   end;
+}   1: begin
+     Accs := CreateObject('Аккумуляторы.ОстаткиТоваров');
+     Fields := 'Товар;Партия;КолОбщ;СумВх';
+     Expression := 'СумВх/КолОбщ';
+   end;
+   2: begin
+     Accs := CreateObject('Аккумуляторы.ОстаткиТоваровНаРеализаторах');
+     Fields := 'Партнер;Товар;Партия;КолОбщ;СумВх';
+     Expression := 'СумВх/КолОбщ';
+   end;
+   3: begin
+     Accs := CreateObject('Аккумуляторы.ОстаткиТоваровВПроизводстве');
+     Fields := 'Партнер;Товар;Партия;КолОбщ;СумВх';
+     Expression := 'СумВх/КолОбщ';
+   end;
+  end;
+  TempTbl := CreateObject('ТаблицаЗначений');
+  TblGoods.CopyColumnsTo(TempTbl);
+  TempTbl.Clear;
+
+  Accs.ClearFieldBuffers;
+  Accs.ClearFieldFilters;
+//  Accs.IncludeZeroRest := true;
+  Accs.AppendGroupRestToValueTable(400000,Fields,TempTbl);
+
+  AccsPartGood.ClearFieldBuffers;
+  AccsPartGood.ClearFieldFilters;
+//  AccsPartGood.IncludeZeroRest := true;
+  AccsPartGood.AssignFieldsByDimIDTo('Партия','ВхЦенаБезНДС',TempTbl);
+  
+  if i = 0 then
+    Fields := 'Товар;Партия;КолОбщ;СумОбщ';
+  TempTbl.DoCalculation('ЦенаРасч',Expression);
+  TempTbl.Select;
+  While TempTbl.SelectNext do
+    if TempTbl.ЦенаРасч <> TempTbl.ВхЦенаБезНДС then
+      begin
+        TblGoods.Append;
+        TblGoods.AssignFields(Fields+';ВхЦенаБезНДС;ЦенаРасч',TempTbl);
+        TblGoods.Post;
+      end;
+  TblGoods.DoGetLinks('Код=Товар.Код');
+end;
+
+procedure GetDocsTable(i: Integer);
+var
+  PartionList : ISValueList; 
+  k: integer;
+begin
+  PartionList := CreateObject('ValueList');  
+  if TblGoods.LineCount <> 0 then
+    begin
+      TblGoods.GroupToList('Партия',PartionList);
+      if i <> 0 then
+        begin
+          Accs.SetFieldFilter('Партия',PartionList);
+          Accs.OutcomeMotionWithMinus := True;
+          if i = 1 then
+            Accs.AppendGroupMotionToValueTable(0, 400000, amtBoth, 'Товар;Склад;MotionSign;'+
+                   'Партия;Document;Date;СумОтп;СумОтпНДС;КолОбщ;СумВх;СумВхНДС;СумНац',-1, DocListTbl);
+          if (i = 2) or (i = 3) then
+            Accs.AppendGroupMotionToValueTable(0, 400000, amtBoth, 'Товар;MotionSign;'+
+                   'Партия;Document;Date;СумОтп;СумОтпНДС;КолОбщ;СумВх;СумНац',-1, DocListTbl);
+        end
+      else
+        for k := 1 to PartionList.Count do
+          begin
+            Accs.AppendGroupMotionToValueTable(0, 400000, amtBoth, 'Товар;MotionSign;'+
+                   'DimensionID=Партия;Document;Date;КолОбщ;СумОбщ=СумОтп;СумОбщ',PartionList.GetValue(k), DocListTbl);
+          end;
+      DocListTbl.DoGetLinks('Партнер=Document.Партнер');
+      DocListTbl.DoGetMeanNames('Document', 'DNames');
+      DocListTbl.DoCalculation('Цена', 'СумОтп/КолОбщ');
+      DocListTbl.Select;
+      while DocListTbl.SelectNext do
+        begin
+          DocListTbl.Edit;
+          DocListTbl.НазваниеПартнера := GetPartName(DocListTbl.Партнер);
+          DocListTbl.Post;
+        end;
+      DocListTbl.DoGetLinks('Отпуск=Document.Отпуск;НомерДокумента=Document.НомерДокумента');
+    end;
+end;
+
+procedure SetScrollParams(i: Integer); server;
+begin
+  GetDocsTable(i);
+end;
+
+end.
+

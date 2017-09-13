@@ -1,0 +1,318 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты;
+
+implementation
+var OnDate : DateTime;
+    Empl : ISDictionary;
+    LogList : ISValueList;
+
+procedure ClearAllDocs(Mean : ISProcessing; var Accept : Boolean);
+const DocTypeList = '„ек;Ќакладна€ќтпуска;¬озвратѕоставщикам;—писание“овара;Ќакладна€¬нутрѕеремещ;–евизи€“овара;Ќакладна€ѕрихода;¬водќстатков;¬озвратќтѕокупателей;јктЌаѕолучение”слуг;—мена;–асход»з ассы;ѕриход¬ ассу;ѕеремещениећежду ассами;ќбмен¬алют¬ ассе;–асход—–асч—чета;ѕриходЌа–асч—чет;–асходѕоЁквайрингу;ѕриходѕоЁквайрингу;¬водќстатковѕоЅанку» ассе;¬водќстатковѕо¬заиморасчетам;“рансферЌа–асч—чет;“рансфер—–асч—чета';
+      BeforeClearDocTypeList = '„ек;¬озвратќтѕокупателей';
+var DelAckParam, FixAckParam : boolean;
+    Options : ISOptions;
+    TblRest,  TblBankKassa,  TblPart, tmpTblBankKassa, CurrencyTbl, StoreTbl, TblContents : ISValueTable;
+    AccsGood,  AccsBank, AccsKassa, AccsPart, AccsPartGood : ISAccs;
+    Doc, DelDoc, ShiftDoc : ISDocuments;
+    i, DocTypeCount, DocCount, Total, RoundValue : integer;
+    CurrentDocType : string;
+    Currency : ISDictionary;
+    Constants: IS4VPAConst;  
+
+begin
+ Accept := false;
+ LogList.AddValue('¬рем€ начала '+TimeToStr(CurrentTime),0);
+ LogList.AddValue(' ',0);
+ Options := GetOptions;
+ Constants := GetConstants;
+ DelAckParam := VarAsBool(Options.GetPrm(DelAck));
+ FixAckParam := VarAsBool(Options.GetPrm(FixAck));
+ Options.SetPrm(DelAck,false);
+ AccsGood   := CreateObject('јккумул€торы.ќстатки“оваров');
+ AccsGood.IncludeZeroRest := false;
+ AccsBank   := CreateObject('јккумул€торы.ќстаткиЌа–асч—чет');
+ AccsBank.IncludeZeroRest := false;
+ AccsKassa  := CreateObject('јккумул€торы.ќстаткиѕо ассе');
+ AccsKassa.IncludeZeroRest := false;
+ AccsPart   := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+ AccsPart.IncludeZeroRest := false;
+ AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+
+ TblRest := CreateObject('ValueTable');
+ TblRest.AddColumn('“овар',vtcLink,0);
+ TblRest.AddColumn('—клад',vtcLink,0);
+ TblRest.AddColumn('ѕарти€',vtcFloat,0);
+ TblRest.AddColumn('ѕартнер',lftLink,0);
+ TblRest.AddColumn('ƒатаѕр',lftDateTime,0);
+ TblRest.AddColumn('¬алюта“овара',lftLink,0);
+ TblRest.AddColumn(' урс“овара',vtcFFt,6);
+ TblRest.AddColumn('—тавкаЌƒ—',vtcFFt,2);
+ AddFFtColumnsList(TblRest, ' олќбщ;¬х÷енаЅезЌƒ—;¬х÷ена¬ал');
+ TblRest.Open;
+
+ TblBankKassa := CreateObject('ValueTable');
+ TblBankKassa.AddColumn('–асч—чет',vtcLink,0);
+ TblBankKassa.AddColumn(' асса',vtcLink,0);
+ TblBankKassa.AddColumn('¬алюта',vtcLink,0);
+ TblBankKassa.AddColumn('—умќбщ',vtcFFt,2);
+ TblBankKassa.AddColumn('“ип',vtcInteger,0);
+ TblBankKassa.Open;
+ tmpTblBankKassa := CreateObject('ValueTable');
+ TblBankKassa.CopyColumnsTo(tmpTblBankKassa);
+
+ TblPart := CreateObject('ValueTable');
+ TblPart.AddColumn('ѕартнер',vtcLink,0);
+ TblPart.AddColumn('¬алюта',vtcLink,0);
+ TblPart.AddColumn('—умќбщ¬ал',vtcFFt,2);
+ TblPart.Open;
+ // сохранение остатков товара
+ AccsGood.AppendGroupRestToValueTable(OnDate, '“овар;—клад; олќбщ;ѕарти€', TblRest);
+ AccsPartGood.AssignFieldsByDimIDTo('ѕарти€','ѕартнер;ƒатаѕр;—тавкаЌƒ—;¬х÷енаЅезЌƒ—;¬х÷ена¬ал;¬алюта=¬алюта“овара', TblRest);
+ TblRest.DoCalculation(' урс“овара','(¬х÷енаЅезЌƒ— + ¬х÷енаЅезЌƒ—*—тавкаЌƒ—/100)/¬х÷ена¬ал');
+
+ TblRest.Select;
+ if TblRest.SelectFirst then
+   While not TblRest.EOF do
+     if VarAsBool(TblRest.@“овар.IsFocused) then
+       TblRest.SelectNext 
+     else
+       TblRest.Delete;
+ // сохранение остатков по банку и кассе
+ TblBankKassa.Clear;
+ tmpTblBankKassa.Clear;
+ AccsBank.AppendGroupRestToValueTable(OnDate, '–асч—чет;¬алюта;—умќбщ', tmpTblBankKassa);
+ tmpTblBankKassa.DoCalculation('“ип','0');
+ tmpTblBankKassa.AppendTo('',TblBankKassa);
+ tmpTblBankKassa.Clear;
+ AccsKassa.AppendGroupRestToValueTable(OnDate, ' асса;¬алюта;—умќбщ', tmpTblBankKassa);
+ tmpTblBankKassa.DoCalculation('“ип','1');
+ tmpTblBankKassa.AppendTo('',TblBankKassa);
+ tmpTblBankKassa.Clear; 
+ // сохранение остатков по взаиморасчетам
+ AccsPart.AppendGroupRestToValueTable(OnDate,'ѕартнер;¬алюта;—умќбщ¬ал',TblPart);
+
+ Mean.NotifyClient('ѕодготовка смен',0,10);
+ ShiftDoc := CreateObject('ƒокументы.—мена');
+ ShiftDoc.SetFieldFilter('ƒатаƒокумента','<',OnDate,'','',Null);
+ DocCount := 0;
+ ShiftDoc.Select;
+ While ShiftDoc.SelectNext do
+   begin
+     ShiftDoc.Edit; 
+     ShiftDoc.ClearContents;
+     ShiftDoc.Post;
+     inc(DocCount);
+     if DocCount mod 10 = 0 then
+      begin
+       if Mean.Terminated then exit;
+       Mean.NotifyClient('ѕодготовка смен '+IntToStr(DocCount),0,10);
+      end;
+   end; 
+ ShiftDoc.CancelFieldFilter('ƒатаƒокумента');
+ ShiftDoc.Select;     
+ for i:=1 to WordCount(BeforeClearDocTypeList,';') do
+   begin
+     CurrentDocType := ExtractWord(i,BeforeClearDocTypeList,';');
+     Doc := CreateObject('ƒокументы.'+CurrentDocType);
+     //Doc.SetFieldFilter('ƒатаƒокумента','>=',OnDate,'','',Null); 
+     DocCount := 0;
+     if Doc.Select then
+     While Doc.SelectNext do
+       if VarAsBool(Doc.@—мена.IsFocused) and ShiftDoc.Find(Doc.@—мена)  then
+         begin     
+           if (ShiftDoc.GetDate>=OnDate) and (Doc.GetDate<OnDate) then
+             begin
+               ShiftDoc.Edit;
+               ShiftDoc.SelectLines;
+               if ShiftDoc.FindLineBy('ƒокумент',Doc) then
+                 ShiftDoc.DeleteLine;
+               ShiftDoc.Post;
+             end  
+           else
+           if (ShiftDoc.GetDate<OnDate) and (Doc.GetDate>=OnDate) then
+             begin
+               Doc.Edit;
+               Doc.—мена := Null;
+               Doc.Post;
+             end;
+           inc(DocCount);
+           if DocCount mod 10 = 0 then
+            begin
+             if Mean.Terminated then exit;
+             Mean.NotifyClient('ѕодготовка '+CurrentDocType+' '+IntToStr(DocCount),0,10);
+            end;
+         end;
+   end;
+
+ DocTypeCount := WordCount(DocTypeList,';');
+ Total := DocTypeCount+3;
+ for i:=1 to DocTypeCount do
+   begin
+     Mean.NotifyClient('”даление документов '+CurrentDocType,i,DocTypeCount);
+     DocCount := 0;
+     CurrentDocType := ExtractWord(i,DocTypeList,';');
+     DelDoc := CreateObject('ƒокументы.'+CurrentDocType);
+     DelDoc.SetFieldFilter('ƒатаƒокумента','<',OnDate,'','',Null);
+     DelDoc.Select;
+     Doc := CreateObject('ƒокументы.'+CurrentDocType);
+     Doc.SetFieldFilter('ƒатаƒокумента','<',OnDate,'','',Null);
+     if Doc.Select then
+       While Doc.SelectNext do
+        if DelDoc.Find(Doc)then
+         begin    
+           DelDoc.Delete;
+           inc(DocCount);
+           if DocCount mod 10 = 0 then
+             begin
+              if Mean.Terminated then exit;
+              Mean.NotifyClient('”даление документов '+CurrentDocType+' '+IntToStr(DocCount),i,Total);
+             end;
+         end;  
+     LogList.AddValue(TimeToStr(CurrentTime)+'  '+CurrentDocType+' - удалено '+IntToStr(DocCount)+' документов',0);
+   end;
+ Options.SetPrm(DelAck,DelAckParam);  
+
+ // —оздание документов ввода остатков   
+ Mean.NotifyClient('—оздание ввода остатков товаров',Total-3,Total);
+ Currency    := CreateObject('—правочники.¬алюты');
+ CurrencyTbl := CreateObject('“аблица«начений');
+ FillCurrencyCoursesTbl(Currency, CurrencyTbl, OnDate);
+ TblContents := CreateObject('“аблица«начений');
+ // ¬водќстатков
+ StoreTbl := CreateObject('“аблица«начений');
+ TblRest.GroupTo('—клад','',StoreTbl);
+ Doc := CreateObject('ƒокументы.¬водќстатков');
+ Doc.Select;
+ Doc.SaveTableStructure('',TblContents);
+ TblRest.SortBy('—клад');
+ StoreTbl.Select; 
+
+ While StoreTbl.SelectNext do
+   begin
+     TblRest.SetRange(StoreTbl.@—клад,StoreTbl.@—клад);
+     TblContents.SortBy('');
+     TblContents.Clear;
+     TblRest.AppendTo('“овар;—клад;ѕартнер=ѕартнеры;ƒатаѕр;¬алюта“овара; урс“овара;¬х÷енаЅезЌƒ—=÷енаЅезЌƒ—;¬х÷енаЅезЌƒ—=÷ена;¬х÷ена¬ал=÷ена¬¬алюте; олќбщ= оличество',TblContents);
+     // «аполнение оптовых цен
+     TblContents.DoGetLinks('ќпт÷ена=“овар.ќпт÷ена;”паковка=“овар.¬алютаќпт÷ена');
+     TblContents.SortBy('”паковка');
+     CurrencyTbl.Select;
+     While CurrencyTbl.SelectNext do
+       begin
+         TblContents.SetRange(CurrencyTbl.@¬алюта,CurrencyTbl.@¬алюта);
+         TblContents.DoCalculation('ќпт÷ена','ќпт÷ена*'+DecToStr(CurrencyTbl. урс));
+       end;
+     TblContents.CancelRange; 
+     TblContents.SortBy('');
+     TblContents.DoGetLinks('”паковка=“овар.”паковка');
+
+     Doc.Append;
+     Doc.ƒатаƒокумента := OnDate+0.00002;
+     Doc.—кладѕр := StoreTbl.@—клад;
+     Doc.«аметки := '”даление всех документов';
+     if Currency.FindByField('јктивность', true, false) or  Currency.FindByField('Ќац¬алюта', true, false) or
+        (Currency.Select and Currency.SelectNext) then
+       begin
+         Doc.¬алюта := Currency;
+         Doc. урс := Currency.GetTimedValue(' урсЌаличный', Doc.GetDate);
+       end;
+     Doc.ѕартнер := Empl;
+     Doc.LoadContents('',TblContents);
+     TblContents.DoCalculation('—умма—троки','÷ена* оличество');
+     Doc.—умма :=  TblContents.Total('—умма—троки');
+     if VarAsDEc(Doc.—умма)<0 then
+      Doc.—умма := 0;
+     if VarAsDec(Doc. урс)>0 then
+       Doc.—умма¬¬алюте := VarAsDec(Doc.—умма) / VarAsDec(Doc. урс)
+     else
+       Doc.—умма¬¬алюте := VarAsDec(Doc.—умма);
+     Doc. олќбщ :=  TblContents.Total(' оличество');
+     Doc.Post;
+     Doc.StateUp;
+   end;
+ TblRest.CancelRange;
+ // ¬водќстатковѕоЅанку» ассе
+ Mean.NotifyClient('—оздание остатки по банку и кассе',Total-2,Total);
+ Doc := CreateObject('ƒокументы.¬водќстатковѕоЅанку» ассе');
+ Doc.Select;
+ Doc.Append;    
+ Doc.ƒатаƒокумента := OnDate+0.00002;
+ Doc.ќтветственный := Empl;
+ Doc.SaveContents('',TblContents);
+ TblBankKassa.AppendTo('–асч—чет=—чет; асса;¬алюта;“ип;—умќбщ=—умма¬¬алюте',TblContents);
+ TblContents.SortBy('¬алюта');
+ CurrencyTbl.Select;
+ While CurrencyTbl.SelectNext do
+   begin
+     TblContents.SetRange(CurrencyTbl.@¬алюта,CurrencyTbl.@¬алюта);
+     TblContents.DoCalculation(' урс',CurrencyTbl. урс);
+   end;
+ TblContents.CancelRange;
+ TblContents.SortBy('');
+ Doc.LoadContents('',TblContents);
+ Doc.Post;
+ Doc.StateUp;
+ // ¬водќстатковѕо¬заиморасчетам  
+ Mean.NotifyClient('—оздание остатки по взаиморасчетам',Total-1,Total);
+ Doc := CreateObject('ƒокументы.¬водќстатковѕо¬заиморасчетам');
+ Doc.Select;
+
+ Doc.Append;  
+ if Currency.FindByField('јктивность', true, false) or  Currency.FindByField('Ќац¬алюта', true, false) or
+    (Currency.Select and Currency.SelectNext) then
+   begin
+     Doc.¬алютаƒок := Currency;
+     Doc. урсƒок := Currency.GetTimedValue(' урсЌаличный', Doc.GetDate);
+   end;
+ Doc.ƒатаƒокумента := OnDate+0.00002;
+ Doc.ќтветственный := Empl;
+ Doc.SaveTableStructure('',TblContents);
+ TblPart.AppendTo('ѕартнер;¬алюта;—умќбщ¬ал=—умма¬¬алюте',TblContents);
+ TblContents.DoCalculation('ƒолг','—умма¬¬алюте<0');
+ TblContents.SortBy('ƒолг');
+ TblContents.SetRange(-1,-1);
+ TblContents.DoCalculation('—умма¬¬алюте','-—умма¬¬алюте');
+ TblContents.CancelRange;
+ TblContents.SortBy('¬алюта');
+ CurrencyTbl.Select;
+   While CurrencyTbl.SelectNext do
+     begin
+       TblContents.SetRange(CurrencyTbl.@¬алюта,CurrencyTbl.@¬алюта);
+       TblContents.DoCalculation(' урс',CurrencyTbl. урс);
+     end;
+ TblContents.CancelRange;
+ TblContents.SortBy('');
+ TblContents.DoCalculation('—умма','—умма¬¬алюте* урс');
+ TblContents.DoCalculation('ƒата–асчетов',IntToStr(trunc(Doc.GetDate)));
+ TblContents.SortBy('ѕартнер;¬алюта');
+ TblContents.Select;
+ TblContents.DoNumbering('Ќом—троки',1,1);
+ TblContents.Select;
+ Doc.LoadContents('',TblContents);
+ Doc.—уммаƒок := TblContents.Total('—умма');
+ if VarAsDec(Doc.—уммаƒок)<=0 then
+   Doc.—уммаƒок := 0;
+ if VarAsDec(Doc. урсƒок)>0 then
+   Doc.—уммаƒок¬ал := VarAsDec(Doc.—уммаƒок) / VarAsDec(Doc. урсƒок)
+ else
+   Doc.—уммаƒок¬ал := VarAsDec(Doc.—уммаƒок);
+ Doc.Post;
+ Doc.StateUp;
+
+ Options.SetPrm(FixAck,FixAckParam); 
+ LogList.AddValue(' ',0);
+ LogList.AddValue('¬рем€ окончани€ '+TimeToStr(CurrentTime),0);
+ Accept := not Mean.Terminated;
+end;
+
+function ClearAllDocsEP(OnDateS : DateTime; EmplS:ISDictionary; LogListS : ISValueList) : Variant; server;
+begin
+  OnDate := OnDateS;                             
+  Empl := EmplS;
+  LogList := LogListS;
+  Result := EntryPoint(ClearAllDocs);
+end;
+
+end.

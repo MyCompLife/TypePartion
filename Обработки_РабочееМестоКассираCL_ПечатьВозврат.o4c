@@ -1,0 +1,111 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : Variant;
+  Doc, DocCheck : ICDocuments;
+  i: Integer;
+  Tbl, TblDoc : ICValueTable;
+  TypeDocPrint : string;   
+  S1, S2, S3, S4 : Decimal;
+  DateFrom, DateTo : DateTime;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams; //Form.GetMean;
+  DateFrom := strtodate(MasterData.params('DateFrom'));
+  DateTo := strtodate(MasterData.params('dateTo'));
+  Tbl := CreateObject('ТаблицаЗначений');
+  Tbl.AddColumn('Код', vtcString, 20);
+  Tbl.AddColumn('КодПроизводителя', vtcString, 100);
+  Tbl.AddColumn('Товар', vtcLink, 0);
+  Tbl.AddColumn('ЕдИзм', vtcLink, 0);
+  Tbl.AddColumn('КолОбщ', vtcFFT, 5);
+  Tbl.AddColumn('Цена', vtcFFT, 7);
+  Tbl.AddColumn('DocumentStr', vtcString, 200);
+  Tbl.AddColumn('Document', vtcLink, 0);
+  Tbl.AddColumn('Партия', vtcFloat, 0);
+  Tbl.AddColumn('СумОтп', vtcFFT, 7);
+  Tbl.AddColumn('Date', vtcDate, 0);
+  Tbl.Open;
+  Tbl.Tblname := 'tblBackGoods';
+  Tbl.SetColumnFormat('Цена', '0,00');
+  Tbl.SetColumnFormat('КолОбщ', '0,00'); 
+  TblDoc := CreateObject('ТаблицаЗначений');
+  TblDoc.AddColumn('DocumentStr', vtcString, 200);
+  TblDoc.AddColumn('Date', vtcDate, 0);
+  TblDoc.Open;
+
+  Tbl.Clear();
+  TblDoc.Clear();
+  Tbl.CopyDataToServer();
+  TblDoc.CopyDataToServer();
+  Server.SetGoods(DateFrom, DateTo, Tbl.SrvMean, TblDoc.SrvMean);
+  Tbl.CopyDataFromServer;
+  TblDoc.CopyDataFromServer;
+  TblDoc.SortBy('Date');
+  Tbl.SortBy('DocumentStr;КодПроизводителя');
+
+  i := 1;
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if i > 0 then
+    Accept := true
+  else
+    Accept := false;
+  if not Accept then
+    exit;
+  dec(i);
+  with Table do
+    begin
+      Value['Name'] := 'з ' + MasterData.Params('DateFrom') + ' по ' + MasterData.Params('DateTo');
+    end;
+end;
+
+procedure Structure1_ROOT_Doc_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  if Index=0 then Accept:= TblDoc.SelectFirst()
+             else Accept:= TblDoc.SelectNext();
+  if not Accept then Exit;
+  Tbl.SetRange(TblDoc.DocumentStr,TblDoc.DocumentStr);
+  with Table do begin
+    Value['NAME'] := TblDoc.DocumentStr;
+  end;
+end;
+
+procedure Structure1_ROOT_Doc_DET_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  if Index=0 then Accept:= Tbl.SelectFirst()
+             else Accept:= Tbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+    Value['NAME'] := Tbl.Товар.КодПроизводителя+ ' ' + Tbl.Товар.НазвТовара;
+    Value['Count'] := DecToStr(Tbl.КолОбщ) + #13 + DecToStr(Tbl.Цена,2)+ #13#10;
+    Value['Summa'] :=  DecToStr(Tbl.СумОтп);
+  end;
+end;
+
+end.
+
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndHdDet:TRBBand
+Label27:TRBLabel
+Label29:TRBLabel
+Label32:TRBLabel
+dbndGoods:TRBDetailBand
+Label35:TRBLabel
+Label37:TRBLabel
+Label40:TRBLabel
+bRoot:TRBBand
+Label1:TRBLabel
+Label5:TRBLabel
+bndDET:TRBDetailBand
+Label2:TRBLabel
+Structure1:TRBStructure

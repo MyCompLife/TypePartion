@@ -1,0 +1,1452 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначенийCL, РаботаСТаблицамиЗначений;
+
+const
+ DefGroup='Регион;Категория;Ответственный;Посредник;Партнер';
+ DefGroupColors='0060C060;00A0A0A0;0080FFFF;00FFFF80;000000FF';
+
+ implementation
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  GoodList, RegionList : ICValueList;
+  GoodsTbl, Group1Tbl, Group2Tbl, Group3Tbl, Group4Tbl, 
+  GroupOptionsTbl, tmpGroupOptionsTbl, RegionTbl, DatesTbl, ReportDatesTbl : ICValueTable;
+  MasterRep : ICReport;
+  DateFrom, DateTo : DateTime;
+  GoodDict, RegionDic, EmplDic, AgentDic, PartnerDic : ICDictionary;
+  UseLevel : boolean;
+
+procedure SetDocTypeCeckBoxEnableds;
+begin
+ cbGroupInOut.Enabled := cbUseSaleDoc.Checked and cbUseRetDoc.Checked;
+ if not cbGroupInOut.Enabled then
+   cbGroupInOut.Checked := false;
+end;
+
+procedure tbCtgVisible_Click(Sender: TObject);
+begin
+ if tbCtgVisible.Down then
+   begin     
+     pGoodsCtg.Visible := true;
+     splCtg.Visible := true;
+     tbCtgVisible.Caption := 'Скрыть категории';
+     tbCtgVisible.ImageIndex := 9;
+   end
+ else
+   begin
+     splCtg.Visible := false;
+     pGoodsCtg.Visible := false;
+     tbCtgVisible.Caption := 'Отобразить категории';
+     tbCtgVisible.ImageIndex := 8;
+   end;
+end;
+
+
+procedure RefreshDatesTbl;
+var CurRecID : Double;
+    tmpDate : DateTime;
+begin
+   try
+     DatesTbl.DisableControls;
+     if DatesTbl.IsFocused then
+       CurRecID :=DatesTbl.RecID;
+     tmpDate := RoundDate(DateFrom, rdDay, false);
+     DatesTbl.Select;
+     While DatesTbl.SelectNext do
+       begin
+         DatesTbl.Edit;
+         DatesTbl.ДатаС  :=  RoundDate(tmpDate, rdDay, false);
+         DatesTbl.ДатаПо := RoundDate(tmpDate + DatesTbl.КоличествоДней-1, rdDay, false);
+         DatesTbl.Post;
+         tmpDate := tmpDate + DatesTbl.КоличествоДней;
+       end;
+   finally                   
+     if CurRecID<>0 then
+       DatesTbl.FindByRecID(CurRecID);
+     DatesTbl.EnableControls;
+   end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterRep := Mean;
+end;
+
+procedure ReadRegionsFromStr(RegionStr:string);
+var i : integer;
+begin
+ RegionTbl.Clear;
+ clbRegion.Items.Clear;
+ RegionDic.SortByName;
+ RegionDic.Select;
+ i := 0;
+ While RegionDic.SelectNext do
+  begin
+    RegionTbl.Append;
+    RegionTbl.AssignFields('Код;Название',RegionDic);
+    RegionTbl.Регион := RegionDic;
+    RegionTbl.Num := i;
+    RegionTbl.Post;
+    clbRegion.Items.Add(VarAsStr(RegionDic.NameField));
+    clbRegion.Checked[i] := StrPos(';'+VarAsStr(RegionDic.CodeField)+';',RegionStr)<>0;
+    inc(i);
+  end;
+end;
+
+function WriteRegionsToStr:string;
+begin
+ Result := ';';
+ RegionTbl.Select;
+ While RegionTbl.SelectNext do
+   if clbRegion.Checked[VarAsInt(RegionTbl.Num)] then
+     Result := Result + VarAsStr(RegionTbl.Код)+';';
+end;
+
+
+procedure FillGroupTbl(tmpGroupOptionsTbl:ICValueTable);
+var i, Num : integer; 
+    CurGroup : string;
+begin
+ try     
+   GroupOptionsTbl.Clear;
+   GroupOptionsTbl.DisableControls;
+   Num := 0;
+   if not IsNil(tmpGroupOptionsTbl) and tmpGroupOptionsTbl.Active and (tmpGroupOptionsTbl.LineCount>0) then
+     begin
+       tmpGroupOptionsTbl.SortBy('Num');
+       tmpGroupOptionsTbl.Select;
+       While tmpGroupOptionsTbl.SelectNext do
+        if (StrPos(VarAsStr(tmpGroupOptionsTbl.Group),DefGroup)<>0) and
+            not GroupOptionsTbl.Locate('Group',VarAsStr(tmpGroupOptionsTbl.Group)) then
+         begin
+           GroupOptionsTbl.Append;
+           GroupOptionsTbl.AssignFields('Color;Checked;Group',tmpGroupOptionsTbl);
+           GroupOptionsTbl.Num := Num;
+           GroupOptionsTbl.Post; 
+           inc(Num);
+         end;
+     end;
+   for i:=1 to WordCount(DefGroup,';') do
+     begin
+       CurGroup := ExtractWord(i, DefGroup,';');
+       if not GroupOptionsTbl.Locate('Group',CurGroup) then
+         begin
+           GroupOptionsTbl.Append; 
+           GroupOptionsTbl.Group := CurGroup;
+           GroupOptionsTbl.Checked := 0;
+           GroupOptionsTbl.Color := HexToInt(ExtractWord(i, DefGroupColors,';'));
+           GroupOptionsTbl.Num := Num;
+           GroupOptionsTbl.Post;  
+           inc(Num);
+         end;
+     end;
+ finally
+   GroupOptionsTbl.EnableControls;
+ end;
+
+end;
+
+procedure cbUsePeriod_Click(Sender: TObject);
+begin
+  tsPeriod.TabVisible := cbUsePeriod.Checked;
+end;
+
+
+procedure Form_Open(Sender: TObject);
+begin
+  pcOptions.ActivePage := tsOptions;
+  Options := GetOptions;
+  DatesTbl := CreateObject('ТаблицаЗначений');
+  DatesTbl.AddColumn('Num',vtcInteger,0);
+  DatesTbl.AddColumn('КоличествоДней',vtcInteger,0);
+  DatesTbl.AddColumn('ДатаС',vtcDate,0);
+  DatesTbl.AddColumn('ДатаПо',vtcDate,0);
+  DatesTbl.Open;
+  DatesTbl.PackedData :=  Options.GetServerPrm('ReportPeriodTbl');
+  ReportDatesTbl := CreateObject('ТаблицаЗначений');
+  DatesTbl.CopyColumnsTo(ReportDatesTbl);
+  DatesTbl.UseDataSource(CtrltoVar(TVSDateList));
+  GoodDict := CreateObject('Справочники.Товары');
+  RegionDic := CreateObject('Справочники.Регионы');
+  GoodList := CreateObject('СписокЗначений');
+  RegionList := CreateObject('СписокЗначений');
+  RegionTbl := CreateObject('ТаблицаЗначений');
+  RegionTbl.AddColumn('Num',vtcInteger,0);   
+  RegionTbl.AddColumn('Регион',vtcLink,0);
+  RegionTbl.AddColumn('Код',vtcString,2);
+  RegionTbl.AddColumn('Название',vtcString,70);
+  RegionTbl.Open; 
+  GoodsTbl  := CreateObject('ТаблицаЗначений');
+  GoodsTbl.Open;
+  Group1Tbl := CreateObject('ТаблицаЗначений');
+  Group1Tbl.Open;
+  Group2Tbl := CreateObject('ТаблицаЗначений'); 
+  Group2Tbl.Open;
+  Group3Tbl := CreateObject('ТаблицаЗначений');
+  Group3Tbl.Open;
+  Group4Tbl := CreateObject('ТаблицаЗначений');
+  Group4Tbl.Open;
+  GroupOptionsTbl := CreateObject('ТаблицаЗначений');
+  GroupOptionsTbl.AddColumn('Num',vtcInteger,0);
+  GroupOptionsTbl.AddColumn('Color',vtcInteger,0);
+  GroupOptionsTbl.AddColumn('Checked',vtcInteger,0);
+  GroupOptionsTbl.AddColumn('Group',vtcString,30);
+  GroupOptionsTbl.Open;  
+  GroupOptionsTbl.SortBy('Num');
+  GroupOptionsTbl.UseDataSource(CtrlToVar(TVSGroup));
+  tmpGroupOptionsTbl := CreateObject('ТаблицаЗначений');
+  GroupOptionsTbl.CopyColumnsTo(tmpGroupOptionsTbl);
+  tmpGroupOptionsTbl.SortBy('Num');
+  tbXTools.Visible := GetUDASet('XTools');
+  GoodDict.OpenFormInplace('КатегорииТоваров', CtrlToVar(pGoodsCtg));
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  tmpGroupOptionsTbl.PackedData := Options.GetServerPrm('ОтчетПоПродажамGroupOptions');
+  FillGroupTbl(tmpGroupOptionsTbl);
+  pnRegions.Height := VarAsInt(Options.GetServerPrm('ОтчетПоПродажамpnRegionsHeight'),150);
+  ReadRegionsFromStr(VarAsStr(Options.GetServerPrm('ОтчетПоПродажамRegionStr')));
+  cbUseSaleDoc.Checked := VarAsBool(Options.GetServerPrm('ОтчетПоПродажамcbUseSaleDoc'));
+  cbUseRetDoc.Checked := VarAsBool(Options.GetServerPrm('ОтчетПоПродажамcbUseRetDoc'));
+  cbGroupInOut.Checked := VarAsBool(Options.GetServerPrm('ОтчетПоПродажамcbGroupInOut'));
+  cbUseCount.Checked := VarAsBool(Options.GetServerPrm('ОтчетПоПродажамcbUseCount'));
+  cbUseSum.Checked := VarAsBool(Options.GetServerPrm('ОтчетПоПродажамcbUseSum'));
+  cbUsePeriod.Checked := VarAsBool(Options.GetServerPrm('ОтчетПоПродажамcbUsePeriod'));
+  rgbPeriod.ItemIndex := VarAsInt(Options.GetServerPrm('ОтчетПоПродажамrgbPeriod'),2);
+  tbCtgVisible.Down :=  VarAsBool(Options.GetServerPrm('ОтчетПоПродажамCtgVisible'));
+  edSortGood.ItemIndex := VarAsInt(Options.GetServerPrm('ОтчетПоПродажамedSortGood'));  
+  SetDocTypeCeckBoxEnableds;
+  cbUsePeriod_Click(Form);
+  tbCtgVisible_Click(Form);
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);  
+  RefreshDatesTbl;
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid.ExportToExcel;
+end;  
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(MasterRep.GetActiveFormComment(), True);
+end;
+
+procedure Form_Close(Sender: TObject);  
+begin
+  Options.SetServerPrm('ОтчетПоПродажамGroupOptions', GroupOptionsTbl.PackedData);
+  Options.SetServerPrm('ОтчетПоПродажамRegionStr', WriteRegionsToStr);
+  Options.SetServerPrm('ОтчетПоПродажамcbUseSaleDoc', cbUseSaleDoc.Checked);
+  Options.SetServerPrm('ОтчетПоПродажамcbUseRetDoc', cbUseRetDoc.Checked);
+  Options.SetServerPrm('ОтчетПоПродажамcbGroupInOut', cbGroupInOut.Checked);
+  Options.SetServerPrm('ОтчетПоПродажамcbUseCount', cbUseCount.Checked);
+  Options.SetServerPrm('ОтчетПоПродажамcbUseSum', cbUseSum.Checked);
+  Options.SetServerPrm('ОтчетПоПродажамcbUsePeriod', cbUsePeriod.Checked);
+  Options.SetServerPrm('ОтчетПоПродажамrgbPeriod', rgbPeriod.ItemIndex);
+  Options.SetServerPrm('ОтчетПоПродажамedSortGood', edSortGood.ItemIndex);
+  Options.SetServerPrm('ОтчетПоПродажамCtgVisible', tbCtgVisible.Down);
+  Options.SetServerPrm('ОтчетПоПродажамpnRegionsHeight', pnRegions.Height);
+end;
+
+procedure tbGroupUp_Click(Sender: TObject);
+var RecID : Double;
+    CurNum, PriorNum : Integer;
+begin
+ if GroupOptionsTbl.IsFocused then
+   begin   
+     RecID := GroupOptionsTbl.RecID;
+     CurNum := VarAsInt(GroupOptionsTbl.Num);
+     if GroupOptionsTbl.SelectPrior then
+       begin
+         PriorNum := VarAsInt(GroupOptionsTbl.Num);
+         GroupOptionsTbl.Edit;
+         GroupOptionsTbl.Num := CurNum;
+         GroupOptionsTbl.Post;
+         if GroupOptionsTbl.FindByRecID(RecID) then
+           begin
+             GroupOptionsTbl.Edit;
+             GroupOptionsTbl.Num := PriorNum;
+             GroupOptionsTbl.Post;
+           end;
+       end;  
+     //GroupOptionsTbl.FindByRecID(RecID);
+   end;
+end;
+
+procedure tbGroupDown_Click(Sender: TObject);
+var RecID : Double;
+    CurNum, NextNum : Integer;
+begin
+ if GroupOptionsTbl.IsFocused then
+   begin    
+     RecID := GroupOptionsTbl.RecID;
+     CurNum := VarAsInt(GroupOptionsTbl.Num);
+     if GroupOptionsTbl.SelectNext then
+       begin
+         NextNum := VarAsInt(GroupOptionsTbl.Num);
+         GroupOptionsTbl.Edit;
+         GroupOptionsTbl.Num := CurNum;
+         GroupOptionsTbl.Post;
+         if GroupOptionsTbl.FindByRecID(RecID) then
+           begin
+             GroupOptionsTbl.Edit;
+             GroupOptionsTbl.Num := NextNum;
+             GroupOptionsTbl.Post; 
+           end;
+       end;
+     //GroupOptionsTbl.FindByRecID(RecID);
+   end;
+end;
+
+
+procedure btSelAllRegion_Click(Sender: TObject);   
+var i : integer;
+begin
+ if clbRegion.Items.Count>0 then
+   for i :=0 to clbRegion.Items.Count-1 do
+    clbRegion.Checked[i] := VarAsBool((Sender as TComponent).Tag);
+end;
+
+function InputDaysCount(var DaysCount:integer): boolean;
+begin
+  Result := StdInpInt('Введите количество дней', DaysCount);
+  if Result then
+    Result :=  (DaysCount>0);
+end;
+
+procedure tbAdd_Click(Sender: TObject); 
+var DaysCount : integer;
+begin
+ if DatesTbl.LineCount>100 then
+   ShowMessage('Список периодов не может быть больше чем 100 периодов');
+ DaysCount := 0;
+ if InputDaysCount(DaysCount) then
+   begin
+     DatesTbl.UseDataSource(0);
+     DatesTbl.Append;
+     DatesTbl.КоличествоДней := DaysCount;
+     DatesTbl.Post;
+     DatesTbl.UseDataSource(CtrltoVar(TVSDateList)); 
+     RefreshDatesTbl;
+   end;
+end;
+
+procedure tbEdit_Click(Sender: TObject); 
+var DaysCount : integer;
+begin
+ if DatesTbl.IsFocused then
+   begin
+     DaysCount := DatesTbl.КоличествоДней;
+     if InputDaysCount(DaysCount) then
+       begin
+         DatesTbl.UseDataSource(0);
+         DatesTbl.Edit;
+         DatesTbl.КоличествоДней := DaysCount;
+         DatesTbl.Post;
+         DatesTbl.UseDataSource(CtrltoVar(TVSDateList));
+      end;
+      RefreshDatesTbl;
+   end;
+end;
+
+procedure tbDel_Click(Sender: TObject);
+begin
+  if DatesTbl.IsFocused then
+    begin
+      DatesTbl.Delete;
+      RefreshDatesTbl;
+    end;
+end;
+
+procedure tbSave_Click(Sender: TObject);
+begin
+  Options.SetServerPrm('ReportPeriodTbl',DatesTbl.PackedData);
+end;
+
+
+procedure rgbPeriod_Click(Sender: TObject);
+begin
+ pnHendPeriods.Visible := rgbPeriod.ItemIndex=6;
+end; 
+
+procedure edPartner_ActionClear(Sender: TObject);
+begin
+ Nil(Partnerdic);
+ edPartner.Text := '';
+end;
+
+procedure edPartner_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelPartnerdic : ICDictionary;
+begin
+ SelPartnerdic := CreateObject('Справочники.ЮрПартнеры');
+ if SelPartnerdic.SelectInForm('',DefName,Null) then
+   begin
+     if IsNil(Partnerdic) then
+       Partnerdic := CreateObject('Справочники.ЮрПартнеры');
+     if PartnerDic.Find(SelPartnerdic) then
+       edPartner.Text := DefName;
+   end;
+end;
+
+procedure edEmpl_ActionClear(Sender: TObject);
+begin
+ Nil(Empldic);
+ edEmpl.Text := '';
+end;
+
+procedure edEmpl_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelEmpl : ICDictionary;
+begin
+ SelEmpl := CreateObject('Справочники.Служащие');
+ if SelEmpl.SelectInForm('',DefName,Null) then
+   begin
+     if IsNil(EmplDic) then
+       EmplDic := CreateObject('Справочники.Служащие');
+     if EmplDic.Find(SelEmpl) then
+       edEmpl.Text := DefName;
+   end;
+end;
+
+procedure edAgent_ActionClear(Sender: TObject);
+begin
+ Nil(AgentDic);
+ edAgent.Text := '';
+end;
+
+procedure edAgent_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelAgent : ICDictionary;
+begin
+ SelAgent := CreateObject('Справочники.Служащие');
+ if SelAgent.SelectInForm('',DefName,Null) then
+   begin
+     if IsNil(AgentDic) then
+       AgentDic := CreateObject('Справочники.Служащие');
+     if AgentDic.Find(SelAgent) then
+       edAgent.Text := DefName;
+   end;
+end;
+
+procedure FillReportDatesTbl;
+var tmpDate : DateTime;
+    i : integer;
+begin
+ ReportDatesTbl.Clear;
+ if cbUsePeriod.Checked then
+   begin     
+     if rgbPeriod.ItemIndex=6 then 
+       begin  
+         DatesTbl.DoNumbering('Num',0,1);
+         DatesTbl.AppendTo('',ReportDatesTbl);
+         if ReportDatesTbl.SelectLast and (ReportDatesTbl.ДатаПо<DateTo) then
+           begin
+             tmpDate := trunc(RoundDate(ReportDatesTbl.ДатаПо, rdDay, true));
+             i := VarAsInt(ReportDatesTbl.Num);
+             inc(i);
+             ReportDatesTbl.Append;
+             ReportDatesTbl.ДатаС  :=  tmpDate;
+             ReportDatesTbl.ДатаПо := DateTo;
+             ReportDatesTbl.Num := i;
+             ReportDatesTbl.Post;
+           end;
+       end
+     else
+       begin   
+         i := 0;
+         tmpDate := trunc(DateFrom);
+         While tmpDate<=DateTo do
+           begin
+             ReportDatesTbl.Append;
+             case rgbPeriod.ItemIndex of
+               0:  // По дням
+                 begin
+                   ReportDatesTbl.ДатаС  :=  RoundDate(tmpDate, rdDay, false);
+                   ReportDatesTbl.ДатаПо := RoundDate(tmpDate, rdDay, false);
+                 end;
+               1: // По неделям
+                 begin
+                   ReportDatesTbl.ДатаС  :=  RoundDate(tmpDate, rdWeek, false);
+                   ReportDatesTbl.ДатаПо := Trunc(RoundDate(tmpDate, rdWeek, true)-1);
+                 end;
+               2: // По месяцам
+                 begin
+                   ReportDatesTbl.ДатаС  :=  RoundDate(tmpDate, rdMonth, false);
+                   ReportDatesTbl.ДатаПо := Trunc(RoundDate(tmpDate, rdMonth, true)-1);
+                 end;
+               3: // По кварталам
+                 begin
+                   ReportDatesTbl.ДатаС  :=  RoundDate(tmpDate, rdQuarter, false);
+                   ReportDatesTbl.ДатаПо := Trunc(RoundDate(tmpDate, rdQuarter, true)-1);
+                 end;
+               4: // По полугодиям
+                 begin
+                   ReportDatesTbl.ДатаС  :=  RoundDate(tmpDate, rdHalfYear, false);
+                   ReportDatesTbl.ДатаПо := Trunc(RoundDate(tmpDate, rdHalfYear, true)-1);
+                 end;
+               5: // По годам
+                 begin
+                   ReportDatesTbl.ДатаС  :=  RoundDate(tmpDate, rdYear, false);
+                   ReportDatesTbl.ДатаПо := Trunc(RoundDate(tmpDate, rdYear, true)-1);
+                 end;
+             end;
+             if ReportDatesTbl.ДатаПо>DateTo then
+               ReportDatesTbl.ДатаПо := DateTo;
+             if ReportDatesTbl.ДатаС<DateFrom then
+               ReportDatesTbl.ДатаС := DateFrom;
+             ReportDatesTbl.КоличествоДней := trunc(ReportDatesTbl.ДатаПо-ReportDatesTbl.ДатаС+1); 
+             ReportDatesTbl.Num := i;
+             ReportDatesTbl.Post;
+             tmpDate := trunc(RoundDate(ReportDatesTbl.ДатаПо, rdDay, true));
+             inc(i);
+           end;
+       end;
+   end; 
+ if ReportDatesTbl.LineCount=0 then
+   begin 
+     ReportDatesTbl.Append;
+     ReportDatesTbl.ДатаС  :=  DateFrom;
+     ReportDatesTbl.ДатаПо := DateTo;
+     ReportDatesTbl.Num := 0;
+     ReportDatesTbl.Post;
+   end;
+end;
+
+
+procedure tbRun_Click(Sender: TObject);
+var GroupFieldsStr, SumFieldsStr, XGridSumFieldsStr, NumStr : string;
+    GrField1, GrField2, GrField3, GrField4, GrField5, GoodSortField : string;
+    i, Col, FirstLevelHedWidth, SecondLevelHedWidth, FirstLevelHedRow, SecondLevelHedRow, GroupLevelCount,
+    GrLine1, GrLine2, GrLine3, GrLine4, GrLine5 : integer;
+    TotalSum, GroupColor : Variant;
+begin
+ FillReportDatesTbl; // Разбивка по периодам
+ if not (cbUseSaleDoc.Checked or cbUseRetDoc.Checked) then
+   ShowMessage('Выберите хотя-бы один тип документов!')
+ else  
+ if not (cbUseCount.Checked or cbUseSum.Checked) then
+   ShowMessage('Выберите хотя-бы одно поле отображения')
+ else 
+ if ReportDatesTbl.LineCount>100 then
+   ShowMessage('Список периодов не может быть больше чем 100 периодов'+#13+
+               'Необходимо либо уменьшить период отчета либо выбрать более крупный вид разбивки!')
+ else
+   begin         
+     if edSortGood.ItemIndex=0 then
+       GoodSortField := 'Товар'
+     else
+       GoodSortField := 'Код';
+     // Регионы
+     RegionList.Clear;
+     RegionTbl.Select;
+     While RegionTbl.SelectNext do
+       if clbRegion.Checked[VarAsInt(RegionTbl.Num)] then
+        RegionList.AddValue(VarAsStr(RegionTbl.Название),RegionTbl.@Регион);
+     if RegionList.Count=0 then
+       ShowMessage('Выберите хотя-бы один регион!')
+     else
+       begin
+         // категории
+         GoodList.Clear;
+         UseLevel := VarAsBool(GoodDict.Params['UseLevel']);
+          if not UseLevel then
+            GoodDict.AssignSelectParamsOnSrv(Null)
+          else
+            begin
+              GoodDict.GetCheckLevelsAsValueList(GoodList);
+              if GoodDict.InteractiveUseLevels and (GoodList.Count = 0) then
+                 begin
+                   ShowMessage(CheckCtg);
+                   exit;
+                 end;
+            end;
+          GoodList.CopyDataToServer;
+
+          // Группировка отчета
+          GroupFieldsStr := '';
+          ArrayCreate(GroupColor,[0,4],Variant);
+          try                                 
+            i := 0;
+            GroupOptionsTbl.DisableControls;
+            GroupOptionsTbl.Select;
+            While GroupOptionsTbl.SelectNext  do
+              if VarAsBool(GroupOptionsTbl.Checked) then
+                begin
+                  GroupFieldsStr := GroupFieldsStr + VarAsStr(GroupOptionsTbl.Group)+';';
+                  GroupColor[i] := VarAsInt(GroupOptionsTbl.Color);
+                  inc(i);
+                end;
+            if (StrLength(GroupFieldsStr)>0) and (GroupFieldsStr[StrLength(GroupFieldsStr)]=';') then
+              StrDelete(GroupFieldsStr,StrLength(GroupFieldsStr),1);
+          finally
+            GroupOptionsTbl.EnableControls;
+          end;
+          if i>4 then
+            begin
+              ShowMessage('Количество уровней группировки не может превышать 4 уровня!'+#13+
+                          'Укажите меньше уровней группировки!');
+              exit;
+            end;
+          XGrid.ClearAll;
+          XGrid.AddSection('Title');
+          XGrid.Cell(XGrid.RowCount,1).Value := 'Отчет по продажам с '+DateToStr(DateFrom)+' по '+ DateToStr(DateTo);
+          if IsObjFocused(EmplDic) then
+            begin
+              XGrid.AddSection('Filter');
+              XGrid.Cell(XGrid.RowCount,1).Value := 'Ответственный: '+VarAsStr(EmplDic.NameField);
+            end;    
+          if IsObjFocused(AgentDic) then
+            begin
+              XGrid.AddSection('Filter');
+              XGrid.Cell(XGrid.RowCount,1).Value := 'Посредник: '+VarAsStr(AgentDic.NameField);
+            end;
+          XGrid.AddSection('Hed');
+          FirstLevelHedRow := XGrid.RowCount-2;
+          SecondLevelHedRow := XGrid.RowCount-1;
+          Col := 4;                        
+          if cbUseCount.Checked and cbUseSum.Checked then
+            SecondLevelHedWidth := 2
+          else
+            SecondLevelHedWidth := 1;
+          if cbUseSaleDoc.Checked and cbUseRetDoc.Checked and not cbGroupInOut.Checked then
+            FirstLevelHedWidth := SecondLevelHedWidth * 3
+          else
+            FirstLevelHedWidth := SecondLevelHedWidth;
+
+          ReportDatesTbl.SortBy('Num');
+          Group1Tbl.Close;
+          Group2Tbl.Close;
+          Group3Tbl.Close;
+          Group4Tbl.Close;  
+          GoodsTbl.Close;
+          GoodsTbl.AddColumn('Код', lftString, 20);
+          GoodsTbl.AddColumn('Товар', lftLink, 0);
+          GoodsTbl.AddColumn('ЕдИзм', lftLink, 0);
+          GoodsTbl.AddColumn('Document', lftLink, 0);
+          GoodsTbl.AddColumn('Регион', lftLink, 0);
+          GoodsTbl.AddColumn('Категория', lftString, 512);
+          GoodsTbl.AddColumn('Ответственный', lftLink, 0);
+          GoodsTbl.AddColumn('Посредник', lftLink, 0);  
+          GoodsTbl.AddColumn('Партнер', lftLink, 0);
+          // Формирование списка полей сумм
+          SumFieldsStr := '';
+          XGridSumFieldsStr := '';
+          ReportDatesTbl.Select;
+          While ReportDatesTbl.SelectNext do
+            begin
+              if  trunc(ReportDatesTbl.ДатаПо-ReportDatesTbl.ДатаС)>0 then
+                XGrid.Cell(FirstLevelHedRow,Col).Value := DateToStr(ReportDatesTbl.ДатаС)+' - '+DateToStr(ReportDatesTbl.ДатаПо)
+              else
+                XGrid.Cell(FirstLevelHedRow,Col).Value := DateToStr(ReportDatesTbl.ДатаС);
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).GroupCells;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).BorderTop := 2;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).BorderLeft := 1;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).BorderRight := 1;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).Alignment := taCenter;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).WordWrap := true;
+              NumStr := VarAsStr(ReportDatesTbl.Num);
+              if cbUseSaleDoc.Checked then
+                begin
+                  if not cbGroupInOut.Checked then
+                    begin
+                      XGrid.Cell(SecondLevelHedRow,Col).Value := 'Продажи';
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).GroupCells;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderTop := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderLeft := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderRight := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).Alignment := taCenter;
+                    end;
+                  if cbUseCount.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ПродажаКол'+NumStr, lftFFT, 5);
+                      SumFieldsStr := SumFieldsStr+ 'ПродажаКол'+NumStr+';';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'К-ство';
+                      if not cbGroupInOut.Checked then 
+                        begin
+                          inc(Col);   
+                          XGridSumFieldsStr := XGridSumFieldsStr+ 'ПродажаКол'+NumStr+';';
+                        end;
+                    end;
+                  if cbUseSum.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ПродажаСум'+NumStr, lftFFT, 7);
+                      SumFieldsStr := SumFieldsStr+ 'ПродажаСум'+NumStr+';';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'Сумма';  
+                      if not cbGroupInOut.Checked then 
+                        begin
+                          inc(Col);   
+                          XGridSumFieldsStr := XGridSumFieldsStr+ 'ПродажаСум'+NumStr+';';
+                        end;
+                    end;
+                end;
+              if cbUseRetDoc.Checked then
+                begin                
+                  if not cbGroupInOut.Checked then
+                    begin
+                      XGrid.Cell(SecondLevelHedRow,Col).Value := 'Возвраты';
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).GroupCells;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderTop := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderLeft := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderRight := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).Alignment := taCenter;
+                    end;
+                  if cbUseCount.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ВозвратКол'+NumStr, lftFFT, 5);
+                      SumFieldsStr := SumFieldsStr+ 'ВозвратКол'+NumStr+';';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'К-ство'; 
+                      if not cbGroupInOut.Checked then
+                        begin
+                          inc(Col);
+                          XGridSumFieldsStr := XGridSumFieldsStr+ 'ВозвратКол'+NumStr+';';
+                        end;
+                    end;
+                  if cbUseSum.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ВозвратСум'+NumStr, lftFFT, 7);
+                      SumFieldsStr := SumFieldsStr+ 'ВозвратСум'+NumStr+';';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'Сумма';  
+                      if not cbGroupInOut.Checked then 
+                        begin
+                          inc(Col);
+                          XGridSumFieldsStr := XGridSumFieldsStr+ 'ВозвратСум'+NumStr+';';
+                        end;
+                    end;
+                end;
+              if cbUseSaleDoc.Checked and cbUseRetDoc.Checked then
+                begin   
+                  XGrid.Cell(SecondLevelHedRow,Col).Value := 'Продажи - Возвраты';
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).GroupCells;
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderTop := 1;
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderLeft := 1;
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderRight := 1;
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).Alignment := taCenter;
+                  if cbUseCount.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ВсегоКол'+NumStr, lftFFT, 5);
+                      SumFieldsStr := SumFieldsStr+ 'ВсегоКол'+NumStr+';';  
+                      XGridSumFieldsStr := XGridSumFieldsStr+ 'ВсегоКол'+NumStr+';';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'К-ство';
+                      inc(Col);
+                    end;
+                  if cbUseSum.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ВсегоСум'+NumStr, lftFFT, 7);
+                      SumFieldsStr := SumFieldsStr+ 'ВсегоСум'+NumStr+';'; 
+                      XGridSumFieldsStr := XGridSumFieldsStr+ 'ВсегоСум'+NumStr+';';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'Сумма';
+                      inc(Col);
+                    end;
+                end;
+            end;
+          if ReportDatesTbl.LineCount>1 then
+            begin    
+              XGrid.Cell(FirstLevelHedRow,Col).Value := 'Всего';
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).GroupCells;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).BorderTop := 2;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).BorderLeft := 1;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).BorderRight := 1;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).Alignment := taCenter;
+              XGrid.Cells(FirstLevelHedRow,Col,FirstLevelHedRow,Col+FirstLevelHedWidth-1).WordWrap := true;
+              if cbUseSaleDoc.Checked then
+                begin         
+                  if not cbGroupInOut.Checked then
+                    begin
+                      XGrid.Cell(SecondLevelHedRow,Col).Value := 'Продажи';
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).GroupCells;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderTop := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderLeft := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderRight := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).Alignment := taCenter;
+                    end;
+                  if cbUseCount.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ПродажаКолTotal', lftFFT, 5);
+                      SumFieldsStr := SumFieldsStr+ 'ПродажаКолTotal;';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'К-ство';
+                      if not cbGroupInOut.Checked then
+                        begin
+                          inc(Col); 
+                          XGridSumFieldsStr := XGridSumFieldsStr+ 'ПродажаКолTotal;';
+                        end;
+                    end;
+                  if cbUseSum.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ПродажаСумTotal', lftFFT, 7);
+                      SumFieldsStr := SumFieldsStr+ 'ПродажаСумTotal;';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'Сумма';
+                      if not cbGroupInOut.Checked then 
+                        begin
+                          inc(Col);
+                          XGridSumFieldsStr := XGridSumFieldsStr+ 'ПродажаСумTotal;';
+                        end;
+                    end;
+                end;
+              if cbUseRetDoc.Checked then
+                begin                   
+                  if not cbGroupInOut.Checked then
+                    begin
+                      XGrid.Cell(SecondLevelHedRow,Col).Value := 'Возвраты';
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).GroupCells;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderTop := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderLeft := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderRight := 1;
+                      XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).Alignment := taCenter;
+                    end;
+                  if cbUseCount.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ВозвратКолTotal', lftFFT, 5);
+                      SumFieldsStr := SumFieldsStr+ 'ВозвратКолTotal;';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'К-ство';
+                      if not cbGroupInOut.Checked then 
+                        begin
+                          inc(Col);    
+                          XGridSumFieldsStr := XGridSumFieldsStr+ 'ВозвратКолTotal;';
+                        end;
+                    end;
+                  if cbUseSum.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ВозвратСумTotal', lftFFT, 7);
+                      SumFieldsStr := SumFieldsStr+ 'ВозвратСумTotal;';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'Сумма';  
+                      if not cbGroupInOut.Checked then 
+                        begin
+                          inc(Col);    
+                          XGridSumFieldsStr := XGridSumFieldsStr+ 'ВозвратСумTotal;';
+                        end;
+                    end;
+                end;
+              if cbUseSaleDoc.Checked and cbUseRetDoc.Checked then
+                begin
+                  XGrid.Cell(SecondLevelHedRow,Col).Value := 'Продажи - Возвраты';
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).GroupCells;
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderTop := 1;
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderLeft := 1;
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).BorderRight := 1;
+                  XGrid.Cells(SecondLevelHedRow,Col,SecondLevelHedRow,Col+SecondLevelHedWidth-1).Alignment := taCenter;
+                  if cbUseCount.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ВсегоКолTotal', lftFFT, 5);
+                      SumFieldsStr := SumFieldsStr+ 'ВсегоКолTotal;'; 
+                      XGridSumFieldsStr := XGridSumFieldsStr+ 'ВсегоКолTotal;';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'К-ство';
+                      inc(Col);
+                    end;
+                  if cbUseSum.Checked then
+                    begin
+                      GoodsTbl.AddColumn('ВсегоСумTotal', lftFFT, 7);
+                      SumFieldsStr := SumFieldsStr+ 'ВсегоСумTotal;'; 
+                      XGridSumFieldsStr := XGridSumFieldsStr+ 'ВсегоСумTotal;';
+                      XGrid.Cell(XGrid.RowCount,Col).Value := 'Сумма';
+                      inc(Col);
+                    end;
+                end;
+            end;  
+          Dec(Col);
+          XGrid.Cells(FirstLevelHedRow,4,SecondLevelHedRow,Col).AdjustRowHeights;
+          if (StrLength(SumFieldsStr)>0) and (SumFieldsStr[StrLength(SumFieldsStr)]=';') then
+            StrDelete(SumFieldsStr,StrLength(SumFieldsStr),1);  
+          if (StrLength(XGridSumFieldsStr)>0) and (XGridSumFieldsStr[StrLength(XGridSumFieldsStr)]=';') then
+            StrDelete(XGridSumFieldsStr,StrLength(XGridSumFieldsStr),1);
+          GoodsTbl.Open;
+          GoodsTbl.CopyColumnsTo(Group1Tbl);
+          GoodsTbl.CopyColumnsTo(Group2Tbl);
+          GoodsTbl.CopyColumnsTo(Group3Tbl);
+          GoodsTbl.CopyColumnsTo(Group4Tbl);
+          GoodsTbl.CopyDataToServer;
+          Group1Tbl.CopyDataToServer;
+          Group2Tbl.CopyDataToServer;
+          Group3Tbl.CopyDataToServer;
+          Group4Tbl.CopyDataToServer;  
+          RegionList.CopyDataToServer;
+          ReportDatesTbl.CopyDataToServer;
+          if MasterRep.RunThreadProcess(server.GetRunReportEP(GoodsTbl.SrvMean, Group1Tbl.SrvMean, Group2Tbl.SrvMean,
+              Group3Tbl.SrvMean, Group4Tbl.SrvMean, ReportDatesTbl.SrvMean,GoodList.SrvMean,
+              RegionList.SrvMean, GoodDict.SrvMean, EmplDic, AgentDic, PartnerDic, GroupFieldsStr,SumFieldsStr, UseLevel,
+              cbUseSaleDoc.Checked, cbUseRetDoc.Checked, cbUseCount.Checked, cbUseSum.Checked),'Отбор данных') then
+            begin
+              GoodsTbl.CopyDataFromServer;
+              GoodsTbl.SrvMean.Close;
+              Group1Tbl.CopyDataFromServer;
+              Group1Tbl.SrvMean.Close;
+              Group2Tbl.CopyDataFromServer;
+              Group2Tbl.SrvMean.Close;
+              Group3Tbl.CopyDataFromServer;
+              Group3Tbl.SrvMean.Close;
+              Group4Tbl.CopyDataFromServer;
+              Group4Tbl.SrvMean.Close;  
+              ReportDatesTbl.SrvMean.Close;
+              GoodsTbl.Select;
+              GroupLevelCount := WordCount(GroupFieldsStr,';');
+              if (GroupFieldsStr<>'') and (GroupLevelCount>0) then
+                begin
+                  Group1Tbl.SortBy(GroupFieldsStr);
+                  Group2Tbl.SortBy(GroupFieldsStr);
+                  Group3Tbl.SortBy(GroupFieldsStr);
+                  Group4Tbl.SortBy(GroupFieldsStr);
+                  GoodsTbl.SortBy(GroupFieldsStr+';'+GoodSortField);
+                  GrField1 := ExtractWord(1,GroupFieldsStr,';');
+                  Group1Tbl.Select;
+                  GrLine1 := 1;
+                  While Group1Tbl.SelectNext do
+                    begin
+                      XGrid.AddSection('Empty');
+                      Group1Tbl.AddToXGrid(CtrlToVar(XGrid),'Group',GrField1+';;;'+XGridSumFieldsStr,GrLine1,1);
+                      if (Group1Tbl.GetColumnDataType(Group1Tbl.GetColumnIndex(GrField1))=vtcLink) and not IsObjFocused(Group1Tbl._Default[GrField1]) then
+                        XGrid.Cell(XGrid.RowCount,1).Value := GrField1 + ' НЕ УКАЗАН !!!'
+                      else
+                      if (Group1Tbl.GetColumnDataType(Group1Tbl.GetColumnIndex(GrField1))=vtcString) and (VarAsStr(Group1Tbl._Default[GrField1])='') then
+                        XGrid.Cell(XGrid.RowCount,1).Value := GrField1 + ' НЕ УКАЗАНА !!!';
+                      XGrid.Cells(XGrid.RowCount,1,XGrid.RowCount,Col).BkColor := VarAsInt(GroupColor[0]);
+                      if GroupLevelCount>1 then
+                        begin
+                          Group2Tbl.SetRange(Group1Tbl._Default[GrField1],Group1Tbl._Default[GrField1]);
+                          GrField2 := ExtractWord(2,GroupFieldsStr,';');
+                          Group2Tbl.Select;
+                          GrLine2 := 1;
+                          While Group2Tbl.SelectNext do
+                            begin
+                              XGrid.AddSection('Empty');
+                              Group2Tbl.AddToXGrid(CtrlToVar(XGrid),'Group',GrField2+';;;'+XGridSumFieldsStr,GrLine2,1);
+                              if (Group2Tbl.GetColumnDataType(Group2Tbl.GetColumnIndex(GrField2))=vtcLink) and not IsObjFocused(Group2Tbl._Default[GrField2]) then
+                                XGrid.Cell(XGrid.RowCount,1).Value := GrField2 + ' НЕ УКАЗАН !!!'
+                              else
+                              if (Group2Tbl.GetColumnDataType(Group2Tbl.GetColumnIndex(GrField2))=vtcString) and (VarAsStr(Group2Tbl._Default[GrField2])='') then
+                                XGrid.Cell(XGrid.RowCount,1).Value := GrField2 + ' НЕ УКАЗАНА !!!';
+                              XGrid.Cells(XGrid.RowCount,1,XGrid.RowCount,Col).BkColor := VarAsInt(GroupColor[1]);;
+                              if GroupLevelCount>2 then
+                                begin
+                                 Group3Tbl.SetRange(ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2]),
+                                                    ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2]));
+                                 GrField3 := ExtractWord(3,GroupFieldsStr,';');
+                                 Group3Tbl.Select;
+                                 GrLine3 := 1;
+                                 While Group3Tbl.SelectNext do
+                                   begin
+                                     XGrid.AddSection('Empty');
+                                     Group3Tbl.AddToXGrid(CtrlToVar(XGrid),'Group',GrField3+';;;'+XGridSumFieldsStr,GrLine3,1);
+                                     if (Group3Tbl.GetColumnDataType(Group3Tbl.GetColumnIndex(GrField3))=vtcLink) and not IsObjFocused(Group3Tbl._Default[GrField3]) then
+                                       XGrid.Cell(XGrid.RowCount,1).Value := GrField3 + ' НЕ УКАЗАН !!!'
+                                     else
+                                     if (Group3Tbl.GetColumnDataType(Group3Tbl.GetColumnIndex(GrField3))=vtcString) and (VarAsStr(Group3Tbl._Default[GrField3])='') then
+                                       XGrid.Cell(XGrid.RowCount,1).Value := GrField3 + ' НЕ УКАЗАНА !!!';
+                                     XGrid.Cells(XGrid.RowCount,1,XGrid.RowCount,Col).BkColor := VarAsInt(GroupColor[2]);
+                                     if GroupLevelCount>3 then
+                                       begin
+                                         Group4Tbl.SetRange(ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2],Group3Tbl._Default[GrField3]),
+                                                            ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2],Group3Tbl._Default[GrField3]));
+                                         GrField4 := ExtractWord(4,GroupFieldsStr,';');
+                                         Group4Tbl.Select;
+                                         GrLine4 := 1;
+                                         While Group4Tbl.SelectNext do
+                                           begin
+                                             XGrid.AddSection('Empty');
+                                             Group4Tbl.AddToXGrid(CtrlToVar(XGrid),'Group',GrField4+';;;'+XGridSumFieldsStr,GrLine4,1);
+                                             if (Group4Tbl.GetColumnDataType(Group4Tbl.GetColumnIndex(GrField4))=vtcLink) and not IsObjFocused(Group4Tbl._Default[GrField4]) then
+                                               XGrid.Cell(XGrid.RowCount,1).Value := GrField4 + ' НЕ УКАЗАН !!!'
+                                             else
+                                             if (Group4Tbl.GetColumnDataType(Group4Tbl.GetColumnIndex(GrField4))=vtcString) and (VarAsStr(Group4Tbl._Default[GrField4])='') then
+                                               XGrid.Cell(XGrid.RowCount,1).Value := GrField4 + ' НЕ УКАЗАНА !!!';
+                                             XGrid.Cells(XGrid.RowCount,1,XGrid.RowCount,Col).BkColor := VarAsInt(GroupColor[3]);
+                                             GoodsTbl.SetRange(ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2],Group3Tbl._Default[GrField3],Group4Tbl._Default[GrField4]),
+                                                               ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2],Group3Tbl._Default[GrField3],Group4Tbl._Default[GrField4]));
+                                             GoodsTbl.AddToXGrid(CtrlToVar(XGrid),'Det','Код;Товар;ЕдИзм;'+XGridSumFieldsStr,1,GoodsTbl.LineCount);
+                                             inc(GrLine4);
+                                           end;
+                                       end
+                                     else
+                                       begin
+                                         GoodsTbl.SetRange(ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2],Group3Tbl._Default[GrField3]),
+                                                           ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2],Group3Tbl._Default[GrField3]));
+                                         GoodsTbl.AddToXGrid(CtrlToVar(XGrid),'Det','Код;Товар;ЕдИзм;'+XGridSumFieldsStr,1,GoodsTbl.LineCount);
+                                       end;
+                                     inc(GrLine3);
+                                   end;
+
+                                end
+                              else
+                                begin
+                                  GoodsTbl.SetRange(ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2]),
+                                                    ArrayOf(Group1Tbl._Default[GrField1],Group2Tbl._Default[GrField2]));
+                                  GoodsTbl.AddToXGrid(CtrlToVar(XGrid),'Det','Код;Товар;ЕдИзм;'+XGridSumFieldsStr,1,GoodsTbl.LineCount);
+                                end;
+                              inc(GrLine2);
+                            end;
+                        end
+                      else
+                        begin
+                          GoodsTbl.SetRange(Group1Tbl._Default[GrField1],Group1Tbl._Default[GrField1]);
+                          GoodsTbl.AddToXGrid(CtrlToVar(XGrid),'Det','Код;Товар;ЕдИзм;'+XGridSumFieldsStr,1,GoodsTbl.LineCount);
+                        end;
+                      inc(GrLine1);
+                    end;
+                end
+              else
+                begin
+                  GoodsTbl.SortBy(GoodSortField);
+                  GoodsTbl.AddToXGrid(CtrlToVar(XGrid),'Det','Код;Товар;ЕдИзм;'+XGridSumFieldsStr,1,GoodsTbl.LineCount);
+                end;
+
+              GoodsTbl.CancelRange;
+              TotalSum := GoodsTbl.Total(XGridSumFieldsStr);
+              XGrid.AddSection('Empty');
+              XGrid.AddSection('Group');
+              XGrid.Cells(XGrid.RowCount,1,XGrid.RowCount,Col).BkColor := $00FFA0FF;;
+              XGrid.Cell(XGrid.RowCount,1).Value := 'Всего'; 
+              if WordCount(XGridSumFieldsStr,';')>1 then
+                begin
+                  for i:=4 to Col do
+                    XGrid.Cell(XGrid.RowCount,i).Value := TotalSum[i-4];
+                end
+              else
+                XGrid.Cell(XGrid.RowCount,i).Value := VarAsDec(TotalSum);
+
+              XGrid.FixedRowCount :=  SecondLevelHedRow+1;
+              XGrid.ColCount := Col;
+              for i:=4 to XGrid.ColCount do
+                begin
+                  if StrPos('Кол',ExtractWord(i-3,XGridSumFieldsStr,';'))<>0 then
+                    XGrid.Cells(SecondLevelHedRow+2,i,XGrid.RowCount,i).DisplayFormat := '0.#####';
+                  if (i-4) mod FirstLevelHedWidth = 0 then 
+                    XGrid.Cells(FirstLevelHedRow,i,XGrid.RowCount,i).BorderLeft := 2;
+                end;
+              XGrid.Cells(FirstLevelHedRow,XGrid.ColCount,XGrid.RowCount,XGrid.ColCount).BorderRight := 2;
+            end
+          else
+            ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+       end;
+   end;
+end;
+procedure WriteRepOptionsToDic(Dic:ICDictionary);
+const CheckedList = 'cbUseSaleDoc;cbUseRetDoc;cbUseCount;cbUseSum;cbUsePeriod;cbGroupInOut';
+var i:integer;
+    CurComponentName, DatesStr : string;
+    CurComponent : TComponent;
+    RepOptTbl : ICValueTable; 
+begin
+ RepOptTbl := CreateObject('ТаблицаЗначений');
+ RepOptTbl.AddColumn('TypeComponent',vtcString,50);
+ RepOptTbl.AddColumn('NameComponent',vtcString,50);
+ RepOptTbl.AddColumn('StrValue',vtcString,255);
+ RepOptTbl.AddColumn('IntValue',vtcInteger,0);
+ RepOptTbl.AddColumn('LinkValue',vtcLink,0);  
+ RepOptTbl.AddColumn('BlobValue',vtcBlob,0);
+ RepOptTbl.Open;
+ // TO4CheckBox
+ for i:=1 to WordCount(CheckedList,';') do
+   begin
+     CurComponentName := ExtractWord(i,CheckedList,';');
+     CurComponent := Form.FindComponent(CurComponentName);
+     if not IsNil(CurComponent) then
+       begin
+         RepOptTbl.Append;
+         RepOptTbl.TypeComponent := 'TO4CheckBox';
+         RepOptTbl.NameComponent := CurComponentName;
+         RepOptTbl.IntValue := VarAsInt((CurComponent as TO4CheckBox).Checked);
+         RepOptTbl.Post;
+       end;
+   end;  
+ // Edit Служащий, Посредник
+ if IsObjFocused(EmplDic) then
+  begin
+    RepOptTbl.Append;
+    RepOptTbl.TypeComponent := 'TO4Edit';
+    RepOptTbl.NameComponent := 'edEmpl';
+    RepOptTbl.LinkValue := EmplDic;
+    RepOptTbl.Post;
+  end;
+ if IsObjFocused(AgentDic) then
+  begin
+    RepOptTbl.Append;
+    RepOptTbl.TypeComponent := 'TO4Edit';
+    RepOptTbl.NameComponent := 'edAgent';
+    RepOptTbl.LinkValue := AgentDic;
+    RepOptTbl.Post;
+  end;
+ if IsObjFocused(PartnerDic) then
+  begin
+    RepOptTbl.Append;
+    RepOptTbl.TypeComponent := 'TO4Edit';
+    RepOptTbl.NameComponent := 'edPartner';
+    RepOptTbl.LinkValue := PartnerDic;
+    RepOptTbl.Post;
+  end;
+ // Разбивка по периодам
+ RepOptTbl.Append;
+ RepOptTbl.TypeComponent := 'TO4RadioGroup';
+ RepOptTbl.NameComponent := 'rgbPeriod';
+ RepOptTbl.IntValue := rgbPeriod.ItemIndex;
+ RepOptTbl.Post;  
+
+ // Сортировка товара
+ RepOptTbl.Append;
+ RepOptTbl.TypeComponent := 'TO4Edit';
+ RepOptTbl.NameComponent := 'edSortGood';
+ RepOptTbl.IntValue := edSortGood.ItemIndex;
+ RepOptTbl.Post;
+
+ // CheckBoxList
+ RepOptTbl.Append;
+ RepOptTbl.TypeComponent := 'ICValueTable';
+ RepOptTbl.NameComponent := 'GroupOptionsTbl';
+ RepOptTbl.BlobValue := GroupOptionsTbl.PackedData;
+ RepOptTbl.Post;
+
+ RepOptTbl.Append;
+ RepOptTbl.TypeComponent := 'ICValueTable';
+ RepOptTbl.NameComponent := 'DatesTbl';
+ RepOptTbl.BlobValue := DatesTbl.PackedData;
+ RepOptTbl.Post;
+
+ RepOptTbl.Append;
+ RepOptTbl.TypeComponent := 'TO4CheckListBox';
+ RepOptTbl.NameComponent := 'clbRegion';
+ RepOptTbl.StrValue := WriteRegionsToStr;
+ RepOptTbl.Post;
+
+ Dic.Edit;
+ Dic.Настройки := WritePropsToBlob(RepOptTbl);
+ Dic.Post;
+ Dic.ApplyUpdates;
+end;
+
+procedure tbSaveParams_Click(Sender: TObject);
+var DefName : string;
+    ReportOptionsDic, SelReportOptionsDic : ICDictionary;
+begin
+ SelReportOptionsDic := CreateObject('Справочники.НастройкиОтчетов');
+ SelReportOptionsDic.SetFieldFilter('Отчет','=',MasterRep.GetSign,'','',Null);
+ SelReportOptionsDic.Params['Отчет'] := MasterRep.GetSign;
+ if SelReportOptionsDic.SelectInForm('',DefName,False) then
+   begin
+     ReportOptionsDic := CreateObject('Справочники.НастройкиОтчетов');
+     if ReportOptionsDic.Find(SelReportOptionsDic) then
+       WriteRepOptionsToDic(ReportOptionsDic);
+   end;
+end;  
+
+procedure ReadRepOptionsFromDic(Dic:ICDictionary);
+var FindCheckBox : TO4CheckBox;
+    FindEdit : TO4Edit;
+    FindRadioGroup : TO4RadioGroup;
+    RepOptTbl : ICValueTable;
+    DateStr : string;
+    i,d : integer;
+begin
+  RepOptTbl := CreateTblFromBLOB(Dic.Настройки);
+  if not IsNil(RepOptTbl) then
+    begin
+      RepOptTbl.Select;
+      While RepOptTbl.SelectNext do
+        begin
+          case VarAsStr(RepOptTbl.TypeComponent) of
+            'TO4CheckBox' :
+              begin
+                FindCheckBox := (Form.FindComponent(VarAsStr(RepOptTbl.NameComponent)) as TO4CheckBox);
+                if not IsNil(FindCheckBox) and FindCheckBox.Enabled then
+                  FindCheckBox.Checked := VarAsBool(RepOptTbl.IntValue);
+              end;
+            'TO4Edit' :
+              begin
+                FindEdit := (Form.FindComponent(VarAsStr(RepOptTbl.NameComponent)) as TO4Edit);
+                if not IsNil(FindEdit) then
+                  begin
+                    case FindEdit.EditStyle of
+                     fesDropDownListBox :  FindEdit.ItemIndex := VarAsInt(RepOptTbl.IntValue);
+                     fesAction :
+                       begin
+                         case VarAsStr(RepOptTbl.NameComponent) of
+                           'edEmpl' :
+                             begin
+                               if IsNil(EmplDic) then
+                                 EmplDic := CreateObject('Справочники.Служащие');
+                               if EmplDic.Find(RepOptTbl.@LinkValue) then
+                                 edEmpl.Text := VarAsStr(EmplDic.NameField)
+                               else
+                                Nil(EmplDic);
+                             end;
+                           'edAgent' :
+                             begin
+                               if IsNil(AgentDic) then
+                                 AgentDic := CreateObject('Справочники.Служащие');
+                               if AgentDic.Find(RepOptTbl.@LinkValue) then
+                                 edAgent.Text := VarAsStr(AgentDic.NameField)
+                               else
+                                Nil(AgentDic);
+                             end;
+                           'edPartner' :
+                             begin
+                               if IsNil(PartnerDic) then
+                                 PartnerDic := CreateObject('Справочники.ЮрПартнеры');
+                               if PartnerDic.Find(RepOptTbl.@LinkValue) then
+                                 edPartner.Text := VarAsStr(PartnerDic.NameField)
+                               else
+                                Nil(PartnerDic);
+                             end;
+                         end;
+                       end;
+                    end;
+                  end;
+              end;
+            'TO4RadioGroup' :
+              begin
+                FindRadioGroup := (Form.FindComponent(VarAsStr(RepOptTbl.NameComponent)) as TO4RadioGroup);
+                if not IsNil(FindRadioGroup) then
+                  FindRadioGroup.ItemIndex := VarAsInt(RepOptTbl.IntValue);
+              end;  
+            'TO4CheckListBox' :
+              case VarAsStr(RepOptTbl.NameComponent) of
+               'clbRegion' : ReadRegionsFromStr(VarAsStr(RepOptTbl.StrValue));
+              end;
+            'ICValueTable' :
+              case VarAsStr(RepOptTbl.NameComponent) of
+                'DatesTbl' :
+                  begin
+                    DatesTbl.PackedData :=  RepOptTbl.BlobValue;
+                    RefreshDatesTbl;
+                  end; 
+                'GroupOptionsTbl' :
+                  begin    
+                    tmpGroupOptionsTbl.Clear;
+                    tmpGroupOptionsTbl.PackedData :=  RepOptTbl.BlobValue;
+                    FillGroupTbl(tmpGroupOptionsTbl);
+                  end;
+              end;
+          end;
+        end;
+    end;  
+ SetDocTypeCeckBoxEnableds;
+end;
+
+procedure tbOpenParams_Click(Sender: TObject);
+var DefName : string;
+    ReportOptionsDic : ICDictionary;
+begin
+ ReportOptionsDic := CreateObject('Справочники.НастройкиОтчетов');
+ ReportOptionsDic.SetFieldFilter('Отчет','=',MasterRep.GetSign,'','',Null);
+ ReportOptionsDic.Params['Отчет'] := MasterRep.GetSign;
+ if ReportOptionsDic.SelectInForm('',DefName,False) then
+   ReadRepOptionsFromDic(ReportOptionsDic);
+end;
+
+{$D-}
+procedure dbgGroup_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+ if GroupOptionsTbl.IsFocused and VarAsBool(GroupOptionsTbl.Checked) then
+   Index1 := 52;
+end;
+
+procedure dbgGroup_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if GroupOptionsTbl.IsFocused and (VarAsInt(GroupOptionsTbl.Color)<>0) then
+   begin
+     BackColor := VarAsInt(GroupOptionsTbl.Color);
+     if Highlight then
+       begin
+         DrawFont.Style := 1;   
+         DrawFont.Size := 10;  
+         //DrawFont.Color := clBlack;
+        end;
+   end
+end;
+{$D+}
+
+procedure TVSGroup_VPAAfterScroll(Sender: TObject);
+begin
+ if GroupOptionsTbl.IsFocused and VarAsBool(GroupOptionsTbl.Checked) then
+   begin
+     miGroupChecked.Caption := 'Снять отметку';
+     miGroupChecked.ImageIndex := 52;
+   end
+ else
+   begin
+     miGroupChecked.Caption := 'Отметить';
+     miGroupChecked.ImageIndex := -1;
+   end;
+end;
+
+procedure dbgGroup_DblClick(Sender: TObject);
+begin
+ if GroupOptionsTbl.IsFocused then
+   begin
+     GroupOptionsTbl.Edit;
+     GroupOptionsTbl.Checked  :=  not VarAsBool(GroupOptionsTbl.Checked);
+     GroupOptionsTbl.Post; 
+     TVSGroup_VPAAfterScroll(Form);
+   end;
+end;
+
+procedure tbColor_Click(Sender: TObject);
+begin
+ if GroupOptionsTbl.IsFocused then
+   begin
+    ColorDialog.Color := VarAsInt(GroupOptionsTbl.Color);
+    if ColorDialog.Execute then
+      begin
+        if ColorDialog.Color=0 then
+          ShowMessage('Только не черный!')
+        else   
+        if ColorDialog.Color=clWhite then
+          ShowMessage('Только не белый!')
+        else
+          begin
+            GroupOptionsTbl.Edit;
+            GroupOptionsTbl.Color  := ColorDialog.Color;
+            GroupOptionsTbl.Post;
+          end;
+      end;
+   end;
+end;
+
+procedure cbUseSaleDoc_Click(Sender: TObject);
+begin
+ SetDocTypeCeckBoxEnableds;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+SplOptions:TO4Splitter
+splCtg:TO4Splitter
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbPrint:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel4:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+XGridTools:TXGridTools
+pcOptions:TO4PageControl
+tsOptions:TTabSheet
+Label3:TO4Label
+Label2:TO4Label
+Splitter1:TO4Splitter
+Label7:TO4Label
+pnRegions:TO4Panel
+Panel6:TO4Panel
+btSelAllRegion:TO4Button
+btUnSelAllRegion:TO4Button
+clbRegion:TO4CheckListBox
+Panel2:TO4Panel
+Panel3:TO4Panel
+ToolBar1:TO4ToolBar
+tbGroupDown:TO4ToolButton
+ToolBar2:TO4ToolBar
+tbGroupUp:TO4ToolButton
+Panel7:TO4Panel
+ToolBar5:TO4ToolBar
+tbColor:TO4ToolButton
+dbgGroup:TO4DBGrid
+Panel1:TO4Panel
+Label5:TO4Label
+GroupBox2:TO4GroupBox
+edEmpl:TO4Edit
+GroupBox3:TO4GroupBox
+edAgent:TO4Edit
+GroupBox4:TO4GroupBox
+edPartner:TO4Edit
+ToolBar3:TO4ToolBar
+ToolButton5:TO4ToolButton
+tbSaveParams:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbOpenParams:TO4ToolButton
+ToolButton6:TO4ToolButton
+tsPeriod:TTabSheet
+Label6:TO4Label
+rgbPeriod:TO4RadioGroup
+pnHendPeriods:TO4Panel
+Label4:TO4Label
+tbDateList:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDel:TO4ToolButton
+tbSave:TO4ToolButton
+dbgDateList:TO4DBGrid
+pnOptions:TO4Panel
+gbTypeDoc:TO4GroupBox
+cbUseSaleDoc:TO4CheckBox
+cbUseRetDoc:TO4CheckBox
+cbGroupInOut:TO4CheckBox
+gbFields:TO4GroupBox
+cbUseCount:TO4CheckBox
+cbUseSum:TO4CheckBox
+GroupBox1:TO4GroupBox
+cbUsePeriod:TO4CheckBox
+ToolBar4:TO4ToolBar
+tbCtgVisible:TO4ToolButton
+GroupBox5:TO4GroupBox
+edSortGood:TO4Edit
+XGrid:TO4XGrid
+pGoodsCtg:TO4Panel
+Label1:TO4Label
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+TVSDateList:TO4TableValueSource
+TVSGroup:TO4TableValueSource
+ColorDialog:TO4ColorDialog
+pmGroup:TO4PopupMenu
+miGroupChecked:TO4MenuItem
+MenuItem2:TO4MenuItem
+miGroupColor:TO4MenuItem

@@ -1,0 +1,289 @@
+interface
+
+uses
+  System, DispIntf;
+
+function CheckAcc(var AccCode : string; Plan : ICPlan) : Boolean;
+function GetAnalitObjForSelect(AO, PartnerType : Integer; edAnalitObj : TO4Edit; var NameAn : string) : ICDictionary;
+
+procedure CreateTblSumByAcc(var TmpTbl : ICValueTable; DateFrom, DateTo : DateTime);
+function GetSumByAcc(V : Variant; ColumnName : string; TmpTbl : ICValueTable) : Decimal;
+procedure GetPeriodParams(DateFrom, DateTo : DateTime;
+  var IsRepYear, IsRepQuarter, IsRepMonth : Boolean;
+  var Period : string);
+procedure ChangePrevDates(ADateFrom, ADateTo : DateTime; var ADateFromPrev, ADateToPrev : DateTime);
+procedure GetPrevDate(ADate : DateTime; var AMonth, AYear : string);
+function GetSumBetweenAcc(Acc, CorAcc : Variant; FuncType : string;
+  DateFrom, DateTo : DateTime; Q : ICBhQuery) : Decimal;
+
+implementation
+
+function CheckAcc(var AccCode : string; Plan : ICPlan) : Boolean;
+var
+  i : Integer;
+  Res : string;
+  Acc : ICPlan;
+begin
+  if not ((StrPos('.', AccCode) <> 0) or (StrLength(AccCode) = 2)) then
+    begin
+      Res := StrCopy(AccCode, 1, 2);
+      for i := 3 to StrLength(AccCode) do
+        Res := Res + '.' + AccCode[i];
+      AccCode := Res;
+    end;
+  Acc := Plan.AccByCode(AccCode);
+  if Acc.IsFocused then
+    Result := True
+  else
+    begin
+      ShowMessage(Trans('—чет') + ' ' + AccCode + ' ' + Trans('отсутствует в плане счетов'));
+      Result := False;
+    end;
+end;
+
+function GetAnalitObjForSelect(AO, PartnerType : Integer; edAnalitObj : TO4Edit; var NameAn : string) : ICDictionary;
+var
+  AnalitObj, ‘ормаƒл€¬ыбора : string;
+  Analitica : ICDictionary;
+begin
+  case AO of
+    0 :
+      begin
+        Analitica := CreateObject('—правочники.“овары');
+        ‘ормаƒл€¬ыбора := '¬ыбор“овара';
+        NameAn := '“овар';
+      end;
+    1 :
+      begin
+        case PartnerType of
+          0 :
+            begin
+              Analitica := CreateObject('—правочники.ёрѕартнеры');
+              ‘ормаƒл€¬ыбора := '¬ыборѕартнера';
+            end;
+          1 :
+            begin
+              Analitica := CreateObject('—правочники.‘изЋица');
+              ‘ормаƒл€¬ыбора := '¬ыбор‘изЋица';
+            end;
+        end;
+        NameAn := 'ѕартнер';
+      end;
+    2 :
+      begin
+        Analitica := CreateObject('—правочники.—лужащие');
+        ‘ормаƒл€¬ыбора := '¬ыбор—лужащего';
+        NameAn := '—лужащий';
+      end;
+    3 :
+      begin
+        Analitica := CreateObject('—правочники.—клады');
+        ‘ормаƒл€¬ыбора := '¬ыбор—клада';
+        NameAn := '—клад';
+      end;
+    4 :
+      begin
+        Analitica := CreateObject('—правочники.–асч—чета');
+        ‘ормаƒл€¬ыбора := '¬ыбор–асч—четаѕредпри€ти€';
+        NameAn := '–асч.счет';
+      end;
+    5 :
+      begin
+        Analitica := CreateObject('—правочники.–еализаторы');
+        ‘ормаƒл€¬ыбора := '¬ыбор–еализатора';
+        NameAn := '–еализатор';
+      end;
+    6 :
+      begin
+        Analitica := CreateObject('—правочники.¬алюты');
+        ‘ормаƒл€¬ыбора := '¬ыбор¬алюты';
+        NameAn := '¬алюта';
+      end;
+  end;
+  if Analitica.SelectInForm(‘ормаƒл€¬ыбора, AnalitObj, Null) then
+    edAnalitObj.Text := AnalitObj;
+  Result := Analitica;
+end;
+
+procedure CreateTblSumByAcc(var TmpTbl : ICValueTable; DateFrom, DateTo : DateTime);
+var
+  i : Integer;
+  BI, BI1 : ICBuh;
+  Q, Q1 : ICBhQuery;
+begin
+  if IsNil(TmpTbl) then
+    begin
+      TmpTbl := CreateObject('“аблица«начений');
+      TmpTbl.AddColumn('—чет', vtcString, 20);
+      TmpTbl.AddColumn('—уммаƒебетЌач', vtcFft, 2);
+      TmpTbl.AddColumn('—умма редитЌач', vtcFft, 2);
+      TmpTbl.AddColumn('—уммаƒебет он', vtcFft, 2);
+      TmpTbl.AddColumn('—умма редит он', vtcFft, 2);
+      TmpTbl.AddColumn('—уммаƒебетќборот', vtcFft, 2);
+      TmpTbl.AddColumn('—умма редитќборот', vtcFft, 2);
+      TmpTbl.AddColumn('—уммаƒебетЌач–азв', vtcFft, 2);
+      TmpTbl.AddColumn('—умма редитЌач–азв', vtcFft, 2);
+      TmpTbl.AddColumn('—уммаƒебет он–азв', vtcFft, 2);
+      TmpTbl.AddColumn('—умма редит он–азв', vtcFft, 2);
+      TmpTbl.Open;
+    end
+  else
+    TmpTbl.Clear;
+
+  TmpTbl.SortBy('—чет');
+  BI := CreateObject('Ѕух”чет.Ѕухучет');
+  Q := BI.Query();
+  BI1 := CreateObject('Ѕух”чет.Ѕухучет');
+  Q1 := BI1.Query();
+
+  for i := 0 to 3 do
+    begin
+      Q.UseAcc(Unassigned);
+      Q.UseCorAcc(Unassigned);
+      Q.SetSubAccLevel(i, i);
+      Q.Run(DateFrom, DateTo + 1, prkNo, sfSumma);
+      Q.SelectAcc(0, 0, rfAll);
+      while Q.SelectAccNext(0) do
+        if not TmpTbl.Find(Q.Acc()) then
+          begin
+            TmpTbl.Append;
+            TmpTbl.—уммаƒебетЌач := Q.DS(sfSumma);
+            TmpTbl.—умма редитЌач := Q.CS(sfSumma);
+            TmpTbl.—уммаƒебет он := Q.DE(sfSumma);
+            TmpTbl.—умма редит он := Q.CE(sfSumma);
+            TmpTbl.—уммаƒебетќборот := Q.DR(sfSumma);
+            TmpTbl.—умма редитќборот := Q.CR(sfSumma);
+            TmpTbl.—чет := Q.Acc();
+            TmpTbl.Post;
+          end;
+
+      Q1.UseAcc(Unassigned);
+      Q1.UseCorAcc(Unassigned);
+      Q1.UseAO('ѕартнеры', Unassigned, False);
+      Q1.SetSubAccLevel(i, i);
+      Q1.Run(DateFrom, DateTo + 1, prkNo, sfSumma);
+      Q1.SelectAcc(0, 0, rfAll);
+      while Q1.SelectAccNext(0) do
+        if TmpTbl.Find(Q1.Acc()) then
+          begin
+            TmpTbl.Edit;
+            Q1.SelectAO(1, 0, 1, rfAll);
+            while Q1.SelectAoNext(1, 0) do
+              ;
+            TmpTbl.—уммаƒебетЌач–азв := Q1.DSx(sfSumma);
+            TmpTbl.—умма редитЌач–азв := Q1.CSx(sfSumma);
+            TmpTbl.—уммаƒебет он–азв := Q1.DEx(sfSumma);
+            TmpTbl.—умма редит он–азв := Q1.CEx(sfSumma);
+            TmpTbl.Post;
+          end;
+    end;
+end;
+
+function GetSumByAcc(V : Variant; ColumnName : string; TmpTbl : ICValueTable) : Decimal;
+begin
+  if TmpTbl.Find(V) then
+    Result := TmpTbl._Default[ColumnName]
+  else
+    Result := 0;
+end;
+
+procedure GetPeriodParams(DateFrom, DateTo : DateTime;
+  var IsRepYear, IsRepQuarter, IsRepMonth : Boolean;
+  var Period : string);
+var
+  m1, m2, d1, d2, y1, y2 : Integer;
+begin
+  IsRepYear := False;
+  IsRepQuarter := False;
+  IsRepMonth := False;
+  Period := '00';
+  DecodeDate(DateFrom, y1, m1, d1);
+  if not (d1 = 1) then
+    exit;
+  DecodeDate(DateTo + 1, y2, m2, d2);
+  if not (d2 = 1) then
+    exit;
+  case m2 - m1 of
+    1 :
+      begin
+        IsRepMonth := True;
+        if m1 < 10 then
+          Period := '0' + IntToStr(m1)
+        else
+          Period := IntToStr(m1);
+      end;
+    3 :
+      begin
+        if not ((m1 - 1) mod 3 = 0) then
+          exit;
+        IsRepQuarter := True;
+        Period := '0' + IntToStr((m1 - 1) div 3 + 1);
+      end;
+    0 :
+      begin
+        if not (m1 = 1) then
+          exit;
+        IsRepYear := (y2 - y1 = 1);
+      end;
+    -11 :
+      begin
+        if not (m1 = 12) then
+          exit;
+        IsRepMonth := True;
+        Period := '12';
+      end;
+    -9 :
+      begin
+        if not (m1 = 10) then
+          exit;
+        IsRepQuarter := True;
+        Period := '04';
+      end;
+  end;
+end;
+
+procedure GetPrevDate(ADate : DateTime; var AMonth, AYear : string);
+var
+  dd, mm, yyyy : Integer;
+begin
+  DecodeDate(ADate, yyyy, mm, dd);
+  if mm < 10 then
+    AMonth := '0' + IntToStr(mm)
+  else
+    AMonth := IntToStr(mm);
+  AYear := IntToStr(yyyy - 1);
+end;
+
+procedure ChangePrevDates(ADateFrom, ADateTo : DateTime; var ADateFromPrev, ADateToPrev : DateTime);
+var
+  Day, Month, Year : string;
+begin
+  GetPrevDate(ADateFrom, Month, Year);
+  ADateFromPrev := StrToDate('01.' + Month + '.' + Year);
+  GetPrevDate(ADateTo, Month, Year);
+  Day := IntToStr(DaysPerMonth(StrToInt(Month), IsLeapYear(StrToInt(Year))));
+  ADateToPrev := StrToDate(Day + '.' + Month + '.' + Year)
+end;
+
+function GetSumBetweenAcc(Acc, CorAcc : Variant; FuncType : string;
+  DateFrom, DateTo : DateTime; Q : ICBhQuery) : Decimal;
+begin
+  Result := 0;
+  Q.UseAcc(VarAsStr(Acc));
+  Q.UseCorAcc(VarAsStr(CorAcc));
+  Q.Run(DateFrom, DateTo + 1, prkNo, sfSumma);
+  Q.SelectAcc(0, 0, rfAll);
+  if Q.SelectAccNext(0) then
+    begin
+      Q.SelectCorAcc(0, 0, rfAll);
+      if Q.SelectCorAccNext(0) then
+        case FuncType of
+          'CR' :
+            Result := Q.CR(sfSumma);
+          'DR' : 
+            Result := Q.DR(sfSumma)
+        end;
+    end
+end;
+
+end.

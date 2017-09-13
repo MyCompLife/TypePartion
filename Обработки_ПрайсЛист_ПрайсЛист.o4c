@@ -1,0 +1,86 @@
+interface
+
+uses
+  System, DispIntf, Reports;
+
+implementation
+
+var
+  Tbl, TblDel : ICValueTable;
+  Doc : ICDocuments;
+  Options : ICOptions;
+  V : ICReport;
+  Today : DateTime;
+
+procedure CreateObjects;
+begin
+  Tbl := CreateObject('ТаблицаЗначений'); 
+  Tbl.Close;
+  Tbl.AddColumn('НомСтроки', lftString, 20);
+  Tbl.AddColumn('Код', lftString, 20);
+  Tbl.AddColumn('Товар', lftLink, 0);
+  Tbl.AddColumn('ЕдИзм', lftLink, 0);
+  Tbl.AddColumn('ОптЦена', lftFFT, 7);
+  Tbl.AddColumn('Цена', lftFFT, 7);
+  Tbl.AddColumn('CondField', lftFFT, 5);
+  Tbl.Open;     
+  Tbl.SetColumnFormat('Цена','0.00#####');
+  SetGoodsTblColumnsFormat(Tbl);
+  Options := CreateObject('ОпцииКлиента');
+end;
+
+procedure Run;
+var
+  CursorVis : TCursor;
+begin
+  try
+    SetCursor(CursorVis);
+    Tbl.Clear;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    Doc.SetSrvToClientPos;
+    Tbl.CopyDataToServer;
+    if not V.RunThreadProcess(server.GetRunReportEP(Tbl.SrvMean, Doc.SrvMean, VarAsBool(Options.GetServerPrm(ShowCodeUnitName))),
+                              'Подготовка данных!')   then
+    raise('Произошла ошибка!');
+    Tbl.CopyDataFromServer;
+
+    Tbl.SrvMean.Clear;
+    Tbl.SelectFirst;
+    Tbl.AddToXGrid(CtrlToVar(XGrid), 'Det', '-', 1, Tbl.LineCount);
+    XGrid.Cells(4, 1, XGrid.RowCount, 3).AdjustColWidths(0);
+    {XGrid.Cells(5, 5, XGrid.RowCount, 5).DisplayFormat := '0.00#####';
+    XGrid.Cells(5, 6, XGrid.RowCount, 6).DisplayFormat := '0.00#####';}
+
+    XGrid.Cells(1, 1, 1, 1).Value := VarAsStr(XGrid.Cells(1, 1, 1, 1).Value) + 'Дата формирования прайс листа: ' + DateToStr(Today);
+    XGrid.Cells(2, 1, 2, 1).Value := VarAsStr(XGrid.Cells(2, 1, 2, 1).Value) + 'Основание: ' + Doc.GetName + ' на '+ DateToStr(Doc.GetDate);
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  CreateObjects;
+  XGrid.AddSection('Hed');   
+  Today := CurrentDate;
+  Run;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  Doc := Params;
+  V := Mean;
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+begin
+XGrid.Print(V.GetActiveFormComment(), True);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+XGrid:TO4XGrid
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+Panel4:TO4Panel

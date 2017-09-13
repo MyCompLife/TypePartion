@@ -1,0 +1,125 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений, Пользователи;
+Var
+  PaysDoc : ICJournal;
+  CalcNum, FirstNum : Integer;
+  V: ICProcessing;
+  Date: DateTime;
+  LockDate: Boolean;
+  WorkTbl: ICValueTable;
+  User, UserTerminals: ICDictionary;
+
+implementation
+
+function GetTotalSums(Data: ICJournal): String;
+var
+  V : Variant;
+begin
+  Data.SrvAssignClientSelectParams;
+  Result := FormatFloat('0.00', server.GetTotalSumsSrv(Data.SrvMean));
+end;
+
+procedure GetWorkTbl;
+var
+  tmpTbl: ICValueTable;
+  TerminalsList: ICValueList;
+begin
+  WorkTbl.DisableControls;
+  WorkTbl.CancelRange;
+  WorkTbl.DoCalculation('Сумма','0');
+  tmpTbl := CreateObject('ValueTable');
+  tmpTbl.AddColumn('Терминал',vtcLink,0);
+  tmpTbl.AddColumn('Сумма',vtcFFT,2);
+  tmpTbl.Open;
+  TerminalsList := CreateObject('ValueList');
+  WorkTbl.GroupToList('Терминал', TerminalsList);
+  PaysDoc.SetFieldFilter('Терминал','=',TerminalsList,'','',null);
+  PaysDoc.Select;
+  while PaysDoc.SelectNext do
+    begin
+      WorkTbl.Append;
+      WorkTbl.AssignFields('Терминал;Сумма',PaysDoc);
+      WorkTbl.Post;
+    end;
+  WorkTbl.GroupBy('Терминал','Сумма');
+  WorkTbl.SortBy('Терминал');
+  WorkTbl.EnableControls;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+  Date := CurrentDate;
+  LockDate := true;
+  eDate.Enabled := GetUDASet('changedate');
+  eDate.Text := DateToStr(Date);
+  LockDate := false;
+  PaysDoc := CreateObject('Журналы.ЖурналПлатежейЭквайринга');
+  UserTerminals := CreateObject('Справочники.Терминалы');
+  UserTerminals.Select;
+  PaysDoc.SetDateRange(RoundDate(Date, rdDay, False), RoundDate(Date, rdDay, True));
+  //lSumma.Caption := GetTotalSums(PaysDoc);
+  WorkTbl := CreateObject('ValueTable');
+  WorkTbl.AddColumn('Терминал',vtcLink,0);
+  WorkTbl.AddColumn('Сумма',vtcFFT,2);
+  WorkTbl.AddColumn('ShowIndex',vtcInteger,0);
+  WorkTbl.Open;
+  WorkTbl.SetColumnFormat('Сумма','0.00');
+  WorkTbl.UseDataSource(CtrlToVar(TVS));
+  User := GetDictUser;
+  if User.IsFocused then
+    begin
+      if not V.HasParam('AllTerminals') then
+        UserTerminals.UseMasterAndSelect(User);
+      while UserTerminals.SelectNext do
+        begin
+          WorkTbl.Append;
+          WorkTbl.Терминал := UserTerminals;
+          WorkTbl.ShowIndex := 1;
+          WorkTbl.Post;
+        end;
+      if WorkTbl.LineCount = 0 then
+        begin
+          LockDate := true;
+          ShowMessage('Для Вашего пользователя не задан ни один терминал!');
+          exit;
+        end;
+    end
+  else
+    begin
+      LockDate := true;
+      ShowMessage('Ваш пользователь не определен!');
+      exit;
+    end;
+  GetWorkTbl;
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  //
+end;
+
+procedure eDate_Change(Sender: TObject);
+begin
+  if LockDate then
+    exit;
+  Date := StrToDate(eDate.Text);
+  PaysDoc.SetDateRange(RoundDate(Date, rdDay, False), RoundDate(Date, rdDay, True));
+  GetWorkTbl;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnGoodName:TO4Panel
+lbGoodName:TO4Label
+Label1:TO4Label
+eDate:TO4Edit
+pnNum:TO4Panel
+dbgData:TO4DBGrid
+Panel1:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+TVS:TO4TableValueSource

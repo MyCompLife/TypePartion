@@ -1,0 +1,99 @@
+interface
+
+uses
+ System, DispIntf, Расчеты, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений;
+
+implementation
+var
+  ReportTbl : ICValueTable;
+  TLF, ADR, RRR, MYF, Currency : ICDictionary;
+  Options : ICOptions;
+  User : ICDictionary;
+
+
+procedure Form_BeginPrint(PrintForm: TO4PrintForm);
+begin
+  ReportTbl := Form.GetParams[0];
+  User := Form.GetParams[1];
+
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  Currency := CreateObject('Справочники.Валюты');
+  Options := GetOptions;
+  PrintForm.Page.LeftMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('LeftMargin ПечатьСмена'), '5'));
+  PrintForm.Page.TopMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('TopMargin ПечатьСмена'), '5'));
+
+  ReportTbl.Select;
+  ReportTbl.SelectFirst;
+end;
+
+procedure Structure_ME_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  if VarAsStr(GetActiv(ADR, 'Город.Название', MYF)) <> '' then
+    Table.Value['ADDRESS'] := GetActiv(ADR, 'Город.Название', MYF) + ', ' + GetActiv(ADR, 'Адрес', MYF)
+  else
+    Table.Value['ADDRESS'] := GetActiv(ADR, 'Адрес', MYF);
+  Table.Value['PHONE'] := GetActiv(TLF, 'Номер', MYF);
+end;
+
+procedure Structure_Hed_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+ with Table do
+    begin
+     Value['Date'] := DateToStr(CurrentDateTime);
+     if VarAsBool(User.IsFocused) then
+       Value['Respons'] := User.NameField;
+     Value['Summa'] := ReportTbl.Total('Сумма');
+    end; 
+  ReportTbl.SortBy('НомСорт');
+  ReportTbl.Select;
+
+end;
+
+procedure Structure_Hed_Det_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  Accept := ReportTbl.SelectNext();
+  if not Accept then
+    Exit;
+  with Table do
+    begin
+      Value['Note'] := ReportTbl.НазвКупюры;
+      Value['Count'] := ReportTbl.Количество;
+      Value['Sum'] :=  ReportTbl.Сумма;
+    end;
+
+end;
+
+procedure Structure_Hed_Det_GetCount(Table: TRBTable; var Count: Integer);
+begin
+ Count := ReportTbl.LineCount;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndMyFirm:TRBBand
+Label41:TRBLabel
+Label6:TRBLabel
+Label16:TRBLabel
+bndDocHed:TRBBand
+Label1:TRBLabel
+lbDocDate:TRBLabel
+Label8:TRBLabel
+lbRespons:TRBLabel
+Band1:TRBBand
+Label27:TRBLabel
+Label29:TRBLabel
+Label32:TRBLabel
+dbndGoods:TRBDetailBand
+Label35:TRBLabel
+Label37:TRBLabel
+Label40:TRBLabel
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label81:TRBLabel
+Label7:TRBLabel
+Structure:TRBStructure

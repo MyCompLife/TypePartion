@@ -1,0 +1,86 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation
+
+Var
+  TblConsgGoodFilter, TblGoods, DocListTbl : ISValueTable;
+  Accs : ISAccs;
+  Constants : IS4VPAConst;
+  Part : Extended;
+  PTbl : ISValueTable;
+
+Procedure CreateSrvObjects(STblGoods, SDocListTbl: ISValueTable); server;
+begin
+  TblGoods := STblGoods;
+  DocListTbl := SDocListTbl;
+  Constants := GetConstants;
+end;
+
+Procedure GetReportData(i: Integer); server;
+var
+  TempTbl: ISValueTAble;
+  Fields: String;
+begin
+  Case i of
+   0: begin
+     Accs := CreateObject('Аккумуляторы.ОстаткиТоваров');
+     Fields := 'Товар;Склад;Партия;КолОбщ';
+   end;
+   1: begin
+     Accs := CreateObject('Аккумуляторы.ОстаткиТоваровНаРеализаторах');
+     Fields := 'Партнер;Товар;Партия;КолОбщ';
+   end;
+//   2: Accs := CreateObject('Аккумуляторы.ПартииТоваров');
+  end;
+  TempTbl := CreateObject('ТаблицаЗначений');
+  TblGoods.CopyColumnsTo(TempTbl);
+  TempTbl.Clear;
+  Accs.ClearFieldBuffers;
+  Accs.ClearFieldFilters;
+
+  Accs.AppendGroupRestToValueTable(400000,Fields,TempTbl);
+  TempTbl.SortBy('КолОбщ');
+  TempTbl.SetRange(-10000000, -0.00001);
+  TempTbl.Select;
+  TempTbl.AppendTo(Fields,TblGoods);
+  TblGoods.DoGetLinks('Код=Товар.Код');
+end;
+
+procedure GetDocsTable(i: Integer);
+var
+  PartionList : ISValueList;
+begin
+  PartionList := CreateObject('ValueList');
+  TblGoods.GroupToList('Партия',PartionList);
+  if PartionList.Count = 0 then
+    exit;
+  Accs.SetFieldFilter('Партия',PartionList);
+  Accs.OutcomeMotionWithMinus := True;
+  if i = 0 then
+    Accs.AppendGroupMotionToValueTable(0, 400000, amtBoth, 'Товар;Склад;MotionSign;'+
+           'Партия;Document;Date;СумОтп;СумОтпНДС;КолОбщ;СумВх;СумВхНДС;СумНац',-1, DocListTbl)
+  else
+    Accs.AppendGroupMotionToValueTable(0, 400000, amtBoth, 'Товар;MotionSign;'+
+           'Партия;Document;Date;СумОтп;СумОтпНДС;КолОбщ;СумВх;СумНац',-1, DocListTbl);
+  DocListTbl.DoGetLinks('Партнер=Document.Партнер');
+  DocListTbl.DoGetMeanNames('Document', 'DNames');
+  DocListTbl.DoCalculation('Цена', 'СумОтп/КолОбщ');
+  DocListTbl.Select;
+  while DocListTbl.SelectNext do
+    begin
+      DocListTbl.Edit;
+      DocListTbl.НазваниеПартнера := GetPartName(DocListTbl.Партнер);
+      DocListTbl.Post;
+    end;
+  DocListTbl.DoGetLinks('Отпуск=Document.Отпуск;НомерДокумента=Document.НомерДокумента');
+end;
+
+procedure SetScrollParams(i: Integer); server;
+begin
+  GetDocsTable(i);
+end;
+
+end.

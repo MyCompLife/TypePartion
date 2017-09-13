@@ -1,0 +1,124 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  UseLevels : Boolean;
+  Opt : ICOptions;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  server.InitSrvData;
+  eDate.Text := DateToStr(CurrentDate);
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+end;
+
+procedure miPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null)
+end;
+
+procedure eDate_Change(Sender : TObject);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  server.SetDate(StrToDateDef(eDate.Text, CurrentDateTime));
+  MasterData.Refresh;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure miSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+CtgPanel:TO4Panel
+dbtCtg:TO4DBTreeView
+tbrCtg:TO4ToolBar
+tbAddLevel:TO4ToolButton
+tbEditLevel:TO4ToolButton
+tbDelLevel:TO4ToolButton
+DataPanel:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tsSeparator:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton10:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+eDate:TO4Edit
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSelect:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter4:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+pmAddLevels:TO4PopupMenu
+pmiAddBros:TO4MenuItem
+pmiAddChild:TO4MenuItem
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem

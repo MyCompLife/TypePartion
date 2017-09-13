@@ -1,0 +1,77 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, Интерфейс;//, РаботаСТаблицамиЗначений, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  Journ: ISJournal;
+  Процент : Variant;
+
+procedure CalcTblDoc(PartTbl,BonusTbl:ISValueTable; DateFrom, DateTo : DateTime); server;
+begin
+  PartTbl.Clear;
+
+  Journ := CreateObject('Журналы.ЖурналЧеков');
+  Journ.SetDateRange(RoundDate(DateFrom, rdDay, False),RoundDate(DateTo, rdDay, true));
+  Journ.SetDocMultiStateRange('1;2');
+  Journ.Select;
+  while Journ.SelectNext do
+    begin
+      PartTbl.Append;
+      PartTbl.Партнер := Journ.Партнер;
+      PartTbl.СуммаЧек := Journ.Сумма;
+      PartTbl.СуммаВозврат := 0;     
+      PartTbl.Валюта := Journ.Валюта;
+      PartTbl.Курс := Journ.Валюта.GetTimedValue('КурсНаличный', CurrentDateTime);
+      PartTbl.Post;
+    end;
+
+  Journ := CreateObject('Журналы.ЖурналВозвратовОтПокупателя');
+  Journ.SetDateRange(RoundDate(DateFrom, rdDay, False),RoundDate(DateTo, rdDay, true));
+  Journ.SetDocMultiStateRange('1;2');
+  Journ.Select;
+  while Journ.SelectNext do
+    begin
+      PartTbl.Append;
+      PartTbl.Партнер := Journ.Партнер;
+      PartTbl.СуммаВозврат := - Journ.СуммаОпт;
+      PartTbl.СуммаЧек := 0;
+      PartTbl.Валюта := Journ.Валюта;                                           
+      PartTbl.Курс := Journ.Валюта.GetTimedValue('КурсНаличный', CurrentDateTime);
+      PartTbl.Post;
+    end;
+
+  PartTbl.GroupBy('Партнер;Валюта;Курс','СуммаЧек;СуммаВозврат;Процент;СумВознаграждения;СумВалВознаграждения');
+  PartTbl.DoCalculation('Сумма','СуммаЧек + СуммаВозврат');
+  PartTbl.DoCalculation('СумВалВознаграждения','СумВознаграждения*Курс');
+  if BonusTbl.LineCount = 0 then
+    exit;
+  PartTbl.Select;
+  while PartTbl.SelectNext do
+    begin
+      if PartTbl.Сумма <> 0 then
+        begin       
+          Процент := 0;
+          BonusTbl.SortBy('Сумма');
+          BonusTbl.Select;
+          while BonusTbl.SelectNext do
+            begin 
+              if PartTbl.Сумма >= BonusTbl.Сумма then
+                Процент := BonusTbl.Процент;
+            end;
+          if Процент <> 0 then
+            begin
+              PartTbl.Edit;
+              PartTbl.Процент := Процент;
+              PartTbl.СумВознаграждения := PartTbl.Сумма * (Процент/100);
+              PartTbl.Post;
+            end;
+        end;
+    end;
+
+  PartTbl.SortBy('Партнер');
+end;
+
+end.

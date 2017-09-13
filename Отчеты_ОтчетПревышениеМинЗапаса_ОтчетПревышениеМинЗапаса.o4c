@@ -1,0 +1,144 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  CursorVis : TCursor;
+  GoodsTbl, DocsTbl : ICValueTable;
+  V : ICReport;
+  GoodDict : ICDictionary;
+
+procedure SetGoodsTblColumns;
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn('Код', lftString, 20);
+  GoodsTbl.AddColumn('Товар', lftLink, 0);
+  GoodsTbl.AddColumn('ЕдИзм', lftLink, 0);
+  GoodsTbl.AddColumn('КолОбщ', lftFFt, 5);
+  GoodsTbl.AddColumn('КолНеопл', lftFFt, 5);
+  GoodsTbl.AddColumn('КолОпл', lftFFt, 5);
+  GoodsTbl.AddColumn('МинНал', lftFFt, 5);
+  GoodsTbl.AddColumn('Наличие', lftFFt, 5);
+  GoodsTbl.AddColumn('НехвОбщ', lftFFt, 5);
+  GoodsTbl.AddColumn('НехвНеопл', lftFFt, 5);
+  GoodsTbl.AddColumn('НехвОпл', lftFFt, 5);
+  GoodsTbl.Open();
+end;
+
+procedure SetGoodsTblColumnsFormat;
+begin
+  GoodsTbl.SetColumnFormat('КолОбщ', Constants.ФорматКол);
+  GoodsTbl.SetColumnFormat('КолОбщ', Constants.ФорматКол);
+  GoodsTbl.SetColumnFormat('КолНеопл', Constants.ФорматКол);
+  GoodsTbl.SetColumnFormat('КолОпл', Constants.ФорматКол);
+  GoodsTbl.SetColumnFormat('МинНал', Constants.ФорматКол);
+  GoodsTbl.SetColumnFormat('Наличие', Constants.ФорматКол);
+  GoodsTbl.SetColumnFormat('НехвОбщ', Constants.ФорматКол);
+  GoodsTbl.SetColumnFormat('НехвНеопл', Constants.ФорматКол);
+  GoodsTbl.SetColumnFormat('НехвОпл', Constants.ФорматКол);
+end;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  SetGoodsTblColumns;
+  SetGoodsTblColumnsFormat;
+
+  GoodDict := CreateObject('Справочники.Товары');
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  CreateObjects;
+  eDate.text := DateToStr(CurrentDate);
+  cbShowZero.Checked := False;
+  cbMinCount.Checked := False;
+  server.CreateSrvObjects;
+  GoodDict.OpenFormInplace('КатегорииТоваров', CtrlToVar(pGoodsCtg));
+  XGrid.AddSection('Hed');
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+begin
+  try
+    CursorVis := WaitCursorStart;
+    GoodsTbl.UseDataSource(0);
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer();
+    GoodDict.AssignSelectParamsOnSrv(Null);     
+    try
+      V.RunThreadProcess(server.GetRunReportEP(GoodsTbl.SrvMean, GoodDict.SrvMean, StrToDate(eDate.Text),
+        cbShowZero.Checked, cbMinCount.Checked, VarAsBool(Options.GetServerPrm(ShowCodeUnitName))),
+        ReportRunning);
+      GoodsTbl.CopyDataFromServer();
+    finally
+      GoodsTbl.SrvMean.Clear;
+    end;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Det', '-', 0, GoodsTbl.LineCount); 
+    XGrid.Cells(4, 1, XGrid.RowCount, 3).AdjustColWidths(0);
+    XGrid.FixedColCount := 3;
+    if XGrid.RowCount > 4 then
+      XGrid.FixedRowCount := 4;
+    XGrid.Cell(1, 1).Value := XGrid.Cell(1, 1).Value + ' на ' + eDate.Text;
+  finally
+    SetCursor(CursorVis);
+  end;
+  tbPrint.Enabled := True;
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(V.GetActiveFormComment(), True);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+Label3:TO4Label
+eDate:TO4Edit
+cbShowZero:TO4CheckBox
+cbMinCount:TO4CheckBox
+Panel2:TO4Panel
+Label1:TO4Label
+Splitter1:TO4Splitter
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+pGoodsCtg:TO4Panel
+Label2:TO4Label
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+TableValueSource1:TO4TableValueSource

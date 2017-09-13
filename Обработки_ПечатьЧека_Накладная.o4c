@@ -1,0 +1,232 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+  Constants : IC4VPAConst;
+  Tbl : ICValueTable;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  Constants := GetConstants;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  MYF.Select;
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  TmpPartner : ICDictionary;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        begin
+          TmpPartner := MasterData.Партнер;
+          if (TmpPartner.GetSign() = 'Реализаторы') then
+            if MasterData.HasField('Покупатель') and VarAsBool(MasterData.@Покупатель.IsFocused) then
+              TmpPartner := MasterData.Покупатель
+            else
+              TmpPartner := TmpPartner.Партнер;
+          if VarAsBool(TmpPartner.IsFocused) then
+            begin
+              Value['PARTADDR'] := GetActiv(ADR, 'ПочтИндекс', TmpPartner) + ', ' +
+                GetActiv(ADR, 'Город.Название', TmpPartner) + ', ' +
+                GetActiv(ADR, 'Адрес', TmpPartner);
+              Value['PARTPHONE'] := '(' + GetActiv(TLF, 'КодГорода', TmpPartner) + ') ' +
+                GetActiv(TLF, 'Номер', TmpPartner);
+              Value['PARTNAME'] := GetPartName(TmpPartner, 0)
+            end;
+        end;
+      Value['Summa'] := MasterData.Сумма;
+      Value['SumNT'] := MasterData.Сумма; 
+      Value['Cnt'] := MasterData.КолОбщ;
+      //Value['Tax'] := 0;
+    end;
+  MasterData.SaveContents('', Tbl);
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*Цена');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Товар');
+  Tbl.Select;
+  lbSumInWord.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058); //C_GRN,C_KOP,True);
+//  lResp.Caption := GetShortPartName(MasterData.Ответственный);
+end;
+            
+
+
+function GetUrAddress(DIC, MST : ICDictionary) : ICDictionary;
+begin
+  nil(Result);
+  if (not IsNil(DIC)) and IsObjFocused(MST) then
+    begin
+      if VarAsBool(MST.HasField('Партнер')) then
+        Result := GetActiveLink(DIC, MST.Партнер);
+      if not IsNil(Result) then
+        exit;
+      DIC.UseMasterAndSelect(MST);
+      if DIC.FindByField('Юридический', true, False) then
+        Result := DIC;
+    end;
+end;   
+
+function GetPsAddress(DIC, MST : ICDictionary) : ICDictionary;
+begin
+  nil(Result);
+  if (not IsNil(DIC)) and IsObjFocused(MST) then
+    begin
+      if VarAsBool(MST.HasField('Партнер')) then
+        Result := GetActiveLink(DIC, MST.Партнер);
+      if not IsNil(Result) then
+        exit;
+      DIC.UseMasterAndSelect(MST);
+      if DIC.FindByField('Активность', true, False) then
+        Result := DIC;
+    end;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  Bank : ICDictionary;
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  Accept := False;
+  with Table do
+    begin
+      GetUrAddress(ADR,MYF);
+      Value['ADDRESS'] := ADR.ПочтИндекс + ', ' + ADR.Город.Название + ', ' + ADR.Адрес;
+      GetPsAddress(ADR,MYF);
+      Value['AddressNoAct'] := ADR.ПочтИндекс + ', ' + ADR.Город.Название + ', ' + ADR.Адрес;
+      if not IsNull(Value['BankTown']) then
+        Value['BankName'] := Value['BankName'] + ',' + Value['BankTown'];
+      Value['PayAccNum'] := Value['PayAccNum'] + ' в ' + Value['BankName'];
+    end;
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+      Value['PriceNT'] := Tbl.Цена;
+      Value['Price'] := Tbl.Цена;
+      Value['SummaStr'] := Tbl.СуммаСтроки;
+    end;
+end;
+
+procedure bndFtMinus_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Accept := (MasterData.СуммаСкидкиНадбавки < 0);
+end;
+
+procedure bndFtPlus_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Accept := (MasterData.СуммаСкидкиНадбавки > 0);
+end;
+
+procedure bndFtTTV_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Accept := False;
+  if MasterData.HasField('СуммаТрансп') then
+    Accept := MasterData.СуммаТрансп <> 0;
+end;
+
+procedure bndFtMassa_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Accept := MasterData.HasField('ОбщаяМасса') and MasterData.HasField('ОбщаяПлощадь');
+  if not Accept then
+    exit;
+  Accept := (MasterData.ОбщаяМасса <> 0) or (MasterData.ОбщаяПлощадь <> 0);
+end;
+
+procedure Structure1_ROOT_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+dbPicture:TRBDetailBand
+imgLogo:TRBImage
+dbTop:TRBDetailBand
+dbMe:TRBDetailBand
+lblMe:TRBLabel
+Label50:TRBLabel
+dbPartner:TRBDetailBand
+lblPart:TRBLabel
+Label94:TRBLabel
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label32:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label40:TRBLabel
+SysData1:TRBSysData
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label79:TRBLabel
+Label80:TRBLabel
+Label81:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+bndFtDET:TRBBand
+Label47:TRBLabel
+lbSumInWord:TRBLabel
+Label49:TRBLabel
+lResp:TRBLabel
+Label7:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+dbPartnerAdr:TRBDetailBand
+Label8:TRBLabel
+Label9:TRBLabel
+Label1:TRBLabel
+Label4:TRBLabel
+Label3:TRBLabel
+Label2:TRBLabel
+dbMeReq:TRBDetailBand
+Label58:TRBLabel
+Label59:TRBLabel
+Label62:TRBLabel
+Label63:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+dbMeBank:TRBDetailBand
+Label10:TRBLabel
+Label18:TRBLabel
+dbMeAdr:TRBDetailBand
+Label51:TRBLabel
+Label57:TRBLabel
+DetailBand1:TRBDetailBand
+Label11:TRBLabel
+Label12:TRBLabel
+Structure1:TRBStructure

@@ -1,0 +1,163 @@
+object Form: TO4Form
+  Left = 48
+  Top = 16
+  Width = 350
+  Height = 164
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = ()
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    1
+    'Отмена'
+    'btCancel.Hint'
+    1
+    ''
+    'btOK.Caption'
+    1
+    'Удалить все документы'
+    'btOK.Hint'
+    1
+    ''
+    'edDate.EditMask'
+    1
+    ''
+    'edDate.Hint'
+    1
+    ''
+    'edDate.Period.StrStartDate'
+    1
+    '06.12.2016'
+    'edDate.Period.Text'
+    1
+    ''
+    'edDate.Text'
+    1
+    ''
+    'edEmpl.EditMask'
+    1
+    ''
+    'edEmpl.Hint'
+    1
+    ''
+    'edEmpl.Period.StrStartDate'
+    1
+    '06.12.2016'
+    'edEmpl.Period.Text'
+    1
+    ''
+    'edEmpl.Text'
+    1
+    ''
+    'Label1.Caption'
+    1
+    'На дату'
+    'Label1.Hint'
+    1
+    ''
+    'Label2.Caption'
+    1
+    
+      'Перед удалением все документов создайте резервную копию базы дан' +
+      'ных !!!'
+    'Label2.Hint'
+    1
+    ''
+    'Label3.Caption'
+    1
+    'Ответственный'
+    'Label3.Hint'
+    1
+    '')
+  Translat.LangDict.Cols = ()
+  Translat.LangDict.Words = ()
+  BorderStyle = bsDialog
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnExecute.EventName = 'Form_Execute'
+  object Label1: TO4Label
+    Left = 59
+    Top = 54
+    Width = 43
+    Height = 13
+    Caption = 'До даты'
+  end
+  object Label2: TO4Label
+    Left = 1
+    Top = 1
+    Width = 348
+    Height = 32
+    Align = alTop
+    Alignment = taCenter
+    Caption = 
+      'Перед удалением всех документов создайте резервную копию базы да' +
+      'нных !!!'
+    Color = clBtnFace
+    Font.Charset = RUSSIAN_CHARSET
+    Font.Color = clRed
+    Font.Height = -13
+    Font.Name = 'MS Sans Serif'
+    Font.Style = [fsBold]
+    ParentColor = False
+    ParentFont = False
+    WordWrap = True
+  end
+  object Label3: TO4Label
+    Left = 22
+    Top = 76
+    Width = 79
+    Height = 13
+    Caption = 'Ответственный'
+  end
+  object edDate: TO4Edit
+    Left = 106
+    Top = 51
+    Width = 130
+    Height = 21
+    EditStyle = fesDate
+    PasswordChar = #0
+    Period.Enabled = False
+    Period.StrStartDate = '06.12.2016'
+    TabOrder = 0
+  end
+  object btOK: TO4Button
+    Left = 46
+    Top = 123
+    Width = 185
+    Height = 25
+    Caption = 'Удалить все документы до даты'
+    Default = True
+    ModalResult = 1
+    TabOrder = 1
+    WordWrap = False
+    O4Action = actSave
+    VPAOnClick.EventName = 'btOK_Click'
+  end
+  object btCancel: TO4Button
+    Left = 237
+    Top = 123
+    Width = 75
+    Height = 25
+    Cancel = True
+    Caption = 'Отмена'
+    ModalResult = 2
+    TabOrder = 2
+    WordWrap = False
+    O4Action = actCancel
+  end
+  object edEmpl: TO4Edit
+    Left = 106
+    Top = 74
+    Width = 230
+    Height = 21
+    EditStyle = fesAction
+    PasswordChar = #0
+    Period.Enabled = False
+    Period.StrStartDate = '06.12.2016'
+    ReadOnly = True
+    TabOrder = 3
+    VPAOnActionClear.EventName = 'edEmpl_ActionClear'
+    VPAOnActionExecute.EventName = 'edEmpl_ActionExecute'
+  end
+end

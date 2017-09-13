@@ -1,0 +1,111 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV  : ICWriNums;
+  Tbl  : ICValueTable;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+end;
+
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  bcNumDoc.Text := '*01'+ AlignStr(VarAsStr(MasterData.NumID),6);
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар;Цена', 'Количество');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Товар');
+  Tbl.Select;
+  with Table do
+    begin
+     Value['NUMBER'] := MasterData.НомерДокумента;
+     Value['Partner'] := MasterData.Партнер.ПолноеНазвание;
+     Value['Respons'] := MasterData.Ответственный.ПолноеНазвание;
+     Value['Date'] := DateToStr(MasterData.ДатаДокумента);
+     Value['Time'] := TimeToStr(MasterData.ДатаДокумента);
+     Value['Summa'] := MasterData.Сумма;
+     Value['DocCnt'] := Tbl.Total('Количество');
+     BandDiscount.Visible := false;
+    end;
+end;
+
+procedure Structure1_ME_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin          
+  MYF.Params['Region'] := MasterData.Регион;
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  if VarAsStr(GetActiv(ADR, 'Город.Название', MYF)) <> '' then
+    Table.Value['ADDRESS'] := GetActiv(ADR, 'Город.Название', MYF) + ', ' + GetActiv(ADR, 'Адрес', MYF)
+  else
+    Table.Value['ADDRESS'] := GetActiv(ADR, 'Адрес', MYF);
+  if VarAsStr(GetActiv(TLF, 'КодГорода', MYF)) <> '' then
+    Table.Value['PHONE'] := '(' + GetActiv(TLF, 'КодГорода', MYF) + ') ' + GetActiv(TLF, 'Номер', MYF)
+  else
+    Table.Value['PHONE'] := GetActiv(TLF, 'Номер', MYF);
+
+  Table.Value['Site'] := MYF.Сайт;
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+var
+  GoodName: String;
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then Exit;
+  GoodName := Tbl.DefValue['Товар'];
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := GoodName;
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+      Value['Price'] := Tbl.Цена;
+      Value['SummaStr'] :=  Tbl.Количество*Tbl.Цена;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand2:TRBDetailBand
+Label7:TRBLabel
+bndHdDet:TRBBand
+Label27:TRBLabel
+Label29:TRBLabel
+Label31:TRBLabel
+Label32:TRBLabel
+dbndGoods:TRBDetailBand
+Label35:TRBLabel
+Label37:TRBLabel
+Label39:TRBLabel
+Label40:TRBLabel
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label81:TRBLabel
+BandDiscount:TRBBand
+lbSum:TRBLabel
+Band2:TRBBand
+Label1:TRBLabel
+Label84:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+bcNumDoc:TRBBarCode
+Structure1:TRBStructure

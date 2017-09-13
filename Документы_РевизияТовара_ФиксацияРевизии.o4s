@@ -1,0 +1,119 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€CL, ‘иксаци€ѕрибыли»«атрат;
+
+implementation
+
+var
+  AccsGoods, AccsPart, AccsPartGood, AccsGoodCurrent, AccsGoodMotion, AccsInOutCome : ISAccs;
+  ApplyTbl : ISValueTable;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc:ISDocuments);
+var
+  DocDate : DateTime;
+  InSum, Col : Decimal;
+  Dimensions, Fields, Resources: Variant;
+  Currency: ISDictionary;
+  PartGoodID : Double;
+begin
+//--------------------------------—писание товаров-----------------------------------
+  SetFldToApplyTbl(ApplyTbl);
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+    if not VarAsBool(Doc.“овар.”слуга) and VarAsBool(Doc. оличество < 0) then
+      CreateApplyTableExternal(Doc.“овар, Doc, ApplyTbl, AccsGoods, AccsPartGood);
+  ApplyTbl.DoCalculation(' олќбщ','- олќбщ');
+  ApplyTbl.DoCalculation('—ум¬х','-—ум¬х');
+  ApplyTbl.DoCalculation('—ум¬хЌƒ—','-—ум¬хЌƒ—');
+  ApplyTbl.DoCalculation('—умќтп','-—умќтп');
+  ApplyTbl.DoCalculation('—умќтпЌƒ—','-—умќтпЌƒ—');
+  ApplyTbl.DoCalculation('—умЌац','-—умЌац');
+  ApplyTbl.DoCalculation('—ум¬ал¬х','-—ум¬ал¬х');
+  ApplyTbl.DoCalculation('—ум¬алќтп','-—ум¬алќтп');
+  ApplyTbl.DoCalculation('—ум¬алЌац','-—ум¬алЌац');
+  InSum    := ApplyTbl.Total('—ум¬х');
+  ApplyTbl.Select;
+  While ApplyTbl.SelectNext do
+    begin
+      //----oстатки товаров-----------------------------------------------
+      MakeGoodMotion(AccsGoods, ApplyTbl, ApplyTbl.ѕарти€, midRevision);
+      //----остатки товара на сегодн€-------------------------------------
+      MakeGoodMotionCurrent(AccsGoodCurrent, Doc, ApplyTbl, midRevision, ApplyTbl. олќбщ);
+      //----партии товаров------------------------------------------------
+      RestructureExistedConsg(Doc, AccsPartGood, amtOutcome, ApplyTbl, ' олќбщ');
+      //  прибыль/расход
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions := ArrayOf(ApplyTbl.“овар,Doc.ќтветственный ,Doc.—тать€,ApplyTbl.¬алюта“овара);
+      Resources  := ArrayOf(-ApplyTbl.—ум¬ал¬х, -ApplyTbl. олќбщ, -ApplyTbl.—ум¬ал¬х*VarAsDec(ApplyTbl. урс“овара));
+      Fields     := ArrayOf(ApplyTbl. урс“овара);
+      AccsInOutCome.OutcomeDirect(Doc, Doc.ƒатаƒокумента, 0, Dimensions, Resources, Fields);
+    end;
+//--------------------------------ѕриход товаров-----------------------------------
+  ApplyTbl.Clear;
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+    if not VarAsBool(Doc.“овар.”слуга) and VarAsBool(Doc. оличество > 0) then
+      CreateApplyTableInExternal(Doc.“овар, Doc, ApplyTbl, AccsGoods, AccsPartGood);
+
+  ApplyTbl.Select;
+  While ApplyTbl.SelectNext do
+    begin
+      PartGoodID := ApplyTbl.ѕарти€;
+      if PartGoodID = 0 then
+        PartGoodID := AppendGoodsConsignAtIncome(ApplyTbl, Doc, AccsPartGood);
+      //----oстатки товаров-----------------------------------------------
+      MakeGoodMotion(AccsGoods, ApplyTbl, PartGoodID, midRevision);
+      //----остатки товара на сегодн€-------------------------------------
+      MakeGoodMotionCurrent(AccsGoodCurrent, Doc, ApplyTbl, midRevision, ApplyTbl. олќбщ);
+      //----партии товаров------------------------------------------------
+      RestructureExistedConsg(Doc, AccsPartGood, amtIncome, ApplyTbl, ' олќбщ');
+       //  прибыль/расход
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions := ArrayOf(ApplyTbl.“овар,Doc.ќтветственный ,Doc.—тать€,ApplyTbl.¬алюта“овара,Doc.–егион);
+      Resources  := ArrayOf(ApplyTbl.—ум¬ал¬х,ApplyTbl. олќбщ,ApplyTbl.—ум¬х);
+      Fields     := ArrayOf(ApplyTbl. урс“овара);
+      AccsInOutCome.IncomeDirect(Doc, Doc.ƒатаƒокумента, 0, Dimensions, Resources, Fields);
+    end;
+
+  InSum    :=  InSum + ApplyTbl.Total('—ум¬х');
+
+  Doc.Edit;
+  Doc.—умма¬х := InSum;  
+  if VarAsDec(Doc. урс)>0 then
+    Doc.—умма¬х¬¬алюте := VarAsDec(Doc.—умма¬х) / VarAsDec(Doc. урс);
+  Doc.Post;
+end;
+
+procedure GetChangeStateUpEP (Doc : ISDocuments); server;
+begin
+  AccsGoods := CreateObject('јккумул€торы.ќстатки“оваров');
+  ApplyTbl := CreateObject('“аблица«начений');
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+  AccsInOutCome := CreateObject('јккумул€торы.ƒоходы–асходы');
+  ChangeStateUp(Doc)
+end; 
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccsGoods := CreateObject('јккумул€торы.ќстатки“оваров');
+        ApplyTbl := CreateObject('“аблица«начений');
+        AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+        AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+        AccsInOutCome := CreateObject('јккумул€торы.ƒоходы–асходы');
+        ChangeStateUp(Doc);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.

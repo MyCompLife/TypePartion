@@ -1,0 +1,78 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure FillDoc(tblContents: ISValueTable; dateFrom, dateTo: DateTime; dicRegions: ISDictionary);server;
+var
+  accsGood: ISAccs;
+  tblTemp, tblTab, tblEmpl: ISValueTable;
+  dicTab: ISDictionary;
+  Sum, curSum, allTime, MinSum, curMinSum: Decimal; 
+  journ: ISJournal;
+begin 
+
+  dateFrom := RoundDate(dateFrom,rdDay,false);
+  dateTo := RoundDate(dateTo,rdDay,true)-0.0001;
+
+  journ := CreateObject('Журналы.ЖурналЧеков');
+  journ.SetDateRange(dateFrom, dateTo);
+  journ.SetRangeByField('Регион',dicRegions);
+
+  dicTab := CreateObject('Справочники.ТабельРабочегоВремени');
+  dicTab.SetFieldFilter('Дата','>=',dateFrom,'and','<=',dateTo);
+  dicTab.Select;
+  tblTab := CreateObject('ValueTable');
+  dicTab.SaveToValueTable('Служащий;Время',tblTab,0,dicTab.RecordCount);
+
+  tblEmpl := CreateObject('ValueTable');
+  tblEmpl.AddColumn('Служащий',vtcLink,0);
+  tblEmpl.AddColumn('Время',vtcFFt,2);
+  tblEmpl.AddColumn('Регион',vtcLink,0);
+  tblEmpl.Open;
+
+  tblTab.AppendTo('Служащий;Время',tblEmpl);
+  tblEmpl.GroupBy('Служащий','Время');
+  tblEmpl.DoGetLinks('Регион=Служащий.Регион');
+  tblEmpl.SortBy('Регион');
+  tblEmpl.SetRange(dicRegions,dicRegions);
+  tblEmpl.Select;
+
+  allTime := tblEmpl.Total('Время');
+  Sum := journ.Total('Сумма') * dicRegions.ПроцентНачисленияЗП /100 ;
+  curSum := journ.Total('СуммаВал') * dicRegions.ПроцентНачисленияЗП /100 ;
+  if allTime <> 0 then    
+    begin
+      MinSum := Sum/allTime;
+      curMinSum := curSum/allTime;
+    end;
+  tblEmpl.AppendTo('Служащий;Время=ОтрабЧасы',tblContents);
+  tblContents.Select;
+  while tblContents.SelectNext do
+    begin
+      tblContents.Edit;
+      tblContents.СуммаСтроки := tblContents.ОтрабЧасы * MinSum;    
+      tblContents.СуммаСтрокиВал := tblContents.ОтрабЧасы * curMinSum;
+      if Sum <> 0 then
+        tblContents.ПроцентЗП := tblContents.СуммаСтроки / Sum * 100;
+      tblContents.ОтрабЧасыСтр := DecToStr(DecInt(tblContents.ОтрабЧасы),0) + ':' + DecToStr(DecFrac(tblContents.ОтрабЧасы)*60,0);
+      tblContents.Post;
+    end;
+end;       
+
+procedure ChangeTbl(TblContents: ISValueTable; Percent, CourseDoc : Decimal; TypePrice, CurrencyCodeDoc: String; DateDoc: DateTime); server;
+var
+  Course: Decimal;
+begin
+  TblContents.Select;
+  While TblContents.SelectNext do
+    begin
+      TblContents.Edit;
+      TblContents.Цена := TblContents.ЦенаБезСкидкиНадбавки*(1 + Percent);
+      TblContents.Post;
+    end;
+end;
+
+end.

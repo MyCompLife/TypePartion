@@ -1,0 +1,39 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  PaysIn, PaysOut : ISJournal;
+
+procedure OrderCalcFields(Order : ISJournal);
+begin
+  if Order.GetDocSign = 'НакладнаяОтпуска' then
+    begin
+      PaysOut.UseMaster(Order);
+      Order.Оплачено := PaysOut.Total('Сумма');
+      PaysOut.UseMaster(Null);
+      Order.Должны := Order.Сумма - Order.Оплачено;
+    end
+  else
+    if Order.GetDocSign = 'НакладнаяПрихода' then
+      begin
+        PaysIn.UseMaster(Order);
+        Order.Оплачено := PaysIn.Total('Сумма');
+        PaysIn.UseMaster(Null);
+        Order.Должны := Order.Сумма - Order.Оплачено;
+      end;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  PaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  PaysIn.SetDocMultiStateRange('1;2;');
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+end.

@@ -1,0 +1,104 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+function AddCollectionToList(var ColCurrent : ICCollection; DoCreate : Boolean = False;
+  CollSign : string = '') : string;
+function GenerateNewCollElem(var ColCurrent : ICCollection; CollComment : string) : Boolean;
+procedure ChangeCollectionField(ColCurrent : ICCollection; ObjData : IObject;
+  FieldName, CollComment : string);
+procedure CreateCollectionTbl(var TblCurrCollection : ICValueTable; ColCurrent : ICCollection;
+  NameLength, CommentLength : Integer = 50);
+procedure CreateCollObjectsTable(var TblCurrCollection : ICValueTable; ColCurrent : ICCollection);
+
+implementation
+
+function GenerateNewCollElem(var ColCurrent : ICCollection; CollComment : string) : Boolean;
+var
+  i : Integer;
+begin
+  ColCurrent := CreateObject('Коллекции.' + ColCurrent.GetSign);
+  ColCurrent.Select;
+  Result := not ColCurrent.FindByComment(CollComment, False);
+  if Result then // генерация нового элемента
+    begin
+      i := 0;
+      if ColCurrent.Select and ColCurrent.SelectNext then
+        while ColCurrent.Find('Sign' + IntToStr(i)) do
+          inc(i);
+      ColCurrent.Change('Sign' + IntToStr(i), CollComment);
+      ColCurrent.ApplyUpdates;
+    end;
+end;
+
+function AddCollectionToList(var ColCurrent : ICCollection; DoCreate : Boolean = False;
+  CollSign : string = '') : string;
+begin
+  if DoCreate then
+    ColCurrent := CreateObject('Collections.' + CollSign);
+  ColCurrent.Select;
+  Result := '';
+  while ColCurrent.SelectNext do
+    Result := Result + #13#10 + ColCurrent.Value;
+  if Result <> '' then
+    StrDelete(Result, 1, 2);
+end;
+
+//Внесение изменений в Коллекции из Edit
+
+procedure ChangeCollectionField(ColCurrent : ICCollection; ObjData : IObject;
+  FieldName, CollComment : string);
+begin
+  CollComment := StrTrim(CollComment);
+  if GenerateNewCollElem(ColCurrent, CollComment) then
+    if ColCurrent.FindByComment(CollComment, False) then
+      ObjData._Default[FieldName] := ColCurrent
+    else
+      ObjData._Default[FieldName] := Null
+  else
+    ObjData._Default[FieldName] := ColCurrent;
+end;
+
+procedure CreateCollectionTbl(var TblCurrCollection : ICValueTable;
+  ColCurrent : ICCollection;
+  NameLength, CommentLength : Integer = 50);
+begin
+  if IsNil(TblCurrCollection) then
+    TblCurrCollection := CreateObject('ValueTable')
+  else
+    TblCurrCollection.Close;
+  TblCurrCollection.AddColumn('Name', vtcString, NameLength);
+  TblCurrCollection.AddColumn('Comment', vtcString, CommentLength);
+  TblCurrCollection.Open;
+  ColCurrent.Select;
+  while ColCurrent.SelectNext do
+    begin
+      TblCurrCollection.Append;
+      TblCurrCollection.Name := ColCurrent.ValueSign;
+      TblCurrCollection.Comment := ColCurrent.Value;
+      TblCurrCollection.Post;
+    end;
+  TblCurrCollection.SortBy('Comment');
+  TblCurrCollection.Select;
+end;
+
+procedure CreateCollObjectsTable(var TblCurrCollection : ICValueTable; ColCurrent : ICCollection);
+begin
+  if IsNil(TblCurrCollection) then
+    TblCurrCollection := CreateObject('ValueTable')
+  else
+    TblCurrCollection.Close;
+  TblCurrCollection.AddColumn('CollObject', vtcLink, 0);
+  TblCurrCollection.Open;
+  ColCurrent.Select;
+  while ColCurrent.SelectNext do
+    begin
+      TblCurrCollection.Append;
+      TblCurrCollection.CollObject := ColCurrent;
+      TblCurrCollection.Post;
+    end;
+  TblCurrCollection.SortBy('CollObject');
+end;
+
+end.

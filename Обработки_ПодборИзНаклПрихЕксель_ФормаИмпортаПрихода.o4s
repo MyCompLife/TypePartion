@@ -1,0 +1,30 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var GoodDic : ISDictionary;
+
+procedure CreateSrvObjects; server;
+begin
+  GoodDic := CreateObject('Справочники.Товары');
+end;
+   
+
+function ClearNullSuppCodes:integer; server;
+var SuppCodes : ISDictionary;
+begin
+ SuppCodes := CreateObject('Справочники.ПоставщикиТоваров');
+ SuppCodes.Select;
+ While SuppCodes.SelectNext do
+   if VarAsStr(SuppCodes.КодПоставщика)='' then
+     begin
+     SuppCodes.Delete;
+     SuppCodes.SelectPrior;
+     end;
+ SuppCodes.ApplyUpdates;
+end;
+
+
+end.

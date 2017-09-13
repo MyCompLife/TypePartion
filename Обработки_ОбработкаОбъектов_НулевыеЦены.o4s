@@ -1,0 +1,52 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+VAr
+  TblGoods : IsValueTable;
+  AccGood : ISAccs;
+  TypePrice : String;
+
+Procedure GetBarCodesError(V : IsProcessing; var Acc : Boolean);
+VAr
+  GoodDic, BarCodeDic : IsDictionary;
+  Count, Total, SimvolCount : Integer;
+  TmpTbl : IsValueTable;
+begin
+  TmpTbl := CreateObject('ValueTable');
+  TmpTbl.Open;
+  TblGoods.CopyColumnsTo(TmpTbl);
+
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccGood.AppendGroupRestToValueTable(RoundDate(CurrentDate,rdDay,True),'Товар;КолОбщ',TmpTbl);
+  TmpTbl.AppendTo('',TblGoods);
+  TmpTbl.Clear;
+
+
+  GoodDic := CreateObject('Справочники.Товары');
+  GoodDic.Select;
+  GoodDic.SaveToValueTable('',TmpTbl,0,GoodDic.RecordCount);
+  TmpTbl.AppendTo('Self=Товар',TblGoods);
+  TmpTbl.Clear;
+  TblGoods.GroupBy('Товар','КолОбщ');
+  TblGoods.DoGetLinks('Цена=Товар.'+TypePrice);
+  TblGoods.CopyColumnsTo(TmpTbl);
+  TblGoods.AppendTo('',TmpTbl);
+  TmpTbl.SortBy('Цена');
+  TmpTbl.SetRange(0,0);
+  TmpTbl.Select;
+  TblGoods.Clear;
+  TmpTbl.AppendTo('',TblGoods);
+  TblGoods.DoGetLinks('Код=Товар.Код');
+end;
+
+function GetBarCodesErrorEp(TblGoodsS : IsValueTable; TypePriceS : String ): Variant;Server;
+Begin
+  TblGoods := TblGoodsS;
+  TypePrice := TypePriceS;
+  Result := EntryPoint(GetBarCodesError);
+end;
+
+end.

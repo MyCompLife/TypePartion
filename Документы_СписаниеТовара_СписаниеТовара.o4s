@@ -1,0 +1,73 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, ПодключениеДопИнтерфейса;
+
+implementation
+  
+procedure ChangePriceTbl(TblContent:ISValueTable; OnDate:DateTime; TypePrice:string); server;
+var CurrencyDic, GoodDic : ISDictionary;
+    Constants : IS4VPAConst;
+    Total, Count : integer;
+    CourseTbl : ISValueTable;
+begin
+ Constants := GetConstants;
+ GoodDic := CreateObject('Справочники.Товары');
+ CurrencyDic := CreateObject('Справочники.Валюты');
+ CourseTbl := CreateObject('ТаблицаЗначений');
+ FillCurrencyCoursesTbl(CurrencyDic, CourseTbl, OnDate);
+ TblContent.Select;
+ Total := TblContent.LineCount;
+ Count := 0;
+ While TblContent.SelectNext do
+  if GoodDic.Find(TblContent.@Товар) then
+   begin
+     TblContent.Edit;
+     if CourseTbl.Locate('Валюта',GoodDic._Default['Валюта'+TypePrice]) then
+       TblContent.Цена := GoodDic._Default[TypePrice]*VarAsDec(CourseTbl.Курс)
+     else
+       TblContent.Цена := VarAsDec(GoodDic._Default[TypePrice]);
+     if VarAsBool(Constants.ОкруглятьЦеныГрн) then 
+       if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+         TblContent.Цена := RoundTo5Cop(TblContent.Цена)
+       else
+         TblContent.Цена := RoundDec(TblContent.Цена, VarAsInt(Constants.ОкруглениеЦенГрн));
+     TblContent.Post;
+     inc(Count);
+     if Count mod 10 = 0 then
+       SysProgress(0,Total,Count,'Заполнение цен');
+   end;
+ SysProgress(0,0,0,'');
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure GetGoodCount(Store : ISDictionary; tmpCtx : ISValueTable; Date : DateTime; AccsGoods : ISAccs); server;
+var
+  IsStore: boolean;
+begin
+  if (not tmpCtx.Active) then
+    exit;
+  IsStore := VarAsBool(Store.IsFocused);
+  tmpCtx.Select;
+  while tmpCtx.SelectNext do
+    begin
+      if IsStore then
+        AccsGoods.CalcGroupRestDirect(Date, ArrayOf(tmpCtx.@Товар, Store))
+      else
+        AccsGoods.CalcGroupRestDirect(Date, tmpCtx.@Товар);
+      tmpCtx.Edit;
+      tmpCtx.AssignFields('НаличиеТовара=КолОбщ', AccsGoods);
+      tmpCtx.Post;
+    end;
+end;
+
+end.

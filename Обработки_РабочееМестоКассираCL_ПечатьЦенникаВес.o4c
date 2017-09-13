@@ -1,0 +1,55 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : Variant;    
+  i: Integer;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams; //Form.GetMean;   
+  i := 1;
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if i > 0 then
+    Accept := true
+  else
+    Accept := false; 
+  if not Accept then
+    exit;
+  dec(i);
+  BarCode.Text := MasterData[0];
+  with Table do
+    begin
+      Value['Code'] := MasterData[0];
+      Value['Name'] := MasterData[1];
+      Value['UnitName'] := MasterData[2];
+      Value['Weight'] := MasterData[3];
+      Value['Price'] := MasterData[4];
+      Value['Cost'] := MasterData[5];
+    end;
+end;
+
+end.
+
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+Label5:TRBLabel
+BarCode:TRBBarCode
+Label4:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Structure1:TRBStructure

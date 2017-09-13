@@ -1,0 +1,186 @@
+interface
+
+uses 
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+procedure eOrders_Change(Sender : TObject); forward;
+procedure tbRun_Click(Sender : TObject); forward;
+
+var
+  PostReal : Variant;
+  UseConst : IC4VPAConst;
+  TblGoods, TblPartGood : ICValueTable;
+  LockCalc : Boolean;
+  CursorVis : TCursor;
+  LstOrder : ICValueList;
+
+procedure MDS_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+  TVSGoods.AfterScrollLock := True;
+  CursorVis := WaitCursorStart;
+end;
+
+procedure MDS_VPAAfterMove(Sender : TObject);
+begin
+  TVSGoods.AfterScrollLock := False;
+  SetCursor(CursorVis);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  S : ICDictionary;
+begin
+  if IsNil(Params) then
+    exit;
+  if VarAsBool(Params.IsType('Документы')) then
+    PostReal := Params.Партнер;
+  if VarAsBool(Params.IsType('Справочники')) then
+    PostReal := Params;
+  nbLists.PageIndex := 0;
+  LockCalc := True;
+  CursorVis := WaitCursorStart;
+  dpDates.PeriodIndex := 3;
+  try
+    UseConst := GetConstants;
+    LstOrder := CreateObject('СписокЗначений');
+    TblPartGood := CreateObject('ТаблицаЗначений');
+    TblGoods := CreateObject('ТаблицаЗначений');
+    TblGoods.AddColumn('Код', vtcString, 20);
+    TblGoods.AddColumn('ЕдИзм', vtcLink, 0);
+    TblGoods.AddColumn('Товар', vtcLink, 0);
+    TblGoods.AddColumn('Партнер', vtcLink, 0);
+    TblGoods.AddColumn('Партия', vtcFloat, 0);
+    TblGoods.AddColumn('КолОбщ', vtcFFT, 5);
+    TblGoods.AddColumn('Цена', vtcFFT, 7);
+    TblGoods.AddColumn('СумОтп', vtcFFT, 7);
+    TblGoods.AddColumn('СумВалОтп', vtcFFT, 7);
+    TblGoods.AddColumn('ВхЦенаБезНДС', vtcFFT, 7);
+    TblGoods.AddColumn('Валюта', vtcLink, 0);
+    TblGoods.AddColumn('ВалютаОтп', vtcLink, 0);
+    TblGoods.AddColumn('ВхЦенаВал', vtcFFT, 7);
+    TblGoods.AddColumn('ЦенаВВалюте', vtcFFT, 7);
+    TblGoods.AddColumn('Document', vtcLink, 0);
+    TblGoods.Open;
+    TblGoods.Tblname := 'tblBackGoods';
+    TblGoods.SetColumnFormat('Цена;ВхЦенаБезНДС', UseConst.ФорматЦеныГРН);
+    TblGoods.SetColumnFormat('ВхЦенаВал;ЦенаВВалюте', UseConst.ФорматЦеныВал);
+    TblGoods.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+    TblGoods.CopyTo('', TblPartGood);
+    LstOrder := CreateObject('СписокЗначений');
+    server.InitSData;
+    tbRun_Click(tbRun);
+    TblPartGood.SetColumnFormat('Цена;ВхЦенаБезНДС', UseConst.ФорматЦеныГРН);
+    TblPartGood.SetColumnFormat('ВхЦенаВал;ЦенаВВалюте', UseConst.ФорматЦеныВал);
+    TblPartGood.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+    TblPartGood.TblName := 'tblBackPartGood';
+  finally
+    LockCalc := False;
+    SetCursor(CursorVis);
+  end;
+  eOrders_Change(eOrders);
+end;
+
+procedure eOrders_Change(Sender : TObject);
+begin
+  if LockCalc then
+    exit;
+  TblPartGood.UseDataSource(0);
+  TblPartGood.Clear();
+  TblPartGood.CopyDataToServer();
+  server.GetGoodWithPart(TblPartGood.SrvMean, LstOrder.CurIndex);
+  TblPartGood.CopyDataFromServer();
+  TblPartGood.SrvMean.Clear;
+  TblPartGood.UseDataSource(CtrlToVar(TVSPartGood));
+end;
+
+procedure TsLists_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbLists.PageIndex := NewTab;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  CursorVis : TCursor;
+begin
+  CursorVis := WaitCursorStart;
+  try
+    LstOrder.UseControl(0);
+    TblGoods.UseDataSource(0);
+    TblGoods.Clear();
+    TblGoods.CopyDataToServer();
+    server.InitSrvData(PostReal, dpDates.DateFrom, dpDates.DateTo, TblGoods.SrvMean, LstOrder.SrvMean);
+    LstOrder.CopyDataFromServer;
+    LstOrder.UseControl(CtrlToVar(eOrders));
+    TblGoods.CopyDataFromServer;
+    TblGoods.SrvMean.Clear;
+    TblGoods.SortBy('Товар');
+    TblGoods.UseDataSource(CtrlToVar(TVSGoods));
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  TblGoods.Locate('Товар', InParams);
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  TblPartGood.SortBy('Код;Товар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  TblPartGood.SortBy('Товар;Код');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure miSortByCodeAll_Click(Sender : TObject);
+begin
+  TblGoods.SortBy('Код;Товар');
+  miSortByCodeAll.Checked := True;
+  miSortByNameAll.Checked := False;
+end;
+
+procedure miSortByNameAll_Click(Sender : TObject);
+begin
+  TblGoods.SortBy('Товар;Код');
+  miSortByCodeAll.Checked := False;
+  miSortByNameAll.Checked := True;
+end;
+
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+dpDates:TO4DatePeriod
+Panel4:TO4Panel
+tbrData:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbRun:TO4ToolButton
+tbParam:TO4ToolButton
+nbLists:TO4Notebook
+dbgPartGood:TO4DBGrid
+Panel3:TO4Panel
+eOrders:TO4Edit
+Panel5:TO4Panel
+dbgGoods:TO4DBGrid
+TsLists:TO4TabSet
+TVSGoods:TO4TableValueSource
+TVSPartGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+pmSortAll:TO4PopupMenu
+miSortByCodeAll:TO4MenuItem
+miSortByNameAll:TO4MenuItem

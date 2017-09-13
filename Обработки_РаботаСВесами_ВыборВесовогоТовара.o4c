@@ -1,0 +1,95 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+vAR
+  GoodsTbl : ICValueTable;
+  V: ICProcessing;
+
+procedure CreateObjects;
+begin
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.AddColumn('Товар', vtcLink, 0);
+  GoodsTbl.AddColumn('Название', vtcString, 200);
+  GoodsTbl.AddColumn('Код', vtcString, 15);
+  GoodsTbl.AddColumn('RangeField', vtcInteger, 0);
+  GoodsTbl.Open;
+end;
+
+procedure LoadGoods(StrRange: String);
+begin
+  GoodsTbl.UseDataSource(Null);
+  GoodsTbl.Clear;
+  GoodsTbl.CopyDataToServer;
+  Server.LoadPartToTbl(GoodsTbl.SrvMean, StrRange);
+  GoodsTbl.CopyDataFromServer;
+
+  GoodsTbl.SortBy('RangeField;Название');
+  GoodsTbl.SetRange(0,0);
+  GoodsTbl.Select;
+  GoodsTbl.UseDataSource(CtrlToVar(TVSGoods));
+  GoodsTbl.SelectFirst;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  CreateObjects;
+  LoadGoods(eGoodFilter.Text);
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  LoadGoods(eGoodFilter.Text);
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  eGoodFilter.Text := '';
+  LoadGoods(eGoodFilter.Text);
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+  if GoodsTbl.IsFocused then
+    V.Params['Good']  := GoodsTbl.Товар;
+  Form.ModalResult := mrOk
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+end;
+
+procedure dbgData_DblClick(Sender: TObject);
+begin
+  btOK_Click(Sender);
+  Form.ModalResult := mrOk
+end;
+
+procedure eGoodFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if Key = 13 then
+    LoadGoods(eGoodFilter.Text);
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+dbgData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pFilter:TO4Panel
+CodePanel:TO4Panel
+Label1:TO4Label
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+eGoodFilter:TO4Edit
+TVSGoods:TO4TableValueSource

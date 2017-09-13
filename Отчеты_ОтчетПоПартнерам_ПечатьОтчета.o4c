@@ -1,0 +1,146 @@
+interface
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, InitColors;
+
+implementation
+
+Var
+  GoodDic: ICDictionary;
+  V: ICProcessing;
+  PrintPartner, AttrPartTbl, PDocsTbl, PGoodsTbl, PDocsTypeTbl : ICValueTable;
+  TypeRepport, AnalitField : String;
+
+procedure XGrid_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  case Hsect of
+    'Hed' :
+     begin
+       Vars.Period := PrintPartner.Params['Period'];
+     end;
+     'Adress' :
+     begin
+       Vars.Adress := 'Адреса: ' + AttrPartTbl.Адрес + ' Телефон: ' + AttrPartTbl.Телефон;
+     end;
+     'BalansBeg' :
+     begin
+       Vars.SumBeg := PrintPartner.СумНач;
+     end;
+     'DetDoc' :
+     begin                        
+       Vars.DateDoc := PDocsTbl.Date;
+       Vars.NumDoc := PDocsTbl.НомерДокумента;
+       Vars.Doc := PDocsTbl.DocType;
+       Vars.CurrName := PDocsTbl.Валюта;
+       if PDocsTbl.СумОбщВал < 0 then begin Vars.SumIn := AbsD(PDocsTbl.СумОбщВал); Vars.SumOut := 0; end;
+       if PDocsTbl.СумОбщВал > 0 then begin Vars.SumOut := AbsD(PDocsTbl.СумОбщВал); Vars.SumIn := 0; end;
+     end;
+     
+     'BalansEnd' :
+     begin
+       Vars.SumEnd := PrintPartner.СумКон;
+     end;
+  end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  FieldsStr: String;
+  Fields: Variant;
+  SectionMastertHed, SectionMasterDet: String;
+  i : integer;
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  V := Mean;
+  PrintPartner := Params;
+  AttrPartTbl := PrintPartner.Params['AttrPartTbl'];
+  PDocsTbl := PrintPartner.Params['PDocsTbl'];
+  PGoodsTbl := PrintPartner.Params['PGoodsTbl'];
+  PDocsTypeTbl := PrintPartner.Params['PDocsTypeTbl'];
+  if PrintPartner.HasParam('AnalitField') then
+    AnalitField := VarAsStr(PrintPartner.Params['AnalitField']);
+  Xgrid.ClearAll;
+  Xgrid.AddSection('Hed');
+  i := 1;
+  PrintPartner.Select;
+  while PrintPartner.SelectNext do begin
+    PrintPartner.AddToXGrid(CtrlToVar(XGrid), 'Part', 'Партнер;;;;;Валюта' , i, 1);
+    if (AnalitField<>'') and VarAsBool(PrintPartner.@АналитикаВзаиморасчета.isFocused) then
+      XGrid.Cell(XGrid.RowCount,1).Value := VarAsStr(XGrid.Cell(XGrid.RowCount,1).Value)+' ('+VarAsStr(PrintPartner.АналитикаВзаиморасчета.NameField)+')';
+    if VarAsBool(PrintPartner.Params['PrintAttr']) then
+      begin
+        AttrPartTbl.SetRange(PrintPartner.@Партнер,PrintPartner.@Партнер);
+        XGrid.AddSection('Adress');
+      end;
+    inc(i); 
+    XGrid.AddSection('BalansBeg');
+
+    if PDocsTbl.LineCount <> 0 then
+    //if PrintPartner.Params['DetChek'] = true then
+      begin
+        XGrid.AddSection('HedDoc');
+        if AnalitField<>'' then
+          PDocsTbl.SetRange(ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта,PrintPartner.@АналитикаВзаиморасчета),
+                           ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта,PrintPartner.@АналитикаВзаиморасчета))
+        else
+          PDocsTbl.SetRange(ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта),
+                            ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта));
+        PDocsTbl.Select;
+        while PDocsTbl.SelectNext do
+          begin
+            XGrid.AddSection('DetDoc');
+            PGoodsTbl.SetRange(PDocsTbl.@Document,PDocsTbl.@Document);
+            if PGoodsTbl.LineCount <> 0 then
+              begin
+                XGrid.AddSection('HedDocGoods');
+                PGoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'DetDocGoods', ';;НомСтроки;Код;НазвТовара;ЕдИзм;Количество;Цена;Сумма' , 0, 0);
+              end;
+          end;
+      end;  
+    XGrid.AddSection('BalansEnd'); 
+    if AnalitField<>'' then
+      PDocsTypeTbl.SetRange(ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта,PrintPartner.@АналитикаВзаиморасчета),
+                       ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта,PrintPartner.@АналитикаВзаиморасчета))
+    else
+      PDocsTypeTbl.SetRange(ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта),
+                        ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта));
+    if PDocsTypeTbl.LineCount <> 0 then
+      begin
+        XGrid.AddSection('HedType');
+        PDocsTypeTbl.AddToXGrid(CtrlToVar(XGrid), 'Type', 'DocType;;;;СумОбщВал' , 0, 0);
+      end;
+    end;
+ tbPrint.Enabled := true;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+ XGridTools.Visible := not XGridTools.Visible;
+ if XGridTools.Visible
+  then tbXTools.ImageIndex := 98 else tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+Panel2:TO4Panel
+Panel3:TO4Panel
+btCancel:TO4Button
+TVSStore:TO4TableValueSource

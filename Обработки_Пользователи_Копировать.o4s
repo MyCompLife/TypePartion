@@ -1,0 +1,32 @@
+interface
+
+uses
+  System, DispIntf, Пользователи, Интерфейс, Расчеты;
+
+implementation
+       
+function StringColumnsWithoutDelIndex(DocsTbl: ISValueTable): String;
+Var
+  ColumnCnt, NumBegColumn : Integer;
+begin
+  Result := '';
+  for ColumnCnt := NumBegColumn to DocsTbl.GetColumnCount-1 Do
+    begin
+      if (DocsTbl.GetColumnName(ColumnCnt) <> 'UniID') and (DocsTbl.GetColumnName(ColumnCnt) <> 'Логин') and (DocsTbl.GetColumnName(ColumnCnt) <> 'Имя') and
+         (DocsTbl.GetColumnName(ColumnCnt) <> 'Служащий') and (DocsTbl.GetColumnName(ColumnCnt) <> 'SELF') then
+          Result := Result + ';' + DocsTbl.GetColumnName(ColumnCnt);
+    end;
+  if Result[1]=';' then StrDelete(Result,1,1);
+end;
+
+procedure GetColumnName(EmplFrom:ISDictionary;Var StrFields:string); server;
+var
+  Tbl : ISValueTable;
+begin                      
+  Tbl := CreateObject('ТаблицаЗначений');
+  EmplFrom.Select;
+  EmplFrom.SaveToValueTable('',Tbl,1,1);
+  StrFields := StringColumnsWithoutDelIndex(Tbl);
+end;
+
+end.

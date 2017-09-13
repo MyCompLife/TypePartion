@@ -1,0 +1,117 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€, ‘иксаци€ѕрибыли»«атрат,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений;
+
+implementation
+
+var
+  AccPart, AccsGoodByInv, AccSt : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+begin
+  //взаиморасчеты с партнерами
+  AccPart.ClearFieldBuffers();
+  AccPart.ѕартнер := Doc.@ѕартнер;
+  if VarAsBool(Doc.@јналитика¬заиморасчета.IsFocused) then
+    AccPart.јналитика¬заиморасчета := Doc.@јналитика¬заиморасчета;
+  AccPart.¬алюта := Doc.@¬алюта;
+  AccPart.—ум–асх¬ал := Doc.—умма¬¬алюте;
+  AccPart.—умќбщ¬ал := Doc.—умма¬¬алюте;
+  AccPart.Income(Doc, Doc.GetDate(), 0);
+  //  прибыль/расход
+  if Doc.—умма¬¬алюте <> 0 then 
+    AppendRecAccsInOutCome(Doc,Null);
+
+  if VarAsBool(Doc.Owner.IsFocused) then
+    begin
+      Doc.SelectLines;
+      Count := 1;
+      Total := Doc.LinesCount;
+      while Doc.SelectNextLine do
+        begin
+          if VarAsBool(Doc.@“овар.IsFocused) then
+            begin
+              //аккумул€тор товаров по счетам
+              AccsGoodByInv.ClearFieldBuffers();
+              AccsGoodByInv.—чет := Doc;
+              AccsGoodByInv.“овар := Doc.@“овар;
+              AccsGoodByInv.“ип := midDiscard;
+              AccsGoodByInv. олќбщ := Doc. оличество;
+              AccsGoodByInv.—умќбщ := Doc. оличество * Doc.÷енаЅезЌƒ—;
+              AccsGoodByInv.—умќбщќтп := Doc. оличество * Doc.÷ена;
+              AccsGoodByInv.Income(Doc, Doc.GetDate(), Doc.Ќом—троки);
+              // отправка сообщени€ клиенту
+              if Count mod 10 = 0 then 
+                begin
+                  Doc.NotifyClient(msgProceed, Count, Total);
+                  if Doc.Terminated then
+                    break;
+                end;
+              inc(Count);
+            end;
+        end;
+    end;
+  Accept := not Doc.Terminated;
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  AccsGoodByInv := CreateObject('јккумул€торы.ќстатки“оваров“ћ÷по—четам');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+        AccsGoodByInv := CreateObject('јккумул€торы.ќстатки“оваров“ћ÷по—четам');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  SumNt, SumInNt : Decimal;
+begin
+//
+end;    
+
+function —формироватьѕлатежѕоƒокументу(DocOwner : Variant) : Decimal; server;
+var
+  Pays, Nakls, Orders : ISJournal;
+  V : Variant;
+  “амѕроц—уммаƒекл, ѕошл—уммаƒекл, —уммаЌƒ—ƒекл, ќпл“ам : Decimal;
+  AccsPartRealiz : ISAccs;
+begin
+  if (DocOwner.ќтпуск = 1) then
+    Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп')
+  else
+    Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+  Pays.UseMaster(DocOwner);
+  Pays.SetDocMultiStateRange('1;2');
+  Result := DocOwner.—умма¬¬алюте - Pays.Total('—умма¬¬алюте');
+end;
+
+end.

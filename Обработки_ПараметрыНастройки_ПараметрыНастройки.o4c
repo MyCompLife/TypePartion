@@ -1,0 +1,288 @@
+interface
+
+uses 
+  System, DispIntf, ConstNames, УстановкаКонстант;
+
+implementation
+
+var
+  Opt : ICOptions;
+  AO : ICDictionary;
+  FirstStart : Boolean;
+  Constants : IC4VPAConst;
+  Registry : TRegistry;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  dt : Integer;
+  V : Variant;
+begin
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  cbCountAck.Checked := VarAsBool(Opt.GetServerPrm(CountAck));
+  cbShowCaptions.Checked := VarAsBool(Opt.GetServerPrm(ShowCaptions));
+  cbCaptionsList.Checked := VarAsBool(Opt.GetServerPrm(CaptionsList));
+  cbFlat.Checked := VarAsBool(Opt.GetServerPrm(Flat));
+  cbTransparent.Checked := VarAsBool(Opt.GetServerPrm(Transparent));
+  cbGridReadOnly.Checked := VarAsBool(Opt.GetServerPrm(GridReadOnly));
+  cbFixAck.Checked := VarAsBool(Opt.GetServerPrm(FixAck));
+  cbRefreshData.Checked := VarAsBool(Opt.GetServerPrm(RefreshOnEnter));
+  cbEnableImpPrices.Checked := VarAsBool(Opt.GetServerPrm(ImportEnabled));
+  cbDirectPrint.Checked := VarAsBool(Opt.GetServerPrm(DirectPrint));
+  cbDelAck.Checked := VarAsBool(Opt.GetServerPrm(DelAck));
+  cbShowCodeUnitName.Checked := VarAsBool(Opt.GetServerPrm(ShowCodeUnitName));
+  cbFixPays.Checked := VarAsBool(Opt.GetServerPrm(FixPays));
+  rgDatesForReport.ItemIndex := VarAsInt(Opt.GetServerPrm(DatesForReport));
+  cbCheckZero.Checked := VarAsBool(Opt.GetServerPrm(CheckZero));
+  cbCloseAck.Checked := VarAsBool(Opt.GetServerPrm('CloseAck'));
+
+  csNoPayNorm.Color := VarAsInt(Opt.GetServerPrm(NoPayNormOpt));
+  csNoPaySel.Color := VarAsInt(Opt.GetServerPrm(NoPaySelOpt));
+  csBlZero.Color := VarAsInt(Opt.GetServerPrm(BlZeroOpt));
+  csBlFZero.Color := VarAsInt(Opt.GetServerPrm(BlFZeroOpt));
+  csBlZeroSel.Color := VarAsInt(Opt.GetServerPrm(BlZeroSelOpt));
+  csBlFZeroSel.Color := VarAsInt(Opt.GetServerPrm(BlFZeroSelOpt));
+
+  //первое событие
+  cbUseFirstEvent.Checked := VarAsBool(Opt.GetServerPrm(UseFirstEvent));
+  rbTaxDocRule.ItemIndex := VarAsInt(Opt.GetServerPrm(TaxDocRule));
+  cbAutoCreateTaxDoc.Checked := VarAsBool(Opt.GetServerPrm(AutoCreateTaxDoc));
+  cbAskAutoCreateTaxDoc.Checked := VarAsBool(Opt.GetServerPrm(AskAutoCreateTaxDoc));
+  cbAutoFixTaxDoc.Checked := VarAsBool(Opt.GetServerPrm(AutoFixTaxDoc));
+  //первое событие
+
+  V := Opt.GetServerPrm(AOSet);
+  if IsObject(V) then
+    begin
+      AO := V;
+      if AO.IsFocused then
+        eAO.Text := AO.Название
+      else
+        nil(AO)
+    end;
+  //работа с центрами рассылки
+  cbRefresh.Checked := VarAsBool(Opt.GetServerPrm(RefreshOpt));
+  cbRefCount.Checked := VarAsBool(Opt.GetServerPrm(RefCountOpt));
+  dt := VarAsInt(Opt.GetLocalPrm(DelayTime));
+  if dt >= 0 then
+    eDelayTime.Text := IntToStr(dt)
+  else
+    eDelayTime.Text := '';
+  //метод расчета суммы по документу
+  rgCalcSum.ItemIndex := VarAsInt(Opt.GetServerPrm(CalcSumRule));
+  cbError.Checked := not RaiseOnlyMessage(romRead);  
+  pgcOptions.ActivePage := TabSheet5;  
+
+  // Звук
+  Registry := CreateTRegistry;
+  Registry.RootKey := HKEY_CURRENT_USER;
+  Registry.OpenKey('AppEvents\Schemes\Apps\O4Client\O4Client-BarCodeError\.Default', true);
+  edSoundFile.Text := Registry.ReadString('');
+  Registry.OpenKey('AppEvents\Schemes\Apps\O4Client\O4Client-Ding\.Default', true);
+  edSoundDingFile.Text := Registry.ReadString('');
+
+  Registry.CloseKey;
+
+
+end;
+
+procedure btnOK_Click(Sender : TObject);
+begin
+  Opt.SetServerPrm(CountAck, cbCountAck.Checked);
+  Opt.SetServerPrm(ShowCaptions, cbShowCaptions.Checked);
+  Opt.SetServerPrm(CaptionsList, cbCaptionsList.Checked);
+  Opt.SetServerPrm(Flat, cbFlat.Checked);
+  Opt.SetServerPrm(Transparent, cbTransparent.Checked);
+  Opt.SetServerPrm(GridReadOnly, cbGridReadOnly.Checked);
+  Opt.SetServerPrm(FixAck, cbFixAck.Checked);
+  Opt.SetServerPrm(DelAck, cbDelAck.Checked);
+  Opt.SetServerPrm(RefreshOnEnter, cbRefreshData.Checked);
+  Opt.SetServerPrm(ImportEnabled, cbEnableImpPrices.Checked);
+  Opt.SetServerPrm(DirectPrint, cbDirectPrint.Checked);
+  Opt.SetServerPrm(ShowCodeUnitName, cbShowCodeUnitName.Checked);
+  Opt.SetServerPrm(FixPays, cbFixPays.Checked);
+  Opt.SetServerPrm(DatesForReport, rgDatesForReport.ItemIndex);
+  Opt.SetServerPrm(AOSet, AO);
+  Opt.SetLocalPrm(DelayTime, StrToInt(eDelayTime.Text));
+  Opt.SetServerPrm(CheckZero, cbCheckZero.Checked);
+  Opt.SetServerPrm(NoPayNormOpt, csNoPayNorm.Color);
+  Opt.SetServerPrm(NoPaySelOpt, csNoPaySel.Color);
+  Opt.SetServerPrm(BlZeroOpt, csBlZero.Color);
+  Opt.SetServerPrm(BlFZeroOpt, csBlFZero.Color);
+  Opt.SetServerPrm(BlZeroSelOpt, csBlZeroSel.Color);
+  Opt.SetServerPrm(BlFZeroSelOpt, csBlFZeroSel.Color);
+  Opt.SetServerPrm(RefreshOpt, cbRefresh.Checked);
+  Opt.SetServerPrm(RefCountOpt, cbRefCount.Checked); 
+  Opt.SetServerPrm('CloseAck', cbCloseAck.Checked);
+  //первое событие  
+  Opt.SetServerPrm(UseFirstEvent, cbUseFirstEvent.Checked);
+  Opt.SetServerPrm(TaxDocRule, rbTaxDocRule.ItemIndex);
+  Opt.SetServerPrm(AutoCreateTaxDoc, cbAutoCreateTaxDoc.Checked);
+  Opt.SetServerPrm(AskAutoCreateTaxDoc, cbAskAutoCreateTaxDoc.Checked);
+  Opt.SetServerPrm(AutoFixTaxDoc, cbAutoFixTaxDoc.Checked);
+  //первое событие
+  //метод расчета суммы по документу
+  Opt.SetServerPrm(CalcSumRule, rgCalcSum.ItemIndex);
+
+  if cbError.Checked then
+    RaiseOnlyMessage(romWriteFalse)
+  else
+    RaiseOnlyMessage(romWriteTrue);
+end;
+
+procedure btnDefault_Click(Sender : TObject);
+begin
+  DefaultOptions(False);
+  Form_Execute(Sender, Null, Null);
+end;
+
+procedure eAO_ActionExecute(Sender : TObject);
+var
+  AOName : string;
+begin
+  if IsNil(AO) then
+    AO := CreateObject('Справочники.Правила');
+  if AO.SelectInForm('ВыборПравила', AOName, Null) then
+    eAO.Text := AOName;
+end;
+
+procedure eAO_ActionClear(Sender : TObject);
+begin
+  nil(AO);
+  eAO.Text := '';
+end;
+
+procedure tsColors_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbColors.PageIndex := NewTab;
+end;
+
+procedure cbUseFirstEvent_Click(Sender: TObject);
+begin
+  rbTaxDocRule.Enabled := cbUseFirstEvent.checked;
+  cbAutoCreateTaxDoc.Enabled := cbUseFirstEvent.checked;
+  cbAskAutoCreateTaxDoc.Enabled := cbUseFirstEvent.checked;
+  cbAutoFixTaxDoc.Enabled := cbUseFirstEvent.checked;
+end;
+
+procedure tbPlaySoundFile_Click(Sender: TObject);
+begin
+ PlaySound('BarCodeError');
+end;
+
+procedure tbOpenSoundFile_Click(Sender: TObject);
+begin
+ if SoundFileOpenDialog.Execute then
+   begin
+     edSoundFile.Text := SoundFileOpenDialog.FileName;
+     Registry.OpenKey('AppEvents\Schemes\Apps\O4Client\O4Client-BarCodeError\.Default', true);
+     Registry.WriteString('',SoundFileOpenDialog.FileName);
+     Registry.CloseKey;
+     Registry.OpenKey('AppEvents\Schemes\Apps\O4Client\O4Client-BarCodeError\.None', true);
+     Registry.WriteString('',SoundFileOpenDialog.FileName);
+     Registry.OpenKey('AppEvents\Schemes\Apps\O4Client\O4Client-BarCodeError\.current', true);
+     Registry.WriteString('',SoundFileOpenDialog.FileName);
+     Registry.CloseKey;
+   end;
+
+end;
+
+procedure tbPlaySoundDingFile_Click(Sender: TObject);
+begin
+ PlaySound('Ding');
+end;
+
+procedure tbOpenSoundDingFile_Click(Sender: TObject);
+begin
+ if SoundFileOpenDialog.Execute then
+   begin
+     edSoundDingFile.Text := SoundFileOpenDialog.FileName;
+     Registry.OpenKey('AppEvents\Schemes\Apps\O4Client\O4Client-Ding\.Default', true);
+     Registry.WriteString('',SoundFileOpenDialog.FileName);
+     Registry.CloseKey;
+     Registry.OpenKey('AppEvents\Schemes\Apps\O4Client\O4Client-Ding\.None', true);
+     Registry.WriteString('',SoundFileOpenDialog.FileName);
+     Registry.OpenKey('AppEvents\Schemes\Apps\O4Client\O4Client-Ding\.current', true);
+     Registry.WriteString('',SoundFileOpenDialog.FileName);
+     Registry.CloseKey;
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+pgcOptions:TO4PageControl
+TabSheet5:TTabSheet
+nbColors:TO4Notebook
+GroupBox2:TO4GroupBox
+Label2:TO4Label
+Label6:TO4Label
+csNoPayNorm:TO4ColorSelector
+csNoPaySel:TO4ColorSelector
+GroupBox1:TO4GroupBox
+cbShowCaptions:TO4CheckBox
+cbCaptionsList:TO4CheckBox
+cbFlat:TO4CheckBox
+cbTransparent:TO4CheckBox
+cbError:TO4CheckBox
+GroupBox3:TO4GroupBox
+Label8:TO4Label
+Label9:TO4Label
+csBlZero:TO4ColorSelector
+csBlFZero:TO4ColorSelector
+GroupBox4:TO4GroupBox
+Label10:TO4Label
+Label11:TO4Label
+csBlZeroSel:TO4ColorSelector
+csBlFZeroSel:TO4ColorSelector
+tsColors:TO4TabSet
+TabSheet3:TTabSheet
+rgDatesForReport:TO4RadioGroup
+TabSheet2:TTabSheet
+Label20:TO4Label
+Label1:TO4Label
+cbEnableImpPrices:TO4CheckBox
+cbDirectPrint:TO4CheckBox
+cbCountAck:TO4CheckBox
+cbGridReadOnly:TO4CheckBox
+cbFixAck:TO4CheckBox
+cbDelAck:TO4CheckBox
+cbRefreshData:TO4CheckBox
+cbFixPays:TO4CheckBox
+GroupBox6:TO4GroupBox
+eAO:TO4Edit
+rgCalcSum:TO4RadioGroup
+edSoundFile:TO4Edit
+edSoundDingFile:TO4Edit
+ToolBar1:TO4ToolBar
+tbPlaySoundFile:TO4ToolButton
+tbOpenSoundFile:TO4ToolButton
+ToolBar2:TO4ToolBar
+tbPlaySoundDingFile:TO4ToolButton
+tbOpenSoundDingFile:TO4ToolButton
+cbCloseAck:TO4CheckBox
+TabSheet4:TTabSheet
+Label3:TO4Label
+Label7:TO4Label
+cbShowCodeUnitName:TO4CheckBox
+cbCheckZero:TO4CheckBox
+GroupBox5:TO4GroupBox
+Label5:TO4Label
+cbRefresh:TO4CheckBox
+cbRefCount:TO4CheckBox
+eDelayTime:TO4Edit
+tsTaxDoc:TTabSheet
+GroupBox7:TO4GroupBox
+rbTaxDocRule:TO4RadioGroup
+cbAutoCreateTaxDoc:TO4CheckBox
+cbAskAutoCreateTaxDoc:TO4CheckBox
+cbAutoFixTaxDoc:TO4CheckBox
+cbUseFirstEvent:TO4CheckBox
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+btnDefault:TO4Button
+SoundFileOpenDialog:TO4OpenDialog

@@ -1,0 +1,153 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+  
+const
+  //************ 27.03.12 Snizhok ****************//
+//  GoodLinksListAll = 'КолНач;КолПрих;КолВПрих;КолВозвр;КолРевиз;КолРасх;КолВРасх;КолСпис;КолКон;CondField';
+  GoodLinksListAll = 'КолНач;КолПрих;КолРасх;КолКон;КолВозвр;КолВозврПост;КолРевиз;КолСпис;CondField';
+
+implementation
+
+var
+  AccsGood : ISAccs;
+  GoodsTbl, TmpTbl : ISValueTable;
+  GoodList : ISValueList;
+  DateFrom, DateTo : DateTime;
+  GoodDic  : IsDictionary;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  GoodDic := CreateObject('Справочники.Товары');
+  TmpTbl := CreateObject('ValueTable');
+  GoodList := CreateObject('ValueList');
+end;
+
+
+
+procedure SetGoods(Doc : ISReport; var Accept : Boolean);
+var
+  Dims : Double;
+  b : Boolean;
+  MotionID : Integer;
+  ЗначенияПрихода, ЗначенияОтпуска : string;
+
+begin
+
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+
+  GoodsTbl.Clear();
+  GoodsTbl.SortBy('');
+
+  GoodDic.SetFieldFilter('ПодАкцизний','=', true,'','',null);
+  GoodDic.Select;
+  GoodDic.SaveToValueTable('',TmpTbl,0,GoodDic.RecordCount);
+  TmpTbl.Select;
+  if TmpTbl.LineCount=0 then
+    exit;
+  TmpTbl.GroupToList('Self',GoodList);
+  AccsGood.SetFieldFilter('Товар',GoodList);
+
+  Doc.NotifyClient(RestsView, 1, 50);
+  if Doc.Terminated then
+    exit;
+  for MotionID := 1 to 11 do
+    begin
+      if Doc.Terminated then
+        break;
+      ЗначенияПрихода := '';
+      ЗначенияОтпуска := '';
+
+      case MotionID of
+        midIncome :
+          ЗначенияПрихода := 'КолОбщ=КолПрих';
+        midOutcome :
+          ЗначенияОтпуска := 'КолОбщ=КолРасх';
+        midRetBuyer:
+          ЗначенияПрихода := 'КолОбщ=КолВозвр';
+        midRetSupplier:
+          ЗначенияОтпуска := 'КолОбщ=КолВозврПост';
+        midDiscard :
+          ЗначенияОтпуска := 'КолОбщ=КолСпис';
+        midRevision :
+          ЗначенияПрихода := 'КолОбщ=КолРевиз';
+        else
+          continue;
+      end;
+      AccsGood.SetFieldFilter('Тип', MotionID);
+      AccsGood.AppendGroupRest2ToValueTable(DateFrom, DateTo, 'Товар;Склад',
+        'КолОбщ=КолНач', ЗначенияПрихода, ЗначенияОтпуска,
+        'КолОбщ=КолКон', GoodsTbl);
+    end;
+
+  GoodsTbl.DoGetLinks('ВидПрод=Товар.ВидПодакцПродукции;Объем=Товар.ОбъемДек');
+  GoodsTbl.DoGetLinks('Множитель=ВидПрод.Множитель');
+  GoodsTbl.DoCalculation('КолНач','КолНач*Объем/Множитель');
+  GoodsTbl.DoCalculation('КолПрих','КолПрих*Объем/Множитель');
+  GoodsTbl.DoCalculation('КолРасх','КолРасх*Объем/Множитель');
+  GoodsTbl.DoCalculation('КолКон','КолКон*Объем/Множитель');
+  GoodsTbl.DoCalculation('КолВозвр','КолВозвр*Объем/Множитель');
+  GoodsTbl.DoCalculation('КолВозврПост','КолВозврПост*Объем/Множитель');
+  GoodsTbl.DoCalculation('КолРевиз','КолРевиз*Объем/Множитель');
+  GoodsTbl.DoCalculation('КолСпис','КолСпис*Объем/Множитель');
+  GoodsTbl.GroupBy('ВидПрод', GoodLinksListAll);
+  GoodsTbl.DoGetLinks('КодПрод=ВидПрод.КодПродукции; Примечание=ВидПрод.КодПродукции');
+  GoodsTbl.SortBy('КодПрод;ВидПрод');
+
+
+  AccsGood.ClearFieldFilters();
+  DeleteColumnsByCondition(GoodsTbl, 'CondField', '(КолНач=0) and (КолПрих=0)and (КолРасх=0)'+
+                          'and(КолКон=0)and(КолВозвр=0)and(КолВозврПост=0)and(КолРевиз=0)' +
+                          'and(КолСпис=0)');
+  GoodsTbl.Select;
+  while GoodsTbl.SelectNext do
+    begin
+      GoodsTbl.Edit;
+      GoodsTbl.Примечание :='';
+      if VarAsDec(GoodsTbl.КолВозвр)<>0 then
+        begin
+          GoodsTbl.Примечание := GoodsTbl.Примечание + DecToStr(GoodsTbl.КолРасх,6)+'-'+DecToStr(GoodsTbl.КолВозвр,6)+
+                                 '- повернення від покупців'+#13;
+          GoodsTbl.КолРасх := GoodsTbl.КолРасх - GoodsTbl.КолВозвр;
+        end;
+      if VarAsDec(GoodsTbl.КолВозврПост)<>0 then
+        begin
+          GoodsTbl.Примечание := GoodsTbl.Примечание + DecToStr(GoodsTbl.КолПрих,6)+'-'+DecToStr(GoodsTbl.КолВозврПост,6)+
+                                 '- повернення постачальникам'+#13;
+          GoodsTbl.КолПрих := GoodsTbl.КолПрих - GoodsTbl.КолВозврПост;
+        end;
+      if VarAsDec(GoodsTbl.КолРевиз)<>0 then
+        begin
+          GoodsTbl.Примечание := GoodsTbl.Примечание + DecToStr(GoodsTbl.КолРевиз,6)+'- Ревізія'+#13;
+        end;
+      if VarAsDec(GoodsTbl.КолСпис)<>0 then
+        begin
+          GoodsTbl.Примечание := GoodsTbl.Примечание + DecToStr(GoodsTbl.КолСпис,6)+'- Списання'+#13;
+        end;
+
+      GoodsTbl.Post;
+    end;
+
+   Accept := True;
+end;
+
+function GetRunReportEP(GoodsTbls : ISValueTable; DateFroms, DateTos : DateTime) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  Result := EntryPoint(SetGoods);
+end;
+
+function GetGoodLinksList : string; server;
+begin
+  Result := GoodLinksListAll;
+end;
+
+end.

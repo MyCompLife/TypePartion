@@ -1,0 +1,64 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты,
+  РаботаСДокументамиВЖурналах, ПодключениеДопИнтерфейса;
+
+implementation
+
+var
+  PaysIn, PaysOut : ISJournal;
+
+procedure OrderCalcFields(Order : ISJournal);
+var
+  TmpDoc : ISDocuments;
+begin
+  if Order.GetDocSign = 'НакладнаяОтпуска' then
+    begin
+      PaysOut.UseMaster(Order);
+      Order.Оплачено := PaysOut.Total('Сумма');
+      Order.ОплаченоВал := PaysOut.Total('СуммаВал');
+      PaysOut.UseMaster(Null);
+      Order.Должны := Order.Сумма - Order.Оплачено;
+      Order.ДолжныВал := Order.СуммаВал - Order.ОплаченоВал;
+    end
+  else
+    if Order.GetDocSign = 'НакладнаяПрихода' then
+      begin
+        PaysIn.UseMaster(Order);
+        TmpDoc := Order.GetDoc;
+        Order.Оплачено := PaysIn.Total('СуммаВВалюте');
+        Order.ОплаченоВал := PaysIn.Total('СуммаВал');
+        PaysIn.UseMaster(Null);
+        Order.Должны := Order.СуммаВал - Order.Оплачено;
+        Order.ДолжныВал := Order.СуммаВал - Order.ОплаченоВал;
+      end;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  PaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  PaysIn.SetDocMultiStateRange('1;2;');
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+function OrderAfterScroll(Order : Variant) : string; server;
+var
+  OneDoc : Variant;
+begin
+  Result := '';
+  if VarAsBool(Order.HasDocOwner) then
+    begin
+      OneDoc := Order.GetDocOwner;
+      if VarAsBool(OneDoc.IsFocused) then
+        if OneDoc.GetType() = 'Dictionaries;Справочники;Довідники' then
+          Result := Trans(VarAsStr(OneDoc.GetName())) + ' ' + OneDoc.Партнер.ПолноеНазвание
+        else
+          Result := Trans(VarAsStr(OneDoc.GetName())) + ' № ' + OneDoc.НомерДокумента
+            + Trans(' от ') + DateToStr(OneDoc.ДатаДокумента) + Trans(' г.');
+    end
+end;
+
+end.

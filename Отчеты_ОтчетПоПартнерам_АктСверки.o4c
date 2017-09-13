@@ -1,0 +1,271 @@
+interface
+
+uses
+  System,DispIntf;
+
+implementation
+
+Var PrintPartner,PDocsTbl,PDocsTblG,PDocsTypeTbl,AttrPartTbl,PGoodsTbl:ICValueTable;
+    NotIsGroup,HasDet:Boolean;
+    PrintAttr,Datalize:Boolean; 
+    Sum11,Sum12:variant;//integer;
+    AnalitField : String;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+ PrintPartner:=Form.GetParams[0];
+ HasDet:=Form.GetParams[1];
+ PDocsTbl:=PrintPartner.Params['PDocsTbl'];
+ PDocsTypeTbl:=PrintPartner.Params['PDocsTypeTbl'];
+ PGoodsTbl:=PrintPartner.Params['PGoodsTbl'];
+ Label16.Caption:=DateToStr(PrintPartner.Params['DateFrom']);
+ Label18.Caption:=DateToStr(PrintPartner.Params['DateTo']);
+ PrintAttr:=PrintPartner.Params['PrintAttr'];
+ AttrPartTbl:=PrintPartner.Params['AttrPartTbl'];  
+ if PrintPartner.HasParam('AnalitField') then
+   AnalitField := VarAsStr(PrintPartner.Params['AnalitField']);
+ PDocsTbl.SortBy('Партнер;Валюта'+AnalitField+';TP');
+ PDocsTbl.SelectFirst();
+ While not PDocsTbl.EOF() do
+  if PDocsTbl.DocType = 'Всього:' then PDocsTbl.Delete
+  else 
+  if not PDocsTbl.Selectnext() then break;
+
+ PDocsTypeTbl.SortBy('Партнер;Валюта'+AnalitField+';TP');
+ PDocsTypeTbl.SelectFirst();
+ While not PDocsTypeTbl.EOF() do
+   if PDocsTypeTbl.DocType = 'Всього:' then PDocsTypeTbl.Delete() 
+   else 
+   if not PDocsTypeTbl.Selectnext() then break;
+
+ PrintPartner.SelectFirst();
+ While not PrintPartner.EOF() do
+   if PrintPartner.НазвПартнер = 'Всього:' then PrintPartner.Delete() 
+   else 
+   if not PrintPartner.Selectnext() then break;
+
+end;
+
+procedure Structure1_RT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin  
+  Sum11 := 0;
+  Sum12 := 0;
+  if Index=0 then Accept := PrintPartner.SelectFirst()
+             else Accept := PrintPartner.SelectNext();
+  if not Accept then Exit; 
+  if AnalitField<>'' then
+    PDocsTbl.SetRange(ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта,PrintPartner.@АналитикаВзаиморасчета),
+                     ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта,PrintPartner.@АналитикаВзаиморасчета))
+  else
+    PDocsTbl.SetRange(ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта),
+                      ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта));
+  PDocsTbl.Select;
+  while PDocsTbl.SelectNext do
+    begin
+      if PDocsTbl.СумОбщВал < 0 then Sum11 := Sum11 + PDocsTbl.СумОбщВал;
+      if PDocsTbl.СумОбщВал > 0 then
+        begin 
+          PDocsTbl.Edit;
+          PDocsTbl.СумОбщМин := PDocsTbl.СумОбщВал;
+          PDocsTbl.СумОбщВал := 0;
+          PDocsTbl.Post;
+          Sum12 := Sum12 + PDocsTbl.СумОбщМин;
+        end;
+    end;
+      PDocsTbl.Append;
+      PDocsTbl.Партнер := PrintPartner.Партнер; 
+      PDocsTbl.Валюта := PrintPartner.Валюта;
+      PDocsTbl.НомерДокумента := '';
+      PDocsTbl.Date := Null;
+      PDocsTbl.DocType := 'Всього:';
+      PDocsTbl.СумОбщВал := Sum11;
+      PDocsTbl.СумОбщМин := Sum12;
+      PDocsTbl.Tp := 1;
+      PDocsTbl.Post;
+  if AnalitField<>'' then
+      PDocsTypeTbl.SetRange(ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта,PrintPartner.@АналитикаВзаиморасчета),
+                           ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта,PrintPartner.@АналитикаВзаиморасчета))
+  else
+      PDocsTypeTbl.SetRange(ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта),
+                            ArrayOf(PrintPartner.@Партнер,PrintPartner.@Валюта));
+  Sum11 := 0;
+  Sum11 := PDocsTypeTbl.Total('СумОбщВал');
+      PDocsTypeTbl.Append;
+      PDocsTypeTbl.Партнер := PrintPartner.Партнер;
+      PDocsTypeTbl.DocType := 'Всього:';
+      PDocsTypeTbl.СумОбщВал := Sum11;
+      PDocsTypeTbl.Tp := 1;
+      PDocsTypeTbl.Post;
+ Sum11 := 0;
+  if PrintAttr then
+    AttrPartTbl.SetRange(PrintPartner.Партнер,PrintPartner.Партнер);
+  with Table do begin 
+   if (AnalitField<>'') and VarAsBool(PrintPartner.@АналитикаВзаиморасчета.IsFocused) then
+     Value['Name'] := VarAsStr(PrintPartner.НазвПартнер)+' ('+VarAsStr(PrintPartner.АналитикаВзаиморасчета.NameField)+')'
+   else
+     Value['Name'] := PrintPartner.НазвПартнер;
+   //Value['Name'] := PrintPartner.НазвПартнер;
+   if VarAsBool(PrintPartner.Валюта.IsFocused) then
+     Value['Curr'] := PrintPartner.Валюта.Код;
+   Value['SUMMABEG'] := PrintPartner.СумНач;
+   Value['SUMMAEND'] := PrintPartner.СумКон;
+  end;
+end;
+
+procedure Structure1_RT_DT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);  
+begin
+  if Index=0 then Accept := PDocsTbl.SelectFirst()
+             else Accept := PDocsTbl.SelectNext();
+  if not Accept then Exit;
+  if HasDet then          
+    PGoodsTbl.SetRange(PDocsTbl.@Document,PDocsTbl.@Document);
+  with Table do begin
+   Value['Number'] := PDocsTbl.НомерДокумента;
+   Value['Date'] := PDocsTbl.Date;
+   Value['DOCNAME'] := PDocsTbl.DocType;
+   if VarAsBool(PDocsTbl.Валюта.IsFocused) then
+     Value['CurrVal'] := PDocsTbl.Валюта.Код;
+  // if PDocsTbl.СумОбщВал < 0 then Value['SUMMAP'] := AbsD(PDocsTbl.СумОбщВал);
+  // if PDocsTbl.СумОбщВал > 0 then Value['SUMMAM'] := AbsD(PDocsTbl.СумОбщВал);
+   Value['SUMMAP'] := AbsF(PDocsTbl.СумОбщВал);
+   Value['SUMMAM'] := AbsF(PDocsTbl.СумОбщМин);
+   Value['SummaAdd'] := PDocsTbl.СумНакоп;
+  end;
+end;
+
+procedure Structure1_RT_DT1_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if Index=0 then Accept := PDocsTypeTbl.SelectFirst()
+             else Accept := PDocsTypeTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   Value['DOCNAME'] := PDocsTypeTbl.DocType;
+   Value['SUMMAIN'] := PDocsTypeTbl.СумОбщВал;
+//   Value['Tax'] := Tbl.СуммаНДС;
+  end;
+end;
+
+procedure Structure1_RT_AttrPart_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin  
+  Accept := (Index=0) and AttrPartTbl.SelectFirst;
+  if not Accept then Exit;
+  with Table do 
+   begin
+    Value['PartAddr'] := AttrPartTbl.Адрес;
+    Value['PartPhone'] := AttrPartTbl.Телефон;
+   end;
+end;
+
+procedure Structure1_RT_DT_Tbl1_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if Index=0 then Accept := PGoodsTbl.SelectFirst()
+             else Accept := PGoodsTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   Value['Code'] := PGoodsTbl.Код;
+   Value['Name'] := PGoodsTbl.НазвТовара;
+   Value['UnitName'] := PGoodsTbl.ЕдИзм;
+   Value['Count'] := PGoodsTbl.Количество;
+//   Value['PDV'] := PGoodsTbl.НДС;
+   Value['Price'] := PGoodsTbl.Цена;
+ //  Value['PriceNT'] := PGoodsTbl.ЦенаБезНДС;
+ //  Value['Tax'] := PGoodsTbl.НДС;
+   Value['Summa'] := PGoodsTbl.Цена * PGoodsTbl.Количество;
+ //  Value['SUMNT'] := PGoodsTbl.ЦенаБезНДС * PGoodsTbl.Количество;
+ //  Value['SUMTax'] := PGoodsTbl.НДС * PGoodsTbl.Количество;
+  end;
+end;
+
+
+procedure bndDT_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+ if PDocsTbl.DocType = 'Всього:' then
+   begin
+     Label8.Font.Style := 1;
+     Label9.Font.Style := 1;
+     Label10.Font.Style := 1;
+     Label11.Font.Style := 1;
+     Label7.Font.Style := 1;
+   end
+ else
+   begin
+     Label8.Font.Style := 0;
+     Label9.Font.Style := 0;
+     Label10.Font.Style := 0;
+     Label11.Font.Style := 0;
+     Label7.Font.Style := 0;
+   end
+end;
+
+procedure bndDT1_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+ if PDocsTypeTbl.DocType = 'Всього:' then
+   begin
+     Label13.Font.Style := 1;
+     Label14.Font.Style := 1;
+   end
+ else
+   begin
+     Label13.Font.Style := 0;
+     Label14.Font.Style := 0;
+   end
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+dbRecvisPart:TRBDetailBand
+Label40:TRBLabel
+Label41:TRBLabel
+Label42:TRBLabel
+Label43:TRBLabel
+Band1:TRBBand
+Label1:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+bndRT:TRBDetailBand
+Label2:TRBLabel
+Label21:TRBLabel
+Label20:TRBLabel
+Label22:TRBLabel
+Label32:TRBLabel
+bndDT:TRBDetailBand
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label7:TRBLabel
+Label30:TRBLabel
+bndDT1:TRBDetailBand
+Label13:TRBLabel
+Label14:TRBLabel
+Band2:TRBBand
+Label3:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label12:TRBLabel
+Label25:TRBLabel
+Band3:TRBBand
+Label19:TRBLabel
+bndFtDET:TRBBand
+Label36:TRBLabel
+Label37:TRBLabel
+bndDET:TRBDetailBand
+SysData2:TRBSysData
+Label34:TRBLabel
+Label35:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label50:TRBLabel
+Label53:TRBLabel
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label31:TRBLabel
+Label48:TRBLabel
+Structure1:TRBStructure

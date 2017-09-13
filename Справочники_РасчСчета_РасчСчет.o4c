@@ -1,0 +1,93 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  Acc : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  Acc := MDS.GetMean;
+end;
+
+procedure ViewBank;
+begin
+  if VarAsBool(Acc.@Банк.IsFocused) then
+    lbBankMFO.Caption := Acc.Банк.МФО
+  else
+    lbBankMFO.Caption := '-';
+end;
+
+procedure dbeBank_ActionExecute(Sender : TObject);
+begin
+  ViewBank;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  cbActive.Checked := Acc.Активность;
+  ViewBank;                           
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeNumber.Text), '');
+end;
+
+procedure dbeBank_ActionClear(Sender : TObject);
+begin
+  ViewBank;
+end;
+
+procedure cbActive_Click(Sender : TObject);
+begin
+  Acc.Активность := cbActive.Checked;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  Acc.Активность := not HasActive(Acc);
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  ResetActive(Acc);
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure dbeNumber_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeNumber.Text), '');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label5:TO4Label
+Label3:TO4Label
+dbeNumber:TO4DBEdit
+gbxBank:TO4GroupBox
+Label1:TO4Label
+Label2:TO4Label
+lbBankMFO:TO4Label
+dbeBank:TO4DBEdit
+cbActive:TO4CheckBox
+dbeComment:TO4DBEdit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnTitle:TO4Panel
+lbTitle:TO4Label
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

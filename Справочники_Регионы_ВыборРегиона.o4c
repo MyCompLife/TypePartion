@@ -1,0 +1,40 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Masterdata : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  Masterdata := MDS.GetMean;
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  pmiSort.Enabled := MasterData.IsFocused();
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  pmiSort.Enabled := MasterData.IsFocused();
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem

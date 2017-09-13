@@ -1,0 +1,59 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+function GetEndPosition(OwnerDic : IsDictionary):Integer;server;
+var
+  TmpDic : ISDictionary;
+begin
+  TmpDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+  TmpDic.UseMaster(OwnerDic);
+  TmpDic.SortByField('-НомПозиции');
+  TmpDic.Select;
+  TmpDic.SelectNext;
+  Result:= TmpDic.НомПозиции;
+end;    
+ 
+procedure RenumberingDicAfterDelete(OwnerDic : Variant); server;
+var
+  TmpDic : IsDictionary;
+  PriorNumber : Integer;
+begin
+  PriorNumber := 0;
+  TmpDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+  TmpDic.UseMaster(OwnerDic);
+  TmpDic.SortByField('НомПозиции');
+  TmpDic.Select;
+  While TmpDic.SelectNext do
+    begin
+      if  VarAsInt(TmpDic.НомПозиции)<>PriorNumber+1 then
+        begin
+          TmpDic.Edit;
+          TmpDic.НомПозиции := PriorNumber+1;
+          TmpDic.Post;
+          TmpDic.ApplyUpdates;
+        end;
+
+      inc(PriorNumber);
+    end;
+
+end;
+
+
+function CheckGoodsInGroup (OwnerDic : IsDictionary): boolean;Server;
+var
+  WGoodsDic : IsDictionary;
+Begin
+  WGoodsDic := CreateObject('Справочники.ВессовойТовар');
+  WGoodsDic.UseMaster(OwnerDic);
+  WGoodsDic.Select;
+  Result:= WGoodsDic.RecordCount=0;
+  Nil(WGoodsDic);
+end;
+
+
+
+end.

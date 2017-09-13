@@ -1,0 +1,299 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, Пользователи, ДополнительныйФункционал;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Options : ICOptions;
+  Users : ICDictionary;
+  PrintFormsTbl: ICValueTable;
+  PreView : Boolean;
+  DateFrom, DateTo : DateTime;
+  OwnerProc : ICProcessing;
+  OutParams : Variant;
+  CurrentRegion : ICDictionary;
+
+procedure GetTotalSums;
+var
+  V : Variant;
+begin
+  MasterData.SrvAssignClientSelectParams;
+  V := server.GetTotalSumsSrv(MasterData.SrvMean);
+  lSum.Caption := FormatFloat('0.00', V);
+  if V < 0 then
+    lSum.Font.Color := clRed
+  else
+    lSum.Font.Color := clNavy;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Options := GetOptions;     
+  if MasterData.HasParam('OwnerProc') then
+    OwnerProc := MasterData.Params['OwnerProc'];
+ // установка периода
+  DateFrom := Options.GetServerPrm('StartDateFromForReg');
+  DateTo := Options.GetServerPrm('StartDateToForReg');
+  if (DateFrom=0) and (DateTo=0) then
+    begin
+     DateFrom := RoundDate(CurrentDate, rdMonth, False);
+     DateTo := RoundDate(CurrentDate, rdMonth, True)-1;
+    end;
+  MasterData.SetDateRange(RoundDate(DateFrom, rdDay, false), RoundDate(DateTo, rdDay, true));
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;
+  DateBeg, DateEnd: DateTime;
+  ItemMenu : TO4MenuItem;
+begin
+  miDocMove.Visible := GetUDASet('viewdocmove');   
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i))); 
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+//-------------------- выборка по полю ------------------------------
+  Users := GetDictUser;
+  if IsObjFocused(Users) and VarAsBool(Users.@Склад.IsFocused) and VarAsBool(Users.БлокировкаВыбораСклада) then
+    begin
+      MasterData.SetFieldFilter('Склады','LIKE', '%'+FloatToHexStr(Users.Склад.GetUniID)+'%','','',Null);
+      MasterData.Refresh;
+    end;  
+  GetTotalSums;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+var IsDateRange : boolean;
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  IsDateRange := MasterData.GetDateRange(DateFrom, DateTo);
+  DateTo := DateTo - 1;
+  if not IsNil(OwnerProc) then
+    OwnerProc.ExecProc(MasterData, 'ChJrnDatePeriod', ArrayOf(DateFrom, DateTo, IsDateRange), OutParams);
+end;
+
+procedure pmiPrint_Click(Sender : TObject); 
+var
+  V : ICProcessing;
+begin   
+  V := CreateObject('Обработки.ПечУнивЖурнала');
+  V.PrintForm('ПечУнивЖурналаСТипомИВалютой', true, MasterData)
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin   
+      V := CreateObject('Обработки.ПечВнутрПеремещ');
+      V.PrintForm('', true, MasterData)
+    end;
+end;
+
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if MasterData.GetDocState > 0 then
+        Index1 := 10
+      else
+        Index1 := 9;
+      if MasterData.Подтверждена = 1 then
+        Index2 := 1;
+    end;
+end;
+{$D+}
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh();  
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+ 
+function GetEmplByName(EmplName : string) : ICDictionary;
+Var
+  Respons: ICDictionary;
+begin
+  if IsNil(Respons) then
+    Respons := CreateObject('Справочники.Служащие');
+  if Respons.FindByField('ПолноеНазвание', EmplName, False) then
+    begin
+      Result := Respons;
+    end
+  else
+    nil(Result);
+end;
+
+procedure miCreateDocBarCode_Click(Sender: TObject);
+var
+  TblOwnerDoc : ICValueTable;
+  DocOwner, Doc : ICDocuments;
+begin
+   DocOwner := MasterData.GetDoc;
+   Doc := CreateObject('Документы.ПечатьШтрихКодов');
+   Doc.Select;
+   Doc.Append;
+   Doc.ДатаДокумента := CurrentDateTime;
+   Doc.Партнер := GetEmplByName(GetUserName);
+   DocOwner.SelectLines;
+   while DocOwner.SelectNextLine do
+     begin
+       Doc.AppendLine;
+       Doc.Товар := DocOwner.Товар;
+       Doc.Цена := DocOwner.Товар.ОптЦена;
+       Doc.Количество := 1;
+       Doc.PostLine;
+     end;
+  Doc.Post;
+  ShowMessage('Документ создан успешно.');
+end;
+
+
+procedure miCheck_Click(Sender: TObject);
+var
+  V: ICProcessing;
+  Doc: ICDocuments;
+begin
+ if MasterData.IsFocused and
+   ((VarAsInt( MasterData.Подтверждена)=0) or (MessageDlg('Накладная уже подтверждена! Открыть окно подтверждения?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes)) then
+   begin
+     Doc := MasterData.GetDoc;
+     V := CreateObject('Обработки.ПодтверждениеНаличияТовара');
+     V.Execute('Подтверждение',Doc);
+     MasterData.Refresh;
+    end;
+end;
+
+
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end; 
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+ case StrLowerCase(ProcID) of
+    'chjrndateperiod' :
+      if  IsArray(InParams) then
+        try
+          DateFrom := InParams[0];
+          DateTo := InParams[1];
+          if VarAsBool(InParams[2]) then
+            MasterData.SetDateRange(RoundDate(DateFrom, rdDay, false), RoundDate(DateTo, rdDay, true))
+          else
+            MasterData.CancelDateRange;
+          MasterData.Refresh;
+        finally
+        end;
+  'changeregion' :
+    begin
+      if IsObjFocused(InParams) then
+        begin
+          if IsNil(CurrentRegion) then
+            CurrentRegion := CreateObject('Справочники.Регионы');
+          if CurrentRegion.Find(InParams) then
+            MasterData.SetFieldFilter('РегионыСкладов','LIKE','%'+FloatToHexStr(CurrentRegion.GetUniID)+'%','','',Null)
+          else
+            MasterData.CancelFieldFilter('РегионыСкладов');
+        end
+      else
+        MasterData.CancelFieldFilter('РегионыСкладов');
+      MasterData.Refresh;
+    end;
+  end
+end;
+
+procedure MDS_VPADataRefreshed(Sender: TObject);
+begin
+ GetTotalSums;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+btnPrint:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+Panel1:TO4Panel
+tsState:TO4TabSet
+DBMemo1:TO4DBMemo
+Panel3:TO4Panel
+Label1:TO4Label
+lSum:TO4Label
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiRefresh:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCreateDocBarCode:TO4MenuItem
+miCheck:TO4MenuItem
+miDocMove:TO4MenuItem
+MDS:TO4DataSource
+pmPrintForms:TO4PopupMenu
+miPrinForm1:TO4MenuItem
+miPrinForm2:TO4MenuItem
+miPrinForm3:TO4MenuItem
+miPrinForm4:TO4MenuItem
+miPrinForm5:TO4MenuItem
+miPrinForm6:TO4MenuItem
+miPrinForm7:TO4MenuItem
+miPrinForm8:TO4MenuItem
+miPrinForm9:TO4MenuItem
+miPrinForm10:TO4MenuItem
+miInfoChange:TO4MenuItem

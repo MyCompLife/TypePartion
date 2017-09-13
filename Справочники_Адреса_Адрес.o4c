@@ -1,0 +1,130 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками;
+
+implementation
+
+var
+  Adr, AdrOwner : ICDictionary;
+  CollectTbl : ICValueTable;
+  Collection : ICCollection;
+  Constants : IC4VPAConst;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  Adr := MDS.GetMean;
+  AdrOwner := Adr._GetOwner;
+  Constants := GetConstants;
+end;
+
+procedure dbeTown_ActionExecute(Sender : TObject);
+begin
+  if VarAsBool(Adr.@Город.IsFocused) then
+    Adr.ПочтИндекс := Adr.Город.ПочтИндекс
+  else
+    Adr.ПочтИндекс := '';
+end;      
+
+procedure SetFormTitleCaption;
+begin
+  if dbeIndex.Text <> '' then
+    lbTitle.Caption := SetTitleCaption(ArrayOf(dbeIndex.Text + ', ', dbeAdr.Text), '')
+  else
+    lbTitle.Caption := SetTitleCaption(ArrayOf(dbeAdr.Text), '');
+end;
+
+procedure dbeAdr_Change(Sender : TObject);
+begin
+  SetFormTitleCaption;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  cbActive.Checked := Adr.Активность;
+  cbUrAdr.Checked := Adr.Юридический;
+  if VarAsBool(Adr.Тип.IsFocused) then
+    edCollect.Text := Adr.Тип.Value;
+  Collection := CreateObject('Коллекции.ТипАдреса');
+  CollectTbl := CreateObject('ТаблицаЗначений');
+  CreateCollectionTbl(CollectTbl, Collection);
+  while CollectTbl.SelectNext() do
+    edCollect.Items.Add(CollectTbl.Comment);
+  SetFormTitleCaption;
+end;
+
+procedure chbActive_Click(Sender : TObject);
+begin
+  Adr.Активность := cbActive.Checked;
+end;
+
+procedure MDS_Append(Sender : TObject);
+var
+  TLZTown : ICDictionary;
+begin
+  Adr.Активность := not HasActive(Adr);
+  Adr.Юридический := not HasActive(Adr, 'Юридический');
+  TLZTown := Constants.АктивныйГород;
+  if VarAsBool(TLZTown.IsFocused) then
+    begin
+      Adr.Город := TLZTown;
+      Adr.ПочтИндекс := TLZTown.ПочтИндекс;
+    end;
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  ResetActive(Adr);
+  ResetActive(Adr, 'Юридический');
+  if cbActive.Checked then
+    begin
+      AdrOwner.Edit;
+      AdrOwner.Город := Adr.Город;
+      AdrOwner.Post;
+    end;
+end;
+
+procedure MDS_Validate(Sender : TObject);
+begin
+  ChangeCollectionField(Collection, Adr, 'Тип', edCollect.Text);
+end;
+
+procedure chbUrAdr_Click(Sender : TObject);
+begin
+  Adr.Юридический := cbUrAdr.Checked;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+MainPanel:TO4Panel
+Label1:TO4Label
+Label5:TO4Label
+Label7:TO4Label
+Label8:TO4Label
+dedType:TO4DBEdit
+dbeTown:TO4DBEdit
+dbeIndex:TO4DBEdit
+dbeAdr:TO4DBEdit
+cbActive:TO4CheckBox
+edCollect:TO4Edit
+cbUrAdr:TO4CheckBox
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnTitle:TO4Panel
+lbTitle:TO4Label
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

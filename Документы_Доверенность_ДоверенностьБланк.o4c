@@ -1,0 +1,138 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF, Docum : ICDictionary;
+  CNV : ICWriNums;
+  Tbl : ICValueTable;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  Docum := CreateObject('Справочники.ЛичДокументы');
+  Tbl := CreateObject('ТаблицаЗначений');
+  CNV := CreateObject('ЧислаПрописью');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  DateOut : DateTime;
+  Employee : ICDictionary;
+begin
+  with Table do
+    begin
+      Value['DateBeg'] := StrLowerCase(CNV.FormatDateTime('dd mmmm', MasterData.ДатаДокумента, 1, 1058));
+      Value['DateEnd'] := StrLowerCase(CNV.FormatDateTime('dd mmmm', MasterData.ДатаДействия, 1, 1058));
+      Value['YearBeg'] := StrCopy(IntToStr(GetYear(MasterData.ДатаДокумента)), 3, 2);
+      Value['YearEnd'] := StrCopy(IntToStr(GetYear(MasterData.ДатаДействия)), 3, 2);
+      Value['Doverenost'] := MasterData.ОснованиеДоверенности;
+      Value['Part'] := GetPartName(MasterData.Партнер, 0);
+      Employee := MasterData.Служащий;
+      if VarAsBool(Employee.IsFocused) then
+        begin
+          Value['Name'] := Employee.ПолноеНазвание;
+          Docum.UseMasterAndSelect(Employee);
+          if Docum.FindByField('Активность', True, False) then
+            Value['Docum'] := Docum.Название.Value;
+          Value['Seria'] := GetActiv(Docum, 'СерияНомер', Employee);
+          DateOut := GetActiv(Docum, 'ДатаВыдачи', Employee);
+          if not IsNull(DateOut) and (VarAsInt(DateOut) <> 0) then
+            Value['DateOut'] := StrLowerCase(CNV.FormatDateTime('dd mmmm yyyy', DateOut, 1, 1058)) + 'р.'
+          else
+            Value['DateOut'] := '';
+          Value['MVD'] := GetActiv(Docum, 'ОрганВыдачи', Employee);
+        end;
+    end;
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар', 'Количество');  
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Товар');
+end;
+
+procedure Structure1_Root_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Tbl.LineCount > 6 then
+    exit;
+  if Index = 0 then
+    Accept := Tbl.SelectFirst()
+  else
+    Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['Name'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Discript'] := VarAsStr(Tbl.Количество) + ' (' + CNV.DigitToStr(Tbl.Количество, 1058) + ')';
+    end;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  with Table do
+    begin
+      if not IsNull(Value['BankTown']) then
+        Value['BankName'] := StrCopy(Value['BankName'] + ',' + Value['BankTown'], 1, 120);
+      if (StrLength(Value['Name']) > 100) or (StrLength(Value['Address']) > 100) then
+        begin
+          Label11.Font.Size := 7;
+          Label15.Font.Size := 7;
+          Label6.Font.Size := 7;
+          Label10.Font.Size := 7;
+          Label12.Font.Size := 7;
+          Label17.Font.Size := 7;
+          Label18.Font.Size := 7;
+          Label23.Font.Size := 7;
+        end;
+    end;
+  Accept := False;
+end;
+
+procedure Band1_AfterPrint(Band : TRBCustomBand; Accepted : Boolean);
+begin
+  if Tbl.LineCount > 6 then
+    Band2.Options := 0
+  else
+    Band2.Options := 16
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label4:TRBLabel
+Label25:TRBLabel
+Label27:TRBLabel
+Label7:TRBLabel
+Label3:TRBLabel
+Label5:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label11:TRBLabel
+Label15:TRBLabel
+Label10:TRBLabel
+Label12:TRBLabel
+Label6:TRBLabel
+Label18:TRBLabel
+Label17:TRBLabel
+Label23:TRBLabel
+Label13:TRBLabel
+bndDET:TRBDetailBand
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+SysData1:TRBSysData
+Band2:TRBBand
+Structure1:TRBStructure

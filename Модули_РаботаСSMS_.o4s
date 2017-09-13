@@ -1,0 +1,44 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+function GetStatusSMSByCode(StatusCode:integer):string; 
+function StrOnlyDigitTel(s:string):string;
+
+implementation
+
+function GetStatusSMSByCode(StatusCode:integer):string;
+begin
+ case StatusCode of
+  0 : Result := 'Ожидает';
+  1 : Result := 'Отправляется';
+  2 : Result := 'Отправлено';
+  3 : Result := 'Доставлено';
+  5 : Result := 'Нет на связи';
+  10 : Result := 'Удалено';
+  50 : Result := 'Частично доставлено';
+  96 : Result := 'Сбой сети при доставке SMS';
+  99 : Result := 'Ошибка в номере или Номер не обслуживается';
+  -1 : Result := 'Ошибка определения статуса SMS сообщения';
+  else  Result := 'Неизвестный код статуса';
+ end;
+
+end;  
+
+function StrOnlyDigitTel(s:string):string;
+var tmpStr : String;
+    i : integer;
+const AllowChars='0123456789';
+begin
+ tmpStr := '';
+  if strLength(s)>0 then
+   for i:=1 to strLength(s) do
+    if StrPos(s[i],AllowChars)<>0 then
+     tmpStr := tmpStr + s[i];
+  if (StrLength(tmpStr)=11) and (tmpStr[1]='8') then
+   StrDelete(tmpStr,1,1);
+  Result := tmpStr;
+end;
+
+end.

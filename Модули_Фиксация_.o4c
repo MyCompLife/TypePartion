@@ -1,0 +1,178 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+function CanFixDel(Data : ICDocuments; var Accept : Boolean; SemMsg, UniMsg, OptName : string) : string;
+function CheckAllRestrictions(Doc : ICDocuments; ApplyTbl : ICValueTable;
+  FullName : string; var Accept : Boolean;
+  OverOrder : Boolean = False) : Boolean;
+function CheckOverGoodStore(Doc : ICDocuments; FullName : string; Action : integer) : boolean;
+function CheckAllRealRestrictions(Doc : ICDocuments; FullName : string; var Accept : Boolean; 
+  DocType, Action : Integer) : Boolean;
+
+implementation
+
+var
+  Semaphore : ICSemaphore;
+
+function GroupMove(Data : ICDocuments; StrMsg : string) : Boolean; //;Var Accept:Boolean
+var
+  Resultat : Integer;
+begin
+  Resultat := mrYesToAll;
+  if not Data.IsGroupAction then
+    Resultat := MessageDlg(StrMsg + ' ?', mtConfirmation, ArrayOf(mbYes, mbNo))
+  else
+    if (not Data.YesToAllInGroupAction) or Data.FirstInGroupAction then
+      Resultat := MessageDlg(StrMsg + ' ?', mtConfirmation, ArrayOf(mbYes, mbYesToAll, mbNo, mbNoToAll));
+  Data.NoToAllInGroupAction := Resultat = mrNoToAll;
+  Data.YesToAllInGroupAction := Resultat = mrYesToAll;
+  Result := Bits(Resultat) and Bits(mrYesToAll, mrYes) <> 0;
+end;
+
+function CanFixDel(Data : ICDocuments; var Accept : Boolean; SemMsg, UniMsg, OptName : string) : string;
+begin
+  Result := VarAsStr(trans(Data.GetName)) + ' № ' + VarAsStr(Data.GetNumber);
+  if Accept and VarAsBool(GetOptions.GetServerPrm(OptName)) then
+    Accept := GroupMove(Data, UniMsg + Result);
+  if Accept and (SemMsg <> '') then
+    begin
+      case SemMsg of
+        DecGood, IncGood, IncResGood, DecResGood,
+          DecGoodRIn, IncGoodRIn, DecGoodROut, IncGoodROut : SemMsg := DecGood;
+        IncCash, DecCash, IncBank, DecBank : SemMsg := DecBank;
+      end;
+      Semaphore := CreateSemaphore(SemMsg, UniMsg + Result);
+      Accept := Semaphore.WaitSemaphore;
+    end
+end;
+
+function CheckAllRestrictions(Doc : ICDocuments; ApplyTbl : ICValueTable;
+  FullName : string; var Accept : Boolean;
+  OverOrder : Boolean = False) : Boolean;
+var
+  MinTbl, OrderMinTbl, OverSumTbl : ICValueTable;
+  ViewWarning : ICProcessing;
+begin
+  OrderMinTbl := CreateObject('ТаблицаЗначений');    
+  OrderMinTbl.Open;
+  MinTbl := CreateObject('ТаблицаЗначений');  
+  MinTbl.Open;
+  OverSumTbl := CreateObject('ТаблицаЗначений'); 
+  OverSumTbl.Open;
+  ApplyTbl.CopyDataToServer;
+  MinTbl.CopyDataToServer;
+  OverSumTbl.CopyDataToServer; 
+  OrderMinTbl.CopyDataToServer;
+  if not Doc.RunThreadProcess(server.CheckAllSrv(OrderMinTbl.SrvMean,
+    MinTbl.SrvMean,
+    OverSumTbl.SrvMean,
+    ApplyTbl.SrvMean, OverOrder),
+    UniFixProgress + FullName) then
+    raise(emsgFixFail);
+  MinTbl.CopyDataFromServer();
+  MinTbl.SrvMean.Clear;
+  if not GetUDASet('OffCheckMarkup') then
+    begin
+      OverSumTbl.CopyDataFromServer();
+      OverSumTbl.SrvMean.Clear;
+    end;
+  if OverOrder and Accept then
+    begin
+      OrderMinTbl.CopyDataFromServer();
+      OrderMinTbl.SrvMean.Clear;
+      if OrderMinTbl.LineCount > 0 then
+        begin
+          ViewWarning := CreateObject('Обработки.ПревышениеТовараВСчете');
+          Accept := ViewWarning.Execute('ПревышениеКолТовВСчете', OrderMinTbl) = mrOK;
+        end;
+    end;
+  if Accept and (MinTbl.LineCount > 0) then
+    begin
+      ViewWarning := CreateObject('Обработки.ПревышениеКолТовараНаСкладах');
+      Accept := ViewWarning.Execute('ПревышениеКолТовНаСкладах', MinTbl) = mrOK;
+      if Accept and not GetUDASet('OverGoodStore') then
+        begin
+          ShowMessage(TakeHimAway);
+          Accept := False;
+        end;
+    end;
+  if Accept and (not GetUDASet('OffCheckMarkup')) and (OverSumTbl.LineCount > 0) then
+    begin
+      ViewWarning := CreateObject('Обработки.ОтрицатНаценка');
+      Accept := ViewWarning.Execute('ОтрицатНаценка', OverSumTbl) = mrOK;
+    end;
+  Result := Accept;
+end;
+
+function CheckOverGoodStore(Doc : ICDocuments; FullName : string; Action : integer) : boolean;
+var
+  TmpStoreGood, TmpGood, TmpPartGood : ICValueTable;
+  ViewTbl : ICProcessing;
+  ProgressMsg : String;
+begin
+  Result := True;
+  TmpGood := CreateObject('ТаблицаЗначений');
+  TmpStoreGood := CreateObject('ТаблицаЗначений');
+  TmpPartGood := CreateObject('ТаблицаЗначений');
+  case Action of
+    actStateDown :
+      ProgressMsg := UniUnFixProgress;
+    actDel :
+      ProgressMsg := Trans('Удаление документа:') + ' ';
+  end;
+  if not Doc.RunThreadProcess(server.GetCanChangeStateDownEP(TmpGood.SrvMean, TmpStoreGood.SrvMean,
+    TmpPartGood.SrvMean), ProgressMsg + FullName) then
+    raise(emsgFixFail);
+  TmpStoreGood.CopyDataFromServer;
+  TmpGood.CopyDataFromServer;
+  TmpPartGood.CopyDataFromServer;
+  TmpStoreGood.SrvMean.Clear;
+  TmpGood.SrvMean.Clear;
+  TmpPartGood.SrvMean.Clear;
+  TmpGood.Params['TmpStoreGood'] := TmpStoreGood;
+  TmpGood.Params['TmpPartGood'] := TmpPartGood;
+  TmpGood.Params['Action'] := Action;
+  if (TmpStoreGood.LineCount > 0) or
+    (TmpGood.LineCount > 0) or
+    (TmpPartGood.LineCount > 0) then
+    begin
+      ViewTbl := CreateObject('Обработки.ПревКолТовСкладПартия');
+      Result := ViewTbl.Execute('ПревКолТовСкладПартия', TmpGood) = mrOK;
+      if Result and not GetUDASet('OverGoodStore') then
+        begin
+          ShowMessage(TakeHimAway);
+          Result := False;
+        end;
+    end;
+end;
+  
+function CheckAllRealRestrictions(Doc : ICDocuments;
+  FullName : string; var Accept : Boolean; DocType, Action : Integer) : Boolean;
+var
+  MinRealTbl : ICValueTable;
+  ViewWarning : ICProcessing;
+begin
+  MinRealTbl := CreateObject('ТаблицаЗначений');
+  if not Doc.RunThreadProcess(server.CheckAllRealSrv(MinRealTbl.SrvMean, DocType),
+    UniFixProgress + FullName) then
+    raise(emsgFixFail);
+  MinRealTbl.CopyDataFromServer();
+  MinRealTbl.SrvMean.Clear;
+
+  if (MinRealTbl.LineCount > 0) then
+    begin
+      ViewWarning := CreateObject('Обработки.ПревышениеКолТовараНаРеализации');  
+      MinRealTbl.Params['Action'] := Action;
+      Accept := ViewWarning.Execute('ПревышениеКолТовНаРеализации', MinRealTbl) = mrOK;
+      if Accept and not GetUDASet('OverGoodStore') then
+        begin
+          ShowMessage(TakeHimAway);
+          Accept := False;
+        end;
+    end;
+  Result := Accept;
+end;
+
+end.

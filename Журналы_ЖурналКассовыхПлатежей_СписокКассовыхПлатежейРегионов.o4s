@@ -1,0 +1,81 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+
+procedure GetTotalSumsSrv(Data : ISJournal; SumTbl: ISValueTable);server;
+var
+  Tbl: ISValueTable;
+  Currency : ISDictionary;
+  Sum: Decimal;
+  DocTypes: String;
+begin
+
+  SumTbl.Clear;
+  Currency := CreateObject('—правочники.¬алюты');
+  Currency.Select;
+  while Currency.SelectNext do
+    begin
+      Data.SetFieldFilter('¬алюта','=',Currency,'','',null);
+      Data.Select;
+      if Data.RecordCount > 0 then
+        begin
+          SumTbl.Append;
+          SumTbl.¬алюта := Currency;
+          SumTbl.—умма¬ал := Data.Total('—умма¬¬алюте');
+          SumTbl.Post;
+        end;
+    end;
+  Data.CancelFieldFilter('¬алюта');
+  Data.Select;
+  DocTypes := Data.GetDocTypeRange;
+  if (DocTypes = '') or (StrPos('ƒокументы.ќбмен¬алют¬ ассе',DocTypes) <> 0) then
+    begin
+      Data.SetDocTypeRange('ƒокументы.ќбмен¬алют¬ ассе');
+      Tbl := CreateObject('“аблица«начений');
+      SumTbl.CopyColumnsTo(Tbl);
+      Tbl.Open;
+      Data.Select;
+      while Data.SelectNext do
+        begin
+          SumTbl.Append;
+          SumTbl.¬алюта := Data.GetDoc.¬алюта–асхода;
+          SumTbl.—умма¬ал := -(Data.GetDoc.—ум¬ал–асхода);
+          SumTbl.Post;
+        end;
+      SumTbl.GroupBy('¬алюта','—умма¬ал');
+      Data.SetDocTypeRange(DocTypes);
+    end;
+{
+  Data.Select;
+  while Data.SelectNext do
+    begin
+      case Data.GetDocSign of
+        'ќбмен¬алют¬ ассе':
+          begin
+            SumTbl.Append;
+            SumTbl.¬алюта := Data.¬алюта;
+            SumTbl.—умма¬ал := Data.—умма¬¬алюте;
+            SumTbl.Post;
+
+            SumTbl.Append;
+            SumTbl.¬алюта := Data.GetDoc.¬алюта–асхода;
+            SumTbl.—умма¬ал := -(Data.GetDoc.—ум¬ал–асхода);
+            SumTbl.Post;
+          end
+        else
+          begin
+            SumTbl.Append;
+            SumTbl.¬алюта := Data.¬алюта;
+            SumTbl.—умма¬ал := Data.—умма¬¬алюте;
+            SumTbl.Post;
+          end
+      end;
+    end;
+  SumTbl.GroupBy('¬алюта','—умма¬ал');
+}
+end;
+
+end.

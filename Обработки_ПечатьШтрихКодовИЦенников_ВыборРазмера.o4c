@@ -1,0 +1,58 @@
+interface
+
+uses
+  System, DispIntf, РаботаСоСправочниками, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  Source: ICDictionary;
+  V: ICProcessing;   
+  SizeList: ICValueList;
+  SizesTbl: ICValueTable;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+  Source := Params;
+  if not IsObject(Params) or not Source.IsFocused then
+    begin                          
+      ShowMessage('Товар не определен!');
+      Form.ModalResult := mrCancel;
+    end; 
+  if not VarAsBool(Source.@Модель.IsFocused) then
+    begin   
+      ShowMessage('Модель товара не определена!');
+      Form.ModalResult := mrCancel;
+    end;       
+  SizeList := CreateObject('ValueList');
+  SizesTbl := CreateTblFromBLOB(Source.Модель.РазмерныйРяд);
+  if IsNil(SizesTbl) then
+    begin
+      SizesTbl := CreateObject('ValueTable');
+      SizesTbl.AddColumn('НомПозиции',vtcInteger,0);
+      SizesTbl.AddColumn('Название',vtcString,200);
+      SizesTbl.Open;
+      SizesTbl.SortBy('НомПозиции');
+    end;
+  SizesTbl.GroupToList('Название',SizeList);
+  SizeList.UseControl(CtrlToVar(edSizes));
+  SizeList.CurIndex := 0;   
+  lbGoodName.Caption := Source.НазвТовара;
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin     
+  if SizeList.ValidIndex(SizeList.CurIndex) then
+    V.Params['size'] := SizeList.GetValue(SizeList.CurIndex);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+pnGoodName:TO4Panel
+lbGoodName:TO4Label
+Panel1:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+edSizes:TO4Edit

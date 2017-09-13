@@ -1,0 +1,3867 @@
+interface
+
+uses
+
+  System, DispIntf, ConstNames, InitColors, Расчеты, Пользователи, РаботаСПеременными, РаботаСОбъектами,РаботаСТаблицамиЗначений,
+  XMLИмпортЭкспорт, РаботаСТаблицамиЗначенийCL, ПодключениеДопИнтерфейса, НумерацияДокументов,   РаботаСДокументамиCL;
+
+
+const
+  CreateAndMoveFiles = 0;
+  CreateFiles = 1;
+  MoveFiles = 2;
+  msgInvalidAgentNumber = 'Неправильный номер агента на КПК. ' +
+    'Если КПК принадлежит выбранному торговому агенту, ' +
+    'то установите галочку "передать данные о торговом агенте" и повторно нажмите кнопку "Выполнить"';
+  msgInvalidIniFile = 'Не создан ini-файл на КПК или путь к ini-файлу неверный. ' +
+    'Проверьте путь к папке экспорта на ПК для системной группы, ' +
+    'установите галочку "передать данные о торговом агенте" и повторно нажмите кнопку "Выполнить"';
+  msgSuccessAgentNumber = 'Номер агента на КПК в ini-файле корректен';
+  msgSelectArchiveType = 'Выберите zip-архиватор в режиме "Работа-КПК-Настройки" на закладке "Архиватор"';
+  NoLogData = 'Никаких операций не произведено';
+  msgAdd = 'Добавлено ';
+  msgRead = 'Прочитано ';
+  msgRecordsToFile = ' записей в файле ';
+  msgFile = 'Файл ';
+  msgSuccessCopy = ' скопирован успешно';
+  msgSuccessMove = ' перенесен успешно';
+  msgSuccessCreate = ' создан успешно';
+  msgSuccessCnv = ' преобразован успешно';
+  msgErrorCopy = ' не скопирован';
+  msgErrorMove = ' не перенесен';
+  msgErrorCreate = ' не создан';
+  msgErrorCnv = ' не преобразован';
+  msgErrorFound = ' не найден';
+  errNotSystemGroupPresent = 'У Вас нет системной группы';
+  TxtExt = '.txt';
+  ZipExt = '.zip';
+  IniExt = '.ini';
+  NoneZipType = 0;
+  Zip7Type = 1;
+  WinRarType = 2;
+  WinZipType = 3;
+  PocketArchiveType = 'PocketArchiveType';
+  PocketArchiveExePath = 'PocketArchiveExePath';
+  Row_Separator = #30;
+  Column_Separator = #9;
+  ExportMean = 'RequestTable;RequestHeader;VisitHeader';
+  ItemsMean = 'Items,ItemsCtg,Packings'; //";" - разделитель групп; "," - разделитель файлов в группе
+  CustomersMean = 'Customers,CustomersCtg,Shops';
+  ToAllMean = 'PriceTypes;VisitResultTypes';
+  PersonalMean = 'RouteHeader,RouteTable';
+  SystemMean = 'CommercialAgents';
+  UpdateItemsMean = 'UpdateItems';
+  UpdateCustomersMean = 'UpdateCustomers';
+  msgCompletion = ' - Заполнение ';
+  msgCompleted = 'Обработано ';
+  msgFrom = ' из ';
+  msgOrdersDoc = ' документ(ов) "Счет на продажу"';
+  msgNaklsDoc = ' документ(ов) "Накладная отпуска" ("Накладная отпуска на реализацию")';
+  msgChecksDoc = ' документ(ов) "Чек"';
+  msgVisitDoc = ' документ(ов) "Посещение"';
+  msgPaysDoc = ' документ(ов) "Приход в кассу"';// ("Приход личных финансов")';
+  msgGetOrderTable  = ' табличной части';
+  msgGetOrderHeader  = ' шапки документа';
+  logErrorInRow = 'Ошибка в строке ';
+  logNotFoundCommercialAgent = 'Не найден торговый агент с Кодом: ';
+  logDocAlreadyExists = 'Документ уже существует. Дата на КПК: ';
+  logPartnerNotFound = 'Не найден партнер с Кодом: ';
+  msgItems = '"Товары" (Items)';
+  msgCustomers = '"Партнеры" (Customers)';
+  msgPriceTypes = '"Типы цен" (PriceTypes)';
+  msgCommercialAgents = '"Торговые агенты" (CommercialAgents)';
+  msgRoute = '"Маршруты" (Route)';
+  msgVisitResultTypes = '"Типы резульатов посещений" (VisitResultTypes)';
+  msgUpdateItems = '"Обновление Товаров" (UpdateItems)';
+  msgUpdateCustomers = '"Обновление партнеров" (UpdateCustomers)';
+  errZipArchOptForSend = 'Установите опцию использование zip-архиватора (меню КПК-Настройки) или ' +
+    'снимите опцию "отправить данные по электронной почте"';
+  errZipArchOptForReceive = 'Установите опцию использование zip-архиватора (меню КПК-Настройки) или ' +
+    'снимите опцию "импорт данных из электронной почты"';
+  errNotFoundPocketFunc = 'Библиотека O4PocketFunc.exe не найдена или не зарегистрирована';
+  errImportExportPath = 'Не указан или неправильный путь к папке обмена в режиме "Работа-КПК-Настройки"';
+  cnfType = 0;
+  cnfFarm = 1;
+  cnfAlco = 2;
+  AndroidExportFileName = 'TmpFromCDB';
+  AndroidExportUnionFileName = 'FromCDB';
+  AndroidExportZipFileName = 'From1C';
+  AndroidImportFileName = 'ToCDB';
+  AndroidImportZipFileName = 'To1C';
+  AndroidConfigFileName = 'config';
+  AndroidPhotoZipFileName = 'GoodsPhotosFromCDB';
+  XMLExt = '.xml';
+  osWindowsMobile = 0;
+  osAndroid = 1;
+  PartnerSuffix = '_Partner_';
+  ItemSuffix = '_Item_'; 
+  AgentSuffix = '_Agent_';       
+  grItem = 1;
+  grPartner = 2;
+  ItemsGroupZeroCode = 0;
+
+procedure ExportDataForAgent(Means, PCExportPath, AgentCode : string;
+  CommercialAgentsGroup, CommercialAgents : ICDictionary;
+  Params : Integer; UseGroup : Boolean; var Log : string);
+procedure ImportDataForAgent(Means, AgentCode : string; CommercialAgents : ICDictionary;
+  Params : Integer; ReceiveFromEMail : Boolean;
+  Doc : ICDocuments; ConfType : Integer; pnConf : TO4Panel;
+  var ResultArray : Variant; var Log : string);
+procedure FillCodeForMean(Means : string; IsCtg, UnitedNumbering : Boolean);
+function CreateIniFile(CommercialAgentsGroup, CommercialAgents : ICDictionary; var Log : string) : boolean;
+procedure CreateCommercialAgents(CommercialAgents, CommercialAgentsGroup : ICDictionary;
+  var Log : string);
+procedure DataCommunication(CommercialAgentsGroup, CommercialAgents : ICDictionary;
+  UseCreateIniFile, UseCreateCommercialAgentsFile, UseCreateExportFiles,
+  UseMoveExportFiles, UseMoveImportFiles, UseCreateImportFiles,
+  UseGroup, OnlyUpdate, SendToEMail, ReceiveFromEMail : Boolean;
+  ConfType : Integer; pnConf : TO4Panel; var ResultArray : Variant);
+function ExtractFilesFromZip(Path : string; ZipType : Integer; ZipExePath : string;
+  var Log : string; DoDelеteFiles : Boolean = True) : Boolean;
+function AddFilesToZip(Path, ZipArchPath : string; AgentCode, ZipType : Integer; ZipExePath, ZipFileNamePrefix : string;
+  var Log : string; DoDelеteFiles : Boolean = False; ZipMask : string = '*.*') : string;
+procedure MakeDir(Path : string);
+
+//Android
+procedure CreateAllAndroidFiles(ConfType : integer; DicCommercialAgents : ICDictionary);
+procedure CreateAllAndroidFilesByTbl(ConfType : integer; AgentsTable : ICValueTable);
+
+procedure CreateAllAndroidOrders(ConfType : Integer; pnConf : TO4Panel; var OrdersCount, NaklsCount, ChecksCount, VisitCount, PaysCount : integer);
+procedure CreateAllAndroidOrdersByTbl(ConfType : Integer; pnConf : TO4Panel; var OrdersCount, NaklsCount, ChecksCount, VisitCount, PaysCount : integer;
+                                      Var AgentsTbl : IcValueTable);
+
+
+procedure CreateAndroidOrdersForOneAgent(CommercialAgents : ICDictionary; ConfType : Integer; pnConf : TO4Panel;
+          var OrdersCount, NaklsCount, ChecksCount, VisitCount, PaysCount : integer);
+
+
+procedure CreateAndroidXMLExchangeFile(CommercialAgents : ICDictionary);
+procedure GetAndroidSettingsDict(var AndroidSettingsDict : ICDictionary);
+procedure AddFilesToZipByZipType(ZipType : integer; ZipExePath, ZipFullName, FilesNames : String);
+procedure DeleteCommercialAgents(AgentID : String);
+procedure CheckOrderDoc (Doc : IcDocuments);
+var
+  ExportFileOle : OLEVariant;
+
+implementation
+
+var
+  FileExt : string;
+  Constants : IC4VPAConst;
+
+procedure SetAndroidSettingsDictDefaultValues(var AndroidSettingsDict : ICDictionary);
+begin
+  server.SetAndroidSettingsDictDefaultValues(AndroidSettingsDict.SrvMean);
+  AndroidSettingsDict.Select;
+  AndroidSettingsDict.SelectNext;
+end;
+
+procedure GetAndroidSettingsDict(var AndroidSettingsDict : ICDictionary);
+begin
+  if IsNil(AndroidSettingsDict) then
+    begin
+      AndroidSettingsDict := CreateObject('Справочники.НастройкиДляAndroid');
+      if AndroidSettingsDict.Select then
+        AndroidSettingsDict.SelectNext
+      else
+        SetAndroidSettingsDictDefaultValues(AndroidSettingsDict);
+    end;
+end;
+
+function GetExportFileName(ExportPath, MeanName : string; CommercialAgentsCode : Integer) : string;
+begin
+  Result := ExportPath + MeanName + '_' + IntToStr(CommercialAgentsCode) + TxtExt
+end;
+
+function GetLogFromServer : string;
+begin
+  Result := server.GetLogFromServer;
+end;
+
+function DataExport(MeanName : string; CommercialAgentsGroup, CommercialAgents : ICDictionary;
+  UseGroup : Boolean) : Boolean;
+var
+  P : ICProcessing;
+begin
+  Result := False;
+  P := CreateObject('Обработки.О');
+  if CommercialAgents.IsFocused then
+    CommercialAgents.SetSrvToClientPos;
+  CommercialAgentsGroup.SetSrvToClientPos;
+  server.CreateSrvObj(CommercialAgentsGroup.ПутьЭкспортаПК, Constants.ИмяБазыНаКПК, CommercialAgentsGroup.SrvMean,
+    CommercialAgents.SrvMean, TxtExt, UseGroup);
+  case VarAsStr(MeanName) of
+    'Items' :
+      Result := P.RunThreadProcess(server.ExportItems,
+        DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgItems));
+    'Customers' :
+      Result := P.RunThreadProcess(server.ExportCustomers,
+        DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgCustomers));
+    'PriceTypes' :
+      Result := P.RunThreadProcess(server.ExportPriceTypes,
+        DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgPriceTypes));
+    'CommercialAgents' :
+      Result := P.RunThreadProcess(server.ExportCommercialAgents,
+        DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgCommercialAgents));
+    'RouteHeader' :
+      Result := P.RunThreadProcess(server.ExportRoute,
+        DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgRoute));
+    'VisitResultTypes' :
+      Result := P.RunThreadProcess(server.ExportVisitResultTypes,
+        DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgVisitResultTypes));
+    'UpdateItems' :
+      Result := P.RunThreadProcess(server.ExportUpdateItems,
+        DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgUpdateItems));
+    'UpdateCustomers' :
+      Result := P.RunThreadProcess(server.ExportUpdateCustomers,
+        DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgUpdateCustomers));
+  end;
+end;
+     
+function GetPartner(i : Integer; IDCustomer : integer; var Partner : ICDictionary; var Log : string) : Boolean;
+Var
+  UroPartner, ManPartner : ICDictionary;
+begin
+  Result := False;
+  UroPartner := CreateObject('Справочники.ЮрПартнеры');
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  case VarAsInt(Constants.КлиентыДляКПК) of
+    0 :
+      begin
+        UroPartner.Select;
+        Result := UroPartner.FindByField('Код', IDCustomer, False);
+        if Result then
+          begin
+            Partner := CreateObject('Справочники.ЮрПартнеры');
+            Partner.Find(UroPartner);
+          end;
+      end;
+    1 :
+      begin
+        ManPartner.Select;
+        Result := ManPartner.FindByField('Код', IDCustomer, False);
+        if Result then
+          begin
+            Partner := CreateObject('Справочники.ФизЛица');
+            Partner.Find(ManPartner);
+          end;
+      end;
+    2 :
+      begin
+        UroPartner.Select;
+        Result := UroPartner.FindByField('Код', IDCustomer, False);
+        if Result then
+          begin
+            Partner := CreateObject('Справочники.ЮрПартнеры');
+            Partner.Find(UroPartner);
+          end
+        else
+          begin
+            ManPartner.Select;
+            Result := ManPartner.FindByField('Код', IDCustomer, False);
+            if Result then
+              begin
+                Partner := CreateObject('Справочники.ФизЛица');
+                Partner.Find(ManPartner);
+              end;
+          end;
+      end;
+  end;
+  if not Result then
+    begin
+      Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+        Trans(logPartnerNotFound) + IntToStr(IDCustomer) + #13#10;
+      exit;
+    end;
+end;
+
+function CreateAndroidPaysByCLAgent(CommercialAgents : ICDictionary; XMLDocFullName : String; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel; var Log : string) : Integer;
+var
+  Partner, Responsible, DicCurrency, DicHdCurrency, DicPayCurrency,
+    Representative, AndroidSettingsDict, KassaDic : ICDictionary;
+  PayJournals, TmpJournal, PayJournalsByRoute  : ICJournal;
+  DocPayCashIn, DocOwner, DocPaysByRoute : ICDocuments;
+  i, Total, j,k : Integer;
+  TmpPanel : TO4Panel;
+  XMLDoc, NodeDOCUMENT, NodeDOCUMENTS, PayNodeDOCUMENT, PayNodeDOCUMENTS  : OLEVariant;
+  NodesDOCUMENTS_Length, PayNodesDOCUMENTS_Length : integer;
+  TmpAtr, DOCID, StrPocketDate, DocSuffix, OwnerDocName, DocName, StrNaklDate, PayDOCID, NaklCode : String;
+  IDCustomer, IDRepresentative : integer;
+  PocketDate, NaklDate : DateTime;
+  ValCourse, HardValCourse, PaySumma : Decimal;
+  ContPaysTbl : IcValueTable;
+  FixAckParam : Boolean;
+  Options : ICOptions;
+
+begin
+  Result := 0;
+  Constants := GetConstants;
+  GetAndroidSettingsDict(AndroidSettingsDict);
+  if VarAsBool(AndroidSettingsDict.ИспользоватьЛичныеФинансы) then
+    DocName := 'ПриходЛичФинансов'
+  else
+    DocName := 'ПриходВКассу';
+
+  Partner := CreateObject('Справочники.ЮрПартнеры');
+  Partner.Select;
+  Responsible := CreateObject('Справочники.ТорговыеАгенты');
+  Responsible.Select;
+  Representative := CreateObject('Справочники.Представители');
+  PayJournals := CreateObject('Журналы.ЖурналПлатежей');
+  PayJournalsByRoute := CreateObject('Журналы.ЖурналПроплатПоМаршруту');
+
+  ContPaysTbl := CreateObject('ValueTable');
+  ContPaysTbl.AddColumn('НомСтроки',vtcInteger,0);
+  ContPaysTbl.AddColumn('НазвДокПроплаты',vtcString,20);
+  ContPaysTbl.AddColumn('ДокументПроплаты',vtcLink,0);
+  ContPaysTbl.AddColumn('ДатаДокПропл',vtcDateTime,0);
+  ContPaysTbl.AddColumn('СуммаОплаты',vtcFFt,2);
+  ContPaysTbl.AddColumn('ДокументОснование',vtcLink,0);
+  ContPaysTbl.Open;
+
+  DocPayCashIn := CreateObject('Документы.' + DocName);
+  DocPayCashIn.Select;
+  DocPaysByRoute := CreateObject('Документы.ПроплатыПоМаршруту');
+  DocPaysByRoute.Select;
+
+  DicCurrency := CreateObject('Справочники.Валюты');
+  DicHdCurrency := CreateObject('Справочники.Валюты');
+  DicPayCurrency := CreateObject('Справочники.Валюты');
+
+  KassaDic := CreateObject('Справочники.Кассы');
+  KassaDic.Select;
+  KassaDic.FindByField('Активность', true, false);
+  Options := GetOptions;
+
+  ValCourse := 0;
+  HardValCourse := 0;
+  GetNatCurrency(DicCurrency);
+  GetNatCurrency(DicPayCurrency);
+  if DicCurrency.IsFocused and VarAsBool(DicCurrency.НацВалюта) then
+    ValCourse := 1;
+  GetHdCurrency(DicHdCurrency);
+  if DicHdCurrency.IsFocused then
+    begin
+      if VarAsBool(DicHdCurrency.НацВалюта) then
+        HardValCourse := 1
+    end
+  else
+    begin
+      GetNatCurrency(DicHdCurrency);
+      HardValCourse := 1;
+    end;
+  case ConfType of
+    cnfFarm :
+      DocSuffix := 'Фарм';
+    cnfAlco :
+      DocSuffix := 'Алко';
+  end;
+  case VarAsInt(Constants.ТипДокументаКПК) of
+    0 :
+      begin
+        TmpJournal := CreateObject('Журналы.ЖурналСчетовНаПродажу' + DocSuffix);
+        OwnerDocName := 'рахунку';
+      end;
+    1 :
+      begin
+        TmpJournal := CreateObject('Журналы.ЖурналНакладных' + DocSuffix);
+        OwnerDocName := 'накладної';
+      end;        
+    2 :
+      begin
+        TmpJournal := CreateObject('Журналы.ЖурналЧеков');
+        OwnerDocName := 'чека';
+      end;
+  end;
+  TmpJournal.Select;
+  i := 0;
+  XMLDoc := LoadXMLFromFileByVersion(XMLDocFullName, XMLVersion6);
+  NodeDOCUMENTS := XMLDoc.SelectNodes('/DATA/DOCUMENTS/DOCUMENT[@GUID="564E0ECA-C498-4D28-83D7-4BDEAEC558E2"]/ELEMENTS/ITEM');
+  NodesDOCUMENTS_Length := NodeDOCUMENTS.Length;
+  Total := NodesDOCUMENTS_Length;
+  try
+    for i := 0 to NodesDOCUMENTS_Length - 1 do
+      begin
+        StatusText(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(Total));
+        NodeDOCUMENT := NodeDOCUMENTS.Item[i];
+        if VarAsInt(NodeDOCUMENT.GetAttribute('State')) = 0 then
+          continue;
+        StrPocketDate := NodeDOCUMENT.GetAttribute('Date');//2012-09-26T17:50:13
+
+        PocketDate := EncodeDate(VarAsInt(StrCopy(StrPocketDate, 1, 4)), VarAsInt(StrCopy(StrPocketDate, 6, 2)), VarAsInt(StrCopy(StrPocketDate, 9, 2)))
+                      + EncodeTime(VarAsInt(StrCopy(StrPocketDate, 12, 2)), VarAsInt(StrCopy(StrPocketDate, 15, 2)), VarAsInt(StrCopy(StrPocketDate, 18, 2)));
+
+        PayJournalsByRoute.CancelFieldFilter('Ответственный');
+        PayJournalsByRoute.SetFieldFilter('Ответственный', '=', CommercialAgents.Служащий, '', '', Null);
+        DOCID := NodeDOCUMENT.GetAttribute('GUID');
+        PayJournalsByRoute.SetRangeByField('AndroidGUID', DOCID);
+        if PayJournalsByRoute.Select then
+          begin
+            Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+              Trans(logDocAlreadyExists) + DateTimeToStr(PocketDate) + #13#10;
+            continue;
+          end;
+
+        TmpAtr := NodeDOCUMENT.GetAttribute('PartnerCode');
+        IDCustomer := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+        if not GetPartner(i + 1, IDCustomer, Partner, Log) then
+          continue;
+
+
+
+        ContPaysTbl.Clear;
+        PayNodeDOCUMENTS := NodeDOCUMENT.SelectNodes('TABLES/TABLE[@GUID="0738E61B-F06F-464A-8483-4249E0254819"]/ITEM');
+//        NodeITEMS := NodeDOCUMENT.SelectNodes('TABLES/TABLE[@GUID="0738E61B-F06F-464A-8483-4249E0254819"]/ITEM');
+
+        PayNodesDOCUMENTS_Length := PayNodeDOCUMENTS.Length;
+        for j := 0 to PayNodesDOCUMENTS_Length-1 do
+          begin
+            K:=0;
+            PayNodeDOCUMENT := PayNodeDOCUMENTS.Item[j];
+            StrNaklDate := PayNodeDOCUMENT.GetAttribute('Date');//2012-09-26T17:50:13
+            NaklDate := StrToDateTime(StrNaklDate);
+            NaklCode := PayNodeDOCUMENT.GetAttribute('Code');
+            PaySumma := StrToDec(VarAsStr(PayNodeDOCUMENT.GetAttribute('Paid')));
+            if PaySumma =0 then
+              continue;
+            TmpJournal.CancelDateRange;
+            TmpJournal.SetDateRange(RoundDate(NaklDate,rdDay,false),RoundDate(NaklDate,rdDay,True));
+            TmpJournal.SetRangeByField('Партнер',Partner);
+            TmpJournal.Select;
+            if (NaklCode <> '') and TmpJournal.FindByField('НомерДокумента', NaklCode, False) then
+              DocOwner := TmpJournal.GetDoc
+            else
+              continue;
+
+            PayJournals.CancelFieldFilter('Ответственный');
+            PayJournals.SetFieldFilter('Ответственный', '=', CommercialAgents.Служащий, '', '', '');
+            PayDOCID := PayNodeDOCUMENT.GetAttribute('GUID');
+            PayJournals.SetRangeByField('AndroidGUID', PayDOCID);
+            if PayJournals.Select then
+              begin
+                Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+                  Trans(logDocAlreadyExists) + DateTimeToStr(PocketDate) + #13#10;
+                continue;
+              end;
+            DocPayCashIn.Append;
+            DocPayCashIn.ДатаДокумента := PocketDate;
+            DocPayCashIn.AndroidGUID := PayDOCID;
+            DocPayCashIn.Ответственный := CommercialAgents.Служащий;
+            if DicPayCurrency.IsFocused then
+              begin
+                DocPayCashIn.Курс := ValCourse;
+                if DocPayCashIn.Курс = 0 then
+                  DocPayCashIn.Курс := DicPayCurrency.GetTimedValue(Constants.UsedCurs, DocPayCashIn.ДатаДокумента);
+                if DocPayCashIn.Курс = 0 then
+                  DocPayCashIn.Курс := 1;
+                DocPayCashIn.Валюта := DicPayCurrency;
+              end;
+            if DicHdCurrency.IsFocused then
+              begin
+                DocPayCashIn.КурсТвВал := HardValCourse;
+                if DocPayCashIn.КурсТвВал = 0 then
+                  DocPayCashIn.КурсТвВал := DicHdCurrency.GetTimedValue(Constants.UsedCurs, DocPayCashIn.ДатаДокумента);
+                if DocPayCashIn.КурсТвВал = 0 then
+                  DocPayCashIn.КурсТвВал := 1;
+              end;
+            if KassaDic.IsFocused then
+              DocPayCashIn.Касса := KassaDic;
+            DocPayCashIn.Взаиморасчет := VarAsInt(True);
+
+            DocPayCashIn.ЕстьНДС := VarAsInt(DocOwner.СуммаНДС <> 0);
+            DocPayCashIn.Комментарий := 'Оплата згідно ' + OwnerDocName + ' №' + DocOwner.НомерДокумента + ' від ' +
+                DateToStr(DocOwner.ДатаДокумента);
+//            Partner := DocOwner.Партнер;
+            DocPayCashIn.Партнер := Partner;
+            if StrPos('Реализаторы', Partner.GetSign) > 0 then
+              DocPayCashIn.SetMaster(Partner)
+            else
+              DocPayCashIn.SetMaster(DocOwner);
+            if VarAsBool(DocPayCashIn.ЕстьНДС) then
+              DocPayCashIn.СтавкаНДС := Constants.ProcentPDV
+            else
+              DocPayCashIn.СтавкаНДС := 0;
+            DocPayCashIn.Сумма := PaySumma;
+            SetSums('Сумма', DocPayCashIn.Сумма, DocPayCashIn, DocPayCashIn.СтавкаНДС); //расчеты
+            SetCurSumma(DocPayCashIn);
+            SetHdSumma(DocPayCashIn);
+            DocPayCashIn.AppendLine;
+            DocPayCashIn.PostLine;
+
+            DocPayCashIn.Post;
+            DocPayCashIn.ApplyUpdates;
+//            if VarAsBool(Constants.ФиксироватьДокументыКПК)  then
+//              DocPayCashIn.StateUp;
+            if VarAsBool(Constants.ФиксироватьДокументыКПК)  then
+              try
+                FixAckParam := VarAsBool(Options.GetServerPrm(FixAck));
+                Options.SetServerPrm(FixAck,false);
+                DocPayCashIn.StateUp;
+              finally
+                Options.SetServerPrm(FixAck,FixAckParam );
+              end;
+
+            Doc.AppendLine;
+            Doc.Документ := DocPayCashIn;
+            Doc.PostLine;
+            inc(Result);
+            inc(k);
+            ContPaysTbl.Append;
+            ContPaysTbl.НомСтроки := k;
+            ContPaysTbl.ДокументПроплаты := DocPayCashIn;
+            ContPaysTbl.НазвДокПроплаты := DocPayCashIn.GetSign;
+            ContPaysTbl.ДатаДокПропл := DocPayCashIn.ДатаДокумента;
+            ContPaysTbl.СуммаОплаты := DocPayCashIn.Сумма;
+            ContPaysTbl.ДокументОснование := DocOwner;
+            ContPaysTbl.Post;
+          end;
+        ContPaysTbl.SortBy('НомСтроки');
+        ContPaysTbl.Select;
+        if ContPaysTbl.LineCount>0 then
+          begin
+            DocPaysByRoute.Append;
+            DocPaysByRoute.ДатаДокумента := PocketDate;
+            DocPaysByRoute.Ответственный := CommercialAgents.Служащий;
+            DocPaysByRoute.Партнер := Partner;
+            if IsObjFocused(Partner.@Маршрут) then
+              DocPaysByRoute.Маршрут := Partner.Маршрут;
+            DocPaysByRoute.Сумма := ContPaysTbl.Total('СуммаОплаты');
+            DocPaysByRoute.AndroidGUID := DOCID;
+            DocPaysByRoute.LoadContents('НазвДокПроплаты;ДокументПроплаты;ДатаДокПропл;СуммаОплаты;ДокументОснование',ContPaysTbl);
+            DocPaysByRoute.Post;
+            DocPaysByRoute.ApplyUpdates;
+          end;
+      end;
+  finally
+    StatusText('');
+  end;
+end;
+
+
+procedure AddMessageToLog(msgType, PathFrom, PathTo, MeanName, AgentCode, Ext, MsgRes : string; var Log : string);
+var
+  FileNameFrom, FileNameTo : string;
+begin
+  FileNameFrom := '''' + PathFrom + MeanName + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + Ext + '''';
+  if PathTo <> '' then
+    FileNameTo := ' - ''' + PathTo + MeanName + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + Ext + '''';
+  Log := Log + trans(msgType) + FileNameFrom + FileNameTo + Trans(MsgRes) + #13#10
+end;
+
+procedure CopyFileToDevice(ExportPath, ImportPath, MeanName, AgentCode, FileExt : string; var Log : string);
+begin
+  if VarAsBool(ExportFileOle.CopyFileToDevice(ExportPath + MeanName + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + FileExt,
+    ImportPath + MeanName + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + FileExt, False)) then
+    AddMessageToLog(msgFile, ExportPath, ImportPath, MeanName, AgentCode, FileExt, msgSuccessCopy, Log)
+  else
+    AddMessageToLog(msgFile, ExportPath, ImportPath, MeanName, AgentCode, FileExt, msgErrorCopy, Log);
+end;
+
+procedure CopyZipFileToDevice(ZipFilePrefix : string; CommercialAgentsGroup, CommercialAgents : ICDictionary;
+  var Log : string);
+var
+  MeanName, AgentCode : string;
+begin
+  AgentCode := IntToStr(CommercialAgents.Код);
+  MeanName := ZipFilePrefix + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + '.zip';
+  if VarAsBool(ExportFileOle.CopyFileToDevice(CommercialAgentsGroup.ПутьЭкспортаПК + MeanName,
+    CommercialAgents.ПутьИмпортаКПК + MeanName, False)) then
+    AddMessageToLog(msgFile, CommercialAgentsGroup.ПутьЭкспортаПК, CommercialAgents.ПутьИмпортаКПК,
+      ZipFilePrefix, AgentCode, ZipExt, msgSuccessCopy, Log)
+  else
+    AddMessageToLog(msgFile, CommercialAgentsGroup.ПутьЭкспортаПК, CommercialAgents.ПутьИмпортаКПК,
+      ZipFilePrefix, AgentCode, ZipExt, msgErrorCopy, Log)
+end;
+
+procedure ExportDataForAgent(Means, PCExportPath, AgentCode : string;
+  CommercialAgentsGroup, CommercialAgents : ICDictionary;
+  Params : Integer; UseGroup : Boolean; var Log : string);
+var
+  i, j, Total, ZipType : Integer;
+  GroupMeans, MeanName, FileNames, ZipExePath, FileNamesForCnv : string;
+  Res : Boolean;
+  Options : ICOptions;
+begin
+//  Options := GetOptions;
+  Options := GetOptions;
+  ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+  ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+  try
+    FileNames := '';
+    Total := WordCount(Means, ';');
+    if Means <> '' then
+      for i := 1 to Total do
+        begin
+          GroupMeans := ExtractWord(i, Means, ';');
+          MeanName := ExtractWord(1, GroupMeans, ',');
+          for j := 1 to WordCount(GroupMeans, ',') do
+            FileNames := FileNames + ';' + ExtractWord(j, GroupMeans, ',') + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + TxtExt;
+          case Params of
+            CreateAndMoveFiles :
+              begin
+                if DataExport(MeanName, CommercialAgentsGroup, CommercialAgents, UseGroup) then
+                  begin
+                    Log := Log + GetLogFromServer;
+                    for j := 1 to WordCount(GroupMeans, ',') do
+                      begin
+                        MeanName := ExtractWord(j, GroupMeans, ',');
+                        FileNamesForCnv := ExportFileOle.GetFileNamesForPath(PCExportPath, MeanName + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + TxtExt);
+                        if FileNamesForCnv <> '' then
+                          begin
+                            if AsciiToWideCharFile(PCExportPath + MeanName + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + TxtExt) then
+                              begin
+                                AddMessageToLog(msgFile, PCExportPath, '', MeanName, AgentCode, TxtExt, msgSuccessCnv, Log);
+                                if not (ZipType > 0) then
+                                  CopyFileToDevice(PCExportPath, CommercialAgents.ПутьИмпортаКПК, MeanName, AgentCode, TxtExt, Log);
+                              end
+                            else
+                              AddMessageToLog(msgFile, PCExportPath, '', MeanName, AgentCode, TxtExt, msgErrorCnv, Log);
+                          end
+                        else
+                          AddMessageToLog(msgFile, PCExportPath, '', MeanName, AgentCode, TxtExt, msgErrorFound, Log);
+                      end;
+                  end;
+              end;
+            CreateFiles :
+              begin
+                if DataExport(MeanName, CommercialAgentsGroup, CommercialAgents, UseGroup) then
+                  begin
+                    Log := Log + GetLogFromServer;
+                    for j := 1 to WordCount(GroupMeans, ',') do
+                      begin
+                        MeanName := ExtractWord(j, GroupMeans, ',');
+                        FileNamesForCnv := ExportFileOle.GetFileNamesForPath(PCExportPath, MeanName + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + TxtExt);
+                        if FileNamesForCnv <> '' then
+                          begin
+                            if AsciiToWideCharFile(PCExportPath + MeanName + '_' + Constants.ИмяБазыНаКПК + '_' + AgentCode + TxtExt) then
+                              AddMessageToLog(msgFile, PCExportPath, '', MeanName, AgentCode, TxtExt, msgSuccessCnv, Log)
+                            else
+                              AddMessageToLog(msgFile, PCExportPath, '', MeanName, AgentCode, TxtExt, msgErrorCnv, Log);
+                          end
+                        else
+                          AddMessageToLog(msgFile, PCExportPath, '', MeanName, AgentCode, TxtExt, msgErrorFound, Log);
+                      end;
+                  end;
+              end;
+            MoveFiles :
+              if not (ZipType > 0) then
+                for j := 1 to WordCount(GroupMeans, ',') do
+                  begin
+                    MeanName := ExtractWord(j, GroupMeans, ',');
+                    CopyFileToDevice(PCExportPath, CommercialAgents.ПутьИмпортаКПК, MeanName, AgentCode, TxtExt, Log);
+                  end;
+          end;
+          StatusText(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(Total))
+        end;
+    if ZipType > 0 then
+      case Params of
+        CreateAndMoveFiles, MoveFiles :
+          begin
+            if StrLength(FileNames) > 0 then
+              StrDelete(FileNames, 1, 1);
+            AddFilesToZip(PCExportPath, CommercialAgentsGroup.ПутьЭкспортаПК, CommercialAgents.Код, ZipType,
+              ZipExePath, 'ImportPocketData', Log, False, FileNames)
+          end;
+      end;
+  finally
+    StatusText('')
+  end;
+end;
+
+//procedure TableCalcFields(Doc : ICDocuments);
+//begin
+//  CalcLineSumma(Doc);
+//end; 
+
+procedure TableCalcFields (Doc : ICDocuments);
+begin
+  Doc.СуммаСтроки := VarAsDec(Doc.Количество)*VarAsDec(Doc.Цена);
+end;
+
+procedure TableCalcFieldsChecks (Doc : ICDocuments);
+begin
+  Doc.СуммаСтроки := VarAsDec(Doc.Количество)*VarAsDec(Doc.Цена);
+  if Doc.HasField('СуммаСтрокиПоБазовойЦене') then
+   Doc.СуммаСтрокиПоБазовойЦене := VarAsDec(Doc.Количество)*VarAsDec(Doc.БазоваяЦенаТовара);
+end;
+
+
+function DeleteFirstAndLastSymbols(Text : string; Symbol : string = '''') : string;
+var
+  TextLength : Integer;
+begin
+  Result := Text;
+  TextLength := StrLength(Text);
+  if (TextLength >= 2) and (Result[1] = Symbol) and (Result[StrLength(Text)] = Symbol) then
+    begin
+      StrDelete(Result, StrLength(Text), 1);
+      StrDelete(Result, 1, 1);
+    end;
+end;
+
+procedure CalcFields(Doc : ICDocuments);
+begin
+  GetCalcValSumma(Doc);
+end;
+
+function SetDocType(DocName, DocSuffix : string; Partner, RealPartner, Representative : ICDictionary;
+  ConfType : Integer; pnConf : TO4Panel; var OrderDoc : ICDocuments;
+  var TmpPartner : ICDictionary) : Boolean;
+var
+  TmpDocName : string;   
+  AndroidSettingsDict : ICDictionary;
+begin
+  GetAndroidSettingsDict(AndroidSettingsDict);
+  Result := False;
+  if not IsNil(RealPartner) and RealPartner.FindByField('Партнер', Partner, False) and 
+    VarAsBool(AndroidSettingsDict.ИспользоватьРеализаторов) then
+    begin
+      TmpPartner := RealPartner;
+      if DocName = 'НакладнаяОтпуска' then
+        TmpDocName := 'НакладнаяОтпускаНаРеализацию'
+      else                  
+        TmpDocName := DocName;
+    end
+  else
+    begin
+      TmpPartner := Partner;
+      TmpDocName := DocName;
+    end;
+  if not IsNil(RealPartner) then
+    begin
+      OrderDoc := CreateObject('Документы.' + TmpDocName + DocSuffix);
+      OrderDoc.Select;
+      OrderDoc.TableAutoCalcFields := False;
+    end;
+  OrderDoc.Append;
+  if StrPos('НакладнаяОтпускаНаРеализацию', TmpDocName) > 0 then
+    OrderDoc.SetMaster(TmpPartner);
+  OrderDoc.Партнер := TmpPartner; 
+
+  Representative.UseMasterAndSelect(Partner);
+  Result := True;
+end;
+
+function FindPartner(i : Integer; DocName, DocSuffix : string; IDCustomer : integer;
+  Partner, ManPartner, RealPartner, Representative : ICDictionary;
+  ConfType : Integer; pnConf : TO4Panel; var OrderDoc : ICDocuments;
+  var TmpPartner : ICDictionary; var Log : string) : Boolean;
+begin
+  Result := False;
+  case VarAsInt(Constants.КлиентыДляКПК) of
+    0 :
+      begin
+        if Partner.FindByField('Код', IDCustomer, False) then
+          Result := SetDocType(DocName, DocSuffix, Partner, RealPartner, Representative, ConfType, pnConf, OrderDoc, TmpPartner)
+        else
+          Result := False
+      end;
+    1 :
+      begin
+        if ManPartner.FindByField('Код', IDCustomer, False) then
+          Result := SetDocType(DocName, DocSuffix, ManPartner, RealPartner, Representative, ConfType, pnConf, OrderDoc, TmpPartner)
+        else
+          Result := False
+      end;
+    2 :
+      begin
+        if Partner.FindByField('Код', IDCustomer, False) then
+          Result := SetDocType(DocName, DocSuffix, Partner, RealPartner, Representative, ConfType, pnConf, OrderDoc, TmpPartner)
+        else
+          if ManPartner.FindByField('Код', IDCustomer, False) then
+            Result := SetDocType(DocName, DocSuffix, ManPartner, RealPartner, Representative, ConfType, pnConf, OrderDoc, TmpPartner)
+          else
+            Result := False
+      end;
+  end;
+  if not Result then
+    begin
+      Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+        Trans(logPartnerNotFound) + IntToStr(IDCustomer) + #13#10;
+      exit;
+    end;
+end;
+
+function CreateNakls(OrderHeader, OrderTable : ICValueTable; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel; var Log : string) : Integer;
+const
+  sprmFPAutoUseDocIn = 'FPAutoUseDocIn';
+var
+  TmpPartner, Partner, RealPartner, ManPartner, Representative, Responsible, Good,
+  Pack, Currency, Store, TmpStore : ICDictionary;
+  OrderJournals : ICJournal;
+  AccGood, AccPartGood, AccReserv : ICAccs;
+  OrderDoc : ICDocuments;
+  ChangeLock, UseAlco, UseTara : Boolean;
+  Course, Quantity : Decimal;
+  i, Total : Integer;
+  Options : ICOptions;
+  TblGoods, TmpCurrencyTbl : ICValueTable;
+  DocSuffix : string;
+begin
+  Result := 0;
+  GetConstants;
+  TmpStore := Constants.СкладДляКПК;
+  Partner := CreateObject('Справочники.ЮрПартнеры');
+  Partner.Select;
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  ManPartner.Select;
+  RealPartner := CreateObject('Справочники.Реализаторы');
+  RealPartner.Select;
+  Responsible := CreateObject('Справочники.ТорговыеАгенты');
+  Responsible.Select;
+  Representative := CreateObject('Справочники.Представители');
+  Good := CreateObject('Справочники.Товары');
+  Good.SortByField('Артикул');
+  Good.Select;
+  Pack := CreateObject('Справочники.Упаковки');
+  Pack.UseMasterAndSelect(Good);
+  TmpCurrencyTbl := CreateObject('ТаблицаЗначений');
+  TmpCurrencyTbl.AddColumn('Валюта', vtcLink, 0);
+  TmpCurrencyTbl.AddColumn('Курс', vtcFFt, 6);
+  TmpCurrencyTbl.Open;
+  Currency := CreateObject('Справочники.Валюты');
+  Currency.Select;
+  while Currency.SelectNext do
+    begin
+      TmpCurrencyTbl.Append;
+      Course := Currency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+      if Course <= 0 then
+        Course := 1;
+      TmpCurrencyTbl.Валюта := Currency;
+      TmpCurrencyTbl.Курс := Course;
+      TmpCurrencyTbl.Post;
+    end;
+  TmpCurrencyTbl.SortBy('Валюта');
+  TmpCurrencyTbl.Select;
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccReserv := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  case ConfType of
+    cnfFarm :
+      DocSuffix := 'Фарм';
+    cnfAlco :
+      DocSuffix := 'Алко';
+  end;
+  OrderJournals := CreateObject('Журналы.ЖурналНакладных' + DocSuffix);
+  OrderTable.SortBy('HeaderAgentCode;HeaderFileDateTime;IDRequest');
+  OrderHeader.Select;
+  Total := OrderHeader.LineCount;
+  i := 0;
+  TblGoods := CreateObject('ТаблицаЗначений');
+  TblGoods.AddColumn('Товар', vtcLink, 0);
+  TblGoods.AddColumn('ЕдИзм', vtcLink, 0);
+  TblGoods.AddColumn('Количество', vtcFFt, 5);
+  TblGoods.AddColumn('Цена', vtcFFt, 7);
+  TblGoods.AddColumn('ЦенаБезНДС', vtcFFt, 7);
+  TblGoods.AddColumn('ЦенаВВалюте', vtcFFt, 7);
+  TblGoods.AddColumn('НДС', vtcFFt, 7);
+  TblGoods.AddColumn('СтавкаНДС', vtcFFt, 2);
+  TblGoods.AddColumn('ПроцентСкидкиНадбавки', vtcFFt, 2);
+  TblGoods.AddColumn('ЦенаБезСкидкиНадбавки', vtcFFt, 7);
+  TblGoods.AddColumn('ВалютаТовара', vtcLink, 0);
+  TblGoods.AddColumn('КурсТовара', vtcFFt, 6);
+  TblGoods.AddColumn('Склад', vtcLink, 0);
+  TblGoods.AddColumn('Масса', vtcFft, 3);
+  case ConfType of
+    cnfFarm :
+      begin
+        TblGoods.AddColumn('ЦенаПроизводителя', vtcFFt, 7);
+        TblGoods.AddColumn('Серия', vtcLink, 0);
+      end;
+    cnfAlco :
+      begin
+        TblGoods.AddColumn('Тара', vtcInteger, 0);
+        TblGoods.AddColumn('СтавкаАлкоСбор', vtcFft, 2);
+      end;
+  end;
+  TblGoods.Open;
+  while OrderHeader.SelectNext do
+    begin
+      inc(i);
+      StatusText(Trans(msgCompleted) + IntToStr(i - 1) + Trans(msgFrom) + IntToStr(Total));
+      if not Responsible.FindByField('Код', OrderHeader.IDCommercialAgent, False) then
+        begin
+          Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+            Trans(logNotFoundCommercialAgent) + IntToStr(OrderHeader.IDCommercialAgent) + #13#10;
+          continue;
+        end;
+      OrderJournals.CancelFieldFilter('Ответственный');
+      OrderJournals.SetFieldFilter('Ответственный', '=', Responsible.Служащий, '', '', '');
+      OrderJournals.SetRangeByField('ДатаКПК', OrderHeader.DocumentDateTime);
+      if OrderJournals.Select then
+        begin
+          Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+            Trans(logDocAlreadyExists) + DateTimeToStr(OrderHeader.DocumentDateTime) + #13#10;
+          continue;
+        end;                //НакладнаяОтпуска
+      if not FindPartner(i, 'Чек', DocSuffix, OrderHeader.IDCustomer, Partner,
+        ManPartner, RealPartner, Representative, ConfType, pnConf, OrderDoc, TmpPartner, Log) then
+        continue;
+      OrderDoc.SetTableOnCalcFields(Null);
+      OrderDoc.SetOnCalcFields(Null);
+      OrderDoc.ДатаКПК := OrderHeader.DocumentDateTime;
+      OrderDoc.ДатаДокумента := OrderHeader.DocumentDateTime;
+      if Representative.FindByField('Код', OrderHeader.IDShop, False) then
+        OrderDoc.Посредник := Representative.@Название;
+      if Responsible.FindByField('Код', OrderHeader.IDCommercialAgent, False) then
+        OrderDoc.Ответственный := Responsible.Служащий;
+      OrderDoc.Заметки := OrderHeader.Comment;
+      if not Currency.FindByField('Активность', VarAsInt(True), True) then
+        Currency := GetNatCurrency(Currency);
+      if Currency.IsFocused then
+        begin
+          if TmpCurrencyTbl.Find(Currency) then
+            Course := TmpCurrencyTbl.Курс
+          else
+            Course := 1;
+          OrderDoc.Валюта := Currency;
+        end
+      else
+        Course := 1;
+      OrderDoc.Курс := Course;
+      OrderDoc.Отпуск := 1;
+      GetNextDateForDocument(OrderDoc, Constants, True);
+      OrderDoc.ДатаДоверенности := CurrentDate;
+      Options := GetOptions;
+      if OrderDoc.HasField('Касса') then
+        OrderDoc.Касса := - Bits(1)*VarAsInt(Options.GetServerPrm(sprmFPAutoUseDocIn)) + 32;
+      if VarAsBool(Constants.ТоварыДляКПК) then
+        begin
+          if TmpStore.IsFocused then
+            Store := TmpStore
+        end
+      else
+        if VarAsBool(Responsible.@Склад.IsFocused) then
+          Store := Responsible.@Склад;
+      TblGoods.Clear;
+      UseAlco := OrderDoc.HasField('СтавкаАлкоСбор');
+      UseTara := OrderDoc.HasField('Тара');
+      OrderTable.SetRange(ArrayOf(OrderHeader.HeaderAgentCode, OrderHeader.HeaderFileDateTime, OrderHeader.IDRequest),
+        ArrayOf(OrderHeader.HeaderAgentCode, OrderHeader.HeaderFileDateTime, OrderHeader.IDRequest));
+      OrderTable.Select;
+      while OrderTable.SelectNext do
+        begin
+          if not Good.FindByField('Артикул', OrderTable.IDItem, False) then
+            continue;
+          Quantity := OrderTable.Quantity;
+          if VarAsBool(Constants.ОтпускНаявногоТовараКПК) then
+            begin
+              AccGood.ClearFieldBuffers;
+              AccGood.ClearFieldFilters;
+              if IsObjFocused(Store) then
+                AccGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), ArrayOf(Good, Store))
+              else
+                AccGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Good);
+              if AccGood.КолОбщ > 0 then
+                begin
+                  if AccGood.КолОбщ < OrderTable.Quantity then
+                    Quantity := AccGood.КолОбщ;
+                end
+              else
+                continue;
+            end;
+          TblGoods.Append;
+          TblGoods.Товар := Good;
+          if UseAlco and (Good.ПризнакАлкоТабак = 1) then
+            TblGoods.СтавкаАлкоСбор := Constants.СтавкаПоАлкоСбору;
+          TblGoods.Количество := Quantity;
+          TblGoods.СтавкаНДС := Good.СтавкаНДС;
+          TblGoods.ВалютаТовара := Good.@ВалОтпЦены;
+          if TmpCurrencyTbl.Find(Good.@ВалОтпЦены) then
+            Course := TmpCurrencyTbl.Курс
+          else
+            Course := 1;
+          TblGoods.КурсТовара := Course;
+          TblGoods.Цена := OrderTable.Price;
+          TblGoods.ЦенаБезСкидкиНадбавки := OrderTable.PriceWithoutDiscount;
+          TblGoods.ПроцентСкидкиНадбавки := -OrderTable.RowDiscount;
+          TblGoods.Масса := OrderTable.Weight;
+          TblGoods.Цена := VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) + VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) * VarAsDec(TblGoods.ПроцентСкидкиНадбавки) / 100;
+          ЦенаНДС(TblGoods, False);
+          if VarAsDec(TblGoods.КурсТовара) <> 0 then
+            TblGoods.ЦенаВВалюте := VarAsDec(TblGoods.Цена) / TblGoods.КурсТовара;
+          TblGoods.Склад := Store;
+          if UseTara and TblGoods.HasField('Тара') then //вид тары
+            TblGoods.AssignFields('Тара', Good);
+          TblGoods.Post;
+        end;
+      TblGoods.Select;
+      if TblGoods.LineCount > 0 then
+        begin
+          while TblGoods.SelectNext do
+            case ConfType of
+              cnfType :
+                CreateApplyTable(TblGoods.Товар, TblGoods, Store, OrderDoc, Null,
+                  TblGoods.Количество, Null, -2, Constants, Currency, Pack, Options,
+                  AccGood, AccReserv, AccPartGood);
+              cnfFarm, cnfAlco :
+                InvokeAIFunction(CtrlToVar(pnConf), 'CreateApplyTable',
+                  ArrayOf(TblGoods, OrderDoc, Constants, Currency,
+                  Pack, Options, AccGood, AccReserv, AccPartGood))
+            end;
+          case ConfType of
+            cnfType :
+              begin
+                OrderDoc.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+                OrderDoc.SetOnCalcFields(EntryPoint(CalcFields));
+              end;
+            cnfFarm, cnfAlco :
+              InvokeAIFunction(CtrlToVar(pnConf), 'SetOnCalcFields',
+                OrderDoc)
+          end;
+          case ConfType of
+            cnfType :
+              CalcDocSumma(OrderDoc);
+            cnfFarm, cnfAlco :
+              InvokeAIFunction(CtrlToVar(pnConf), 'CalcDocSumma', OrderDoc)
+          end;
+          OrderDoc.Post;
+          OrderDoc.ApplyUpdates;
+          if VarAsBool(Constants.ФиксироватьДокументыКПК) then
+            OrderDoc.StateUp;
+          Doc.AppendLine;
+          Doc.Документ := OrderDoc;
+          Doc.PostLine;
+          inc(Result);
+        end
+      else
+        OrderDoc.Cancel;
+    end;
+end;
+
+function CreateOrders(OrderHeader, OrderTable : ICValueTable; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel; var Log : string) : Integer;
+var
+  TmpPartner, Partner, ManPartner, Representative, Responsible, Good, Pack, Currency : ICDictionary;
+  OrderJournals : ICJournal;
+  AccGood : ICAccs;
+  OrderDoc : ICDocuments;
+  ChangeLock, UseAlco, UseTara : Boolean;
+  Course : Decimal;
+  i, Total : Integer;
+  DocSuffix : string;
+  TmpPanel : TO4Panel;
+  TmpCurrencyTbl : ICValueTable;
+begin
+  Result := 0;
+  GetConstants;
+  Partner := CreateObject('Справочники.ЮрПартнеры');
+  Partner.Select;
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  ManPartner.Select;
+  Responsible := CreateObject('Справочники.ТорговыеАгенты');
+  Responsible.Select;
+  Representative := CreateObject('Справочники.Представители');
+  Good := CreateObject('Справочники.Товары');
+  Good.SortByField('Артикул');
+  Good.Select;
+  Pack := CreateObject('Справочники.Упаковки');
+  Pack.UseMasterAndSelect(Good);
+  TmpCurrencyTbl := CreateObject('ТаблицаЗначений');
+  TmpCurrencyTbl.AddColumn('Валюта', vtcLink, 0);
+  TmpCurrencyTbl.AddColumn('Курс', vtcFFt, 6);
+  TmpCurrencyTbl.Open;
+  Currency := CreateObject('Справочники.Валюты');
+  Currency.Select;
+  while Currency.SelectNext do
+    begin
+      TmpCurrencyTbl.Append;
+      Course := Currency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+      if Course <= 0 then
+        Course := 1;
+      TmpCurrencyTbl.Валюта := Currency;
+      TmpCurrencyTbl.Курс := Course;
+      TmpCurrencyTbl.Post;
+    end;
+  TmpCurrencyTbl.SortBy('Валюта');
+  TmpCurrencyTbl.Select;
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  case ConfType of
+    cnfFarm :
+      DocSuffix := 'Фарм';
+    cnfAlco :
+      DocSuffix := 'Алко';
+  end;
+  OrderJournals := CreateObject('Журналы.ЖурналСчетовНаПродажу' + DocSuffix);
+  OrderDoc := CreateObject('Документы.СчетНаПродажу' + DocSuffix);
+  OrderDoc.Select;
+  OrderDoc.TableAutoCalcFields := False;
+  OrderTable.SortBy('HeaderAgentCode;HeaderFileDateTime;IDRequest');
+  OrderHeader.Select;
+  Total := OrderHeader.LineCount;
+  i := 0;
+  while OrderHeader.SelectNext do
+    begin
+      inc(i);
+      StatusText(Trans(msgCompleted) + IntToStr(i - 1) + Trans(msgFrom) + IntToStr(Total));
+      if not Responsible.FindByField('Код', OrderHeader.IDCommercialAgent, False) then
+        begin
+          Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+            Trans(logNotFoundCommercialAgent) + IntToStr(OrderHeader.IDCommercialAgent) + #13#10;
+          continue;
+        end;
+      OrderJournals.CancelFieldFilter('Ответственный');
+      OrderJournals.SetFieldFilter('Ответственный', '=', Responsible.Служащий, '', '', '');
+      OrderJournals.SetRangeByField('ДатаКПК', OrderHeader.DocumentDateTime);
+      if OrderJournals.Select then
+        begin
+          Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+            Trans(logDocAlreadyExists) + DateTimeToStr(OrderHeader.DocumentDateTime) + #13#10;
+          continue;
+        end;
+      if not FindPartner(i, 'СчетНаПродажу', DocSuffix, OrderHeader.IDCustomer, Partner, ManPartner,
+        null, Representative, 0, TmpPanel, OrderDoc, TmpPartner, Log) then
+        continue;
+      OrderDoc.SetTableOnCalcFields(Null);
+      OrderDoc.SetOnCalcFields(Null);
+      OrderDoc.ДатаКПК := OrderHeader.DocumentDateTime;
+      OrderDoc.ДатаДокумента := OrderHeader.DocumentDateTime;
+      if Representative.FindByField('Код', OrderHeader.IDShop, False) then
+        OrderDoc.Посредник := Representative.@Название;
+      if Responsible.FindByField('Код', OrderHeader.IDCommercialAgent, False) then
+        OrderDoc.Ответственный := Responsible.Служащий;
+      OrderDoc.Заметки := OrderHeader.Comment;
+      if not Currency.FindByField('Активность', VarAsInt(True), True) then
+        Currency := GetNatCurrency(Currency);
+      if Currency.IsFocused then
+        begin
+          if TmpCurrencyTbl.Find(Currency) then
+            Course := TmpCurrencyTbl.Курс
+          else
+            Course := 1;
+          OrderDoc.Валюта := Currency;
+        end
+      else
+        Course := 1;
+      OrderDoc.Курс := Course;
+      OrderDoc.Отпуск := 1;
+      GetNextDateForDocument(OrderDoc, Constants, True);
+      OrderDoc.ДатаДоверенности := CurrentDate;
+      OrderDoc.ОкончаниеРезерва := GetNextDateRes(OrderDoc.ДатаДокумента, Constants);
+
+      UseAlco := OrderDoc.HasField('СтавкаАлкоСбор');
+      UseTara := OrderDoc.HasField('Тара');
+      OrderTable.SetRange(ArrayOf(OrderHeader.HeaderAgentCode, OrderHeader.HeaderFileDateTime, OrderHeader.IDRequest),
+        ArrayOf(OrderHeader.HeaderAgentCode, OrderHeader.HeaderFileDateTime, OrderHeader.IDRequest));
+      OrderTable.Select;
+      while OrderTable.SelectNext do
+        begin
+          if not Good.FindByField('Артикул', OrderTable.IDItem, False) then
+            continue;
+          OrderDoc.AppendLine;
+          OrderDoc.Товар := Good;
+          {Pack.Select;
+          if Pack.FindByField('Код', OrderTable.IDPacking, False) then
+            begin
+              OrderDoc.Упаковка := Pack;
+              OrderDoc.КоличествоУпаковок := OrderTable.PackingQuantity;
+            end;}
+          if UseAlco and (Good.ПризнакАлкоТабак = 1) then
+            OrderDoc.СтавкаАлкоСбор := Constants.СтавкаПоАлкоСбору;
+          if UseTara then
+            OrderDoc.AssignFields('Тара', Good);
+          OrderDoc.Количество := OrderTable.Quantity;
+          OrderDoc.СтавкаНДС := Good.СтавкаНДС;
+          OrderDoc.ВалютаТовара := Good.@ВалОтпЦены;
+          if TmpCurrencyTbl.Find(Good.@ВалОтпЦены) then
+            Course := TmpCurrencyTbl.Курс
+          else
+            Course := 1;
+          OrderDoc.КурсТовара := Course;
+          OrderDoc.Цена := OrderTable.Price;
+          OrderDoc.ЦенаБезСкидкиНадбавки := OrderTable.PriceWithoutDiscount;
+          OrderDoc.ПроцентСкидкиНадбавки := -OrderTable.RowDiscount;
+          OrderDoc.Масса := OrderTable.Weight;
+          if VarAsBool(Constants.РасчетВхЦены) then
+            begin
+              AccGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Good);
+              if AccGood.КолОбщ <> 0 then
+                OrderDoc.ВхЦенаБезНДС := AccGood.СумВх / AccGood.КолОбщ;
+            end
+          else
+            OrderDoc.ВхЦенаБезНДС := Good.ВхЦенаБезНДС;
+          GoodTDSFieldChange(OrderDoc, 'ПроцентСкидкиНадбавки', OrderDoc.ПроцентСкидкиНадбавки, ChangeLock, False);
+          OrderDoc.PostLine;
+        end;
+      case ConfType of
+        cnfType :
+          begin
+            OrderDoc.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+            OrderDoc.SetOnCalcFields(EntryPoint(CalcFields));
+          end;
+        cnfFarm, cnfAlco :
+          InvokeAIFunction(CtrlToVar(pnConf), 'SetOnCalcFields',
+            OrderDoc)
+      end;
+      case ConfType of
+        cnfType :
+          CalcDocSumma(OrderDoc);
+        cnfFarm, cnfAlco :
+          InvokeAIFunction(CtrlToVar(pnConf), 'CalcDocSumma', OrderDoc)
+      end;
+      OrderDoc.Post;
+      OrderDoc.ApplyUpdates;
+      if VarAsBool(Constants.ФиксироватьДокументыКПК) then
+        OrderDoc.StateUp;
+      Doc.AppendLine;
+      Doc.Документ := OrderDoc;
+      Doc.PostLine;
+      inc(Result);
+    end;
+end;
+
+function CreateRequestDocs(ExportPath : string; CommercialAgents : ICDictionary; DelOrderedFiles : Boolean;
+  Doc : ICDocuments; ConfType : Integer; pnConf : TO4Panel;
+  var Log : string) : Variant;
+var
+  FileNames, FileName : string;
+  OrderHeader, OrderTable, TmpOrderTable, TmpOrderHeader : ICValueTable;
+  i, j, k, Total, OrdersCount, NaklsCount, HeaderAgentCode : Integer;
+  TmpStringList : TStringList;
+  Text, Line, HeaderFileName, HeaderStrDateTime : string;
+  TmpQuantity : Decimal;
+  HeaderFileDateTime : DateTime;
+  P : ICProcessing;
+begin
+  Result := ArrayOf(0, 0);
+  OrdersCount := 0;
+  NaklsCount := 0;
+  AddColumnsByArrDescr(OrderHeader, ArrayOf(
+    ArrayOf('HeaderAgentCode', vtcInteger, 0),
+    ArrayOf('HeaderFileDateTime', vtcDateTime, 0),
+    ArrayOf('IDRequest', vtcInteger, 0),
+    ArrayOf('DocumentNumber', vtcString, 10),
+    ArrayOf('DocumentDateTime', vtcDateTime, 0),
+    ArrayOf('IDCustomer', vtcInteger, 0),
+    ArrayOf('IDShop', vtcInteger, 0),
+    ArrayOf('IDCommercialAgent', vtcInteger, 0),
+    ArrayOf('Comment', vtcMemo, 0),
+    ArrayOf('Note', vtcInteger, 0)
+    ), True);
+  AddColumnsByArrDescr(OrderTable, ArrayOf(
+    ArrayOf('HeaderAgentCode', vtcInteger, 0),
+    ArrayOf('HeaderFileDateTime', vtcDateTime, 0),
+    ArrayOf('IDRequest', vtcInteger, 0),
+    ArrayOf('IDItem', vtcInteger, 0),
+    ArrayOf('Quantity', vtcFft, 5),
+    ArrayOf('Price', vtcFft, 7),
+    ArrayOf('RowDiscount', vtcFft, 2),
+    ArrayOf('PriceWithoutDiscount', vtcFft, 2),
+    ArrayOf('Weight', vtcFft, 3)
+    ), True);
+  FileNames := ExportFileOle.GetFileNamesForPath(ExportPath, 'Request*' + '_' + Constants.ИмяБазыНаКПК + '_' + '*.*');
+  P := CreateObject('Обработки.О');
+  TmpOrderHeader := CreateObject('ТаблицаЗначений');
+  OrderHeader.CopyColumnsTo(TmpOrderHeader);
+  TmpOrderTable := CreateObject('ТаблицаЗначений');
+  OrderTable.CopyColumnsTo(TmpOrderTable);
+  for i := 1 to WordCount(FileNames, ';') do
+    begin
+      FileName := ExtractWord(i, FileNames, ';');
+      if StrPos('RequestHeader', FileName) > 0 then
+        begin
+          TmpStringList := CreateStringList;
+          try
+            TmpStringList.LoadFromFile(ExportPath + FileName);
+            Text := TmpStringList.Text;
+            TmpOrderHeader.CopyDataToServer;
+            P.RunThreadProcess(server.GetOrderHeader(TmpOrderHeader.SrvMean, Text, FileName),
+              DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgGetOrderHeader));
+            TmpOrderHeader.CopyDataFromServer;
+            TmpOrderHeader.SrvMean.Clear;
+            TmpOrderHeader.AppendTo('', OrderHeader);
+            TmpOrderHeader.Clear;
+            Total := WordCount(Text, Row_Separator) - 1;
+          finally
+            Log := Log + Trans(msgRead) + IntToStr(Total - 1) + Trans(msgRecordsToFile) +
+              '''' + ExportPath + FileName + '''' + #13#10;
+            TmpStringList.Free
+          end;
+        end;
+      if StrPos('RequestTable', FileName) > 0 then
+        begin
+          TmpStringList := CreateStringList;
+          try
+            TmpStringList.LoadFromFile(ExportPath + FileName);
+            Text := TmpStringList.Text;
+            Total := WordCount(Text, Row_Separator) - 1;
+            TmpOrderTable.CopyDataToServer;
+            if Text <> '' then
+              P.RunThreadProcess(server.GetOrderTable(TmpOrderTable.SrvMean, Text),
+                DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans(msgGetOrderTable));
+            TmpOrderTable.CopyDataFromServer;
+            TmpOrderTable.SrvMean.Clear;
+            TmpOrderTable.AppendTo('', OrderTable);
+            TmpOrderTable.Clear;
+          finally
+            Log := Log + Trans(msgRead) + IntToStr(Total - 2) + Trans(msgRecordsToFile) +
+              '''' + ExportPath + FileName + '''' + #13#10;
+            TmpStringList.Free
+          end;
+        end;
+    end;
+  Total := OrderHeader.LineCount;
+  if Total = 0 then
+    exit;
+  try
+    case VarAsInt(Constants.ТипДокументаКПК) of
+      0 :
+        OrdersCount := CreateOrders(OrderHeader, OrderTable, Doc, ConfType, pnConf, Log);
+      1 :
+        NaklsCount := CreateNakls(OrderHeader, OrderTable, Doc, ConfType, pnConf, Log);
+    end;
+    if DelOrderedFiles then
+      for i := 1 to WordCount(FileNames, ';') do
+        begin
+          FileName := ExtractWord(i, FileNames, ';');
+          if (StrPos('RequestHeader', FileName) > 0) or (StrPos('RequestTable', FileName) > 0) then
+            DeleteFile(ExportPath + FileName);
+        end;
+  finally
+    StatusText('');
+    Log := Log + Trans(msgAdd) + IntToStr(OrdersCount) + Trans(msgOrdersDoc) + #13#10;
+    Log := Log + Trans(msgAdd) + IntToStr(NaklsCount) + Trans(msgNaklsDoc) + #13#10;
+  end;
+  Result := ArrayOf(OrdersCount, NaklsCount);
+end;
+
+function CreateVisits(ExportPath : string; CommercialAgents : ICDictionary; DelOrderedFiles : Boolean;
+                      Doc : ICDocuments; var Log : string) : Integer;
+var
+  FileNames, FileName : string;
+  OrderHeader : ICValueTable;
+  i, j, k, Total, OrdersCount : Integer;
+  TmpStringList : TStringList;
+  Text, Line : string;
+  OrderDoc : ICDocuments;
+  TmpPartner, Partner, ManPartner, Representative, Responsible, VisitResultTypes : ICDictionary;
+  OrderJournals : ICJournal;
+  TmpPanel : TO4Panel;
+begin
+  Result := 0;
+  AddColumnsByArrDescr(OrderHeader, ArrayOf(
+    ArrayOf('DocumentNumber', vtcString, 10),
+    ArrayOf('DocumentDateTime', vtcDateTime, 0),
+    ArrayOf('IDCustomer', vtcInteger, 0),
+    ArrayOf('IDShop', vtcInteger, 0),
+    ArrayOf('IDCommercialAgent', vtcInteger, 0),
+    ArrayOf('IDVisitResultTypes', vtcInteger, 0),
+    ArrayOf('Comment', vtcMemo, 0),
+    ArrayOf('Note', vtcInteger, 0)
+    ), True);
+
+  FileNames := ExportFileOle.GetFileNamesForPath(ExportPath, 'VisitHeader' + '_' + Constants.ИмяБазыНаКПК + '_' + '*.*');
+  for i := 1 to WordCount(FileNames, ';') do
+    begin
+      FileName := ExtractWord(i, FileNames, ';');
+      if StrPos('VisitHeader', FileName) > 0 then
+        begin
+          TmpStringList := CreateStringList;
+          try
+            TmpStringList.LoadFromFile(ExportPath + FileName);
+            Text := TmpStringList.Text;
+            Total := WordCount(Text, Row_Separator) - 1;
+            for j := 2 to Total do
+              begin
+                StatusText(Trans(msgCompleted) + IntToStr(j - 2) + Trans(msgFrom) + IntToStr(Total));
+                Line := StrTrim(ExtractWord(j, Text, Row_Separator));
+                OrderHeader.Append;
+                OrderHeader.DocumentNumber := DeleteFirstAndLastSymbols(ExtractWord(2, Line, Column_Separator));
+                OrderHeader.DocumentDateTime := StrToDateTime(DeleteFirstAndLastSymbols(ExtractWord(3, Line, Column_Separator)));
+                OrderHeader.IDCustomer := VarAsInt(ExtractWord(4, Line, Column_Separator));
+                OrderHeader.IDShop := VarAsInt(ExtractWord(5, Line, Column_Separator));
+                OrderHeader.IDCommercialAgent := VarAsInt(ExtractWord(6, Line, Column_Separator));
+                OrderHeader.IDVisitResultTypes := VarAsInt(ExtractWord(7, Line, Column_Separator));
+                OrderHeader.Comment := DeleteFirstAndLastSymbols(ExtractWord(9, Line, Column_Separator));
+                OrderHeader.Note := VarAsInt(ExtractWord(10, Line, Column_Separator));
+                OrderHeader.Post;
+              end;
+          finally
+            Log := Log + Trans(msgRead) + IntToStr(Total - 1) + Trans(msgRecordsToFile) +
+              '''' + ExportPath + FileName + '''' + #13#10;
+            TmpStringList.Free
+          end;
+        end;
+    end;
+  Total := OrderHeader.LineCount;
+  if Total = 0 then
+    exit;
+
+  Partner := CreateObject('Справочники.ЮрПартнеры');
+  Partner.Select;
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  ManPartner.Select;
+  Representative := CreateObject('Справочники.Представители');
+  Responsible := CreateObject('Справочники.ТорговыеАгенты');
+  Responsible.Select;
+  VisitResultTypes := CreateObject('Справочники.РезультатыПосещений');
+  VisitResultTypes.Select;
+
+  OrderJournals := CreateObject('Журналы.ЖурналПосещений');
+  OrderDoc := CreateObject('Документы.Посещение');
+  OrderDoc.Select;
+  OrderHeader.Select;
+  OrdersCount := 0;
+  i := 0;
+  try
+    while OrderHeader.SelectNext do
+      begin
+        inc(i);
+        StatusText(Trans(msgCompleted) + IntToStr(i - 1) + Trans(msgFrom) + IntToStr(Total));
+        if not Responsible.FindByField('Код', OrderHeader.IDCommercialAgent, False) then
+          begin
+            Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+              Trans(logNotFoundCommercialAgent) + IntToStr(OrderHeader.IDCommercialAgent) + #13#10;
+            continue;
+          end;
+        OrderJournals.CancelFieldFilter('Ответственный');
+        OrderJournals.SetFieldFilter('Ответственный', '=', Responsible.Служащий, '', '', '');
+        OrderJournals.SetRangeByField('ДатаКПК', OrderHeader.DocumentDateTime);
+        if OrderJournals.Select then
+          begin
+            Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+              Trans(logDocAlreadyExists) + DateTimeToStr(OrderHeader.DocumentDateTime) + #13#10;
+            continue;
+          end;
+        if not FindPartner(i, 'Посещение', '', OrderHeader.IDCustomer, Partner, ManPartner, null,
+          Representative, 0, TmpPanel, OrderDoc, TmpPartner, Log) then
+          continue;
+        OrderDoc.ДатаКПК := OrderHeader.DocumentDateTime;
+        OrderDoc.ДатаДокумента := OrderHeader.DocumentDateTime;
+        if Representative.FindByField('Код', OrderHeader.IDShop, False) then
+          OrderDoc.Посредник := Representative.@Название;
+        if Responsible.FindByField('Код', OrderHeader.IDCommercialAgent, False) then
+          OrderDoc.Ответственный := Responsible.Служащий;
+        if VisitResultTypes.FindByField('Код', OrderHeader.IDVisitResultTypes, False) then
+          OrderDoc.РезультатПосещения := VisitResultTypes;
+        OrderDoc.Заметки := OrderHeader.Comment;
+        OrderDoc.Post;
+        OrderDoc.ApplyUpdates;
+        if VarAsBool(Constants.ФиксироватьДокументыКПК) then
+          OrderDoc.StateUp;
+        Doc.AppendLine;
+        Doc.Документ := OrderDoc;
+        Doc.PostLine;
+        inc(OrdersCount);
+      end;
+    if DelOrderedFiles then
+      for i := 1 to WordCount(FileNames, ';') do
+        begin
+          FileName := ExtractWord(i, FileNames, ';');
+          if (StrPos('VisitHeader', FileName) > 0) then
+            DeleteFile(ExportPath + FileName);
+        end;
+  finally
+    StatusText('');
+    Log := Log + Trans(msgAdd) + IntToStr(OrdersCount) + Trans(msgVisitDoc) + #13#10;
+  end;
+  Result := OrdersCount;
+end;
+
+procedure WideCharToAsciiFileProc(MeanName : string; CommercialAgents : ICDictionary; var Log : string);
+var
+  Path, FileNamesForCnv : string;
+begin
+  Path := CommercialAgents.ПутьИмпортаПК; 
+  FileNamesForCnv := ExportFileOle.GetFileNamesForPath(Path, MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + TxtExt);
+  if FileNamesForCnv <> '' then
+    begin
+      if WideCharToAsciiFile(Path + MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + TxtExt) then
+        AddMessageToLog(msgFile, Path, '', MeanName, '', TxtExt, msgSuccessCnv, Log)
+      else
+        AddMessageToLog(msgFile, Path, '', MeanName, '', TxtExt, msgErrorCnv, Log)
+    end
+  else
+    AddMessageToLog(msgFile, Path, '', MeanName, '', TxtExt, msgErrorFound, Log)
+end;
+
+procedure CreateDocs(Path, MeanName : string; CommercialAgents : ICDictionary; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel;
+  var ResultArray : Variant; var Log : string);
+var
+  TmpArray : Variant;
+begin
+  case MeanName of
+    'RequestHeader' :
+      begin
+        TmpArray := CreateRequestDocs(Path, CommercialAgents, True, Doc, ConfType, pnConf, Log);
+        ResultArray[1] := TmpArray[0];
+        ResultArray[2] := TmpArray[1];
+      end;
+    'VisitHeader' :
+      ResultArray[0] := CreateVisits(Path, CommercialAgents, True, Doc, Log);
+  end;
+end;
+
+procedure CnvAndCreateDocs(MeanName : string; CommercialAgents : ICDictionary; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel;
+  var ResultArray : Variant; var Log : string);
+var
+  Path, FileNamesForCnv : string;
+begin
+  Path := CommercialAgents.ПутьИмпортаПК;
+  FileNamesForCnv := ExportFileOle.GetFileNamesForPath(Path, MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + TxtExt);
+  if FileNamesForCnv <> '' then
+    begin
+      if WideCharToAsciiFile(Path + MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + TxtExt) then
+        begin
+          AddMessageToLog(msgFile, Path, '', MeanName, '', TxtExt, msgSuccessCnv, Log);
+          CreateDocs(Path, MeanName, CommercialAgents, Doc, ConfType, pnConf, ResultArray, Log);
+        end
+      else
+        AddMessageToLog(msgFile, Path, '', MeanName, '', TxtExt, msgErrorCnv, Log)
+    end
+  else
+    AddMessageToLog(msgFile, Path, '', MeanName, '', TxtExt, msgErrorFound, Log)
+end;
+
+procedure ImportDataForAgent(Means, AgentCode : string; CommercialAgents : ICDictionary;
+  Params : Integer; ReceiveFromEMail : Boolean;
+  Doc : ICDocuments; ConfType : Integer; pnConf : TO4Panel;
+  var ResultArray : Variant; var Log : string);
+var
+  i, Total, ZipType : Integer;
+  MeanName, ZipExePath : string;
+  Res : Variant;
+  Options : ICOptions;
+begin
+  Options := GetOptions;
+  ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+  ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+  if ZipType > 0 then
+    case Params of
+      CreateAndMoveFiles, MoveFiles :
+        begin
+          MeanName := 'ExportPocketData';
+          if not ReceiveFromEMail then
+            begin
+              if ExportFileOle.CopyFileFromDevice(CommercialAgents.ПутьЭкспортаКПК + MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + ZipExt,
+                CommercialAgents.ПутьИмпортаПК + MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + ZipExt, True) <> 0 then
+                begin
+                  AddMessageToLog(msgFile, CommercialAgents.ПутьЭкспортаКПК, CommercialAgents.ПутьИмпортаПК,
+                    MeanName, '', ZipExt, msgSuccessCopy, Log);
+                  ExtractFilesFromZip(CommercialAgents.ПутьИмпортаПК, ZipType, ZipExePath, Log);
+                end
+              else
+                AddMessageToLog(msgFile, CommercialAgents.ПутьЭкспортаКПК, CommercialAgents.ПутьИмпортаПК,
+                  MeanName, '', ZipExt, msgErrorCopy, Log)
+            end
+          else
+            ExtractFilesFromZip(CommercialAgents.ПутьИмпортаПК, ZipType, ZipExePath, Log);
+        end;
+    end;
+  ArrayCreate(ResultArray, [0, 2], Integer);
+  try
+    Total := WordCount(Means, ';');
+    for i := 1 to Total do
+      begin
+        MeanName := ExtractWord(i, Means, ';');
+        case Params of
+          CreateAndMoveFiles :
+            begin
+              if not (ZipType > 0) then
+                begin
+                  if ExportFileOle.CopyFileFromDevice(CommercialAgents.ПутьЭкспортаКПК + MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + TxtExt,
+                    CommercialAgents.ПутьИмпортаПК + MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + TxtExt, True) <> 0 then
+                    begin
+                      AddMessageToLog(msgFile, CommercialAgents.ПутьЭкспортаКПК, CommercialAgents.ПутьИмпортаПК,
+                        MeanName, '', TxtExt, msgSuccessCopy, Log);
+                      CnvAndCreateDocs(MeanName, CommercialAgents, Doc, ConfType, pnConf, ResultArray, Log);
+                    end
+                  else
+                    AddMessageToLog(msgFile, CommercialAgents.ПутьЭкспортаКПК, CommercialAgents.ПутьИмпортаПК,
+                      MeanName, '', TxtExt, msgErrorCopy, Log)
+                end
+              else
+                CnvAndCreateDocs(MeanName, CommercialAgents, Doc, ConfType, pnConf, ResultArray, Log);
+            end;
+          CreateFiles :
+            CreateDocs(CommercialAgents.ПутьИмпортаПК, MeanName, CommercialAgents, Doc, ConfType, pnConf, ResultArray, Log);
+          MoveFiles :
+            begin
+              if not (ZipType > 0) then
+                begin
+                  if ExportFileOle.CopyFileFromDevice(CommercialAgents.ПутьЭкспортаКПК + MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + TxtExt,
+                    CommercialAgents.ПутьИмпортаПК + MeanName + '_' + Constants.ИмяБазыНаКПК + '_*' + TxtExt, True) <> 0 then
+                    begin
+                      AddMessageToLog(msgFile, CommercialAgents.ПутьЭкспортаКПК, CommercialAgents.ПутьИмпортаПК,
+                        MeanName, '', TxtExt, msgSuccessCopy, Log);
+                      WideCharToAsciiFileProc(MeanName, CommercialAgents, Log);
+                    end
+                  else
+                    AddMessageToLog(msgFile, CommercialAgents.ПутьЭкспортаКПК, CommercialAgents.ПутьИмпортаПК,
+                      MeanName, '', TxtExt, msgErrorCopy, Log)
+                end
+              else
+                WideCharToAsciiFileProc(MeanName, CommercialAgents, Log);
+            end;
+        end;
+        StatusText(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(Total))
+      end;
+  finally
+    StatusText('')
+  end;
+end;
+
+procedure FillCodeForMean(Means : string; IsCtg, UnitedNumbering : Boolean);
+var
+  P : ICProcessing;
+begin
+  P := CreateObject('Обработки.О');
+  P.RunThreadProcess(server.FillCode(Means, IsCtg, UnitedNumbering),
+    DateTimeToStr(CurrentDateTime) + Trans(msgCompletion) + Trans('Кода'));
+end;
+
+function CreateIniFile(CommercialAgentsGroup, CommercialAgents : ICDictionary; var Log : string) : Boolean;
+var
+  TextFile : TStringList;
+  ExportPath, IniFileName : string;
+begin
+  Result := False;
+  TextFile := CreateStringList;
+  try
+    ExportPath := CommercialAgents.ПутьИмпортаКПК;
+    IniFileName := 'MC' + '_' + Constants.ИмяБазыНаКПК + IniExt;
+    TextFile.Add(IntToStr(CommercialAgents.Код));
+    TextFile.SaveToFile(CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName);
+    Log := Log + trans(msgFile) + CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName + Trans(msgSuccessCreate) + #13#10;
+    StrDelete(ExportPath, StrPos('import\', CommercialAgents.ПутьИмпортаКПК), 7);
+    if ExportFileOle.CopyFileToDevice(CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName,
+      ExportPath + IniFileName, True) <> 0 then
+      begin
+        Log := Log + trans(msgFile) + CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName + Trans(msgSuccessMove) + #13#10;
+        Result := True;
+      end
+    else
+      Log := Log + trans(msgFile) + CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName + Trans(msgErrorMove) + #13#10;
+    DeleteFile(CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName);
+  finally
+    TextFile.Free;
+  end;
+end;
+
+function CheckIniFile(CommercialAgentsGroup, CommercialAgents : ICDictionary; var Log : string) : Boolean;
+var
+  TextFile : TStringList;
+  ExportPath, IniFileName : string;
+begin
+  Result := False;
+  TextFile := CreateStringList;
+  try
+    ExportPath := CommercialAgents.ПутьИмпортаКПК;
+    IniFileName := 'MC' + '_' + Constants.ИмяБазыНаКПК + IniExt;
+    StrDelete(ExportPath, StrPos('import\', CommercialAgents.ПутьИмпортаКПК), 7);
+    if ExportFileOle.CopyFileFromDevice(ExportPath + IniFileName,
+      CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName, False) <> 0 then
+      begin
+        TextFile.LoadFromFile(CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName);
+        if (TextFile.Strings[0] = IntToStr(CommercialAgents.Код)) then
+          begin
+            Log := Log + trans(msgFile) + CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName + '. ' + Trans(msgSuccessAgentNumber) + #13#10;
+            Result := True
+          end
+        else
+          begin
+            Log := Log + trans(msgFile) + CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName + '. ' + Trans(msgInvalidAgentNumber) + #13#10;
+            ShowMessage(trans(msgInvalidAgentNumber));
+          end;
+        DeleteFile(CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName)
+      end
+    else
+      begin
+        Result := CreateIniFile(CommercialAgentsGroup, CommercialAgents, Log);
+        if not Result then
+          begin
+            Log := Log + trans(msgFile) + CommercialAgentsGroup.ПутьЭкспортаПК + IniFileName + '. ' + Trans(msgInvalidIniFile) + #13#10;
+            ShowMessage(trans(msgInvalidIniFile));
+          end;
+      end
+  finally
+    TextFile.Free;
+  end;
+end;
+
+procedure CreateCommercialAgents(CommercialAgents, CommercialAgentsGroup : ICDictionary;
+  var Log : string);
+var
+  MeanName, ZipExePath : string;
+  ZipType : Integer;
+  Options : ICOptions;
+begin
+  Options := GetOptions;
+  ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+  ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+  if ZipType > 0 then
+    AddFilesToZip(CommercialAgentsGroup.ПутьЭкспортаПК, CommercialAgentsGroup.ПутьЭкспортаПК,
+      CommercialAgents.Код, ZipType, ZipExePath, 'CommercialAgents',
+      Log, False, 'CommercialAgents' + '_' + Constants.ИмяБазыНаКПК + '_' + IntToStr(CommercialAgents.Код) + '.txt')
+  else
+    ExportDataForAgent('CommercialAgents', CommercialAgentsGroup.ПутьЭкспортаПК,
+      IntToStr(CommercialAgents.Код), CommercialAgentsGroup, CommercialAgents, MoveFiles, False, Log);
+end;
+
+procedure GetMeanNames(CommercialAgentsGroup : ICDictionary; Constants : IC4VPAConst;
+  UseGroup, OnlyUpdate : Boolean; var MeansImport, MeansAllImport : string);
+var
+  ItemsMeanCurr, CustomersMeanCurr : string;
+  UseManPartner, UsePartner : Boolean;
+begin
+  if OnlyUpdate then
+    begin
+      ItemsMeanCurr := UpdateItemsMean;
+      CustomersMeanCurr := UpdateCustomersMean;
+      MeansAllImport := '';
+    end
+  else
+    begin
+      ItemsMeanCurr := ItemsMean;
+      CustomersMeanCurr := CustomersMean;
+      MeansAllImport := ToAllMean;
+    end;
+  MeansImport := '';
+  if VarAsBool(Constants.ТоварыДляКПК) then
+    MeansAllImport := MeansAllImport + ';' + ItemsMeanCurr
+  else
+    if UseGroup then
+      begin
+        if (CommercialAgentsGroup.Тип = 1) then
+          MeansImport := ItemsMeanCurr;
+      end
+    else
+      MeansImport := ItemsMeanCurr;
+  if VarAsBool(Constants.ПартнерыДляКПК) then
+    MeansAllImport := MeansAllImport + ';' + CustomersMeanCurr;
+  case VarAsInt(Constants.КлиентыДляКПК) of
+    0 :
+      UsePartner := True;
+    1 :
+      UseManPartner := True;
+    2 :
+      begin
+        UsePartner := True;
+        UseManPartner := True;
+      end;
+  end;
+  if (not VarAsBool(Constants.ПартнерыДляКПК)) and UsePartner then
+    if UseGroup then
+      begin
+        if (CommercialAgentsGroup.Тип = 2) then
+          MeansImport := CustomersMeanCurr;
+      end
+    else
+      MeansImport := MeansImport + ';' + CustomersMeanCurr;
+  if (StrLength(MeansAllImport) > 0) and (StrCopy(MeansAllImport, 1, 1) = ';') then
+    StrDelete(MeansAllImport, 1, 1);
+  if (StrLength(MeansImport) > 0) and (StrCopy(MeansImport, 1, 1) = ';') then
+    StrDelete(MeansImport, 1, 1)
+end;
+
+procedure DataCommunication(CommercialAgentsGroup, CommercialAgents : ICDictionary;
+  UseCreateIniFile, UseCreateCommercialAgentsFile, UseCreateExportFiles,
+  UseMoveExportFiles, UseMoveImportFiles, UseCreateImportFiles,
+  UseGroup, OnlyUpdate, SendToEMail, ReceiveFromEMail : Boolean;
+  ConfType : Integer; pnConf : TO4Panel; var ResultArray : Variant);
+var
+  MeansImport, MeansAllImport, Log : string;
+  TmpCommercialAgentsGroup, ItemsGroup, PartnersGroup, Responsible : ICDictionary;
+  Doc : ICDocuments;
+  Options : ICOptions;
+  ZipType : Integer;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+  if (ZipType < 1) and SendToEMail then
+    raise(Trans(errZipArchOptForSend));
+  if (ZipType < 1) and ReceiveFromEMail then
+    raise(Trans(errZipArchOptForReceive));
+  TmpCommercialAgentsGroup := CreateObject('Справочники.ГруппыТА');
+  TmpCommercialAgentsGroup.Select;
+  if not TmpCommercialAgentsGroup.FindByField('Тип', 0, False) then
+    raise(Trans(errNotSystemGroupPresent));
+  Log := '';
+  Doc := CreateObject('Документы.ПротоколОбменаСКПК');
+  Doc.Select;
+  Doc.Append;
+  try
+    if (not SendToEMail) and (not ReceiveFromEMail) then
+      begin
+        if UseCreateIniFile then
+          CreateIniFile(TmpCommercialAgentsGroup, CommercialAgents, Log);
+        if (UseMoveExportFiles or UseMoveImportFiles) and (VarAsInt(CommercialAgents.ТипПередачиНаКПК) = 0) and
+          not CheckIniFile(TmpCommercialAgentsGroup, CommercialAgents, Log) then
+          exit;
+      end;
+    GetMeanNames(CommercialAgentsGroup, Constants, UseGroup, OnlyUpdate, MeansImport, MeansAllImport);
+    if UseCreateExportFiles then
+      begin
+        if OnlyUpdate then
+          begin
+            if UseGroup then
+              case VarAsInt(CommercialAgentsGroup.Тип) of
+                0 :
+                  ExportDataForAgent(MeansAllImport, CommercialAgentsGroup.ПутьЭкспортаПК,
+                    IntToStr(CommercialAgentsGroup.Код), CommercialAgentsGroup,
+                    CommercialAgents, CreateFiles, UseGroup, Log);
+                1, 2 :
+                  ExportDataForAgent(MeansImport, CommercialAgentsGroup.ПутьЭкспортаПК,
+                    IntToStr(CommercialAgentsGroup.Код), CommercialAgentsGroup,
+                    CommercialAgents, CreateFiles, UseGroup, Log);
+              end;
+          end
+        else
+          if UseGroup then
+            begin
+              if CommercialAgentsGroup.Тип = 0 then
+                begin
+                  ExportDataForAgent(MeansAllImport, CommercialAgentsGroup.ПутьЭкспортаПК,
+                    IntToStr(CommercialAgentsGroup.Код), CommercialAgentsGroup,
+                    CommercialAgents, CreateFiles, UseGroup, Log);
+                  CommercialAgents.Select;
+                  while CommercialAgents.SelectNext do
+                    ExportDataForAgent(SystemMean + ';' + PersonalMean, CommercialAgentsGroup.ПутьЭкспортаПК,
+                      IntToStr(CommercialAgents.Код), CommercialAgentsGroup,
+                      CommercialAgents, CreateFiles, UseGroup, Log);
+                end
+              else
+                ExportDataForAgent(MeansImport, CommercialAgentsGroup.ПутьЭкспортаПК,
+                  IntToStr(CommercialAgentsGroup.Код), CommercialAgentsGroup,
+                  CommercialAgents, CreateFiles, UseGroup, Log);
+            end
+          else
+            ExportDataForAgent(SystemMean + ';' + PersonalMean, TmpCommercialAgentsGroup.ПутьЭкспортаПК,
+              IntToStr(CommercialAgents.Код), TmpCommercialAgentsGroup,
+              CommercialAgents, CreateFiles, UseGroup, Log);
+      end;
+    if UseMoveExportFiles then
+      begin
+        DeleteFile(TmpCommercialAgentsGroup.ПутьЭкспортаПК + 'ImportPocketData' + '_' + Constants.ИмяБазыНаКПК + '_' + IntToStr(CommercialAgents.Код) + ZipExt);
+        ExportDataForAgent(MeansAllImport, TmpCommercialAgentsGroup.ПутьЭкспортаПК,
+          IntToStr(TmpCommercialAgentsGroup.Код),
+          TmpCommercialAgentsGroup, CommercialAgents,
+          MoveFiles, UseGroup, Log);
+        ItemsGroup := CreateObject('Справочники.ГруппыТА');
+        PartnersGroup := CreateObject('Справочники.ГруппыТА');
+        if OnlyUpdate then
+          begin
+            if (not VarAsBool(Constants.ТоварыДляКПК)) and VarAsBool(CommercialAgents.@ГруппаТоваров.IsFocused)
+              and ItemsGroup.Find(CommercialAgents.@ГруппаТоваров) then
+              ExportDataForAgent(UpdateItemsMean, ItemsGroup.ПутьЭкспортаПК, IntToStr(ItemsGroup.Код),
+                TmpCommercialAgentsGroup, CommercialAgents, MoveFiles, UseGroup, Log);
+            if (not VarAsBool(Constants.ПартнерыДляКПК))
+              and VarAsBool(CommercialAgents.@ГруппаПартнеров.IsFocused)
+              and PartnersGroup.Find(CommercialAgents.@ГруппаПартнеров) then
+              ExportDataForAgent(UpdateCustomersMean, PartnersGroup.ПутьЭкспортаПК, IntToStr(PartnersGroup.Код),
+                TmpCommercialAgentsGroup, CommercialAgents, MoveFiles, UseGroup, Log);
+          end
+        else
+          begin
+            ExportDataForAgent(PersonalMean, TmpCommercialAgentsGroup.ПутьЭкспортаПК,
+              IntToStr(CommercialAgents.Код),
+              TmpCommercialAgentsGroup, CommercialAgents,
+              MoveFiles, UseGroup, Log);
+            if not VarAsBool(Constants.ТоварыДляКПК) and VarAsBool(CommercialAgents.@ГруппаТоваров.IsFocused)
+              and ItemsGroup.Find(CommercialAgents.@ГруппаТоваров) then
+              ExportDataForAgent(ItemsMean, ItemsGroup.ПутьЭкспортаПК, IntToStr(ItemsGroup.Код),
+                TmpCommercialAgentsGroup, CommercialAgents, MoveFiles, UseGroup, Log);
+            if not VarAsBool(Constants.ПартнерыДляКПК)
+              and VarAsBool(CommercialAgents.@ГруппаПартнеров.IsFocused)
+              and PartnersGroup.Find(CommercialAgents.@ГруппаПартнеров) then
+              ExportDataForAgent(CustomersMean, PartnersGroup.ПутьЭкспортаПК, IntToStr(PartnersGroup.Код),
+                TmpCommercialAgentsGroup, CommercialAgents, MoveFiles, UseGroup, Log);
+          end;
+        if (ZipType > 0) and (not SendToEMail) then
+          CopyZipFileToDevice('ImportPocketData', TmpCommercialAgentsGroup, CommercialAgents, Log);
+      end;
+    if UseCreateCommercialAgentsFile then
+      begin
+        DeleteFile(TmpCommercialAgentsGroup.ПутьЭкспортаПК + 'CommercialAgents' + '_' + Constants.ИмяБазыНаКПК + '_' + IntToStr(CommercialAgents.Код) + ZipExt);
+        CreateCommercialAgents(CommercialAgents, TmpCommercialAgentsGroup, Log);
+        if (ZipType > 0) and (not SendToEMail) then
+          CopyZipFileToDevice('CommercialAgents', TmpCommercialAgentsGroup, CommercialAgents, Log);
+      end;
+    if UseMoveImportFiles then
+      ImportDataForAgent(ExportMean, IntToStr(CommercialAgents.Код), CommercialAgents, MoveFiles, ReceiveFromEMail, Doc, ConfType, pnConf, ResultArray, Log);
+    if UseCreateImportFiles then
+      ImportDataForAgent(ExportMean, IntToStr(CommercialAgents.Код), CommercialAgents, CreateFiles, ReceiveFromEMail, Doc, ConfType, pnConf, ResultArray, Log);
+  finally
+    if StrPos(#13#10, Log) = 0 then
+      Log := trans(NoLogData);
+    Doc.Протокол := Log;
+    Doc.ТорговыйАгент := CommercialAgents;
+    Responsible := CreateObject('Справочники.Служащие');
+    if Responsible.FindByField('ПолноеНазвание', GetUserName, False) then
+      Doc.Ответственный := Responsible;
+    Doc.Post;
+    Doc.ApplyUpdates;
+  end;
+end;
+
+function ExtractFilesFromZip(Path : string; ZipType : Integer; ZipExePath : string;
+  var Log : string; DoDelеteFiles : Boolean = True) : Boolean;
+var
+  FileName, FileNames : string;
+  i : Integer;
+  Options : ICOptions;
+begin
+  FileNames := ExportFileOle.GetFileNamesForPath(Path, 'ExportPocketData_' + Constants.ИмяБазыНаКПК + '*.zip');
+  for i := 1 to WordCount(FileNames, ';') do
+    begin
+      FileName := Path + ExtractWord(i, FileNames, ';');
+      if FileExists(FileName) then
+        begin
+          case ZipType of
+            Zip7Type :
+              Run('"' + ZipExePath + '7z.exe"' + ' x "' + FileName + '" -o"' + Path + '" -y', True);
+            WinRarType :
+              Run('"' + ZipExePath + 'WinRAR.exe"' + ' x "' + FileName + '" "' + Path + '" -y', True);
+            WinZipType :
+              Run('"' + ZipExePath + 'WZUNZIP.exe"' + ' -o "' + FileName + '" "' + Path + '"', True);
+          end;
+          if DoDelеteFiles then
+            DeleteFile(FileName);
+        end;
+    end;
+end;
+
+function AddFilesToZip(Path, ZipArchPath : string; AgentCode, ZipType : Integer; ZipExePath, ZipFileNamePrefix : string;
+  var Log : string; DoDelеteFiles : Boolean = False; ZipMask : string = '*.*') : string;
+var
+  ZipFileName, TmpZipMask, FileName, FileNames : string;
+  i : Integer;
+begin
+  Result := '';
+  ZipFileName := ZipFileNamePrefix + '_' + Constants.ИмяБазыНаКПК + '_' + IntToStr(AgentCode) + '.zip';
+  Result := ZipFileName;
+  if ZipMask = '' then
+    exit;
+  TmpZipMask := '';
+  for i := 1 to WordCount(ZipMask, ';') do
+    begin
+      FileName := Path + ExtractWord(i, ZipMask, ';');
+      if FileExists(FileName) then
+        TmpZipMask := TmpZipMask + ' "' + FileName + '"';
+    end;
+  if TmpZipMask <> '' then
+    begin
+      case ZipType of
+        Zip7Type :
+          Run('"' + ZipExePath + '7z.exe"' + ' a -tzip "' + ZipArchPath + ZipFileName + '"' + TmpZipMask, True);
+        WinRarType :
+          Run('"' + ZipExePath + 'WinRAR.exe"' + ' a "' + ZipArchPath + ZipFileName + '"' + TmpZipMask + ' -ep1', True);
+        WinZipType :
+          Run('"' + ZipExePath + 'WZUNZIP.exe"' + ' "' + ZipArchPath + ZipFileName + '"' + TmpZipMask, True);
+      end;
+      if DoDelеteFiles then
+        for i := 1 to WordCount(ZipMask, ';') do
+          begin
+            FileName := Path + ExtractWord(i, ZipMask, ';');
+            if FileExists(FileName) then
+              DeleteFile(FileName);
+          end;
+    end;
+end;
+
+procedure MakeDir(Path : string);
+begin
+  if not DirectoryExists(Path) then
+    ForceDir(Path);
+end;
+
+function CreateNodeCATALOGS(XMLDoc : Variant; ParentNodeName : string) : OLEVariant;
+var
+  i : integer;
+  TmpNodeName : string;
+  NodeCurrent, TmpNode : OLeVariant;
+begin
+  NodeCurrent := XMLDoc.SelectSingleNode('/DATA');
+  for i := 3 to WordCount(ParentNodeName, '/') do
+    begin
+      TmpNodeName := ExtractWord(i, ParentNodeName, '/');
+      TmpNode := XMLDoc.SelectSingleNode(StrCopy(ParentNodeName, 1, StrPos(TmpNodeName, ParentNodeName) - 1) + TmpNodeName);
+      if not IsObject(TmpNode) then  
+        begin
+          TmpNode := XMLDoc.CreateElement(TmpNodeName);
+          NodeCurrent.AppendChild(TmpNode);
+        end;
+      NodeCurrent := TmpNode;
+    end; 
+  Result := NodeCurrent;
+end;
+
+procedure CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLAdditionalDocFullName, ParentNodeNames : string; TypeAppl : Integer = 0);
+var
+  XMLDoc, XMLAdditionalDoc, NodeCATALOGS, NodeAdditionalCATALOGS, NodeAdditionalCATALOG, DelatedNode, ParentDelNode  : OLEVariant;
+  i, j, LengthNodeAdditionalCATALOGS : integer;
+  ParentNodeName : string;
+begin
+  if FileExists(XMLDocFullName) then
+    begin
+      XMLDoc := LoadXMLFromFileByVersion(XMLDocFullName, XMLVersion6);         
+   {   if TypeAppl = 0 then
+        begin
+          DelatedNode := XMLDoc.SelectSingleNode('descendant::CATALOG[@Comment="Оплата"]');
+          ParentDelNode := DelatedNode.ParentNode;
+          ParentDelNode.removeChild(DelatedNode);
+          DelatedNode := ParentDelNode.SelectSingleNode('descendant::PRICES[@GUID="8E502A85-3WW4-82EX-8DD4-67YT50872D52"]');
+          ParentDelNode := DelatedNode.ParentNode;
+          ParentDelNode.removeChild(DelatedNode);
+
+        end;   }
+      for i := 1 to WordCount(ParentNodeNames, ';') do
+        begin
+          ParentNodeName := ExtractWord(i, ParentNodeNames, ';');
+          NodeCATALOGS := XMLDoc.SelectSingleNode(ParentNodeName);
+          if not IsObject(NodeCATALOGS) then
+            NodeCATALOGS := CreateNodeCATALOGS(XMLDoc, ParentNodeName);
+          if FileExists(XMLDocFullName) then
+            begin
+              XMLAdditionalDoc := LoadXMLFromFileByVersion(XMLAdditionalDocFullName, XMLVersion6);
+              NodeAdditionalCATALOGS := XMLAdditionalDoc.SelectNodes(ParentNodeName + '/*');
+              LengthNodeAdditionalCATALOGS := NodeAdditionalCATALOGS.Length;
+              for j := 0 to LengthNodeAdditionalCATALOGS - 1 do
+                NodeCATALOGS.AppendChild(NodeAdditionalCATALOGS.Item[j].cloneNode(true));
+            end;
+        end;
+      XMLDoc.save(XMLUnionDocFullName);
+    end
+end;
+
+procedure DeleteFilesForGroup(GroupType : integer; GroupSuffix, XMLDocPath : String);
+var
+  CommercialAgentsGroup : ICDictionary;
+  XMLDocFullName : String;
+begin
+  CommercialAgentsGroup := CreateObject('Справочники.ГруппыТА');
+  CommercialAgentsGroup.SetRangeByField('Тип', GroupType, GroupType);
+  CommercialAgentsGroup.Select;
+  while CommercialAgentsGroup.SelectNext do
+    begin
+      XMLDocFullName := XMLDocPath + AndroidExportFileName + GroupSuffix + VarAsStr(CommercialAgentsGroup.Код) + XMLExt;
+      if FileExists(XMLDocFullName) then
+        DeleteFile(XMLDocFullName);
+    end;
+end;  
+
+procedure DeleteFilesForCommercialAgents(XMLDocPath : String);
+var
+  CommercialAgents : ICDictionary;
+  XMLDocFullName : String;
+begin
+  CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+  CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+  CommercialAgents.Select;
+  while CommercialAgents.SelectNext do
+    begin
+      XMLDocFullName := XMLDocPath + AndroidExportFileName + AgentSuffix + VarAsStr(CommercialAgents.Код) + XMLExt;
+      if FileExists(XMLDocFullName) then
+        DeleteFile(XMLDocFullName);
+    end;
+end;
+
+procedure ExchangeFileWithUseFtp(ExchangeType : integer; FtpAddress, UserName, PWD, LocalFileName, DestFolder : string);
+const
+  FtpCommandFileName = 'ftpDownloadCommands.bat';
+var
+  CommandList, FtpCommandFullFileName, TmpPath : string;
+  StringList : TStringList;
+  fso : OLEVariant;
+begin
+  Opt :=GetOptions;
+  if VarAsStr(Opt.GetServerPrm('FtpType')) = 'CLManager' then
+    ExchangeType := ExchangeType + 2;
+
+  case ExchangeType of
+    0:
+      CommandList :=
+                'open ' + FtpAddress + #13#10 + //указываем хост
+                UserName + #13#10 + //пользователь
+                PWD + #13#10 + //пароль
+                'mkdir ' + DestFolder + #13#10 + //создать папку на ftp сервере
+                'cd ' + DestFolder + #13#10 + //перейти в папку на ftp сервере, в которую запишем файл
+                'binary' + #13#10 +
+                'put ' + LocalFileName + #13#10 + //залить на ftp в текущую папку локальный файл
+                'quit' + #13#10;//отключиться от ftp сервера
+    1:
+      begin
+        fso := CreateOleObject('Scripting.FileSystemObject');
+        TmpPath := ExtractFilePath(LocalFileName);
+        if StrLength(TmpPath) > 0 then
+          StrDelete(TmpPath, StrLength(TmpPath), 1);
+        CommandList :=
+                  'open ' + FtpAddress + #13#10 + //указываем хост
+                  UserName + #13#10 + //пользователь
+                  PWD + #13#10 + //пароль
+                  'cd ' + DestFolder + #13#10 + //перейти в папку на ftp сервере
+                  'lcd ' + TmpPath + #13#10 + //перейти в папку на локальном компьютере
+                  'binary' + #13#10 +
+                  'get ' + fso.GetFileName(LocalFileName) + #13#10 + //залить c ftp в текущую папку локальный файл
+                  'quit' + #13#10;//отключиться от ftp сервера
+      end;
+    2:
+      CommandList :=
+                VarAsStr(Opt.GetServerPrm('FtpPATH')) + //указываем путь к ftpCL
+                'CLManager -p -bin -v -u ' +UserName + //пользователь
+                ':' + PWD + //пароль
+                ' -putftp ' + LocalFileName + //залить на ftp локальный файл
+                ' ftp:/'+'/' + FtpAddress + '/'+ DestFolder +'/' + AndroidExportZipFileName + ZipExt; //указываем хост
+    3:
+      begin
+        TmpPath := ExtractFilePath(LocalFileName);
+        if StrLength(TmpPath) > 0 then
+          StrDelete(TmpPath, StrLength(TmpPath), 1);
+        CommandList :=
+                VarAsStr(Opt.GetServerPrm('FtpPATH')) + //указываем путь к ftpCL
+                'CLManager -p -bin -v -u ' +UserName + //пользователь
+                ':' + PWD + //пароль
+                ' -getftp ' + 'ftp:/'+'/' + FtpAddress + '/'+ DestFolder +'/' + AndroidImportZipFileName + ZipExt +
+                ' ' + LocalFileName;  
+      end;
+  end;
+  StringList := CreateStringList;
+  try
+    StringList.Add(CommandList);
+    FtpCommandFullFileName := ExtractFilePath(LocalFileName) + '\' + FtpCommandFileName;
+    StringList.SaveToFile(FtpCommandFullFileName);
+  finally
+    StringList.Free;
+  end;
+  if VarAsStr(Opt.GetServerPrm('FtpType')) = 'CLManager' then
+    Run(FtpCommandFullFileName, True)
+  else
+    Run('ftp -s:' + FtpCommandFullFileName, True);
+
+  if FileExists(FtpCommandFullFileName) then
+    DeleteFile(FtpCommandFullFileName);
+end;
+
+procedure AddFilesToZipByZipType(ZipType : integer; ZipExePath, ZipFullName, FilesNames : String);
+begin
+  case ZipType of
+    Zip7Type :
+      Run('"' + ZipExePath + '7z.exe"' + ' a -tzip "' + ZipFullName + '"' + ' "' + FilesNames + '"', True);
+    WinRarType :
+      Run('"' + ZipExePath + 'WinRAR.exe"' + ' a "' + ZipFullName + '"' + ' "' + FilesNames + '"' + ' -ep1', True);
+    WinZipType :
+      Run('"' + ZipExePath + 'WZUNZIP.exe"' + ' "' + ZipFullName + '"' + ' "' + FilesNames + '"', True);
+  end;
+end;
+
+procedure CreateAllAndroidFiles(ConfType : integer; DicCommercialAgents : ICDictionary);
+const
+  GroupParentNodeName = '/DATA/CATALOGS;/DATA/PICTURES';
+  AgentParentNodeNames = '/DATA/CONSTANTS/ELEMENTS;/DATA/DOCUMENTS';
+var
+  P : ICProcessing;
+  XMLDocPath, XMLDocFullName, XMLUnionDocFullName, XMLDocZipFullName, ZipExePath,
+  XMLDocFileNames, XMLItemDocFullName , XMLPartnerDocFullName, XMLAgentDocFullName, XMLPhotoZipFullName : String;
+  Options : ICOptions;
+  ZipType : integer;
+  CommercialAgents, AndroidSettingsDict : ICDictionary;
+  fso, OutParams : Variant;
+  CustomersGroupSuffix : String;
+  PhotoTbl : ICValueTable;
+begin
+  Constants := GetConstants;
+  GetAndroidSettingsDict(AndroidSettingsDict);
+  XMLDocPath := VarAsStr(Constants.ПутьКПапкеОбменаДляКПК);
+  XMLDocFullName := XMLDocPath + AndroidExportFileName + XMLExt;
+  XMLUnionDocFullName := XMLDocPath + AndroidExportUnionFileName + XMLExt;
+  if FileExists(XMLDocFullName) then
+    DeleteFile(XMLDocFullName);
+  DeleteFilesForGroup(grItem, ItemSuffix, XMLDocPath);
+  DeleteFilesForGroup(grPartner, PartnerSuffix, XMLDocPath);
+  DeleteFilesForCommercialAgents(XMLDocPath);
+  XMLDocZipFullName := XMLDocPath + AndroidExportZipFileName + ZipExt;
+  if FileExists(XMLDocZipFullName) then
+    DeleteFile(XMLDocZipFullName);
+  PhotoTbl := CreateObject('ТаблицаЗначений');
+  PhotoTbl.AddColumn('GUID', vtcString, 36);
+  PhotoTbl.AddColumn('Фото', vtcBlob, 0);
+  PhotoTbl.AddColumn('Группа', vtcInteger, 0);
+  PhotoTbl.Open;
+  PhotoTbl.CopyDataToServer;
+  P := CreateObject('Обработки.О');
+  P.RunThreadProcess(server.ExportAndroidData(ConfType, PhotoTbl.SrvMean),
+    DateTimeToStr(CurrentDateTime) + Trans(msgCompletion));
+  PhotoTbl.CopyDataFromServer;
+  PhotoTbl.SrvMean.Clear;
+  Options := GetOptions;
+  ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+  if ZipType = 0 then
+    raise(Trans(msgSelectArchiveType));
+  ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+  if VarAsBool(AndroidSettingsDict.ПередаватьФотографииТоваров) then
+    DicCommercialAgents.ExecProc(null, 'SavePhoto', PhotoTbl, OutParams);
+  if VarAsBool(Constants.ПартнерыДляКПК) and VarAsBool(Constants.ТоварыДляКПК) then
+    begin
+      if FileExists(XMLDocFullName) then
+        begin
+          CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+          CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+          CommercialAgents.Select;
+          while CommercialAgents.SelectNext do
+            begin
+              if FileExists(XMLUnionDocFullName) then
+                DeleteFile(XMLUnionDocFullName);
+              XMLAgentDocFullName := XMLDocPath + AndroidExportFileName + AgentSuffix + VarAsStr(CommercialAgents.Код) + XMLExt;
+              if FileExists(XMLAgentDocFullName) then
+                CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLAgentDocFullName, AgentParentNodeNames);
+              fso := CreateOleObject('Scripting.FileSystemObject');
+              if not FileExists(XMLUnionDocFullName) then
+                fso.CopyFile(XMLDocFullName, XMLUnionDocFullName, true);
+              if FileExists(XMLDocZipFullName) then
+                DeleteFile(XMLDocZipFullName);
+              AddFilesToZipByZipType(ZipType, ZipExePath, XMLDocZipFullName, XMLUnionDocFullName);
+              if FileExists(XMLDocZipFullName) then
+                begin
+                  if VarAsBool(AndroidSettingsDict.ПередаватьФотографииТоваров) then
+                    begin
+                      XMLPhotoZipFullName := XMLDocPath + AndroidPhotoZipFileName + ZipExt;
+                      if FileExists(XMLPhotoZipFullName) then
+                        AddFilesToZipByZipType(ZipType, ZipExePath, XMLDocZipFullName, XMLPhotoZipFullName);
+                    end;
+                  fso.CopyFile(XMLDocZipFullName, CommercialAgents.ПутьИмпортаПК, True);
+                  if AndroidSettingsDict.СпособОбмена = 1 then
+                    ExchangeFileWithUseFtp(0, AndroidSettingsDict.АдресСервераFTP, AndroidSettingsDict.ИмяПользователяFTP, AndroidSettingsDict.ПарольFTP, XMLDocZipFullName, CommercialAgents.Логин);
+                end;
+            end;
+        end;
+    end
+  else
+    begin
+      Options := GetOptions;
+      ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+      ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+      CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+      CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+      CommercialAgents.Select;
+      while CommercialAgents.SelectNext do
+        begin
+          XMLDocFileNames := '';
+          XMLPartnerDocFullName := '';
+          if not VarAsBool(Constants.ПартнерыДляКПК) and VarAsBool(CommercialAgents.@ГруппаПартнеров.IsFocused) then
+            XMLPartnerDocFullName := XMLDocPath + AndroidExportFileName + PartnerSuffix + VarAsStr(CommercialAgents.ГруппаПартнеров.Код) + XMLExt;
+          if not VarAsBool(Constants.ТоварыДляКПК) and VarAsBool(CommercialAgents.@ГруппаТоваров.IsFocused) then
+            XMLItemDocFullName := XMLDocPath + AndroidExportFileName + ItemSuffix + VarAsStr(CommercialAgents.ГруппаТоваров.Код) + XMLExt;
+          if FileExists(XMLUnionDocFullName) then
+            DeleteFile(XMLUnionDocFullName);
+          if FileExists(XMLDocFullName) then
+            begin
+              if FileExists(XMLPartnerDocFullName) then
+                CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLPartnerDocFullName, GroupParentNodeName);
+              if FileExists(XMLItemDocFullName) then
+                if FileExists(XMLUnionDocFullName) then
+                  CreateUnionXMLFile(XMLUnionDocFullName, XMLUnionDocFullName, XMLItemDocFullName, GroupParentNodeName)
+                else
+                  CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLItemDocFullName, GroupParentNodeName)
+            end;
+          XMLAgentDocFullName := XMLDocPath + AndroidExportFileName + AgentSuffix + VarAsStr(CommercialAgents.Код) + XMLExt;
+          if FileExists(XMLAgentDocFullName) then
+            if FileExists(XMLUnionDocFullName) then
+              CreateUnionXMLFile(XMLUnionDocFullName, XMLUnionDocFullName, XMLAgentDocFullName, AgentParentNodeNames)
+            else
+              if FileExists(XMLDocFullName) then
+                CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLAgentDocFullName, AgentParentNodeNames);
+          fso := CreateOleObject('Scripting.FileSystemObject');
+          if not FileExists(XMLUnionDocFullName) then
+            fso.CopyFile(XMLDocFullName, XMLUnionDocFullName, true);
+          if FileExists(XMLUnionDocFullName) then
+            begin
+              if FileExists(XMLDocZipFullName) then
+                DeleteFile(XMLDocZipFullName);
+              AddFilesToZipByZipType(ZipType, ZipExePath, XMLDocZipFullName, XMLUnionDocFullName);
+              if VarAsBool(fso.FileExists(XMLDocZipFullName)) then
+                begin
+                  if VarAsBool(AndroidSettingsDict.ПередаватьФотографииТоваров) then
+                    begin
+                      XMLPhotoZipFullName := XMLDocPath + AndroidPhotoZipFileName + ZipExt;
+                      if not VarAsBool(Constants.ТоварыДляКПК) and VarAsBool(CommercialAgents.@ГруппаТоваров.IsFocused) then
+                        XMLPhotoZipFullName := XMLDocPath + VarAsStr(CommercialAgents.ГруппаТоваров.Код) + '\' + AndroidPhotoZipFileName + ZipExt;
+                      if FileExists(XMLPhotoZipFullName) then
+                        AddFilesToZipByZipType(ZipType, ZipExePath, XMLDocZipFullName, XMLPhotoZipFullName);
+                    end;
+                  fso.CopyFile(XMLDocZipFullName, CommercialAgents.ПутьИмпортаПК, True);
+                  if AndroidSettingsDict.СпособОбмена = 1 then
+                    ExchangeFileWithUseFtp(0, AndroidSettingsDict.АдресСервераFTP, AndroidSettingsDict.ИмяПользователяFTP, AndroidSettingsDict.ПарольFTP, XMLDocZipFullName, CommercialAgents.Логин);
+                end;
+            end;
+        end;
+    end
+end;
+ 
+procedure CreateAllAndroidFilesByTbl(ConfType : integer; AgentsTable : ICValueTable);
+const
+  GroupParentNodeName = '/DATA/CATALOGS;/DATA/PICTURES';
+  AgentParentNodeNames = '/DATA/CONSTANTS/ELEMENTS;/DATA/DOCUMENTS';
+var
+  P : ICProcessing;
+  XMLDocPath, XMLDocFullName, XMLUnionDocFullName, XMLDocZipFullName, ZipExePath,
+  XMLDocFileNames, XMLItemDocFullName , XMLPartnerDocFullName, XMLAgentDocFullName, XMLPhotoZipFullName : String;
+  Options : ICOptions;
+  ZipType : integer;
+  CommercialAgents, AndroidSettingsDict : ICDictionary;
+  fso, OutParams : Variant;
+  CustomersGroupSuffix : String;
+  PhotoTbl : ICValueTable;
+begin
+  Constants := GetConstants;
+  GetAndroidSettingsDict(AndroidSettingsDict);
+  XMLDocPath := VarAsStr(Constants.ПутьКПапкеОбменаДляКПК);
+  XMLDocFullName := XMLDocPath + AndroidExportFileName + XMLExt;
+  XMLUnionDocFullName := XMLDocPath + AndroidExportUnionFileName + XMLExt;
+  if FileExists(XMLDocFullName) then
+    DeleteFile(XMLDocFullName);
+  DeleteFilesForGroup(grItem, ItemSuffix, XMLDocPath);
+  DeleteFilesForGroup(grPartner, PartnerSuffix, XMLDocPath);
+  DeleteFilesForCommercialAgents(XMLDocPath);
+  XMLDocZipFullName := XMLDocPath + AndroidExportZipFileName + ZipExt;
+  if FileExists(XMLDocZipFullName) then
+    DeleteFile(XMLDocZipFullName);
+  PhotoTbl := CreateObject('ТаблицаЗначений');
+  PhotoTbl.AddColumn('GUID', vtcString, 36);
+  PhotoTbl.AddColumn('Фото', vtcBlob, 0);
+  PhotoTbl.AddColumn('Группа', vtcInteger, 0);
+  PhotoTbl.Open;
+  PhotoTbl.CopyDataToServer;
+  AgentsTable.CopyDataToServer;
+
+  P := CreateObject('Обработки.О');
+//  P.RunThreadProcess(server.ExportAndroidData(ConfType, PhotoTbl.SrvMean),
+//    DateTimeToStr(CurrentDateTime) + Trans(msgCompletion));
+  P.RunThreadProcess(server.ExportAndroidDataNew(ConfType, AgentsTable.SrvMean, PhotoTbl.SrvMean),
+    DateTimeToStr(CurrentDateTime) + Trans(msgCompletion));
+
+  PhotoTbl.CopyDataFromServer;
+  PhotoTbl.SrvMean.Clear;
+  AgentsTable.CopyDataFromServer;
+  AgentsTable.SrvMean.Clear;
+
+  Options := GetOptions;
+  ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+  if ZipType = 0 then
+    raise(Trans(msgSelectArchiveType));
+  ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+//  if VarAsBool(AndroidSettingsDict.ПередаватьФотографииТоваров) then
+//    DicCommercialAgents.ExecProc(null, 'SavePhoto', PhotoTbl, OutParams);
+  if VarAsBool(Constants.ПартнерыДляКПК) and VarAsBool(Constants.ТоварыДляКПК) then
+    begin
+      if FileExists(XMLDocFullName) then
+        begin
+          CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+          CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+          CommercialAgents.Select;
+          AgentsTable.Select;
+
+//          while CommercialAgents.SelectNext do
+          while AgentsTable.SelectNext do
+            if CommercialAgents.Find(AgentsTable.@Агент) Then
+            begin
+              if FileExists(XMLUnionDocFullName) then
+                DeleteFile(XMLUnionDocFullName);
+              XMLAgentDocFullName := XMLDocPath + AndroidExportFileName + AgentSuffix + VarAsStr(CommercialAgents.Код) + XMLExt;
+              if FileExists(XMLAgentDocFullName) then
+                CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLAgentDocFullName, AgentParentNodeNames);
+              fso := CreateOleObject('Scripting.FileSystemObject');
+              if not FileExists(XMLUnionDocFullName) then
+                fso.CopyFile(XMLDocFullName, XMLUnionDocFullName, true);
+              if FileExists(XMLDocZipFullName) then
+                DeleteFile(XMLDocZipFullName);
+              AddFilesToZipByZipType(ZipType, ZipExePath, XMLDocZipFullName, XMLUnionDocFullName);
+              if FileExists(XMLDocZipFullName) then
+                begin
+                  if VarAsBool(AndroidSettingsDict.ПередаватьФотографииТоваров) then
+                    begin
+                      XMLPhotoZipFullName := XMLDocPath + AndroidPhotoZipFileName + ZipExt;
+                      if FileExists(XMLPhotoZipFullName) then
+                        AddFilesToZipByZipType(ZipType, ZipExePath, XMLDocZipFullName, XMLPhotoZipFullName);
+                    end;
+                  fso.CopyFile(XMLDocZipFullName, CommercialAgents.ПутьИмпортаПК, True);
+                  if AndroidSettingsDict.СпособОбмена = 1 then
+                    ExchangeFileWithUseFtp(0, AndroidSettingsDict.АдресСервераFTP, AndroidSettingsDict.ИмяПользователяFTP, AndroidSettingsDict.ПарольFTP, XMLDocZipFullName, CommercialAgents.Логин);
+                end;
+            end;
+        end;
+    end
+  else
+    begin
+      Options := GetOptions;
+      ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+      ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+      CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+      CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+      CommercialAgents.Select;
+      AgentsTable.Select;
+
+//      while CommercialAgents.SelectNext do
+      while AgentsTable.SelectNext do
+        if CommercialAgents.Find(AgentsTable.@Агент) Then
+        begin
+          XMLDocFileNames := '';
+          XMLPartnerDocFullName := '';
+//          if not VarAsBool(Constants.ПартнерыДляКПК) and VarAsBool(CommercialAgents.@ГруппаПартнеров.IsFocused) then
+//            XMLPartnerDocFullName := XMLDocPath + AndroidExportFileName + PartnerSuffix + VarAsStr(CommercialAgents.ГруппаПартнеров.Код) + XMLExt;
+
+          if not VarAsBool(Constants.ПартнерыДляКПК) then
+            XMLPartnerDocFullName := XMLDocPath + AndroidExportFileName + PartnerSuffix + VarAsStr(CommercialAgents.Код) + XMLExt;
+          if not VarAsBool(Constants.ТоварыДляКПК) then
+            XMLItemDocFullName := XMLDocPath + AndroidExportFileName + ItemSuffix + VarAsStr(CommercialAgents.Код) + XMLExt;
+
+//          if not VarAsBool(Constants.ТоварыДляКПК) and VarAsBool(CommercialAgents.@ГруппаТоваров.IsFocused) then
+//            XMLItemDocFullName := XMLDocPath + AndroidExportFileName + ItemSuffix + VarAsStr(CommercialAgents.ГруппаТоваров.Код) + XMLExt;
+
+          if FileExists(XMLUnionDocFullName) then
+            DeleteFile(XMLUnionDocFullName);
+          if FileExists(XMLDocFullName) then
+            begin
+              if FileExists(XMLPartnerDocFullName) then
+                CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLPartnerDocFullName, GroupParentNodeName);
+              if FileExists(XMLItemDocFullName) then
+                if FileExists(XMLUnionDocFullName) then
+                  CreateUnionXMLFile(XMLUnionDocFullName, XMLUnionDocFullName, XMLItemDocFullName, GroupParentNodeName)
+                else
+                  CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLItemDocFullName, GroupParentNodeName)
+            end;
+          XMLAgentDocFullName := XMLDocPath + AndroidExportFileName + AgentSuffix + VarAsStr(CommercialAgents.Код) + XMLExt;
+          if FileExists(XMLAgentDocFullName) then
+            if FileExists(XMLUnionDocFullName) then
+              CreateUnionXMLFile(XMLUnionDocFullName, XMLUnionDocFullName, XMLAgentDocFullName, AgentParentNodeNames)
+            else
+              if FileExists(XMLDocFullName) then
+                CreateUnionXMLFile(XMLUnionDocFullName, XMLDocFullName, XMLAgentDocFullName, AgentParentNodeNames);
+          fso := CreateOleObject('Scripting.FileSystemObject');
+          if not FileExists(XMLUnionDocFullName) then
+            fso.CopyFile(XMLDocFullName, XMLUnionDocFullName, true);
+          if FileExists(XMLUnionDocFullName) then
+            begin
+              if FileExists(XMLDocZipFullName) then
+                DeleteFile(XMLDocZipFullName);
+              AddFilesToZipByZipType(ZipType, ZipExePath, XMLDocZipFullName, XMLUnionDocFullName);
+              if VarAsBool(fso.FileExists(XMLDocZipFullName)) then
+                begin
+                  if VarAsBool(AndroidSettingsDict.ПередаватьФотографииТоваров) then
+                    begin
+                      XMLPhotoZipFullName := XMLDocPath + AndroidPhotoZipFileName + ZipExt;
+                      if not VarAsBool(Constants.ТоварыДляКПК) and VarAsBool(CommercialAgents.@ГруппаТоваров.IsFocused) then
+                        XMLPhotoZipFullName := XMLDocPath + VarAsStr(CommercialAgents.ГруппаТоваров.Код) + '\' + AndroidPhotoZipFileName + ZipExt;
+                      if FileExists(XMLPhotoZipFullName) then
+                        AddFilesToZipByZipType(ZipType, ZipExePath, XMLDocZipFullName, XMLPhotoZipFullName);
+                    end;
+                  fso.CopyFile(XMLDocZipFullName, CommercialAgents.ПутьИмпортаПК, True);
+                  if AndroidSettingsDict.СпособОбмена = 1 then
+                    ExchangeFileWithUseFtp(0, AndroidSettingsDict.АдресСервераFTP, AndroidSettingsDict.ИмяПользователяFTP, AndroidSettingsDict.ПарольFTP, XMLDocZipFullName, CommercialAgents.Логин);
+                end;
+            end;
+        end;
+    end
+end;
+
+
+function CreateAndroidOrders(CommercialAgents : ICDictionary; XMLDocFullName : String; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel; var Log : string) : Integer;
+var
+  TmpPartner, Partner, ManPartner, Representative, Responsible, Good, Pack, Currency : ICDictionary;
+  OrderJournals : ICJournal;
+  AccGood : ICAccs;
+  OrderDoc : ICDocuments;
+  ChangeLock, UseAlco, UseTara : Boolean;
+  Course : Decimal;
+  i, Total : Integer;
+  DocSuffix, TypePrice : string;
+  TmpPanel : TO4Panel;
+  TmpCurrencyTbl : ICValueTable;
+  XMLDoc, NodeDOCUMENT, NodeDOCUMENTS, NodeITEM, NodeITEMS : OLEVariant;
+  NodesDOCUMENTS_Length, NodesITEMS_Length, j, IDItem : integer;
+  TmpAtr, DOCID, StrPocketDate : String;
+  IDCustomer, IDRepresentative : integer;
+  PocketDate : DateTime;
+begin
+  Result := 0;
+  Constants := GetConstants;
+  GetConstants;
+  Partner := CreateObject('Справочники.ЮрПартнеры');
+  Partner.Select;
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  ManPartner.Select;
+  Responsible := CreateObject('Справочники.ТорговыеАгенты');
+  Responsible.Select;
+  Representative := CreateObject('Справочники.Представители');
+  Good := CreateObject('Справочники.Товары');
+  Good.SortByField('Артикул');
+  Good.Select;
+  Pack := CreateObject('Справочники.Упаковки');
+  Pack.UseMasterAndSelect(Good);
+  TmpCurrencyTbl := CreateObject('ТаблицаЗначений');
+  TmpCurrencyTbl.AddColumn('Валюта', vtcLink, 0);
+  TmpCurrencyTbl.AddColumn('Курс', vtcFFt, 6);
+  TmpCurrencyTbl.Open;
+  Currency := CreateObject('Справочники.Валюты');
+  Currency.Select;
+  while Currency.SelectNext do
+    begin
+      TmpCurrencyTbl.Append;
+      Course := Currency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+      if Course <= 0 then
+        Course := 1;
+      TmpCurrencyTbl.Валюта := Currency;
+      TmpCurrencyTbl.Курс := Course;
+      TmpCurrencyTbl.Post;
+    end;
+  TmpCurrencyTbl.SortBy('Валюта');
+  TmpCurrencyTbl.Select;
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  case ConfType of
+    cnfFarm :
+      DocSuffix := 'Фарм';
+    cnfAlco :
+      DocSuffix := 'Алко';
+  end;
+  OrderJournals := CreateObject('Журналы.ЖурналСчетовНаПродажу' + DocSuffix);
+  OrderDoc := CreateObject('Документы.СчетНаПродажу' + DocSuffix);
+  OrderDoc.Select;
+  OrderDoc.TableAutoCalcFields := False;
+  i := 0;
+
+  XMLDoc := LoadXMLFromFileByVersion(XMLDocFullName, XMLVersion6);
+  NodeDOCUMENTS := XMLDoc.SelectNodes('/DATA/DOCUMENTS/DOCUMENT[@GUID="E01E1F5C-D6E4-46E8-B923-3758B0D79BDE"]/ELEMENTS/ITEM');
+  NodesDOCUMENTS_Length := NodeDOCUMENTS.Length;
+  Total := NodesDOCUMENTS_Length;
+  try
+    for i := 0 to NodesDOCUMENTS_Length - 1 do
+      begin
+        StatusText(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(Total));
+        NodeDOCUMENT := NodeDOCUMENTS.Item[i];
+        if VarAsInt(NodeDOCUMENT.GetAttribute('IsPost')) = 0 then
+          continue;
+        StrPocketDate := NodeDOCUMENT.GetAttribute('A017');//2012-09-26T17:50:13
+        PocketDate := EncodeDate(VarAsInt(StrCopy(StrPocketDate, 1, 4)), VarAsInt(StrCopy(StrPocketDate, 6, 2)), VarAsInt(StrCopy(StrPocketDate, 9, 2)))
+                      + EncodeTime(VarAsInt(StrCopy(StrPocketDate, 12, 2)), VarAsInt(StrCopy(StrPocketDate, 15, 2)), VarAsInt(StrCopy(StrPocketDate, 18, 2)));
+
+        OrderJournals.CancelFieldFilter('Ответственный');
+        OrderJournals.SetFieldFilter('Ответственный', '=', CommercialAgents.Служащий, '', '', '');
+        OrderJournals.SetRangeByField('ДатаКПК', PocketDate);
+        if OrderJournals.Select then
+          begin
+            Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+              Trans(logDocAlreadyExists) + DateTimeToStr(PocketDate) + #13#10;
+            continue;
+          end;
+        TmpAtr := NodeDOCUMENT.GetAttribute('A03');
+        DOCID := NodeDOCUMENT.GetAttribute('GUID');
+        IDCustomer := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+        if not FindPartner(i + 1, 'СчетНаПродажу', DocSuffix, IDCustomer, Partner, ManPartner,
+          null, Representative, 0, TmpPanel, OrderDoc, TmpPartner, Log) then
+          continue;   
+        if VarAsBool(OrderDoc.@Партнер.IsFocused) and VarAsBool(OrderDoc.Партнер.HasField('ЦенаСправ')) then
+          case  VarAsInt(OrderDoc.Партнер.ЦенаСправ) of
+            0: TypePrice := 'Цена';
+            1: TypePrice := 'ОптЦена';
+            2: TypePrice := 'ДрЦена';
+            3: TypePrice := 'НовЦена'
+            else
+              TypePrice := 'Цена';
+          end
+        else
+          TypePrice := 'Цена';
+        OrderDoc.SetTableOnCalcFields(Null);
+        OrderDoc.SetOnCalcFields(Null);
+        OrderDoc.ДатаКПК := PocketDate;
+        OrderDoc.ДатаДокумента := PocketDate;
+
+        OrderDoc.AndroidGUID := DOCID;
+
+        TmpAtr := NodeDOCUMENT.GetAttribute('A04');
+        IDRepresentative := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+        if Representative.FindByField('Код', IDRepresentative, False) then
+          OrderDoc.Посредник := Representative.@Название;
+
+        OrderDoc.Заметки := NodeDOCUMENT.GetAttribute('A011');
+        OrderDoc.Ответственный := CommercialAgents.Служащий;
+        if not Currency.FindByField('Активность', VarAsInt(True), True) then
+          Currency := GetNatCurrency(Currency);
+        if Currency.IsFocused then
+          begin
+            if TmpCurrencyTbl.Find(Currency) then
+              Course := TmpCurrencyTbl.Курс
+            else
+              Course := 1;
+            OrderDoc.Валюта := Currency;
+          end
+        else
+          Course := 1;
+        OrderDoc.Курс := Course;
+        OrderDoc.Отпуск := 1;
+        GetNextDateForDocument(OrderDoc, Constants, True);
+        OrderDoc.ДатаДоверенности := CurrentDate;
+        OrderDoc.ОкончаниеРезерва := GetNextDateRes(OrderDoc.ДатаДокумента, Constants);
+
+        UseAlco := OrderDoc.HasField('СтавкаАлкоСбор');
+        UseTara := OrderDoc.HasField('Тара');
+
+  //      NodeITEMS := NodeDOCUMENT.SelectNodes('/TABLES/TABLE[@GUID="0738E61B-F06F-464A-8483-4249E0254819"]/ITEM[@DocId="' + DOCID + '"]');
+        NodeITEMS := NodeDOCUMENT.SelectNodes('TABLES/TABLE[@GUID="0738E61B-F06F-464A-8483-4249E0254819"]/ITEM');
+        NodesITEMS_Length := NodeITEMS.Length;
+        for j := 0 to NodesITEMS_Length - 1 do
+          begin
+            NodeITEM := NodeITEMS.Item[j];
+            TmpAtr := NodeITEM.GetAttribute('A01');
+            IDItem := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+
+            if not Good.FindByField('Артикул', IDItem, False) then
+              continue;
+            OrderDoc.AppendLine;
+            OrderDoc.Товар := Good;
+
+            if UseAlco and (Good.ПризнакАлкоТабак = 1) then
+              OrderDoc.СтавкаАлкоСбор := Constants.СтавкаПоАлкоСбору;
+            if UseTara then
+              OrderDoc.AssignFields('Тара', Good);
+            OrderDoc.Количество := StrToDec(VarAsStr(NodeITEM.GetAttribute('A04')));
+            OrderDoc.СтавкаНДС := Good.СтавкаНДС;
+            OrderDoc.ВалютаТовара := Good.@ВалОтпЦены;
+            if TmpCurrencyTbl.Find(Good.@ВалОтпЦены) then
+              Course := TmpCurrencyTbl.Курс
+            else
+              Course := 1;
+            OrderDoc.КурсТовара := Course;
+            OrderDoc.ЦенаБезСкидкиНадбавки := VarAsDec(Good._Default[TypePrice]);
+            OrderDoc.ПроцентСкидкиНадбавки := -StrToDec(VarAsStr(NodeITEM.GetAttribute('A09')));
+            OrderDoc.Масса := StrToDec(VarAsStr(NodeITEM.GetAttribute('A08')));
+            if VarAsBool(Constants.РасчетВхЦены) then
+              begin
+                AccGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Good);
+                if AccGood.КолОбщ <> 0 then
+                  OrderDoc.ВхЦенаБезНДС := AccGood.СумВх / AccGood.КолОбщ;
+              end
+            else
+              OrderDoc.ВхЦенаБезНДС := Good.ВхЦенаБезНДС;
+            GoodTDSFieldChange(OrderDoc, 'ПроцентСкидкиНадбавки', OrderDoc.ПроцентСкидкиНадбавки, ChangeLock, False);
+            OrderDoc.PostLine;
+          end;
+        case ConfType of
+          cnfType :
+            begin
+              OrderDoc.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+              OrderDoc.SetOnCalcFields(EntryPoint(CalcFields));
+            end;
+          cnfFarm, cnfAlco :
+            InvokeAIFunction(CtrlToVar(pnConf), 'SetOnCalcFields',
+              OrderDoc)
+        end;
+        case ConfType of
+          cnfType :
+            CalcDocSumma(OrderDoc);
+          cnfFarm, cnfAlco :
+            InvokeAIFunction(CtrlToVar(pnConf), 'CalcDocSumma', OrderDoc)
+        end;
+        OrderDoc.Post;
+        OrderDoc.ApplyUpdates;
+        if VarAsBool(Constants.ФиксироватьДокументыКПК) then
+          OrderDoc.StateUp;
+        Doc.AppendLine;
+        Doc.Документ := OrderDoc;
+        Doc.PostLine;
+        inc(Result);
+      end;
+  finally
+    StatusText('');
+  end;
+end;      
+
+
+
+
+function CreateAndroidNakls(CommercialAgents : ICDictionary; XMLDocFullName : String; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel; var Log : string) : Integer;
+const
+  sprmFPAutoUseDocIn = 'FPAutoUseDocIn';
+var
+  TmpPartner, Partner, RealPartner, ManPartner, Representative, Responsible, Good,
+  Pack, Currency, Store, UnicueAndroidID, ParamsSt, Region : ICDictionary;
+  OrderJournals : ICJournal;
+  AccGood, AccPartGood, AccReserv : ICAccs;
+  OrderDoc : ICDocuments;
+  ChangeLock, UseAlco, UseTara : Boolean;
+  Course, Quantity : Decimal;
+  i, k, Total : Integer;
+  Options : ICOptions;
+  TblGoods, TmpCurrencyTbl : ICValueTable;
+  DocSuffix : string;
+  XMLDoc, NodeDOCUMENT, NodeDOCUMENTS, NodeITEM, NodeITEMS : OLEVariant;
+  NodesDOCUMENTS_Length, NodesITEMS_Length, j, IDItem : integer;
+  TmpAtr, DOCID, StrPocketDate : String;
+  IDCustomer, IDRepresentative : integer;
+  PocketDate : DateTime;
+begin
+  Result := 0;
+  Constants := GetConstants;
+  GetConstants;
+  Partner := CreateObject('Справочники.ЮрПартнеры');
+  Partner.Select;
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  ManPartner.Select;
+  RealPartner := CreateObject('Справочники.Реализаторы');
+  RealPartner.Select;
+  Responsible := CreateObject('Справочники.ТорговыеАгенты');
+  Responsible.Select;
+  Representative := CreateObject('Справочники.Представители');
+  UnicueAndroidID := CreateObject('Справочники.УникальностьДокументовAndroid');
+  UnicueAndroidID.Select;
+  Good := CreateObject('Справочники.Товары');
+  Good.SortByField('Артикул');
+  Good.Select;
+  Pack := CreateObject('Справочники.Упаковки');
+  Pack.UseMasterAndSelect(Good);
+  TmpCurrencyTbl := CreateObject('ТаблицаЗначений');
+  TmpCurrencyTbl.AddColumn('Валюта', vtcLink, 0);
+  TmpCurrencyTbl.AddColumn('Курс', vtcFFt, 6);
+  TmpCurrencyTbl.Open;
+  Currency := CreateObject('Справочники.Валюты');
+  Currency.Select;
+  while Currency.SelectNext do
+    begin
+      TmpCurrencyTbl.Append;
+      Course := Currency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+      if Course <= 0 then
+        Course := 1;
+      TmpCurrencyTbl.Валюта := Currency;
+      TmpCurrencyTbl.Курс := Course;
+      TmpCurrencyTbl.Post;
+    end;
+  TmpCurrencyTbl.SortBy('Валюта');
+  TmpCurrencyTbl.Select;
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccReserv := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  case ConfType of
+    cnfFarm :
+      DocSuffix := 'Фарм';
+    cnfAlco :
+      DocSuffix := 'Алко';
+  end;
+  OrderJournals := CreateObject('Журналы.ЖурналНакладных' + DocSuffix);
+  i := 0;
+  TblGoods := CreateObject('ТаблицаЗначений');
+  TblGoods.AddColumn('Товар', vtcLink, 0);
+  TblGoods.AddColumn('ЕдИзм', vtcLink, 0);
+  TblGoods.AddColumn('Количество', vtcFFt, 5);
+  TblGoods.AddColumn('Цена', vtcFFt, 7);
+  TblGoods.AddColumn('ЦенаБезНДС', vtcFFt, 7);
+  TblGoods.AddColumn('ЦенаВВалюте', vtcFFt, 7);
+  TblGoods.AddColumn('НДС', vtcFFt, 7);
+  TblGoods.AddColumn('СтавкаНДС', vtcFFt, 2);
+  TblGoods.AddColumn('ПроцентСкидкиНадбавки', vtcFFt, 2);
+  TblGoods.AddColumn('ЦенаБезСкидкиНадбавки', vtcFFt, 7);
+  TblGoods.AddColumn('ВалютаТовара', vtcLink, 0);
+  TblGoods.AddColumn('КурсТовара', vtcFFt, 6);
+  TblGoods.AddColumn('Склад', vtcLink, 0);
+  TblGoods.AddColumn('Масса', vtcFft, 3);
+  case ConfType of
+    cnfFarm :
+      begin
+        TblGoods.AddColumn('ЦенаПроизводителя', vtcFFt, 7);
+        TblGoods.AddColumn('Серия', vtcLink, 0);
+      end;
+    cnfAlco :
+      begin
+        TblGoods.AddColumn('Тара', vtcInteger, 0);
+        TblGoods.AddColumn('СтавкаАлкоСбор', vtcFft, 2);
+      end;
+  end;
+  TblGoods.Open;
+  XMLDoc := LoadXMLFromFileByVersion(XMLDocFullName, XMLVersion6);
+  NodeDOCUMENTS := XMLDoc.SelectNodes('/DATA/DOCUMENTS/DOCUMENT[@GUID="E01E1F5C-D6E4-46E8-B923-3758B0D79BDE"]/ELEMENTS/ITEM');
+  NodesDOCUMENTS_Length := NodeDOCUMENTS.Length;
+  Total := NodesDOCUMENTS_Length;
+  try
+    for i := 0 to NodesDOCUMENTS_Length - 1 do
+      begin
+        StatusText(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(Total));
+        NodeDOCUMENT := NodeDOCUMENTS.Item[i];
+        if VarAsInt(NodeDOCUMENT.GetAttribute('IsPost')) = 0 then
+          continue;
+        StrPocketDate := NodeDOCUMENT.GetAttribute('A017');//2012-09-26T17:50:13
+        PocketDate := EncodeDate(VarAsInt(StrCopy(StrPocketDate, 1, 4)), VarAsInt(StrCopy(StrPocketDate, 6, 2)), VarAsInt(StrCopy(StrPocketDate, 9, 2)))
+                      + EncodeTime(VarAsInt(StrCopy(StrPocketDate, 12, 2)), VarAsInt(StrCopy(StrPocketDate, 15, 2)), VarAsInt(StrCopy(StrPocketDate, 18, 2)));
+        // старая проверка до 05/2013
+        {OrderJournals.CancelFieldFilter('Посредник');
+        OrderJournals.SetFieldFilter('Посредник', '=', CommercialAgents.Служащий, '', '', '');
+        OrderJournals.SetRangeByField('ДатаКПК', PocketDate);
+        if OrderJournals.Select then
+          begin
+            Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+              Trans(logDocAlreadyExists) + DateTimeToStr(PocketDate) + #13#10;
+            continue;
+          end;}
+        UnicueAndroidID.CancelFieldFilter('Посредник');
+        UnicueAndroidID.CancelFieldFilter('AndroidGUID');
+        UnicueAndroidID.SetFieldFilter('Посредник', '=', CommercialAgents.Служащий, '', '', '');
+        UnicueAndroidID.SetFieldFilter('AndroidGUID', '=', NodeDOCUMENT.GetAttribute('GUID'), '', '', '');
+       // UnicueAndroidID.SetRangeByField('AndroidGUID',  NodeDOCUMENT.GetAttribute('GUID'), false);
+        //UnicueAndroidID.SetRangeByField(ArrayOf('Посредник;AndroidGUID'),  ArrayOf(CommercialAgents.Служащий,NodeDOCUMENT.GetAttribute('GUID')), false);
+        if UnicueAndroidID.Select then
+          begin
+            Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+              Trans(logDocAlreadyExists) + DateTimeToStr(PocketDate) + #13#10;
+            continue;
+          end;
+        TmpAtr := NodeDOCUMENT.GetAttribute('A03');
+        DOCID := NodeDOCUMENT.GetAttribute('GUID');
+        IDCustomer := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+                              //НакладнаяОтпуска
+        if not FindPartner(i, 'Чек', DocSuffix, IDCustomer, Partner,
+          ManPartner, RealPartner, Representative, ConfType, pnConf, OrderDoc, TmpPartner, Log) then
+          continue;
+        OrderDoc.SetTableOnCalcFields(Null);
+        OrderDoc.SetOnCalcFields(Null);
+        OrderDoc.ДатаКПК := PocketDate;
+        OrderDoc.ДатаДокумента := PocketDate;
+        OrderDoc.AndroidGUID := DOCID;
+        OrderDoc.BaseID := VarAsInt(Constants.КодИБ);
+        
+        if VarAsBool(CommercialAgents.@РегионИмпорта.IsFocused) then
+          Region := CommercialAgents.@РегионИмпорта;
+
+        OrderDoc.Регион := Region;
+
+        ParamsSt := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');
+        ParamsSt.Select;
+        if VarAsBool(ParamsSt.@Чек.IsFocused) then
+          OrderDoc.Статья := ParamsSt.Чек;
+
+        TmpAtr := NodeDOCUMENT.GetAttribute('A04');
+        IDRepresentative := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+        if Representative.FindByField('Код', IDRepresentative, False) then
+          OrderDoc.Посредник := Representative.@Название;
+        OrderDoc.Заметки := NodeDOCUMENT.GetAttribute('A011');
+              ///  Ответственный
+        OrderDoc.Посредник := CommercialAgents.Служащий;
+        OrderDoc.Ответственный := CommercialAgents.Служащий;
+        if not Currency.FindByField('Активность', VarAsInt(True), True) then
+          Currency := GetNatCurrency(Currency);
+        if Currency.IsFocused then
+          begin
+            if TmpCurrencyTbl.Find(Currency) then
+              Course := TmpCurrencyTbl.Курс
+            else
+              Course := 1;
+            OrderDoc.Валюта := Currency;
+          end
+        else
+          Course := 1;
+        OrderDoc.Курс := Course;
+        OrderDoc.Отпуск := 1;
+        GetNextDateForDocument(OrderDoc, Constants, True);
+        //OrderDoc.ДатаДоверенности := CurrentDate;
+        Options := GetOptions;
+        if OrderDoc.HasField('Касса') then
+          OrderDoc.Касса := - Bits(1)*VarAsInt(Options.GetServerPrm(sprmFPAutoUseDocIn)) + 32;
+        //if VarAsBool(Constants.ТоварыДляКПК) then
+        //  begin
+        //    if TmpStore.IsFocused then
+        //      Store := TmpStore
+        //  end
+        ///else
+        if VarAsBool(Responsible.@СкладИмпорта.IsFocused) then
+          Store := Responsible.@СкладИмпорта
+        else
+          raise('Склад импорта в агента не задан!');
+
+        OrderDoc.СкладПоУмолч := Store;     
+
+        TblGoods.Clear;
+        UseAlco := OrderDoc.HasField('СтавкаАлкоСбор');
+        UseTara := OrderDoc.HasField('Тара');
+  //      NodeITEMS := NodeDOCUMENT.SelectNodes('/TABLES/TABLE[@GUID="0738E61B-F06F-464A-8483-4249E0254819"]/ITEM[@DocId="' + DOCID + '"]');
+        NodeITEMS := NodeDOCUMENT.SelectNodes('TABLES/TABLE[@GUID="0738E61B-F06F-464A-8483-4249E0254819"]/ITEM');
+        NodesITEMS_Length := NodeITEMS.Length;
+        for j := 0 to NodesITEMS_Length - 1 do
+          begin
+            NodeITEM := NodeITEMS.Item[j];
+            TmpAtr := NodeITEM.GetAttribute('A01');
+            IDItem := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+
+            if not Good.FindByField('Артикул', IDItem, False) then
+              continue;
+            Quantity := StrToDec(VarAsStr(NodeITEM.GetAttribute('A04')));
+            if VarAsBool(Constants.ОтпускНаявногоТовараКПК) then
+              begin
+                AccGood.ClearFieldBuffers;
+                AccGood.ClearFieldFilters;
+                if IsObjFocused(Store) then
+                  AccGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), ArrayOf(Good, Store))
+                else
+                  AccGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Good);
+                if AccGood.КолОбщ > 0 then
+                  begin
+                    if AccGood.КолОбщ < Quantity then
+                      Quantity := AccGood.КолОбщ;
+                  end
+                else
+                  continue;
+              end;
+            TblGoods.Append;
+            TblGoods.Товар := Good;
+            if UseAlco and (Good.ПризнакАлкоТабак = 1) then
+              TblGoods.СтавкаАлкоСбор := Constants.СтавкаПоАлкоСбору;
+            TblGoods.Количество := Quantity;
+            TblGoods.СтавкаНДС := Good.СтавкаНДС;
+            TblGoods.ВалютаТовара := Good.@ВалютаОптЦена;
+            if TmpCurrencyTbl.Find(Good.@ВалютаОптЦена) then
+              Course := TmpCurrencyTbl.Курс
+            else
+              Course := 1;
+            TblGoods.КурсТовара := Course;
+            TblGoods.ЦенаБезСкидкиНадбавки := StrToDec(VarAsStr(NodeITEM.GetAttribute('A05')));
+            TblGoods.ПроцентСкидкиНадбавки := -StrToDec(VarAsStr(NodeITEM.GetAttribute('A09')));
+            TblGoods.Масса := StrToDec(VarAsStr(NodeITEM.GetAttribute('A08')));
+          //  TblGoods.Цена := VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) + VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) * VarAsDec(TblGoods.ПроцентСкидкиНадбавки) / 100;
+            TblGoods.Цена := RoundDec(VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) + VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) * VarAsDec(TblGoods.ПроцентСкидкиНадбавки)/100,2);
+            ЦенаНДС(TblGoods, False);
+            if VarAsDec(TblGoods.КурсТовара) <> 0 then
+              TblGoods.ЦенаВВалюте := VarAsDec(TblGoods.Цена) / TblGoods.КурсТовара;
+            TblGoods.Склад := Store;
+            if UseTara and TblGoods.HasField('Тара') then //вид тары
+              TblGoods.AssignFields('Тара', Good);
+            TblGoods.Post;
+          end;
+        TblGoods.Select;
+        if TblGoods.LineCount > 0 then
+          begin
+            while TblGoods.SelectNext do
+              case ConfType of
+                cnfType :     
+                  for k := 1 to TblGoods.Количество do
+                    AddLineByCode(OrderDoc, TblGoods.Товар, AccGood, '', 'ByDict', true);
+
+                  //CreateApplyTable(TblGoods.Товар, TblGoods, Store, OrderDoc, Null,
+                  //  TblGoods.Количество, Null, -2, Constants, Currency, Pack, Options,
+                  //  AccGood, AccReserv, AccPartGood);
+
+                cnfFarm, cnfAlco :
+                  InvokeAIFunction(CtrlToVar(pnConf), 'CreateApplyTable',
+                    ArrayOf(TblGoods, OrderDoc, Constants, Currency,
+                    Pack, Options, AccGood, AccReserv, AccPartGood))
+              end;
+            case ConfType of
+              cnfType :
+                begin
+                  OrderDoc.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+                  OrderDoc.SetOnCalcFields(EntryPoint(CalcFields));
+                end;
+              cnfFarm, cnfAlco :
+                InvokeAIFunction(CtrlToVar(pnConf), 'SetOnCalcFields',
+                  OrderDoc)
+            end;
+            case ConfType of
+              cnfType :
+                CalcSumma(OrderDoc);
+                //CalcDocSumma(OrderDoc);
+              cnfFarm, cnfAlco :
+                InvokeAIFunction(CtrlToVar(pnConf), 'CalcDocSumma', OrderDoc)
+            end;
+            OrderDoc.Post;
+            OrderDoc.ApplyUpdates;
+            if VarAsBool(Constants.ФиксироватьДокументыКПК) then
+              OrderDoc.StateUp;
+            UnicueAndroidID.Append;
+            UnicueAndroidID.AndroidGUID := OrderDoc.AndroidGUID;
+            UnicueAndroidID.Партнер := OrderDoc.Партнер;
+            UnicueAndroidID.ДатаДокумента := OrderDoc.ДатаДокумента;
+            UnicueAndroidID.Сумма := OrderDoc.Сумма;
+            UnicueAndroidID.Посредник := OrderDoc.Посредник;
+            UnicueAndroidID.НомерДокумента := OrderDoc.НомерДокумента;
+         //   UnicueAndroidID.Документ := OrderDoc;
+            UnicueAndroidID.Post;
+            UnicueAndroidID.ApplyUpdates;
+            Doc.AppendLine;
+            Doc.Документ := OrderDoc;
+            Doc.PostLine;
+            inc(Result);
+          end
+        else
+          OrderDoc.Cancel;
+      end;
+  finally
+    StatusText('');
+  end;
+end;
+
+function CreateAndroidChecks(CommercialAgents : ICDictionary; XMLDocFullName : String; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel; var Log : string) : Integer;
+const
+  sprmFPAutoUseDocIn = 'FPAutoUseDocIn';
+var
+  TmpPartner, Partner, RealPartner, ManPartner, Representative, Responsible, Good,
+  Pack, Currency, Store,Region, TmpStore, UnicueAndroidID, ParamsSt : ICDictionary;
+  OrderJournals : ICJournal;
+  AccGood, AccPartGood, AccReserv : ICAccs;
+  OrderDoc : ICDocuments;
+  ChangeLock, UseAlco, UseTara : Boolean;
+  Course, Quantity : Decimal;
+  i, Total : Integer;
+  Options : ICOptions;
+  TblGoods, TmpCurrencyTbl : ICValueTable;
+  DocSuffix : string;
+  XMLDoc, NodeDOCUMENT, NodeDOCUMENTS, NodeITEM, NodeITEMS : OLEVariant;
+  NodesDOCUMENTS_Length, NodesITEMS_Length, j, IDItem : integer;
+  TmpAtr, DOCID, StrPocketDate : String;
+  IDCustomer, IDRepresentative : integer;
+  PocketDate : DateTime;
+begin
+  Result := 0;
+  Constants := GetConstants;
+  GetConstants;
+//  TmpStore := Constants.СкладДляКПК;
+  Partner := CreateObject('Справочники.ЮрПартнеры');
+  Partner.Select;
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  ManPartner.Select;
+  RealPartner := CreateObject('Справочники.Реализаторы');
+  RealPartner.Select;
+  Responsible := CreateObject('Справочники.ТорговыеАгенты');
+  Responsible.Select;
+  Representative := CreateObject('Справочники.Представители');
+  UnicueAndroidID := CreateObject('Справочники.УникальностьДокументовAndroid');
+  UnicueAndroidID.Select;
+  ParamsSt := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');
+  ParamsSt.Select;
+  Good := CreateObject('Справочники.Товары');
+  Good.SortByField('Артикул');
+  Good.Select;
+  Pack := CreateObject('Справочники.Упаковки');
+  Pack.UseMasterAndSelect(Good);
+  TmpCurrencyTbl := CreateObject('ТаблицаЗначений');
+  TmpCurrencyTbl.AddColumn('Валюта', vtcLink, 0);
+  TmpCurrencyTbl.AddColumn('Курс', vtcFFt, 6);
+  TmpCurrencyTbl.Open;
+  Currency := CreateObject('Справочники.Валюты');
+  Currency.Select;
+  while Currency.SelectNext do
+    begin
+      TmpCurrencyTbl.Append;
+      Course := Currency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+      if Course <= 0 then
+        Course := 1;
+      TmpCurrencyTbl.Валюта := Currency;
+      TmpCurrencyTbl.Курс := Course;
+      TmpCurrencyTbl.Post;
+    end;
+  TmpCurrencyTbl.SortBy('Валюта');
+  TmpCurrencyTbl.Select;
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccReserv := CreateObject('Аккумуляторы.ТоварыВРезерве');
+
+  OrderJournals := CreateObject('Журналы.ЖурналЧеков');
+  i := 0;
+  TblGoods := CreateObject('ТаблицаЗначений');
+  TblGoods.AddColumn('Товар', vtcLink, 0);
+  TblGoods.AddColumn('ЕдИзм', vtcLink, 0);
+  TblGoods.AddColumn('Количество', vtcFFt, 5);
+  TblGoods.AddColumn('Цена', vtcFFt, 7);
+  TblGoods.AddColumn('ЦенаБезНДС', vtcFFt, 7);
+  TblGoods.AddColumn('ЦенаВВалюте', vtcFFt, 7);
+  TblGoods.AddColumn('НДС', vtcFFt, 7);
+  TblGoods.AddColumn('СтавкаНДС', vtcFFt, 2);
+  TblGoods.AddColumn('ПроцентСкидкиНадбавки', vtcFFt, 2);
+  TblGoods.AddColumn('ЦенаБезСкидкиНадбавки', vtcFFt, 7);
+  TblGoods.AddColumn('ВалютаТовара', vtcLink, 0);
+  TblGoods.AddColumn('КурсТовара', vtcFFt, 6);
+  TblGoods.AddColumn('Склад', vtcLink, 0);
+  TblGoods.AddColumn('Масса', vtcFft, 3);
+  TblGoods.Open;
+  XMLDoc := LoadXMLFromFileByVersion(XMLDocFullName, XMLVersion6);
+  NodeDOCUMENTS := XMLDoc.SelectNodes('/DATA/DOCUMENTS/DOCUMENT[@GUID="E01E1F5C-D6E4-46E8-B923-3758B0D79BDE"]/ELEMENTS/ITEM');
+  NodesDOCUMENTS_Length := NodeDOCUMENTS.Length;
+  Total := NodesDOCUMENTS_Length;
+  try
+    for i := 0 to NodesDOCUMENTS_Length - 1 do
+      begin
+        StatusText(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(Total));
+        NodeDOCUMENT := NodeDOCUMENTS.Item[i];
+        if VarAsInt(NodeDOCUMENT.GetAttribute('IsPost')) = 0 then
+          continue;
+        StrPocketDate := NodeDOCUMENT.GetAttribute('A017');//2012-09-26T17:50:13
+        PocketDate := EncodeDate(VarAsInt(StrCopy(StrPocketDate, 1, 4)), VarAsInt(StrCopy(StrPocketDate, 6, 2)), VarAsInt(StrCopy(StrPocketDate, 9, 2)))
+                      + EncodeTime(VarAsInt(StrCopy(StrPocketDate, 12, 2)), VarAsInt(StrCopy(StrPocketDate, 15, 2)), VarAsInt(StrCopy(StrPocketDate, 18, 2)));
+        // старая проверка до 05/2013
+        UnicueAndroidID.CancelFieldFilter('Посредник');
+        UnicueAndroidID.CancelFieldFilter('AndroidGUID');
+        UnicueAndroidID.SetFieldFilter('Посредник', '=', CommercialAgents.Служащий, '', '', '');
+        UnicueAndroidID.SetFieldFilter('AndroidGUID', '=', NodeDOCUMENT.GetAttribute('GUID'), '', '', '');
+       // UnicueAndroidID.SetRangeByField('AndroidGUID',  NodeDOCUMENT.GetAttribute('GUID'), false);
+        //UnicueAndroidID.SetRangeByField(ArrayOf('Посредник;AndroidGUID'),  ArrayOf(CommercialAgents.Служащий,NodeDOCUMENT.GetAttribute('GUID')), false);
+        if UnicueAndroidID.Select then
+          begin
+            Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+              Trans(logDocAlreadyExists) + DateTimeToStr(PocketDate) + #13#10;
+            continue;
+          end;
+        TmpAtr := NodeDOCUMENT.GetAttribute('A03');
+        DOCID := NodeDOCUMENT.GetAttribute('GUID');
+        IDCustomer := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+        if not FindPartner(i, 'Чек', DocSuffix, IDCustomer, Partner,
+          ManPartner, RealPartner, Representative, ConfType, pnConf, OrderDoc, TmpPartner, Log) then
+          continue;
+        OrderDoc.SetTableOnCalcFields(Null);
+        OrderDoc.SetOnCalcFields(Null);
+
+        if IsObjFocused(OrderDoc.Партнер.ГруппаСкидки) then
+            OrderDoc.ПроцСкидки := OrderDoc.Партнер.ГруппаСкидки.СкидкаНадбавка;
+
+        OrderDoc.ДатаКПК := PocketDate;
+        OrderDoc.ДатаДокумента := PocketDate;
+        OrderDoc.AndroidGUID := DOCID;
+        if VarAsBool(ParamsSt.@Чек.IsFocused) then
+          OrderDoc.Статья := ParamsSt.Чек;
+
+        TmpAtr := NodeDOCUMENT.GetAttribute('A04');
+        IDRepresentative := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+//        if Representative.FindByField('Код', IDRepresentative, False) then
+//          OrderDoc.Посредник := Representative.@Название;
+//          OrderDoc.СлужащийДляВознаграждения := Representative.@Название;
+        OrderDoc.Заметки := NodeDOCUMENT.GetAttribute('A011');
+              ///  Ответственный
+//        OrderDoc.Посредник := CommercialAgents.Служащий;
+//        OrderDoc.ПроцентСкидкиНадбавки := -StrToDec(VarAsStr(NodeDOCUMENT.GetAttribute('A09')));
+
+
+
+
+        OrderDoc.Ответственный := CommercialAgents.Служащий;
+        if not Currency.FindByField('Активность', VarAsInt(True), True) then
+          Currency := GetNatCurrency(Currency);
+        if Currency.IsFocused then
+          begin
+            if TmpCurrencyTbl.Find(Currency) then
+              Course := TmpCurrencyTbl.Курс
+            else
+              Course := 1;
+            OrderDoc.Валюта := Currency;
+          end
+        else
+          Course := 1;
+        OrderDoc.Курс := Course;
+        OrderDoc.Отпуск := 1;
+        GetNextDateForDocument(OrderDoc, Constants, True);
+//        OrderDoc.ДатаДоверенности := CurrentDate;
+        Options := GetOptions;
+        if OrderDoc.HasField('Касса') then
+          OrderDoc.Касса := - Bits(1)*VarAsInt(Options.GetServerPrm(sprmFPAutoUseDocIn)) + 32;
+
+{        if VarAsBool(Constants.ТоварыДляКПК) then
+          begin
+            if TmpStore.IsFocused then
+              Store := TmpStore
+          end
+        else
+          if VarAsBool(CommercialAgents.@Склад.IsFocused) then
+            Store := CommercialAgents.@Склад;
+}
+        if VarAsBool(CommercialAgents.@СкладИмпорта.IsFocused) then
+          Store := CommercialAgents.@СкладИмпорта;
+        if VarAsBool(CommercialAgents.@РегионИмпорта.IsFocused) then
+          Region := CommercialAgents.@РегионИмпорта;
+
+        OrderDoc.Регион := Region;
+        OrderDoc.СкладПоУмолч := Store;
+
+        OrderDoc.BaseID := VarAsInt(Constants.КодИБ);
+        if OrderDoc.BaseID = 0 then
+          raise('Заполните код информационной базы в значениях важных констант');
+        if OrderDoc.NumID = 0 then
+          OrderDoc.NumID := УстановитьНомерДокумента(OrderDoc, '');
+
+
+        TblGoods.Clear;
+        UseAlco := OrderDoc.HasField('СтавкаАлкоСбор');
+        UseTara := OrderDoc.HasField('Тара');
+  //      NodeITEMS := NodeDOCUMENT.SelectNodes('/TABLES/TABLE[@GUID="0738E61B-F06F-464A-8483-4249E0254819"]/ITEM[@DocId="' + DOCID + '"]');
+        NodeITEMS := NodeDOCUMENT.SelectNodes('TABLES/TABLE[@GUID="0738E61B-F06F-464A-8483-4249E0254819"]/ITEM');
+        NodesITEMS_Length := NodeITEMS.Length;
+        for j := 0 to NodesITEMS_Length - 1 do
+          begin
+            NodeITEM := NodeITEMS.Item[j];
+            TmpAtr := NodeITEM.GetAttribute('A01');
+            IDItem := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+
+            if not Good.FindByField('Артикул', IDItem, False) then
+              continue;
+            Quantity := StrToDec(VarAsStr(NodeITEM.GetAttribute('A04')));
+            if VarAsBool(Constants.ОтпускНаявногоТовараКПК) then
+              begin
+                AccGood.ClearFieldBuffers;
+                AccGood.ClearFieldFilters;
+                if IsObjFocused(Store) then
+                  AccGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), ArrayOf(Good, Store))
+                else
+                  AccGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Good);
+                if AccGood.КолОбщ > 0 then
+                  begin
+                    if AccGood.КолОбщ < Quantity then
+                      Quantity := AccGood.КолОбщ;
+                  end
+                else
+                  continue;
+              end;
+            TblGoods.Append;
+            TblGoods.Товар := Good;
+            if UseAlco and (Good.ПризнакАлкоТабак = 1) then
+              TblGoods.СтавкаАлкоСбор := Constants.СтавкаПоАлкоСбору;
+            TblGoods.Количество := Quantity;
+            TblGoods.СтавкаНДС := Good.СтавкаНДС;
+//            TblGoods.ВалютаТовара := Good.@ВалОтпЦены;
+//            TblGoods.ВалютаТовара := Good.@Валюта;
+//            if TmpCurrencyTbl.Find(Good.@Валюта) then
+//              Course := TmpCurrencyTbl.Курс
+//            else
+              Course := 1;
+            TblGoods.КурсТовара := Course;
+            TblGoods.ЦенаБезСкидкиНадбавки := StrToDec(VarAsStr(NodeITEM.GetAttribute('A05')));
+            TblGoods.ПроцентСкидкиНадбавки := -StrToDec(VarAsStr(NodeITEM.GetAttribute('A09')));
+            TblGoods.Масса := StrToDec(VarAsStr(NodeITEM.GetAttribute('A08')));
+          //  TblGoods.Цена := VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) + VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) * VarAsDec(TblGoods.ПроцентСкидкиНадбавки) / 100;
+            TblGoods.Цена := RoundDec(VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) + VarAsDec(TblGoods.ЦенаБезСкидкиНадбавки) * VarAsDec(TblGoods.ПроцентСкидкиНадбавки)/100,2);
+            ЦенаНДС(TblGoods, False);
+            if VarAsDec(TblGoods.КурсТовара) <> 0 then
+              TblGoods.ЦенаВВалюте := VarAsDec(TblGoods.Цена) / TblGoods.КурсТовара;
+            TblGoods.Склад := Store;
+            if UseTara and TblGoods.HasField('Тара') then //вид тары
+              TblGoods.AssignFields('Тара', Good);
+            TblGoods.Post;
+          end;
+        TblGoods.Select;
+        if TblGoods.LineCount > 0 then
+          begin
+            while TblGoods.SelectNext do
+              case ConfType of
+                cnfType :
+//                  CreateApplyTable(TblGoods.Товар, TblGoods, Store, OrderDoc, Null,
+//                    TblGoods.Количество, Null, -2, Constants, Currency, Pack, Options,
+//                    AccGood, AccReserv, AccPartGood);
+                  AddLineByCodeWidthCount(OrderDoc, TblGoods.Товар, AccGood, TblGoods.Количество);
+                cnfFarm, cnfAlco :
+                  InvokeAIFunction(CtrlToVar(pnConf), 'CreateApplyTable',
+                    ArrayOf(TblGoods, OrderDoc, Constants, Currency,
+                    Pack, Options, AccGood, AccReserv, AccPartGood))
+              end;
+            case ConfType of
+              cnfType :
+                begin
+                  OrderDoc.SetTableOnCalcFields(EntryPoint(TableCalcFieldsChecks));
+                  OrderDoc.SetOnCalcFields(EntryPoint(CalcFields));
+                end;
+              cnfFarm, cnfAlco :
+                InvokeAIFunction(CtrlToVar(pnConf), 'SetOnCalcFields',
+                  OrderDoc)
+            end;
+            case ConfType of
+              cnfType :
+//                CalcDocSumma(OrderDoc);
+                CalcSumma(OrderDoc);
+              cnfFarm, cnfAlco :
+                InvokeAIFunction(CtrlToVar(pnConf), 'CalcDocSumma', OrderDoc)
+            end;
+            OrderDoc.Post;
+            OrderDoc.ApplyUpdates;
+
+            if VarAsBool(Constants.ФиксироватьДокументыКПК) then
+              OrderDoc.StateUp;
+            UnicueAndroidID.Append;
+            UnicueAndroidID.AndroidGUID := OrderDoc.AndroidGUID;
+            UnicueAndroidID.Партнер := OrderDoc.Партнер;
+            UnicueAndroidID.ДатаДокумента := OrderDoc.ДатаДокумента;
+            UnicueAndroidID.Сумма := OrderDoc.Сумма;
+            UnicueAndroidID.Посредник := OrderDoc.Ответственный;
+            UnicueAndroidID.НомерДокумента := OrderDoc.НомерДокумента;
+         //   UnicueAndroidID.Документ := OrderDoc;
+            UnicueAndroidID.Post;
+            UnicueAndroidID.ApplyUpdates;
+            Doc.AppendLine;
+            Doc.Документ := OrderDoc;
+            Doc.PostLine;
+            inc(Result);
+          end
+        else
+          OrderDoc.Cancel;
+      end;
+  finally
+    StatusText('');
+  end;
+end;
+
+
+function CreateAndroidPays(CommercialAgents : ICDictionary; XMLDocFullName : String; Doc : ICDocuments;
+  ConfType : Integer; pnConf : TO4Panel; var Log : string) : Integer;
+var
+  TmpPartner, Partner, ManPartner, RealPartner, Responsible, DicCurrency, DicHdCurrency, DicPayCurrency,
+    Representative, AndroidSettingsDict : ICDictionary;
+  PayJournals, TmpJournal : ICJournal;
+  DocPayCashIn, DocOwner : ICDocuments;
+  i, Total : Integer;
+  TmpPanel : TO4Panel;
+  XMLDoc, NodeDOCUMENT, NodeDOCUMENTS  : OLEVariant;
+  NodesDOCUMENTS_Length : integer;
+  TmpAtr, DOCID, StrPocketDate, DocSuffix, OwnerDocName, DocName : String;
+  IDCustomer, IDRepresentative : integer;
+  PocketDate : DateTime;
+  ValCourse, HardValCourse : Decimal;
+  TmpPayTbl : ICValueTable;
+begin
+  Result := 0;
+  Constants := GetConstants;
+  GetAndroidSettingsDict(AndroidSettingsDict);
+  if VarAsBool(AndroidSettingsDict.ИспользоватьЛичныеФинансы) then
+    DocName := 'ПриходЛичФинансов'
+  else
+    DocName := 'ПриходВКассу';
+  Partner := CreateObject('Справочники.ЮрПартнеры');
+  Partner.Select;
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  ManPartner.Select;
+  RealPartner := CreateObject('Справочники.Реализаторы');
+  RealPartner.Select;
+  Responsible := CreateObject('Справочники.ТорговыеАгенты');
+  Responsible.Select;
+  Representative := CreateObject('Справочники.Представители');
+  PayJournals := CreateObject('Журналы.ЖурналПлатежей');
+  DocPayCashIn := CreateObject('Документы.' + DocName);
+  DocPayCashIn.Select;
+  DicCurrency := CreateObject('Справочники.Валюты');
+  DicHdCurrency := CreateObject('Справочники.Валюты');
+  DicPayCurrency := CreateObject('Справочники.Валюты');
+  TmpPayTbl := CreateObject('ТаблицаЗначений');
+  TmpPayTbl.AddColumn('Doc', vtcLink, 0);
+  TmpPayTbl.Open;
+  ValCourse := 0;
+  HardValCourse := 0;
+  GetNatCurrency(DicCurrency);
+  GetNatCurrency(DicPayCurrency);
+  if DicCurrency.IsFocused and VarAsBool(DicCurrency.НацВалюта) then
+    ValCourse := 1;
+  GetHdCurrency(DicHdCurrency);
+  if DicHdCurrency.IsFocused then
+    begin
+      if VarAsBool(DicHdCurrency.НацВалюта) then
+        HardValCourse := 1
+    end
+  else
+    begin
+      GetNatCurrency(DicHdCurrency);
+      HardValCourse := 1;
+    end;
+  case ConfType of
+    cnfFarm :
+      DocSuffix := 'Фарм';
+    cnfAlco :
+      DocSuffix := 'Алко';
+  end;
+  case VarAsInt(Constants.ТипДокументаКПК) of
+    0 :
+      begin
+        TmpJournal := CreateObject('Журналы.ЖурналСчетовНаПродажу' + DocSuffix);
+        OwnerDocName := 'рахунку';
+      end;
+    1 :
+      begin
+        TmpJournal := CreateObject('Журналы.ЖурналНакладных' + DocSuffix);
+        OwnerDocName := 'накладної';
+      end;
+    2 :
+      begin
+        TmpJournal := CreateObject('Журналы.ЖурналЧеков');
+        OwnerDocName := 'чека';
+      end;
+  end;
+  TmpJournal.Select;
+  i := 0;
+  XMLDoc := LoadXMLFromFileByVersion(XMLDocFullName, XMLVersion6);
+  NodeDOCUMENTS := XMLDoc.SelectNodes('/DATA/DOCUMENTS/DOCUMENT[@GUID="749BE2E0-9B00-4D7B-9D4D-88CA53327511"]/ELEMENTS/ITEM');
+  NodesDOCUMENTS_Length := NodeDOCUMENTS.Length;
+  Total := NodesDOCUMENTS_Length;
+  try
+    for i := 0 to NodesDOCUMENTS_Length - 1 do
+      begin
+        StatusText(Trans(msgCompleted) + IntToStr(i) + Trans(msgFrom) + IntToStr(Total));
+        NodeDOCUMENT := NodeDOCUMENTS.Item[i];
+        if VarAsInt(NodeDOCUMENT.GetAttribute('IsPost')) = 0 then
+          continue;
+        StrPocketDate := NodeDOCUMENT.GetAttribute('A014');//2012-09-26T17:50:13
+        PocketDate := EncodeDate(VarAsInt(StrCopy(StrPocketDate, 1, 4)), VarAsInt(StrCopy(StrPocketDate, 6, 2)), VarAsInt(StrCopy(StrPocketDate, 9, 2)))
+                      + EncodeTime(VarAsInt(StrCopy(StrPocketDate, 12, 2)), VarAsInt(StrCopy(StrPocketDate, 15, 2)), VarAsInt(StrCopy(StrPocketDate, 18, 2)));
+
+        PayJournals.CancelFieldFilter('Ответственный');
+        PayJournals.SetFieldFilter('Ответственный', '=', CommercialAgents.Служащий, '', '', '');
+        DOCID := NodeDOCUMENT.GetAttribute('GUID');
+        PayJournals.SetRangeByField('AndroidGUID', DOCID);
+        if PayJournals.Select then
+          begin
+            Log := Log + Trans(logErrorInRow) + IntToStr(i) + ': ' +
+              Trans(logDocAlreadyExists) + DateTimeToStr(PocketDate) + #13#10;
+            continue;
+          end;
+        TmpAtr := NodeDOCUMENT.GetAttribute('A02');
+        IDCustomer := VarAsInt(StrCopy(TmpAtr, StrLength(TmpAtr) - 11, 12));
+        if not FindPartner(i + 1, DocName, '', IDCustomer, Partner, ManPartner,
+          RealPartner, Representative, 0, TmpPanel, DocPayCashIn, TmpPartner, Log) then
+          continue;
+        DocPayCashIn.ДатаДокумента := PocketDate;
+        DocPayCashIn.AndroidGUID := DOCID;
+        DocPayCashIn.Комментарий := NodeDOCUMENT.GetAttribute('A06');
+        DocPayCashIn.Ответственный := CommercialAgents.Служащий;
+        if DicPayCurrency.IsFocused then
+          begin
+            DocPayCashIn.Курс := ValCourse;
+            if DocPayCashIn.Курс = 0 then
+              DocPayCashIn.Курс := DicPayCurrency.GetTimedValue(Constants.UsedCurs, DocPayCashIn.ДатаДокумента);
+            if DocPayCashIn.Курс = 0 then
+              DocPayCashIn.Курс := 1;
+            DocPayCashIn.Валюта := DicPayCurrency;
+
+            DocPayCashIn.КурсПарт := ValCourse;
+            if DocPayCashIn.КурсПарт = 0 then
+              DocPayCashIn.КурсПарт := DicPayCurrency.GetTimedValue(Constants.UsedCurs, DocPayCashIn.ДатаДокумента);
+            if DocPayCashIn.КурсПарт = 0 then
+              DocPayCashIn.КурсПарт := 1;
+            DocPayCashIn.ВалютаПарт := DicPayCurrency;
+
+          end;
+{        if DicHdCurrency.IsFocused then
+          begin
+            DocPayCashIn.КурсТвВал := HardValCourse;
+            if DocPayCashIn.КурсТвВал = 0 then
+              DocPayCashIn.КурсТвВал := DicHdCurrency.GetTimedValue(Constants.UsedCurs, DocPayCashIn.ДатаДокумента);
+            if DocPayCashIn.КурсТвВал = 0 then
+              DocPayCashIn.КурсТвВал := 1;
+          end;
+}
+        DocPayCashIn.Взаиморасчет := VarAsInt(True);
+        TmpAtr := NodeDOCUMENT.GetAttribute('A09');
+        if (TmpAtr <> '') and TmpJournal.FindByField('AndroidGUID', TmpAtr, False) then
+          begin
+            DocOwner := TmpJournal.GetDoc;
+            DocPayCashIn.ЕстьНДС := VarAsInt(DocOwner.СуммаНДС <> 0);
+            if DocPayCashIn.Комментарий = '' then
+              DocPayCashIn.Комментарий := 'Оплата згідно ' + OwnerDocName + ' №' + DocOwner.НомерДокумента + ' від ' +
+                DateToStr(DocOwner.ДатаДокумента);
+            TmpPartner := DocOwner.Партнер;
+            if StrPos('Реализаторы', TmpPartner.GetSign) > 0 then
+              DocPayCashIn.SetMaster(TmpPartner)
+            else
+              DocPayCashIn.SetMaster(DocOwner);
+          end
+        else
+          begin
+            DocPayCashIn.ЕстьНДС := Constants.ProcentPDV <> 0;
+            if StrPos('Реализаторы', TmpPartner.GetSign) > 0 then
+              DocPayCashIn.SetMaster(TmpPartner);
+          end;
+        if VarAsBool(DocPayCashIn.ЕстьНДС) then
+          DocPayCashIn.СтавкаНДС := Constants.ProcentPDV
+        else
+          DocPayCashIn.СтавкаНДС := 0;
+        DocPayCashIn.Сумма := StrToDec(VarAsStr(NodeDOCUMENT.GetAttribute('A07')));
+        DocPayCashIn.СуммаВВалютеПарт := StrToDec(VarAsStr(NodeDOCUMENT.GetAttribute('A07')));
+
+        SetSums('Сумма', DocPayCashIn.Сумма, DocPayCashIn, DocPayCashIn.СтавкаНДС); //расчеты
+        SetCurSumma(DocPayCashIn);
+//        SetHdSumma(DocPayCashIn);
+        DocPayCashIn.BaseID := VarAsInt(Constants.КодИБ);
+        if DocPayCashIn.BaseID = 0 then
+          raise('Заполните код информационной базы в значениях важных констант');
+        if DocPayCashIn.NumID = 0 then
+          DocPayCashIn.NumID := УстановитьНомерДокумента(DocPayCashIn, '');
+
+
+        DocPayCashIn.AppendLine;
+        DocPayCashIn.PostLine;
+
+        TmpPayTbl.Append;
+        TmpPayTbl.Doc := DocPayCashIn;
+        TmpPayTbl.Post;
+        DocPayCashIn.Post;
+        DocPayCashIn.ApplyUpdates;
+        if VarAsBool(Constants.ФиксироватьДокументыКПК)  then
+          DocPayCashIn.StateUp;
+        Doc.AppendLine;
+        Doc.Документ := DocPayCashIn;
+        Doc.PostLine;
+        inc(Result);
+      end;
+  finally
+    StatusText('');
+  end;
+end;
+
+procedure CreateAndroidOrdersForOneAgent(CommercialAgents : ICDictionary; ConfType : Integer; pnConf : TO4Panel;
+          var OrdersCount, NaklsCount, ChecksCount, VisitCount, PaysCount : integer);
+
+var
+  Log : string;
+  Doc : ICDocuments;
+  XMLDocPath, XMLDocFullName, XMLDocZipFullName, ZipExePath  : String;
+  Options : ICOptions;
+  ZipType : integer;
+  Constants : IC4VPAConst;
+  Responsible, AndroidSettingsDict : ICDictionary;
+begin
+  GetAndroidSettingsDict(AndroidSettingsDict);
+  Log := '';
+  Doc := CreateObject('Документы.ПротоколОбменаСКПК');
+  Doc.Select;
+  Doc.Append;
+  try
+    XMLDocPath := CommercialAgents.ПутьИмпортаПК;
+    XMLDocFullName := XMLDocPath + AndroidImportFileName + XMLExt;
+    if FileExists(XMLDocFullName) then
+      DeleteFile(XMLDocFullName);
+    XMLDocZipFullName := XMLDocPath + AndroidImportZipFileName + ZipExt;
+    if AndroidSettingsDict.СпособОбмена = 1 then
+      ExchangeFileWithUseFtp(1, AndroidSettingsDict.АдресСервераFTP, AndroidSettingsDict.ИмяПользователяFTP,
+                             AndroidSettingsDict.ПарольFTP, XMLDocZipFullName, CommercialAgents.Логин);
+    if FileExists(XMLDocZipFullName) then
+      begin
+        Options := GetOptions;
+        ZipType := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+        if ZipType = 0 then
+          raise(Trans(msgSelectArchiveType));
+        ZipExePath := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+        case ZipType of
+          Zip7Type :
+            Run('"' + ZipExePath + '7z.exe"' + ' x "' + XMLDocZipFullName + '" -o"' + XMLDocPath + '" -y', True);
+          WinRarType :
+            Run('"' + ZipExePath + 'WinRAR.exe"' + ' x "' + XMLDocZipFullName + '" "' + XMLDocPath + '" -y', True);
+          WinZipType :
+            Run('"' + ZipExePath + 'WZUNZIP.exe"' + ' -o "' + XMLDocZipFullName + '" "' + XMLDocPath + '"', True);
+        end;
+        Doc := CreateObject('Документы.ПротоколОбменаСКПК');
+        Doc.Select;
+        Doc.Append;
+        Constants := GetConstants;
+        case VarAsInt(Constants.ТипДокументаКПК) of
+          0 :
+            OrdersCount := OrdersCount + CreateAndroidOrders(CommercialAgents, XMLDocFullName, Doc, ConfType, pnConf, Log);
+          1 :
+            NaklsCount := NaklsCount + CreateAndroidNakls(CommercialAgents, XMLDocFullName, Doc, ConfType, pnConf, Log);
+          2 :
+            ChecksCount := ChecksCount + CreateAndroidChecks(CommercialAgents, XMLDocFullName, Doc, ConfType, pnConf, Log);
+        end;
+        //PaysCount := PaysCount + CreateAndroidPays(CommercialAgents, XMLDocFullName, Doc, ConfType, pnConf, Log); 
+        PaysCount := PaysCount + CreateAndroidPaysByCLAgent(CommercialAgents, XMLDocFullName, Doc, ConfType, pnConf, Log);
+
+        if FileExists(XMLDocZipFullName) then
+          DeleteFile(XMLDocZipFullName);
+        if FileExists(XMLDocFullName) then
+          DeleteFile(XMLDocFullName);
+      end;
+  finally
+    if StrPos(#13#10, Log) = 0 then
+      Log := trans(NoLogData);
+    Doc.Протокол := Log;
+    Doc.ТорговыйАгент := CommercialAgents;
+    Responsible := CreateObject('Справочники.Служащие');
+    if Responsible.FindByField('ПолноеНазвание', GetUserName, False) then
+      Doc.Ответственный := Responsible;
+    Doc.Post;
+    Doc.ApplyUpdates;
+  end;
+end;
+
+procedure CreateAllAndroidOrders(ConfType : Integer; pnConf : TO4Panel; var OrdersCount, NaklsCount, ChecksCount, VisitCount, PaysCount : integer);
+var
+  CommercialAgents : ICDictionary;
+begin
+  CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+  CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+  CommercialAgents.Select;
+  while CommercialAgents.SelectNext do
+    CreateAndroidOrdersForOneAgent(CommercialAgents, ConfType, pnConf, OrdersCount, NaklsCount, ChecksCount, VisitCount, PaysCount);
+end;
+
+procedure CreateAllAndroidOrdersByTbl(ConfType : Integer; pnConf : TO4Panel; var OrdersCount, NaklsCount, ChecksCount, VisitCount, PaysCount : integer; Var AgentsTbl : IcValueTable);
+begin
+  AgentsTbl.CancelRange;
+  AgentsTbl.SortBy('ОперационнаяСистема');
+  AgentsTbl.SetRange( osAndroid, osAndroid);
+  AgentsTbl.Select;
+  while AgentsTbl.SelectNext do
+    CreateAndroidOrdersForOneAgent(AgentsTbl.Агент, ConfType, pnConf, OrdersCount, NaklsCount, ChecksCount, VisitCount, PaysCount);
+end;
+
+function ChangeNode(XMLDoc : OLEVariant; AgentID, AndroidID, Pseudonim, Directory : String) : Boolean;
+var
+  NodePPCS, NodePPC : OLEVariant;
+  NodePPCS_Length, i : Integer;
+begin
+  NodePPCS := XMLDoc.SelectNodes('/APlusServer/PPC');
+  NodePPCS_Length := NodePPCS.Length;
+  if NodePPCS_Length <> 0 then
+    for i := 0 to NodePPCS_Length - 1 do
+      begin
+        NodePPC := NodePPCS.Item[i];
+        if (StrCopy(VarAsStr(NodePPC.GetAttribute('PSEUDONIM')), 1, 36) = AgentID) then
+          begin
+            NodePPC.SetAttribute('DEVICE_ID', AndroidID);
+            NodePPC.SetAttribute('PSEUDONIM', Pseudonim);
+            NodePPC.SetAttribute('DIRECTORY', Directory);
+            Result := True;
+            exit;
+          end
+        else
+          Result := False;
+      end
+  else
+    Result := False;
+end;
+
+procedure CreateAndroidXMLExchangeFile(CommercialAgents : ICDictionary);
+var
+  XMLDoc, NodeAPlusServer, NodeServerConfig, NodePPC, pi : OLEVariant;
+  AndroidSettingsDict : ICDictionary;
+  XMLDocPath, XMLDocFullName, SubDirectoryName, AgentID, AndroidID, Pseudonim, Directory : String;
+begin
+  Constants := GetConstants;
+  GetAndroidSettingsDict(AndroidSettingsDict);
+  XMLDocPath := VarAsStr(Constants.ПутьКПапкеОбменаДляКПК);
+  XMLDocFullName := XMLDocPath + AndroidConfigFileName + XMLExt;
+
+  if FileExists(XMLDocFullName) then
+    begin
+      XMLDoc := LoadXMLFromFileByVersion(XMLDocFullName, XMLVersion6);
+      NodeAPlusServer := XMLDoc.SelectSingleNode('APlusServer');
+    end
+  else
+    begin
+      XMLDoc := CreateDOMDocumentByVersion(XMLVersion6);
+      pi := XMLDoc.createProcessingInstruction(XmlWord, XmlVersionCodeUTF16);
+      XMLDoc.AppendChild(pi);
+
+      NodeAPlusServer := XMLDoc.CreateElement('APlusServer');
+      NodeAPlusServer.SetAttribute('VERSION', '1.0');
+      XMLDoc.AppendChild(NodeAPlusServer);
+
+      NodeServerConfig := XMLDoc.CreateElement('ServerConfig');
+      NodeServerConfig.SetAttribute('ConfigID', '11111111-1111-1111-1111-111111111111');
+      NodeServerConfig.SetAttribute('PortExternal', VarAsStr(AndroidSettingsDict.ПортСОД));
+      NodeAPlusServer.AppendChild(NodeServerConfig);
+    end;
+
+  CommercialAgents.SetRangeByField('ОперационнаяСистема', osAndroid, osAndroid);
+  CommercialAgents.Select;
+  while CommercialAgents.SelectNext do
+    if VarAsStr(CommercialAgents.AndroidID) <> '' then
+      begin
+        AgentID := CommercialAgents.AgentID;
+        AndroidID := CommercialAgents.AndroidID;
+        Pseudonim := CommercialAgents.AgentID + ' ' + CommercialAgents.Служащий.ПолноеНазвание;
+        Directory := CommercialAgents.Логин;
+        if not ChangeNode(XMLDoc, AgentID, AndroidID, Pseudonim, Directory) then
+          begin
+            NodePPC := XMLDoc.CreateElement('PPC');
+            NodePPC.SetAttribute('DEVICE_ID', AndroidID);
+            NodePPC.SetAttribute('PSEUDONIM', Pseudonim);
+            NodePPC.SetAttribute('DIRECTORY', Directory);
+            NodeAPlusServer.AppendChild(NodePPC);
+          end;
+
+        SubDirectoryName := Directory + '\';
+        MakeDir(Constants.ПутьКПапкеОбменаДляКПК + SubDirectoryName);
+        CommercialAgents.Edit;
+        CommercialAgents.ПутьИмпортаПК := Constants.ПутьКПапкеОбменаДляКПК + SubDirectoryName;
+        CommercialAgents.Post;
+        CommercialAgents.ApplyUpdates;
+      end;
+
+  XMLDoc.save(XMLDocFullName);
+end;
+
+procedure DeleteCommercialAgents(AgentID : String);
+var
+  XMLDoc, NodeAPlusServer, NodePPCS, NodePPC : OLEVariant;
+  AndroidSettingsDict : ICDictionary;
+  NodePPCS_Length, i : Integer;
+  XMLDocPath, XMLDocFullName : String;
+begin
+  Constants := GetConstants;
+  GetAndroidSettingsDict(AndroidSettingsDict);
+  XMLDocPath := VarAsStr(Constants.ПутьКПапкеОбменаДляКПК);
+  XMLDocFullName := XMLDocPath + AndroidConfigFileName + XMLExt;
+
+  if FileExists(XMLDocFullName) then
+    begin
+      XMLDoc := LoadXMLFromFileByVersion(XMLDocFullName, XMLVersion6);
+      NodePPCS := XMLDoc.SelectNodes('/APlusServer/PPC');
+      NodePPCS_Length := NodePPCS.Length;
+      if NodePPCS_Length <> 0 then
+        for i := 0 to NodePPCS_Length - 1 do
+          begin
+            NodePPC := NodePPCS.Item[i];
+            if (StrCopy(VarAsStr(NodePPC.GetAttribute('PSEUDONIM')), 1, 36) = AgentID) then
+              begin
+                NodeAPlusServer := NodePPC.ParentNode;
+                NodeAPlusServer.RemoveChild(NodePPC);
+                break;
+              end;
+          end
+      else
+        exit;
+      XMLDoc.save(XMLDocFullName);
+    end;
+end; 
+
+procedure CheckOrderDoc (Doc : IcDocuments);
+var
+ CopyDoc : ICDocuments;
+ TblContents1,TblContents,TblContentsCopyDoc, TmpTbl, TblHead : ICValueTable;
+ CountGood:Decimal;
+ tmpTara,Tara, TmpGood : ICDictionary;
+ AccsGoods, AccsReserv : ICAccs;
+
+begin
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsReserv := CreateObject('Аккумуляторы.ТоварыВРезерве');
+
+  Constants := GetConstants;
+  TblContents:= CreateObject('ValueTable');
+  TblContents1:= CreateObject('ValueTable');
+
+  TblContentsCopyDoc:= CreateObject('ValueTable');
+
+  TmpTbl:= CreateObject('ValueTable');
+  TblHead := CreateObject('ValueTable');
+  CopyDoc := CreateObject('Документы.Чек');
+                                    //НакладнаяОтпуска
+  Doc.SaveContents('',TblContents);
+  Doc.SaveContents('',TblContents1);
+
+  TblContents.CopyColumnsTo(TblContentsCopyDoc);
+
+  TblContents1.CopyDataToServer;
+  server.GetMyGoodCount(TblContents1.SrvMean, 400000, AccsGoods.SrvMean, AccsReserv.SrvMean);
+  TblContents1.CopyDataFromServer;
+  TblContents.CopyDataToServer;
+  server.GetMyGoodCount(TblContents.SrvMean, 400000, AccsGoods.SrvMean, AccsReserv.SrvMean);
+  TblContents.CopyDataFromServer;
+
+  TblContents1.SortBy('Товар;Цена');
+
+  TblContents1.Select;
+  While TblContents1.SelectNext do
+    if (VarAsDec(TblContents1.Количество) > VarAsDec(TblContents1.НаличиеТовара)) and
+        (VarAsDec(TblContents1.НаличиеТовара)>0) then
+      begin
+        TblContents.SortBy('Партия;Товар');
+        TblContents.Select;
+        if TblContents.Find(ArrayOf(TblContents1.Партия,TblContents1.Товар)) then
+          begin
+            TblContentsCopyDoc.Append;
+            TblContentsCopyDoc.AssignFields('НомСтроки;Товар;Количество;Цена;ЦенаБезНДС;НДС;СтавкаНДС;ПроцентСкидкиНадбавки;'+
+            'ЦенаБезСкидкиНадбавки;ВалютаТовара;КурсТовара;ЦенаВВалюте;Склад;Масса;Упаковка;ВхЦенаБезНДС;ПроцентНаценки;'+
+            'КоличествоУпаковок;Партия;Правило;Площадь;КоррекцияСтрокиБезНДС;ВозвратнаяТара',TblContents);
+            TblContentsCopyDoc.Количество:= TblContents.Количество-TblContents.НаличиеТовара;
+            CountGood:=TblContentsCopyDoc.Количество;
+            if VarAsBool(TblContentsCopyDoc.Упаковка.IsFocused) then
+              TblContentsCopyDoc.КоличествоУпаковок := VarAsDec(TblContentsCopyDoc.Количество)/VarAsDec(TblContentsCopyDoc.Упаковка.Количество);
+
+            TblContentsCopyDoc.Post;
+            TblContents.Edit;
+            TblContents.Количество:= TblContents.НаличиеТовара;
+            if VarAsBool(TblContents.Упаковка.IsFocused) then
+              TblContents.КоличествоУпаковок := VarAsDec(TblContents.Количество)/VarAsDec(TblContents.Упаковка.Количество);
+            TblContents.Post;
+
+//            TmpGood:=TblContents.Товар;
+            tmpTara := GetActiveLink(Tara,TblContents.Товар);
+            if IsObjFocused(tmpTara) then
+              if TblContents.Find(ArrayOf(tmpTara.Товар, 0)) then
+
+              begin
+                TblContents.Edit;
+                TblContents.Количество := TblContents.Количество - CountGood;
+                TblContents.Post;
+                TblContentsCopyDoc.Append;
+                TblContentsCopyDoc.AssignFields('НомСтроки;Товар;Количество;Цена;ЦенаБезНДС;НДС;СтавкаНДС;ПроцентСкидкиНадбавки;'+
+                'ЦенаБезСкидкиНадбавки;ВалютаТовара;КурсТовара;ЦенаВВалюте;Склад;Масса;Упаковка;ВхЦенаБезНДС;ПроцентНаценки;'+
+                'КоличествоУпаковок;Партия;Правило;Площадь;КоррекцияСтрокиБезНДС;ВозвратнаяТара',TblContents);
+                TblContentsCopyDoc.Количество := CountGood;
+                TblContentsCopyDoc.Post;
+              end;
+          end;
+      end
+    else
+    if VarAsDec(TblContents1.НаличиеТовара)<=0 then
+      begin
+        TblContents.SortBy('Партия;Товар');
+        TblContents.Select;
+        if TblContents.Find(ArrayOf(TblContents1.Партия,TblContents1.Товар)) then
+          begin
+
+            TblContentsCopyDoc.Append;
+            TblContentsCopyDoc.AssignFields('НомСтроки;Товар;Количество;Цена;ЦенаБезНДС;НДС;СтавкаНДС;ПроцентСкидкиНадбавки;'+
+            'ЦенаБезСкидкиНадбавки;ВалютаТовара;КурсТовара;ЦенаВВалюте;Склад;Масса;Упаковка;ВхЦенаБезНДС;ПроцентНаценки;'+
+            'КоличествоУпаковок;Партия;Правило;Площадь;КоррекцияСтрокиБезНДС;ВозвратнаяТара',TblContents);
+            TblContentsCopyDoc.Post;
+            CountGood:=TblContentsCopyDoc.Количество;
+            TblContents.Delete;
+            TblContents.SelectPrior;
+
+            tmpTara := GetActiveLink(Tara,TblContents.Товар);
+            if IsObjFocused(tmpTara) then
+              if TblContents.Find(ArrayOf(tmpTara.Товар,  0)) then
+              begin
+                TblContents.Edit;
+                TblContents.Количество := TblContents.Количество - CountGood;
+                TblContents.Post;
+                TblContentsCopyDoc.Append;
+                TblContentsCopyDoc.AssignFields('НомСтроки;Товар;Количество;Цена;ЦенаБезНДС;НДС;СтавкаНДС;ПроцентСкидкиНадбавки;'+
+                'ЦенаБезСкидкиНадбавки;ВалютаТовара;КурсТовара;ЦенаВВалюте;Склад;Масса;Упаковка;ВхЦенаБезНДС;ПроцентНаценки;'+
+                'КоличествоУпаковок;Партия;Правило;Площадь;КоррекцияСтрокиБезНДС;ВозвратнаяТара',TblContents);
+                TblContentsCopyDoc.Количество := CountGood;
+                TblContentsCopyDoc.Post;
+                if TblContents.Количество<=0 then
+                  begin
+                    TblContents.Delete;
+                    TblContents.SelectPrior;
+                  end;
+              end;
+          end;
+      end;
+  
+  if TblContentsCopyDoc.LineCount<>0 then
+    begin
+      Doc.SetTableOnCalcFields(Null);
+      Doc.SetOnCalcFields(Null);
+      Doc.Edit;
+      Doc.ClearContents;
+      TblContents.SortBy('НомСтроки');
+      Doc.LoadContents('',TblContents);
+      Doc.SaveHead('',TblHead);
+      Doc.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+      Doc.SetOnCalcFields(EntryPoint(CalcFields));
+      CalcDocSumma(Doc);
+      CalcTransSumma(Doc, Constants.ProcentPDV);
+      Doc.Post;
+      Doc.ApplyUpdates;
+      CopyDoc.Select;
+      CopyDoc.Append;
+      CopyDoc.SetTableOnCalcFields(Null);
+      CopyDoc.SetOnCalcFields(Null);
+      CopyDoc.LoadHead('',TblHead);
+      CopyDoc.НомерДокумента:=CopyDoc.НомерДокумента+'-1';
+      CopyDoc.LoadContents('',TblContentsCopyDoc);
+      CopyDoc.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+      CopyDoc.SetOnCalcFields(EntryPoint(CalcFields));
+      CopyDoc.Edit;
+      CalcDocSumma(CopyDoc);
+      CalcTransSumma(CopyDoc, Constants.ProcentPDV);
+      CopyDoc.Post;
+      CopyDoc.ApplyUpdates;
+    end;
+
+
+end;
+
+end.

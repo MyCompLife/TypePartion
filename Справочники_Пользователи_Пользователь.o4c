@@ -1,0 +1,582 @@
+interface
+
+uses System, DispIntf, »нтерфейс, –асчеты, ѕользователи, –абота— омпонентамиVCL, –абота—“аблицами«начений, –абота—“аблицами«наченийCL;
+
+implementation
+
+var
+  MasterData, ChildStores : ICDictionary;
+  RealPrmTbl, JournalPrmTbl: ICValueTable;
+
+procedure  CheckPasswControls;
+begin
+  if not (cbChangePrecent.Checked or cbChangePrice.Checked) then
+    cbReqPassword.Checked := false;
+  cbReqPassword.Enabled := cbChangePrecent.Checked or cbChangePrice.Checked;
+  ePass.Enabled := cbReqPassword.Checked;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  ChildStores := SetDetailDict(MasterData, '—кладыѕользователей', 'ѕросмотр—кладов', CtrlToVar(pStores));
+end;
+
+procedure CheckTabSheets;
+begin
+  SetPropertyForComponentList(ptTabVisible, Form, 'tsRealParams', cbRealizator.Checked);
+end;
+
+procedure GetJournalParamsList;
+var
+  i : integer;
+  CreateNewTbl, DocVisible, DocState0, DocState1, DocState2: Boolean;
+  BaseTbl: ICValueTable;
+  FieldsStr: String;
+begin
+  BaseTbl := CreateObject('ValueTable');
+  BaseTbl.AddColumn('Ќом—троки',vtcInteger, 0);
+  BaseTbl.AddColumn('“ипƒокумента',vtcString, 100);
+  BaseTbl.AddColumn('Ќазв раткоеƒокумента',vtcString, 50);
+  BaseTbl.AddColumn('ќтображениеƒокумента',vtcString, 50);
+  BaseTbl.AddColumn('Ќабор—осто€нийƒокумента',vtcString, 50);
+  BaseTbl.Open;
+  CheckTabSheets;
+  RealPrmTbl := CreateTblFromBLOB(MasterData.–еал“аблица—Ќастройками∆урнала); //распаковка таблицы
+  if IsNil(RealPrmTbl) then
+    begin
+      CreateNewTbl := true;
+    end
+  else
+    begin //проверка структуры таблицы
+      for i := 0 to BaseTbl.GetColumnCount-1 do
+        if RealPrmTbl.HasField(BaseTbl.GetColumnName(i)) then //проверка на совпадение названий полей
+          begin //проверка на совпадение типов полей
+            if RealPrmTbl.GetColumnDataType(RealPrmTbl.GetColumnIndex(BaseTbl.GetColumnName(i))) =
+              BaseTbl.GetColumnDataType(i) then
+                FieldsStr := FieldsStr + ';' + BaseTbl.GetColumnName(i);
+          end
+        else
+          CreateNewTbl := true;
+    end;
+  if FieldsStr = '' then
+    CreateNewTbl := true
+  else
+    StrDelete(FieldsStr, 1, 1); // удал€ем первый символ ";"
+  if CreateNewTbl then
+    begin
+      RealPrmTbl := CreateObject('ValueTable');
+      RealPrmTbl.Open;
+      BaseTbl.CopyTo('',RealPrmTbl);
+    end
+  else
+    begin
+      RealPrmTbl.AppendTo(FieldsStr, BaseTbl);
+      RealPrmTbl.Clear;
+      BaseTbl.CopyTo('',RealPrmTbl);
+    end;
+  RealPrmTbl.Select;
+  RealPrmTbl.SortBy('Ќом—троки');
+  While RealPrmTbl.SelectNext do
+    begin
+      (form.FindComponent('cbDocStore'+IntToStr(RealPrmTbl.Ќом—троки)) as TO4CheckBox).Checked := RealPrmTbl.ќтображениеƒокумента;
+      (form.FindComponent('cbDocState'+IntToStr(RealPrmTbl.Ќом—троки)+'_0') as TO4CheckBox).Checked := VarAsBool(ExtractWord(1,RealPrmTbl.Ќабор—осто€нийƒокумента,';'));
+      (form.FindComponent('cbDocState'+IntToStr(RealPrmTbl.Ќом—троки)+'_1') as TO4CheckBox).Checked := VarAsBool(ExtractWord(2,RealPrmTbl.Ќабор—осто€нийƒокумента,';'));
+      (form.FindComponent('cbDocState'+IntToStr(RealPrmTbl.Ќом—троки)+'_2') as TO4CheckBox).Checked := VarAsBool(ExtractWord(3,RealPrmTbl.Ќабор—осто€нийƒокумента,';'));
+    end;
+end;
+
+procedure Form_Open(Sender : TObject); 
+var s:string;
+    i,n : integer;
+begin
+  pcLists.ActivePage := tsMain;
+  edPrintForm.Text := VarAsStr(MasterData.ѕечатна€‘орма–абћесто ассира);
+  edPrintFormKassRep.Text := VarAsStr(MasterData.ѕечатна€‘ормаќтчет ассира);
+  cbPreviewPrintForm.Checked := VarAsBool(MasterData.ѕредѕросмотр„ека–абћесто асс);
+  cbJournalOpen.Checked := MasterData.ќткрыть∆урнал;
+  edJournalName.Enabled := cbJournalOpen.Checked;
+  edJournalName.ItemIndex := VarAsInt(MasterData.∆урнал);
+  lTitle.Caption := eEmploy.Text;
+  cbRange.Checked := MasterData.ќтборѕоѕользователю;
+  cbPays.Checked := MasterData.Ѕлокировкаѕлатежей;
+  cbCashBlocked.Checked := MasterData.Ѕлокировка¬ыбора ассы;
+  cbRegionBlocked.Checked := MasterData.Ѕлокировка¬ыбора–егиона;
+  cbStoreBlocked.Checked := MasterData.Ѕлокировка¬ыбора—клада;
+  cbRangeJournal.Checked := MasterData.ќтборѕо–егиону;
+  cbPartBlocked.Checked := MasterData.Ѕлокировка¬ыбораѕартнера;
+  cbPartBlockedManual.Checked := MasterData.Ѕлок¬ыбораѕартнера¬ручную;
+  cbVisibleInSum.Checked := MasterData.Ќеќтображать¬х—уммы;
+  cbRealizator.Checked := MasterData.–еализатор;
+  cbcbViewUserGroups.Checked := MasterData.ќтображатьќбщие√руппы—кидок;
+  cbChangePrice.Checked := MasterData.–азрешить»зменение÷ены;
+  cbChangePrecent.Checked := MasterData.–азрешить»змѕроцента—кидки;
+  cbReqPassword.Checked := VarAsBool(MasterData.«апрѕарольѕри»змѕроц÷ены);
+  cbRetEnable.Checked := VarAsBool(MasterData.–азрешить¬озврат¬–абћесте);
+  cbBlockChangeBarCode.Checked :=  VarAsBool(MasterData.–азрѕрив€зкуЎтрих ода–абћесто);
+  cbChangePriceEnabled.Checked := VarAsBool(MasterData.–азр»зм÷ен“овара–абћесто ас);
+  cbShowGoodsRest.Checked := VarAsBool(MasterData.–абћестоЌеќтобрќстатки“овара);
+  cbUsePostPoneDocs.Checked := VarAsBool(MasterData.–абота—ќтложенными„еками);
+  cbChangeInPriceOnFizNaklIncome.Checked := VarAsBool(MasterData.»зм¬х÷ен‘иксЌаклѕрих);
+  cbUseSwitchGoodService.Checked := VarAsBool(MasterData.»спѕерекл“овар”слуга);
+  cbShowSdacha.Checked := VarAsBool(MasterData.ѕокƒиалог—дачи–абћесто ассира);
+  cbUseNaklInDood.Checked := VarAsBool(MasterData.–азрешитьѕрием“овара¬–абћесте);
+  cbPrintBarCodesEnabled.Checked := VarAsBool(MasterData.–азѕеч÷енников–абћесто ассира);
+
+
+
+
+  edIntervalSdacha.Enabled := cbShowSdacha.Checked;
+  edIntervalSdacha.Text := IntToStr(MasterData.»нтервалƒиалога—дачи–абћесто);
+
+  CheckPasswControls;
+  GetJournalParamsList;
+  JournalPrmTbl := CreateTblFromBLOB(MasterData.Ќастройки∆урналов);
+  //JournalPrmTbl := CreateTblFromBLOB(MasterData.Ќастройки∆урналов);
+  if IsNil(JournalPrmTbl) then
+    begin
+      JournalPrmTbl := CreateObject('ValueTable');
+      JournalPrmTbl.AddColumn('јртикул',vtcInteger,0);
+      JournalPrmTbl.AddColumn('Ќазв∆урнала',vtcString,200);
+      JournalPrmTbl.AddColumn('ѕанель¬ыбораѕринтера',vtcBoolean,0);
+      JournalPrmTbl.AddColumn('ѕечатна€‘орма',vtcString,200);
+      JournalPrmTbl.AddColumn('ѕредвѕросмотр',vtcBoolean,0);
+      JournalPrmTbl.Open;
+    end;
+  JournalPrmTbl.SortBy('Ќазв∆урнала');
+  JournalPrmTbl.UseDataSource(CtrlToVar(TVSJournalPrm));
+  // –абота—–егионами     
+  s := VarAsStr(MasterData.–абота—–егионами“ипыƒокументов);
+  if s<>'' then
+   for i:=1 to WordCount(s,';') do
+     begin
+       n := StrToIntDef(ExtractWord(i,s,';'),i);
+       if n>0 then
+        clbRegionTypeDoc.Checked[n-1] := true;
+     end
+end;
+
+procedure eEmploy_Change(Sender: TObject);
+begin
+  lTitle.Caption := eEmploy.Text;
+end;
+
+function SetJournalParamsList: ICValueTable;
+var
+  i : integer;
+  DocVisible: Boolean;
+  DocState0, DocState1, DocState2: Integer;
+  DocSign, DocShortName, StrList : String;
+begin
+  RealPrmTbl.Clear;
+  for i := 1 to 7 do
+    begin
+      DocSign := ExtractWord(1, (form.FindComponent('cbDocStore'+IntToStr(i)) as TO4CheckBox).Hint,'*');
+      DocShortName := ExtractWord(2, (form.FindComponent('cbDocStore'+IntToStr(i)) as TO4CheckBox).Hint,'*');
+      DocVisible := (form.FindComponent('cbDocStore'+IntToStr(i)) as TO4CheckBox).Checked;
+      DocState0 := VarAsInt((form.FindComponent('cbDocState'+IntToStr(i)+'_0') as TO4CheckBox).Checked)*-1;
+      DocState1 := VarAsInt((form.FindComponent('cbDocState'+IntToStr(i)+'_1') as TO4CheckBox).Checked)*-1;
+      DocState2 := VarAsInt((form.FindComponent('cbDocState'+IntToStr(i)+'_2') as TO4CheckBox).Checked)*-1;
+      RealPrmTbl.Append;
+      RealPrmTbl.Ќом—троки := i;
+      RealPrmTbl.“ипƒокумента := DocSign;
+      RealPrmTbl.Ќазв раткоеƒокумента := DocShortName;
+      RealPrmTbl.ќтображениеƒокумента := DocVisible;
+      RealPrmTbl.Ќабор—осто€нийƒокумента := VarAsStr(AbsD(DocState0))+';'+VarAsStr(DocState1)+';'+VarAsStr(DocState2);
+      RealPrmTbl.Post;
+    end;
+  Result := RealPrmTbl;
+end;
+
+procedure MDS_Validate(Sender: TObject); 
+var i:integer;
+    s:string;
+begin
+  MasterData.ѕредѕросмотр„ека–абћесто асс := cbPreviewPrintForm.Checked;    
+  MasterData.ѕечатна€‘орма–абћесто ассира := edPrintForm.Text;  
+  MasterData.ѕечатна€‘ормаќтчет ассира := edPrintFormKassRep.Text;
+  MasterData.ќткрыть∆урнал := cbJournalOpen.Checked;
+  MasterData.∆урнал := edJournalName.ItemIndex;
+  MasterData.ќтборѕоѕользователю :=  cbRange.Checked;
+  MasterData.Ѕлокировкаѕлатежей :=  cbPays.Checked;
+  MasterData.Ѕлокировка¬ыбора ассы := cbCashBlocked.Checked;
+  MasterData.Ѕлокировка¬ыбора–егиона := cbRegionBlocked.Checked;
+  MasterData.Ѕлокировка¬ыбора—клада := cbStoreBlocked.Checked;
+  MasterData.ќтборѕо–егиону := cbRangeJournal.Checked;
+  MasterData.Ѕлокировка¬ыбораѕартнера := cbPartBlocked.Checked;  
+  MasterData.Ѕлок¬ыбораѕартнера¬ручную :=  cbPartBlockedManual.Checked;
+  MasterData.Ќеќтображать¬х—уммы := cbVisibleInSum.Checked;
+  MasterData.–еализатор := cbRealizator.Checked;
+  MasterData.–еал“аблица—Ќастройками∆урнала := WritePropsToBlob(SetJournalParamsList);
+  MasterData.Ќастройки∆урналов := WritePropsToBlob(JournalPrmTbl);
+  MasterData.ќтображатьќбщие√руппы—кидок := cbcbViewUserGroups.Checked;
+  MasterData.«апрѕарольѕри»змѕроц÷ены := cbReqPassword.Checked;
+  MasterData.–азрѕрив€зкуЎтрих ода–абћесто := cbBlockChangeBarCode.Checked;
+  MasterData.–азр»зм÷ен“овара–абћесто ас := cbChangePriceEnabled.Checked;
+  MasterData.–азѕеч÷енников–абћесто ассира := cbPrintBarCodesEnabled.Checked;
+  MasterData.–азрешить¬озврат¬–абћесте := cbRetEnable.Checked;
+  MasterData.–абћестоЌеќтобрќстатки“овара :=  cbShowGoodsRest.Checked;
+  MasterData.ѕокƒиалог—дачи–абћесто ассира := cbShowSdacha.Checked;    
+  MasterData.–абота—ќтложенными„еками := cbUsePostPoneDocs.Checked;
+  MasterData.»нтервалƒиалога—дачи–абћесто := StrToInt(edIntervalSdacha.Text);
+  MasterData.»зм¬х÷ен‘иксЌаклѕрих := cbChangeInPriceOnFizNaklIncome.Checked;
+  MasterData.»спѕерекл“овар”слуга := cbUseSwitchGoodService.Checked;
+  MasterData.–азрешитьѕрием“овара¬–абћесте := cbUseNaklInDood.Checked;
+
+
+  s:='';
+  for i:=0 to clbRegionTypeDoc.Items.Count-1 do
+    if clbRegionTypeDoc.Checked[i] then
+      s:=s+IntToStr(i+1)+';';
+  if s<>'' then StrDelete(s,StrLength(s),1);
+  MasterData.–абота—–егионами“ипыƒокументов := s;
+end;
+
+procedure cbJournalOpen_Click(Sender: TObject);
+begin
+  edJournalName.Enabled := cbJournalOpen.Checked;
+end;
+
+procedure cbShowSdacha_Click(Sender: TObject);
+begin
+  edIntervalSdacha.Enabled := cbShowSdacha.Checked;
+end;
+
+procedure eRegion_ActionClear(Sender: TObject);
+begin
+  MasterData.—клад := null;
+  MasterData. асса := null;
+  cbRangeJournal.Checked := false;
+  cbRangeJournal.Enabled := false;
+end;
+
+procedure eRegion_ActionExecute(Sender: TObject);
+begin
+  if not VarAsBool(MasterData.@–егион.IsFocused) then
+    begin
+      cbRangeJournal.Checked := false;
+      cbRangeJournal.Enabled := false;
+    end
+  else
+    cbRangeJournal.Enabled := true;
+  MasterData.—клад := null;
+  MasterData. асса := null;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  MasterData.ApplyUpdates;
+end;
+
+procedure cbRealizator_Click(Sender: TObject);
+begin
+  CheckTabSheets;
+end;
+
+
+
+procedure RefreshColorTbl;
+begin
+  JournalPrmTbl.SortBy('Ќазв∆урнала');
+  JournalPrmTbl.DoNumbering('јртикул',1,1);
+  JournalPrmTbl.SortBy('јртикул');
+  JournalPrmTbl.Select;
+  while JournalPrmTbl.SelectNext do
+    begin
+      JournalPrmTbl.Edit;
+      JournalPrmTbl. од := FormatFloat('00', JournalPrmTbl.јртикул);
+      JournalPrmTbl.Post;
+    end;
+end;
+
+procedure tbAdd_Click(Sender: TObject);
+var
+  Dialog: ICProcessing;
+begin
+  JournalPrmTbl.DisableControls;
+  Dialog := CreateObject('ќбработки.ѕользователи');
+  JournalPrmTbl.Params['Field1'] := '';
+  JournalPrmTbl.Params['Field2'] := '';
+  JournalPrmTbl.Params['Field3'] := true;
+  JournalPrmTbl.Params['Field4'] := false;
+  JournalPrmTbl.Params['TypeDlg'] := 'Add';
+  if Bits(Dialog.Execute('Ќастройка∆урналаѕользовател€', JournalPrmTbl)) = Bits(mrOk) then
+    begin
+      JournalPrmTbl.Find(JournalPrmTbl.Params['Field1']);
+      JournalPrmTbl.UseDataSource(0);
+      JournalPrmTbl.Append;
+      JournalPrmTbl.Ќазв∆урнала          := JournalPrmTbl.Params['Field1'];
+      JournalPrmTbl.ѕечатна€‘орма        := JournalPrmTbl.Params['Field2'];
+      JournalPrmTbl.ѕредвѕросмотр        := JournalPrmTbl.Params['Field3'];
+      JournalPrmTbl.ѕанель¬ыбораѕринтера := JournalPrmTbl.Params['Field4'];
+      JournalPrmTbl.Post;
+      JournalPrmTbl.UseDataSource(CtrlToVar(TVSJournalPrm));
+    end;
+  JournalPrmTbl.EnableControls;
+end;
+
+procedure tbAddAll_Click(Sender: TObject);
+var
+  JournalsStr: String;
+  i: integer;
+begin
+  JournalsStr := '∆урнал„еков;∆урналЌакладныхѕрихода;∆урнал¬озвратовќтѕокупател€;∆урнал¬озвратовѕоставщикам;' +
+                 '∆урналѕеремещени€“овара;∆урнал—писаний“оваров;∆урнал–евизий“овара;∆урнал¬водовќстатков;' +
+                 '∆урналјктов;∆урналѕечатиЎтрих одов;∆урналѕечатиЎтрих одов»÷ен';
+  JournalPrmTbl.UseDataSource(0);
+  for i := 1 to WordCount(JournalsStr,';') do
+    begin
+      if not(JournalPrmTbl.Find(ExtractWord(i,JournalsStr,';'))) then
+        begin
+          JournalPrmTbl.Append;
+          JournalPrmTbl.Ќазв∆урнала          := ExtractWord(i,JournalsStr,';');
+          JournalPrmTbl.ѕечатна€‘орма        := '';
+          JournalPrmTbl.ѕредвѕросмотр        := true;
+          JournalPrmTbl.ѕанель¬ыбораѕринтера := false;
+          JournalPrmTbl.Post;
+        end;
+    end;
+  JournalPrmTbl.UseDataSource(CtrlToVar(TVSJournalPrm));
+end;
+
+procedure MenuItem3_Click(Sender: TObject);
+var
+  ColorName: String;
+  Dialog: ICProcessing;
+begin
+  JournalPrmTbl.DisableControls;
+  Dialog := CreateObject('ќбработки.ѕользователи');
+  JournalPrmTbl.Params['Field1'] := JournalPrmTbl.Ќазв∆урнала;
+  JournalPrmTbl.Params['Field2'] := JournalPrmTbl.ѕечатна€‘орма;
+  JournalPrmTbl.Params['Field3'] := JournalPrmTbl.ѕредвѕросмотр;
+  JournalPrmTbl.Params['Field4'] := JournalPrmTbl.ѕанель¬ыбораѕринтера;
+  JournalPrmTbl.Params['TypeDlg'] := 'Edit';
+  if Bits(Dialog.Execute('Ќастройка∆урналаѕользовател€', JournalPrmTbl)) = Bits(mrOk) then
+    begin
+      JournalPrmTbl.Find(JournalPrmTbl.Params['Field1']);
+      JournalPrmTbl.UseDataSource(0);
+      JournalPrmTbl.Edit;
+      JournalPrmTbl.Ќазв∆урнала          := JournalPrmTbl.Params['Field1'];
+      JournalPrmTbl.ѕечатна€‘орма        := JournalPrmTbl.Params['Field2'];
+      JournalPrmTbl.ѕредвѕросмотр        := JournalPrmTbl.Params['Field3'];
+      JournalPrmTbl.ѕанель¬ыбораѕринтера := JournalPrmTbl.Params['Field4'];
+      JournalPrmTbl.Post;
+      JournalPrmTbl.UseDataSource(CtrlToVar(TVSJournalPrm));
+    end;
+  JournalPrmTbl.EnableControls;
+end;
+
+procedure MenuItem2_Click(Sender: TObject);
+begin
+  if JournalPrmTbl.IsFocused and (MessageDlg('”далить запись?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrYes) then
+    begin
+      JournalPrmTbl.UseDataSource(0);
+      JournalPrmTbl.Delete;
+//      RefreshColorTbl;
+      JournalPrmTbl.UseDataSource(CtrlToVar(TVSJournalPrm));
+    end;
+end;
+
+{$D-}
+procedure dbgJournal_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if not JournalPrmTbl.IsFocused then
+    exit;
+  if VarAsBool(JournalPrmTbl.ѕредвѕросмотр) then
+    Index1 := 45;
+  if VarAsBool(JournalPrmTbl.ѕанель¬ыбораѕринтера) then
+    Index2 := 3;
+end;
+{$D+}
+
+procedure TVSJournalPrm_VPAAfterScroll(Sender: TObject);
+begin
+{ if JournalPrmTbl.IsFocused then
+   begin
+     tbDel.Enabled := true;
+     tbEdit.Enabled := true;
+   end
+ else
+   begin
+     tbDel.Enabled := false;
+     tbEdit.Enabled := false;
+   end
+}
+end;
+
+procedure cbChangePrice_Click(Sender: TObject);
+begin
+  MasterData.–азрешить»зменение÷ены := cbChangePrice.Checked;      
+  CheckPasswControls;
+end;
+
+procedure cbChangePrecent_Click(Sender: TObject);
+begin
+ MasterData.–азрешить»змѕроцента—кидки := cbChangePrecent.Checked;
+ CheckPasswControls;
+end;
+
+
+
+procedure cbReqPassword_Click(Sender: TObject);
+begin
+  CheckPasswControls;
+end;
+
+procedure btCheckAll_Click(Sender: TObject);
+var i:integer;
+begin
+ for i:=0 to clbRegionTypeDoc.Items.count-1 do
+  clbRegionTypeDoc.checked[i] := VarAsBool((Sender as TO4Button).Tag);
+end;
+
+procedure ePartner_ActionClear(Sender: TObject);
+begin
+ MasterData.јналитика¬заиморасчета := Null;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel4:TO4Panel
+lTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+nbMain:TO4Notebook
+Label4:TO4Label
+pcLists:TO4PageControl
+tsMain:TTabSheet
+cbRealizator:TO4CheckBox
+cbRange:TO4CheckBox
+cbPays:TO4CheckBox
+cbVisibleInSum:TO4CheckBox
+cbcbViewUserGroups:TO4CheckBox
+cbChangeInPriceOnFizNaklIncome:TO4CheckBox
+Panel2:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label12:TO4Label
+Label13:TO4Label
+Label15:TO4Label
+eLogin:TO4DBEdit
+eEmploy:TO4DBEdit
+eScales:TO4DBEdit
+eFP:TO4DBEdit
+dbeTerminal:TO4DBEdit
+Panel13:TO4Panel
+cbJournalOpen:TO4CheckBox
+edJournalName:TO4Edit
+Panel14:TO4Panel
+Label16:TO4Label
+eRegion:TO4DBEdit
+cbRegionBlocked:TO4CheckBox
+cbRangeJournal:TO4CheckBox
+Panel15:TO4Panel
+Label17:TO4Label
+eStore:TO4DBEdit
+cbStoreBlocked:TO4CheckBox
+Panel16:TO4Panel
+Label18:TO4Label
+eCash:TO4DBEdit
+cbCashBlocked:TO4CheckBox
+TabSheet3:TTabSheet
+ToolBar3:TO4ToolBar
+tbAddAll:TO4ToolButton
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDel:TO4ToolButton
+dbgJournal:TO4DBGrid
+TabSheet2:TTabSheet
+Panel17:TO4Panel
+Label14:TO4Label
+ePartner:TO4DBEdit
+cbPartBlocked:TO4CheckBox
+cbPartBlockedManual:TO4CheckBox
+Panel18:TO4Panel
+Label19:TO4Label
+cbChangePrice:TO4CheckBox
+cbChangePrecent:TO4CheckBox
+cbReqPassword:TO4CheckBox
+ePass:TO4DBEdit
+Panel20:TO4Panel
+Label21:TO4Label
+Label20:TO4Label
+cbPreviewPrintForm:TO4CheckBox
+edPrintForm:TO4Edit
+dbeCountPrintform:TO4DBEdit
+Panel19:TO4Panel
+Label11:TO4Label
+cbShowSdacha:TO4CheckBox
+edIntervalSdacha:TO4Edit
+Panel21:TO4Panel
+Label22:TO4Label
+Label23:TO4Label
+edPrintFormKassRep:TO4Edit
+dbeCountPrintformKassRep:TO4DBEdit
+tsRealParams:TTabSheet
+Panel5:TO4Panel
+Panel6:TO4Panel
+Label3:TO4Label
+cbDocState7_0:TO4CheckBox
+cbDocState7_1:TO4CheckBox
+cbDocState7_2:TO4CheckBox
+cbDocStore7:TO4CheckBox
+Panel7:TO4Panel
+lDoc1:TO4Label
+cbDocState1_0:TO4CheckBox
+cbDocState1_1:TO4CheckBox
+cbDocState1_2:TO4CheckBox
+cbDocStore1:TO4CheckBox
+Panel3:TO4Panel
+Label5:TO4Label
+cbDocState2_0:TO4CheckBox
+cbDocState2_1:TO4CheckBox
+cbDocState2_2:TO4CheckBox
+cbDocStore2:TO4CheckBox
+Panel8:TO4Panel
+Label6:TO4Label
+cbDocState3_0:TO4CheckBox
+cbDocState3_1:TO4CheckBox
+cbDocState3_2:TO4CheckBox
+cbDocStore3:TO4CheckBox
+Panel9:TO4Panel
+Label7:TO4Label
+cbDocState5_0:TO4CheckBox
+cbDocState5_1:TO4CheckBox
+cbDocState5_2:TO4CheckBox
+cbDocStore5:TO4CheckBox
+Panel10:TO4Panel
+Label8:TO4Label
+cbDocState4_0:TO4CheckBox
+cbDocState4_1:TO4CheckBox
+cbDocState4_2:TO4CheckBox
+cbDocStore4:TO4CheckBox
+Panel11:TO4Panel
+Label9:TO4Label
+cbDocState6_0:TO4CheckBox
+cbDocState6_1:TO4CheckBox
+cbDocState6_2:TO4CheckBox
+cbDocStore6:TO4CheckBox
+Panel12:TO4Panel
+TabSheet1:TTabSheet
+pStores:TO4Panel
+tsWR:TTabSheet
+Label10:TO4Label
+clbRegionTypeDoc:TO4CheckListBox
+btCheckAll:TO4Button
+btClearAll:TO4Button
+MDS:TO4DataSource
+TVSJournalPrm:TO4TableValueSource
+Panel22:TO4Panel
+cbBlockChangeBarCode:TO4CheckBox
+cbChangePriceEnabled:TO4CheckBox
+cbPrintBarCodesEnabled:TO4CheckBox
+cbRetEnable:TO4CheckBox
+cbUsePostPoneDocs:TO4CheckBox
+cbUseNaklInDood:TO4CheckBox
+cbUseSwitchGoodService:TO4CheckBox
+cbShowGoodsRest:TO4CheckBox
+Label24:TO4Label
+dbeAnalit:TO4DBEdit

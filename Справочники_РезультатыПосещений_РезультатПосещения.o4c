@@ -1,0 +1,63 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+end;
+
+procedure MDS_Validate(Sender : TObject);
+begin
+  if VarAsInt(MasterData.Код) <> 0 then
+    CheckForUnique('Код', 'Код', MasterData, Null);
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  MasterData.Код := GetNextNumberForField('Справочники.РезультатыПосещений', 'Код')
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label1:TO4Label
+Label3:TO4Label
+Panel5:TO4Panel
+LinkImage1:TO4LinkImage
+dbeName:TO4DBEdit
+dbeCode:TO4DBEdit
+Panel4:TO4Panel
+lbTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem

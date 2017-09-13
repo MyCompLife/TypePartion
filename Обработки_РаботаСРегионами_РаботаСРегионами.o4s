@@ -1,0 +1,25 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Интерфейс, Расчеты, РаботаСПеременными, РаботаСОбъектами;
+
+implementation
+var RegionDic : ISDictionary;
+
+procedure FillRegionTbl(RegionTbl:ISValueTable); server;
+var RegionDic : ISDictionary;
+    tmpTbl : ISValueTable;
+begin
+  RegionDic := CreateObject('Справочники.Регионы');
+  tmpTbl := CreateObject('ТаблицаЗначений');
+  RegionDic.Select;
+  RegionDic.SaveToValueTable('Self;Код;Название',tmpTbl,1,RegionDic.RecordCount);
+  tmpTbl.AppendTo('Код;Название;Self=Регион',RegionTbl);
+  RegionTbl.DoCalculation('Sort','1');  
+  RegionTbl.Append;
+  RegionTbl.Название := 'Все регионы';
+  RegionTbl.Sort := 0;
+  RegionTbl.Post;
+end;
+
+end.

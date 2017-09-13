@@ -1,0 +1,238 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, –асчеты, Reports;
+  
+const
+  //************ 27.03.12 Snizhok ****************//
+  GoodLinksListAll = ' олЌач;—умЌач¬х;' +
+    ' олќст;—умќст¬х;' +
+    ' олѕрих;—умѕрих¬х;' +
+    ' ол¬ѕрих;—ум¬ѕрих¬х;' +
+    ' ол¬озвр;—ум¬озвр¬х;—ум¬озврќтп;—ум¬озврЌац;' +
+    ' ол–евиз;—ум–евиз¬х;' +
+    ' ол–асх;—ум–асх¬х;—ум–асхќтп;—ум–асхЌац;' +
+    ' ол¬–асх;—ум¬–асх¬х;' +
+    ' ол¬озврѕост;—ум¬озврѕост¬х;' +
+    ' ол—пис;—ум—пис¬х;' +
+    ' ол он;—ум он¬х;' +
+    '—умЌац;—умЌацЌачало;CondField';
+
+implementation
+
+var
+  AccsGood, AccsPartGood : ISAccs;
+  TblPartGood, GoodsTbl, StoreTbl : ISValueTable;
+  PartGoodList, PartList, GoodsList, FilterList : ISValueList;
+  Partner, Store : Variant;
+  DateFrom, DateTo : DateTime;
+  ShowCodeUnitname : Boolean;
+  OnlyMoving, UseLevel, GroupModel : Boolean;
+  Items : ISDictionary;   
+  NameFieldsHead2 : string;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  TblPartGood := CreateObject('“аблица«начений');
+  TblPartGood.Close();
+  TblPartGood.AddColumn('DimensionID', lftFloat, 0);
+  TblPartGood.AddColumn('“овар', lftLink, 0);
+  TblPartGood.Open();
+  PartList := CreateObject('—писок«начений');
+  PartGoodList := CreateObject('—писок«начений');
+end;
+
+function SetFilters : Boolean;
+begin
+  Result := True;
+  if (not IsNil(Store)) and VarAsBool(Store.IsFocused) then
+    AccsGood.SetFieldFilter('—клад', Store);
+  if (not IsNil(Partner)) and VarAsBool(Partner.IsFocused) then
+    begin
+      TblPartGood.Clear();
+      AccsPartGood.SetFieldFilter('ѕартнер', Partner);
+      AccsPartGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+        'DimensionID', -1, TblPartGood);
+      TblPartGood.GroupToList('DimensionID', PartList);
+      Result := (PartList.Count <> 0);
+      AccsGood.SetFieldFilter('ѕарти€', PartList);
+    end
+  else
+    if OnlyMoving then
+      begin
+        TblPartGood.Clear();
+        AccsGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+          '“овар;ѕарти€=DimensionID', -1, TblPartGood);
+        TblPartGood.GroupToList('DimensionID', PartList);
+        TblPartGood.GroupToList('“овар', PartGoodList);
+        Result := (PartList.Count <> 0);
+        AccsGood.SetFieldFilter('ѕарти€', PartList);
+        AccsGood.SetFieldFilter('“овар', PartGoodList);
+      end;
+end;
+
+procedure SetGoods(Doc : ISReport; var Accept : Boolean);
+var
+  Dims : Double;
+  b : Boolean;
+  MotionID : Integer;
+  «начени€ѕрихода, «начени€ќтпуска : string;
+begin
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+  AccsPartGood.ClearFieldBuffers();
+  AccsPartGood.ClearFieldFilters();
+  PartList.Clear();
+
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+
+  GoodsTbl.Clear();
+  GoodsTbl.SortBy('');
+  StoreTbl.Clear();
+  StoreTbl.SortBy('');
+  //категории
+  if not SetCtgFilter(UseLevel, GoodsList, Items, AccsGood, '“овар') then
+    begin
+      Accept := True;
+      exit;
+    end;
+  //
+  if SetFilters then
+    begin
+      //************ 27.03.12 Snizhok ****************//
+      if FilterList.Count > 0 then
+        AccsGood.SetFieldFilter('“овар', FilterList);
+      // отправка сообщени€ клиенту
+      Doc.NotifyClient(RestsView, 1, 50);
+      if Doc.Terminated then
+        exit;
+      for MotionID := 1 to 36 do
+        begin
+          if Doc.Terminated then
+            break;
+          «начени€ѕрихода := '';
+          «начени€ќтпуска := '';
+          case MotionID of
+            midIncome : 
+              «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+            midOutcome : 
+              «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+            midInternalIncome : 
+              «начени€ѕрихода := ' олќбщ= ол¬ѕрих;—ум¬х=—ум¬ѕрих¬х';
+            midInternalOutcome : 
+              «начени€ќтпуска := ' олќбщ= ол¬–асх;—ум¬х=—ум¬–асх¬х';
+            midRetBuyer : 
+              «начени€ѕрихода := ' олќбщ= ол¬озвр;—ум¬х=—ум¬озвр¬х;—умќтп=—ум¬озврќтп;—умЌац=—ум¬озврЌац';
+            midRetSupplier : 
+              «начени€ќтпуска := ' олќбщ= ол¬озврѕост;—ум¬х=—ум¬озврѕост¬х';
+            midRetRealBuyer : 
+              «начени€ѕрихода := ' олќбщ= ол¬озвр;—ум¬х=—ум¬озвр¬х;—умЌац=—ум¬озврЌац;—умќтп=—ум¬озврќтп';
+            midRetRealSupplier : 
+              «начени€ќтпуска := ' олќбщ= ол¬озврѕост;—ум¬х=—ум¬озврѕост¬х';
+            midInputRest : 
+              «начени€ѕрихода := ' олќбщ= олќст;—ум¬х=—умќст¬х';
+            midDiscard : 
+              «начени€ќтпуска := ' олќбщ= ол—пис;—ум¬х=—ум—пис¬х';
+            midRevision : 
+              «начени€ѕрихода := ' олќбщ= ол–евиз;—ум¬х=—ум–евиз¬х';
+            midRetFactory : 
+              «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+            midReadyFactory : 
+              «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+            midDiscardFactory : 
+              «начени€ќтпуска := ' олќбщ= ол—пис;—ум¬х=—ум—пис¬х';
+            else
+              continue;
+          end;
+          AccsGood.SetFieldFilter('“ип', MotionID);
+          AccsGood.AppendGroupRest2ToValueTable(DateFrom, DateTo, '“овар;—клад',
+            «начени€ЌаЌачало, «начени€ѕрихода, «начени€ќтпуска,
+            «начени€Ќа онец, GoodsTbl);
+        end;
+      GoodsTbl.GroupBy('“овар;—клад', GoodLinksListAll);
+      GoodsTbl.SortBy('“овар;—клад');
+    end;
+  AccsGood.ClearFieldFilters();
+  DeleteColumnsByCondition(GoodsTbl, 'CondField', '( олЌач=0)and(—умЌач¬х=0)and( олѕрих=0)'+
+                           'and(—умѕрих¬х=0)and( ол–асх=0)and(—ум–асх¬х=0)and(—ум–асхќтп=0)' +
+                           'and( ол он=0)and(—ум он¬х=0)and( ол¬ѕрих=0)and(—ум¬ѕрих¬х=0)' +
+                           'and( ол¬–асх=0)and(—ум¬–асх¬х=0)and( ол¬озвр=0)' +
+                           'and(—ум¬озвр¬х=0)and(—ум¬озврќтп=0)and( ол¬озврѕост=0)and(—ум¬озврѕост¬х=0)' +
+                           'and( ол—пис=0)and(—ум—пис¬х=0)and( олќст=0)and(—умќст¬х=0)' +
+                           'and( ол–евиз=0)and(—ум–евиз¬х=0)');
+  if ShowCodeUnitname then
+    GoodsTbl.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм');
+  GoodsTbl.DoCalculation('—умЌац', '—умЌацЌачало-—умЌац');  
+  if GroupModel then
+    begin
+      GoodsTbl.DoGetLinks('ћодель=“овар. од');
+      GoodsTbl.DoCalculation(' од','ћодель');
+      GoodsTbl.GroupBy(' од;≈д»зм;—клад',GoodLinksListAll);
+    end;
+
+  if StrPos(' олЌач',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' олЌач','0');
+  if StrPos(' олќст',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' олќст','0');
+  if StrPos(' олѕрих',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' олѕрих','0');
+  if StrPos(' ол¬ѕрих',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' ол¬ѕрих','0');
+  if StrPos(' ол¬озвр',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' ол¬озвр','0');
+  if StrPos(' ол–евиз',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' ол–евиз','0');
+  if StrPos(' ол–асх',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' ол–асх','0');
+  if StrPos(' ол¬–асх',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' ол¬–асх','0');
+  if StrPos(' ол¬озврѕост',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' ол¬озврѕост','0');
+  if StrPos(' ол—пис',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' ол—пис','0');
+  if StrPos(' ол он',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation(' ол он','0');
+  if StrPos('—умЌац',NameFieldsHead2) = 0 then GoodsTbl.DoCalculation('—умЌац','0');
+
+//удал€ем 0-вые позиции, добавлено 16.09.02, замедл€ет выполнение отчета
+  GoodsTbl.Select;
+  GoodsTbl.SelectFirst;
+  while not GoodsTbl.EOF do
+    begin
+      if (GoodsTbl. олЌач <> 0) or (GoodsTbl. олќст <> 0) or
+        (GoodsTbl. олѕрих <> 0) or (GoodsTbl. ол¬ѕрих <> 0) or
+        (GoodsTbl. ол¬озвр <> 0) or (GoodsTbl. ол–евиз <> 0) or (GoodsTbl. ол–асх <> 0) or
+        (GoodsTbl. ол¬–асх <> 0) or (GoodsTbl. ол¬озврѕост <> 0) or (GoodsTbl. ол—пис <> 0) or
+        (GoodsTbl. ол он <> 0) or (GoodsTbl.—умЌац <> 0)then
+        GoodsTbl.SelectNext
+      else
+        GoodsTbl.Delete;
+    end;
+  //
+  GoodsTbl.CopyTo('“овар; од;≈д»зм;' + GoodLinksListAll + ';ѕарти€;—клад', StoreTbl);
+  StoreTbl.GroupBy('—клад', GoodLinksListAll);
+  StoreTbl.SortBy('—клад');
+  AddTotalRow(GoodsTbl, ' од', GoodLinksListAll);
+  Accept := True;
+end;
+
+function GetRunReportEP(GoodsTbls, StoreTbls : ISValueTable; GoodLists : ISValueList;
+  Partners, Stores : Variant; ShowCodeUnitnames, UseLevels : Boolean;
+  AItems : ISDictionary;
+  DateFroms, DateTos : DateTime; OnlyMovings, GroupModels : Boolean; FilterLists : ISValueList; var NameFieldsHead2s : string) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;
+  GoodsList := GoodLists;
+  StoreTbl := StoreTbls;
+  Partner := Partners;
+  Store := Stores;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  ShowCodeUnitname := ShowCodeUnitnames;
+  OnlyMoving := OnlyMovings;  
+  GroupModel := GroupModels;
+  UseLevel := UseLevels;
+  Items := AItems;  
+  FilterList := FilterLists;  
+  NameFieldsHead2 := NameFieldsHead2s;
+  Result := EntryPoint(SetGoods);
+end;
+
+function GetGoodLinksList : string; server;
+begin
+  Result := GoodLinksListAll;
+end;
+
+end.

@@ -1,0 +1,369 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, Пользователи, ДополнительныйФункционал;
+
+implementation
+
+var
+  MasterData, ChildRevisDoc : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  PrintList : ICValueList;
+  PrintFormsTbl: ICValueTable;
+  PreView : Boolean;  
+
+function GetNameByTag(Tag : Integer) : string;
+begin
+  case Tag of
+    0 : Result := 'РевизияТовара';
+    1 : Result := 'РевизияТовараСт';
+  end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  Options := GetOptions;
+  SetColors(Constants);
+  ChildRevisDoc := CreateObject('Журналы.ЖурналРевизионныхЛистов');
+  ChildRevisDoc.UseMaster(MasterData);
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;                      
+  ItemMenu : TO4MenuItem;
+begin
+  MakeInterface(tbrData, Nobody, dbgData);
+  miDocMove.Visible := GetUDASet('viewdocmove');  
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  if IsNil(Users) then
+    Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    begin
+      if VarAsBool(Users.@Регион.IsFocused) and VarAsBool(Users.ОтборПоРегиону) then
+        MasterData.SetFieldFilter('Регион','=',Users.Регион,'','',Null);
+      if VarAsBool(Users.ОтборПоПользователю) then
+        MasterData.SetFieldFilter('Партнер','=',Users.Служащий,'','',Null);
+    end;
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;  
+  GetPrintersList(PrintList, edPrinters, MasterData.GetSign); 
+  ChildRevisDoc.OpenFormInplace('СписокРевизионныхЛистов', CtrlToVar(pRevList));   
+  
+  MakeUserInterface(MasterData.GetSign, pPrintPrm, PreView, PrintFormsTbl);
+  if not isNil(PrintFormsTbl) then
+    begin
+      btnPrint.Style := tbsDropDown;
+      btnPrint.DropdownMenu := pmPrintForms;
+      if PrintFormsTbl.LineCount = 0 then
+        btnPrint.Enabled := false; //если не указана печ.форма или не спозиционирован документ, тогда блокируется кнопка печати
+      pmiPrintOne.Enabled := btnPrint.Enabled;
+      PrintFormsTbl.DoNumbering('НомСтроки',1,1);
+      PrintFormsTbl.Select;
+      while PrintFormsTbl.SelectNext do
+        begin
+          ItemMenu := form.FindComponent('miPrinForm' + VarAsStr(PrintFormsTbl.НомСтроки)) as TO4MenuItem;
+          ItemMenu.Caption := PrintFormsTbl.ПечФорма;
+          ItemMenu.Visible := true;
+          ItemMenu.Tag := PrintFormsTbl.НомСтроки;
+          if PrintFormsTbl.НомСтроки = 1 then
+            ItemMenu.Default := true;
+        end;
+    end;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+var
+  PrinterName: String;
+begin
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintOnUserDevice('Обработки.ПечУнивЖурнала', 'ПечУнивЖурналаСТипомИВалютой', PrinterName, MasterData, PreView)
+  //V.PrintForm('ПечУнивЖурналаСТипом', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+var
+ V: ICProcessing;
+begin
+ V := CreateObject('Обработки.ПечУнивРевиз');
+ V.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)),MasterData)
+{
+begin
+  if MasterData.IsFocused then
+    MasterData.GetDoc.PrintForm('АктРевизии', not VarAsBool(Options.GetServerPrm(DirectPrint)), Null)  }
+end;
+
+procedure btnPrint_Click(Sender: TObject);
+var
+  PrinterName: String;
+  ObjTag : Integer;
+begin
+  if Sender.ClassName = 'TO4ToolButton' then
+    ObjTag := (Sender as TO4ToolButton).Tag;
+  if Sender.ClassName = 'TO4MenuItem' then
+    ObjTag := (Sender as TO4MenuItem).Tag;
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintFormsTbl.SortBy('НомСтроки');
+  if PrintFormsTbl.Find(ObjTag) then
+    PrintOnUserDevice('Обработки.ПечУнивРевиз', PrintFormsTbl.ПечФорма, PrinterName, MasterData.GetDoc, PreView);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if MasterData.GetDocState > 0 then
+    Index1 := 10
+  else
+    Index1 := 9;
+end;
+{$D+}
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh();
+end;
+
+procedure pmiExportExcel_Click(Sender : TObject);
+var
+  i, j : Integer;
+  DataDir : string;
+  Excel, WorkBook, WorkSheet, TrgRange : Variant;
+  MasterDoc : ICDocuments;
+  TLF, ADR, RRR, MYF, TmpGood : ICDictionary;
+  CNV : ICWriNums;
+  Sum, SumP : Decimal;
+  TblResp : ICValueTable;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  CNV := CreateObject('ЧислаПрописью');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  //  Excel.WorkBooks.Open(DataDir+'ExcelTemplates\АктРевизии.xls').WorkSheets(1).Copy;
+  //  TrgRange := Excel.WorkBooks(2).WorkSheets(1).Range('A1:N4');
+  try
+    Excel := CreateOleObject('Excel.Application');
+    Excel.Visible := True;
+    Excel.DisplayStatusBar := False;
+    Excel.Application.SheetsInNewWorkbook := 1;
+    Excel.Application.WorkBooks.Add;
+    Excel.Interactive := False;
+    Excel.ScreenUpdating := False;
+    Excel.Application.WorkSheets[1].Cells.NumberFormat := '@';
+    TrgRange := Excel.Application.WorkSheets[1].Range('A1:N4');
+    MasterDoc := MasterData.GetDoc();
+    TrgRange.Cells(1, 2) := 'АКТ ПРОВЕДЕННЯ РЕВІЗІЇ № ' + MasterData.НомерДокумента +
+      ' від ' + DateToStr(MasterData.ДатаДокумента);
+    TrgRange.Cells(1, 2).Font.Bold := True;
+    MYF.Select;
+    if not MYF.SelectNext then
+      exit;
+    MasterDoc.SelectLines;
+    Sum := 0;
+    SumP := 0;
+    i := 4;
+    TrgRange.Cells(i, 1) := '№';
+    TrgRange.Cells(i, 2) := 'Код';
+    TrgRange.Cells(i, 3) := 'Назва товару';
+    TrgRange.Cells(i, 4) := 'Од.вим.';
+    TrgRange.Cells(i, 5) := 'Вх.ціна';
+    TrgRange.Cells(i, 6) := 'Почат.к-сть';
+    TrgRange.Cells(i, 7) := 'Кінц.к-сть';
+    TrgRange.Cells(i, 8) := 'Різниця';
+    for j := 1 to 8 do
+      begin
+        TrgRange.Cells(i, j).Borders.LineStyle := 1;
+        TrgRange.Cells(i, j).Font.Bold := True;
+      end;
+    i := 5;
+    while MasterDoc.SelectNextLine() do
+      begin
+        TrgRange.Cells(i, 1) := VarAsStr(i - 4);  
+        TmpGood := MasterDoc.Товар;
+        TrgRange.Cells(i, 2) := TmpGood.Код;
+        TrgRange.Cells(i, 3) := TmpGood.НазвТовара;
+        if VarAsBool(TmpGood.ЕдИзм.IsFocused) then
+          TrgRange.Cells(i, 4) := MasterDoc.Товар.ЕдИзм.Value;
+        TrgRange.Cells(i, 5) := VarAsDec(MasterDoc.ВхЦенаБезНДС);
+        TrgRange.Cells(i, 5).HorizontalAlignment := $FFFFEFC8; //  xlRight
+        TrgRange.Cells(i, 6) := VarAsDec(MasterDoc.КоличествоДо);
+        TrgRange.Cells(i, 6).HorizontalAlignment := $FFFFEFC8; //  xlRight
+        TrgRange.Cells(i, 7) := VarAsDec(MasterDoc.КоличествоПосле);
+        TrgRange.Cells(i, 7).HorizontalAlignment := $FFFFEFC8; //  xlRight
+        TrgRange.Cells(i, 8) := VarAsDec(MasterDoc.Количество);
+        TrgRange.Cells(i, 8).HorizontalAlignment := $FFFFEFC8; //  xlRight
+        Sum := Sum + MasterDoc.ВхЦенаБезНДС * MasterDoc.КоличествоДо;
+        SumP := SumP + MasterDoc.ВхЦенаБезНДС * MasterDoc.КоличествоПосле;
+        for j := 1 to 8 do
+          TrgRange.Cells(i, j).Borders.LineStyle := 1;
+        i := i + 1;
+      end;
+    TrgRange.Cells(i, 5) := 'Сума';
+    TrgRange.Cells(i, 6) := VarAsDec(Sum);
+    TrgRange.Cells(i, 6).HorizontalAlignment := $FFFFEFC8; //  xlRight
+    TrgRange.Cells(i, 7) := VarAsDec(SumP);
+    TrgRange.Cells(i, 7).HorizontalAlignment := $FFFFEFC8; //  xlRight
+    TrgRange.Cells(i, 8) := VarAsDec(MasterData.СуммаБезНДС);
+    TrgRange.Cells(i, 8).HorizontalAlignment := $FFFFEFC8; //  xlRight
+    for j := 5 to 8 do
+      begin
+        TrgRange.Cells(i, j).Borders.LineStyle := 1;
+        TrgRange.Cells(i, j).Font.Bold := True;
+      end;
+    TrgRange.Cells(i + 2, 1) := 'Сума прописом ';
+    TrgRange.Cells(i + 2, 3) := CNV.MoneyToStr(MasterData.СуммаБезНДС, 'ГРН', 1058);
+    TrgRange.Cells(i + 2, 3).Font.Bold := True;
+    TrgRange.Cells(i + 5, 1) := 'Висновки';
+    TrgRange.Cells(i + 5, 3) := MasterData.Выводы;
+    TrgRange.Cells(i + 7, 1) := 'Комісія в складі';
+    TblResp := CreateObject('ТаблицаЗначений');
+    TblResp.AddColumn('Ответственный', lftLink, 0);
+    TblResp.Open;
+    TblResp.PackedData := MasterDoc.Комиссия;
+    TblResp.Select;
+    j := i + 8;
+    while TblResp.SelectNext do
+      begin
+        if VarAsBool(TblResp.@Ответственный.IsFocused) then
+          TrgRange.Cells(j, 3) := TblResp.Ответственный.ПолноеНазвание;
+        TrgRange.Cells(j, 3).Font.Bold := True;
+        inc(j);
+      end;
+  finally
+    Excel.ScreenUpdating := True;
+    Excel.Interactive := True;
+    Excel.Visible := True;
+    nil(TrgRange);
+    nil(Excel);
+  end;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  SaveUserActivePrinter(PrinterName, MasterData.GetSign);
+//  Options.SetServerPrm('АктивныйПринтер' + MasterData.GetSign + Form.Caption, PrinterName);
+end;
+
+procedure tbEditPPK_Click(Sender: TObject);
+var 
+  DocRev: ICDocuments;
+begin
+  DocRev := MasterData.GetDoc;
+  DocRev.EditInForm('РевизияТовараППК',1);
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end; 
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+procedure tbAdd_VPABeforeActionClick(Sender: TObject);
+begin
+ MasterData.UserTypesToAdd := GetNameByTag((Sender as TComponent).Tag);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tsState:TO4TabSet
+pPrintPrm:TO4Panel
+Label4:TO4Label
+btSaveActivPrinter:TO4Button
+edPrinters:TO4Edit
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+btnPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tbEditPPK:TO4ToolButton
+Panel2:TO4Panel
+Label2:TO4Label
+pRevList:TO4Panel
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+pmiExportExcel:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem
+pmPrintForms:TO4PopupMenu
+miPrinForm1:TO4MenuItem
+miPrinForm2:TO4MenuItem
+miPrinForm3:TO4MenuItem
+miPrinForm4:TO4MenuItem
+miPrinForm5:TO4MenuItem
+miPrinForm6:TO4MenuItem
+miPrinForm7:TO4MenuItem
+miPrinForm8:TO4MenuItem
+miPrinForm9:TO4MenuItem
+miPrinForm10:TO4MenuItem
+pmAddDoc:TO4PopupMenu
+miAddDoc:TO4MenuItem
+miAddDocParty:TO4MenuItem

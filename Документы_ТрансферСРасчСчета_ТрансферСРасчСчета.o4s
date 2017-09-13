@@ -1,0 +1,45 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsPartRealiz : ISAccs;
+
+function —формироватьѕлатежѕоƒокументу(DocOwner : Variant) : Decimal; server;
+var
+  Pays : ISJournal;
+begin
+  if DocOwner.GetType() <> 'Dictionaries;—правочники;ƒов≥дники' then
+    begin
+      if (DocOwner.ќтпуск = 1) and (VarAsInt(DocOwner.GetDocState) = 1) then
+        Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп')
+      else
+        Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+      Pays.UseMaster(DocOwner);
+      Pays.SetDocStateRange(1);
+      Pays.Select;
+      Result := DocOwner.—умма - Pays.Total('—умма');
+    end
+  else
+    begin
+      case VarAsStr(DocOwner.GetSign) of
+        '–еализаторы' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—–еализаторами');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—ум—пис + AccsPartRealiz.—умќпл;
+          end;
+        'ѕостЌа–еализацию' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—ум—пис + AccsPartRealiz.—умќпл;
+          end;
+      end;
+    end;
+end;
+
+end.

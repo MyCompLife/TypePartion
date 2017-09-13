@@ -1,0 +1,71 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL, СохранениеОтчетов;
+
+implementation
+
+var
+  RepCurrent : ICReport;
+  DocForView : ICDocuments;
+
+procedure CreateObjects;
+var
+  i : Integer;
+  RepSuborderForms : ICReport;
+  FormCaption : string;
+begin
+  DocForView.SelectLines;
+  i := 0;
+  while DocForView.SelectNextLine do
+    begin
+      inc(i);
+      FormCaption := VarAsStr(DocForView.НазваниеФормы);
+      if FormCaption = '' then
+        FormCaption := IntToStr(i);
+      tsForms.Tabs.Add(Trans(FormCaption));
+      nbForms.Pages.Add(IntToStr(i));
+      RepSuborderForms := CreateObject('Reports.ПросмотрФорм');
+      RepCurrent.Params['SubordedForm' + IntToStr(i)] := RepSuborderForms;
+      RepSuborderForms.OpenFormInplace('ПросмотрОднойФормы', ctrlToVar(nbForms.PageClass[i - 1]));
+      GetExecProcResult(RepSuborderForms, 'ReadOneXGrid', DocForView);
+    end;
+  tsForms.AutoScroll := True;
+  tsForms.TabIndex := 0;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  GetExecProcResult(RepCurrent.Params['SubordedForm' + IntToStr(nbForms.PageIndex + 1)],
+    'ExportToExcel', DocForView);
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  GetExecProcResult(RepCurrent.Params['SubordedForm' + IntToStr(nbForms.PageIndex + 1)],
+    'Print', DocForView);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  RepCurrent := Mean;
+  DocForView := RepCurrent.Params['DocForView'];
+end;
+
+procedure tsForms_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbForms.PageIndex := NewTab;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  CreateObjects;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+tbExcel:TO4ToolButton
+nbForms:TO4Notebook
+tsForms:TO4TabSet

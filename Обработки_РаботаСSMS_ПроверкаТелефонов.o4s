@@ -1,0 +1,96 @@
+interface
+
+uses
+ System, DispIntf, Расчеты, Интерфейс, ConstNames;
+
+
+implementation
+var TelTbl : ISValueTable;
+    CheckUro,  CheckEmpl, CheckOnlySMS, SetSMSType : Boolean;
+    UroDic, EmplDic, TelDic : ISDictionary;
+
+function StrOnlyDigitTel(s:string):string;
+var tmpStr : String;
+    i : integer;
+const AllowChars='0123456789';
+begin
+ tmpStr := '';
+  if strLength(s)>0 then
+   for i:=1 to strLength(s) do
+    if StrPos(s[i],AllowChars)<>0 then
+     tmpStr := tmpStr + s[i];
+  if (StrLength(tmpStr)=11) and (tmpStr[1]='8') then
+   StrDelete(tmpStr,1,1);
+  Result := tmpStr;
+end;
+
+procedure CheckDic(Doc : ISProcessing; var Accept : Boolean; Dic : ISdictionary);
+var tmpStr,Tel : String;
+    i, cnt : integer;
+const AllowChars='0123456789';
+begin
+ if IsNil(Dic) then exit;
+ cnt := 0;
+ Dic.Select;
+ Doc.NotifyClient('Проверка телефонов по партнёрам из справочника '+Dic.GetSign,cnt,Dic.RecordCount);
+ While Dic.SelectNext do
+  begin
+   TelDic.UseMasterAndSelect(Dic);
+   While TelDic.SelectNext do
+    if (not CheckOnlySMS) or (VarAsBool(TelDic.SMSРассылка,false)) then
+      begin
+       if SetSMSType then
+        begin
+         TelDic.Edit;
+         TelDic.SMSРассылка := true; 
+         TelDic.Post;
+        end;
+       // проверка телефона
+       Tel := StrOnlyDigitTel(TelDic.Номер);
+       if  (VarAsDec(Tel,0)=0) or
+          ((StrCopy(Tel,1,1)<>'0') and (StrCopy(Tel,1,3)<>'380')) or
+          ((StrCopy(Tel,1,1)='0') and (StrLength(Tel)<>10)) or
+          ((StrCopy(Tel,1,3)='380') and (StrLength(Tel)<>12)) then
+        begin
+          TelTbl.Append;
+          TelTbl.Партнер := Dic;
+          TelTbl.Телефон := TelDic;
+          TelTbl.Post;
+        end;
+      end;
+  if Doc.Terminated then exit;
+  inc(cnt);
+  if (cnt mod 10 = 0) then
+   Doc.NotifyClient('Проверка телефонов по партнёрам из справочника '+Dic.GetSign,cnt,Dic.RecordCount);
+  end; //While Dic.SelectNext d
+end;
+
+procedure RunCheck(Doc : ISProcessing; var Accept : Boolean);
+begin
+ if CheckUro then
+  CheckDic(Doc,Accept,UroDic);
+ if Doc.Terminated then exit;
+ if Doc.Terminated then exit;
+ if CheckEmpl then
+  CheckDic(Doc,Accept,EmplDic);
+ TelTbl.SortBy('Партнер;Телефон');
+end;
+
+function CheckTelEP(TelTbls:ISValueTable; CheckUros, CheckEmpls, CheckOnlySMSs, SetSMSTypes:Boolean) : Variant; server;
+begin
+ TelTbl := TelTbls;
+ CheckUro := CheckUros;
+ CheckEmpl := CheckEmpls;
+ CheckOnlySMS := CheckOnlySMSs;
+ SetSMSType := SetSMSTypes;
+ if IsNil(UroDic) then
+  UroDic := CreateObject('Справочники.ЮрПартнеры');
+ if IsNil(EmplDic) then
+  EmplDic := CreateObject('Справочники.Служащие');
+ if IsNil(TelDic) then
+  TelDic := CreateObject('Справочники.Телефоны');
+
+ Result := EntryPoint(RunCheck);
+end;
+
+end.

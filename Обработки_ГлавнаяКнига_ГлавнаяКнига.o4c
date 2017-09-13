@@ -1,0 +1,444 @@
+interface
+
+uses
+  System, DispIntf, –асчеты, Reports, Ѕух‘ункции;
+
+implementation
+
+const
+  ReportName = '√оловна книга';
+
+var
+  Plan : ICPlan;
+  DSum : Variant;
+  DateFrom, DateTo : DateTime;
+  Q, Q1, Q2 : ICBhQuery;
+  MYF : ICDictionary;
+  Acc : IObject;
+
+function GetQuart(DT : DateTime) : string;
+var
+  Quart, M : Variant;
+begin
+  M := GetMonth(DT);
+  Quart := Int((M - 1) / 3) + 1;
+  Result := VarAsStr(Quart) + ' ' + 'квартал'
+end;
+
+function GetMonthName(M : Integer) : string;
+begin
+  case M of
+    1 : 
+      Result := 'с≥чень';
+    2 : 
+      Result := 'лютий';
+    3 : 
+      Result := 'березень';
+    4 : 
+      Result := 'кв≥тень';
+    5 : 
+      Result := 'травень';
+    6 : 
+      Result := 'червень';
+    7 : 
+      Result := 'липень';
+    8 : 
+      Result := 'серпень';
+    9 : 
+      Result := 'вересень';
+    10 : 
+      Result := 'жовтень';
+    11 : 
+      Result := 'листопад';
+    12 : 
+      Result := 'грудень';
+  end
+end;
+
+procedure tbShowTools_Click(Sender : TObject);
+begin
+  XGridTools1.Visible := not XGridTools1.Visible;
+  if XGridTools1.Visible then
+    tbShowTools.ImageIndex := 98
+  else
+    tbShowTools.ImageIndex := 44;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  GRD.ClearAll();
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  BI, BI1, BI2 : ICBuh;
+  prk : Integer;
+  N : Integer;
+  SumD, SumC, D1, D2, D3, D4 : Variant;
+  AccCode, FieldName, GroupFields : string;
+  TblAcc, TblByMonth, TblAcc1, TblResult : ICValueTable;
+  Month, i, k : Integer;
+  DebStart, CredStart, DebEnd, CredEnd : Decimal;
+  AccName, ResultFields, MyName : string;
+  Sum : Variant;
+begin
+  GRD.ClearAll();
+  DateFrom := StrToDate(eDateFrom.Text);
+  DateTo := StrToDate(eDateTo.Text);
+  MYF := CreateObject('—правочники.¬ашеѕредпри€тие');
+  MYF.Select;
+  MYF.SelectNext;
+  TblAcc := CreateObject('“аблица«начений');
+  TblAcc.AddColumn('—чет', vtcString, 20);
+  TblAcc.AddColumn('ћес€ц', vtcInteger, 0);
+  TblAcc.AddColumn('—умма', vtcFFt, 2);
+  TblAcc.AddColumn('“ип', vtcInteger, 0);
+  TblAcc.Open;
+
+  TblByMonth := CreateObject('“аблица«начений');
+  TblByMonth.AddColumn('ћес€ц', vtcInteger, 0);
+  TblByMonth.AddColumn('—уммаЌачƒеб', vtcFFt, 2);
+  TblByMonth.AddColumn('—уммаЌач ред', vtcFFt, 2);
+  TblByMonth.AddColumn('ќборотƒеб', vtcFFt, 2);
+  TblByMonth.AddColumn('ќборот ред', vtcFFt, 2);
+  TblByMonth.AddColumn('—умма онƒеб', vtcFFt, 2);
+  TblByMonth.AddColumn('—умма он ред', vtcFFt, 2);
+  TblByMonth.Open;
+
+  TblAcc1 := CreateObject('“аблица«начений');
+
+  BI := CreateObject('Ѕух”чет.Ѕухучет');
+  Q := BI.Query();
+  AccCode := edAcc.Text;
+  if CheckAcc(AccCode, Plan) then
+    edAcc.Text := AccCode
+  else
+    exit;
+  Q.UseAcc(edAcc.Text);
+  Q.UseCorAcc('');
+  Q.SetSubAccLevel(3, 3);
+  if cbPlus.Checked then
+    Q.UseAO('ѕартнеры', Unassigned, False);
+  Acc := Plan.AccByCode(edAcc.Text);
+  AccName := Acc.Name;
+
+  GRD.AddSection('H', True);
+  Q.RunThreaded(trans('ќтчет с детализацией'),
+    DateFrom, DateTo + 1,
+    prkMonth, sfSumma);
+
+  //  AddHorz('H');
+  if cbPlus.Checked and (Acc.“ип—альдо = 1) then
+    begin
+      Q.SelectAO(1, 0, 1, rfAll);
+      while Q.SelectAONext(1, 0) do
+        ;
+      DebStart := Q.DSx(sfSumma);
+      CredStart := Q.CSx(sfSumma);
+      DebEnd := DebStart;
+      CredEnd := CredStart;
+      TblByMonth.Append;
+      TblByMonth.ћес€ц := 13;
+      TblByMonth.—уммаЌачƒеб := Q.DSx(sfSumma);
+      TblByMonth.—уммаЌач ред := Q.CSx(sfSumma);
+      TblByMonth.ќборотƒеб := Q.DR(sfSumma);
+      TblByMonth.ќборот ред := Q.CR(sfSumma);
+      TblByMonth.—умма онƒеб := Q.DEx(sfSumma);
+      TblByMonth.—умма он ред := Q.CEx(sfSumma);
+      TblByMonth.Post;
+    end
+  else
+    begin
+      DebStart := Q.DS(sfSumma);
+      CredStart := Q.CS(sfSumma);
+      DebEnd := DebStart;
+      CredEnd := CredStart;
+      TblByMonth.Append;
+      TblByMonth.ћес€ц := 13;
+      TblByMonth.—уммаЌачƒеб := Q.DS(sfSumma);
+      TblByMonth.—уммаЌач ред := Q.CS(sfSumma);
+      TblByMonth.ќборотƒеб := Q.DR(sfSumma);
+      TblByMonth.ќборот ред := Q.CR(sfSumma);
+      TblByMonth.—умма онƒеб := Q.DE(sfSumma);
+      TblByMonth.—умма он ред := Q.CE(sfSumma);
+      TblByMonth.Post;
+    end;
+
+  Q.SelectPeriod(1, 0, rfAll);
+  while Q.SelectPeriodNext(1) do
+    //    AddHorz('MH');
+    begin
+      TblByMonth.Append;
+      TblByMonth.ћес€ц := GetMonth(Q.BegDate());
+      if cbPlus.Checked and (Acc.“ип—альдо = 1) then
+        begin
+          TblByMonth.—уммаЌачƒеб := Q.DSx(sfSumma);
+          TblByMonth.—уммаЌач ред := Q.CSx(sfSumma);
+        end
+      else
+        begin
+          TblByMonth.—уммаЌачƒеб := Q.DS(sfSumma);
+          TblByMonth.—уммаЌач ред := Q.CS(sfSumma);
+        end;
+      TblByMonth.ќборотƒеб := Q.DR(sfSumma);
+      TblByMonth.ќборот ред := Q.CR(sfSumma);
+      if cbPlus.Checked and (Acc.“ип—альдо = 1) then
+        begin
+          TblByMonth.—умма онƒеб := Q.DEx(sfSumma);
+          TblByMonth.—умма он ред := Q.CEx(sfSumma);
+        end
+      else
+        begin
+          TblByMonth.—умма онƒеб := Q.DE(sfSumma);
+          TblByMonth.—умма он ред := Q.CE(sfSumma);
+        end;
+      TblByMonth.Post;
+
+      if cbDebet.Checked then
+        begin
+          Q.SelectCorAcc(1, 5, rfCorDR);
+          while Q.SelectCorAccNext(1) do
+            begin
+              TblAcc.Append;
+              TblAcc.—чет := Q.CorAcc();
+              TblAcc.ћес€ц := GetMonth(Q.BegDate());
+              TblAcc.—умма := Q.CorDR(sfSumma);
+              TblAcc.“ип := 0;
+              TblAcc.Post;
+            end;
+        end;
+      if cbCredit.Checked then
+        begin
+          Q.SelectCorAcc(1, 5, rfCorCR);
+          while Q.SelectCorAccNext(1) do
+            begin
+              TblAcc.Append;
+              TblAcc.—чет := Q.CorAcc();
+              TblAcc.ћес€ц := GetMonth(Q.BegDate());
+              TblAcc.—умма := Q.CorCR(sfSumma);
+              TblAcc.“ип := 1;
+              TblAcc.Post;
+            end;
+        end;
+    end;
+
+  TblByMonth.SortBy('ћес€ц');
+  Month := GetMonth(DateFrom);
+  while Month <= GetMonth(DateTo) do
+    begin
+      if TblByMonth.Find(Month) then
+        begin
+          DebStart := TblByMonth.—уммаЌачƒеб;
+          CredStart := TblByMonth.—уммаЌач ред;
+          DebEnd := TblByMonth.—умма онƒеб;
+          CredEnd := TblByMonth.—умма он ред;
+        end
+      else
+        begin
+          TblByMonth.Append;
+          TblByMonth.ћес€ц := Month;
+          TblByMonth.—уммаЌачƒеб := DebStart;
+          TblByMonth.—уммаЌач ред := CredStart;
+          TblByMonth.—умма онƒеб := DebEnd;
+          TblByMonth.—умма он ред := CredEnd;
+          TblByMonth.Post;
+        end;
+      inc(Month);
+    end;
+
+  TblAcc.GroupTo('“ип;—чет', '', TblAcc1);
+  TblAcc1.SortBy('“ип;—чет');
+
+  TblResult := CreateObject('“аблица«начений');
+  TblResult.AddColumn('Ќазвћес€ца', vtcString, 20);
+  TblResult.AddColumn('—уммаЌачƒеб', vtcFFt, 2);
+  TblResult.AddColumn('—уммаЌач ред', vtcFFt, 2);
+  GroupFields := '—уммаЌачƒеб;—уммаЌач ред';
+  i := 4;
+  TblAcc1.SetRange(0, 0);
+  TblAcc1.Select;
+  while TblAcc1.SelectNext do
+    begin
+      FieldName := 'ƒеб' + TblAcc1.—чет;
+      TblResult.AddColumn(FieldName, vtcFFt, 2);
+      GroupFields := GroupFields + ';' + FieldName;
+      ResultFields := ResultFields + ';' + FieldName;
+      GRD.Cell(4, i).Value := TblAcc1.—чет;
+      inc(i);
+    end;
+  TblAcc1.CancelRange;
+  TblResult.AddColumn('ќборотƒеб', vtcFFt, 2);
+  GroupFields := GroupFields + ';' + 'ќборотƒеб';
+  GRD.Cell(4, i).Value := 'ќб≥г дебета';
+  inc(i);
+  TblAcc1.SetRange(1, 1);
+  TblAcc1.Select;
+  while TblAcc1.SelectNext do
+    begin
+      FieldName := ' ред' + TblAcc1.—чет;
+      TblResult.AddColumn(FieldName, vtcFFt, 2);
+      GroupFields := GroupFields + ';' + FieldName;
+      ResultFields := ResultFields + ';' + FieldName;
+      GRD.Cell(4, i).Value := TblAcc1.—чет;
+      inc(i);
+    end;
+  TblAcc1.CancelRange;
+  TblResult.AddColumn('ќборот ред', vtcFFt, 2);
+  GRD.Cell(4, i).Value := 'ќб≥г кредита';
+  inc(i);
+  TblResult.AddColumn('—умма онƒеб', vtcFFt, 2);
+  GRD.Cell(4, i).Value := 'ƒебет на к≥нець';
+  inc(i);
+  TblResult.AddColumn('—умма он ред', vtcFFt, 2);
+  GRD.Cell(4, i).Value := ' редит на к≥нець';
+  TblResult.AddColumn('ћес€ц', vtcFFt, 2);
+  TblResult.Open;
+  GroupFields := GroupFields + ';ќборот ред;—умма онƒеб;—умма он ред';
+
+  TblByMonth.AppendTo('ћес€ц;—уммаЌачƒеб;—уммаЌач ред;ќборотƒеб;ќборот ред;—умма онƒеб;—умма он ред', TblResult);
+  TblAcc.Select;
+  while TblAcc.SelectNext do
+    begin
+      TblResult.Append;
+      TblResult.ћес€ц := TblAcc.ћес€ц;
+      case VarAsInt(TblAcc.“ип) of
+        0 :
+          FieldName := 'ƒеб' + TblAcc.—чет;
+        1 :
+          FieldName := ' ред' + TblAcc.—чет;
+      end;
+      TblResult._Default[FieldName] := TblAcc.—умма;
+      TblResult.Post;
+    end;
+
+  StrDelete(ResultFields, 1, 1);
+  if ResultFields <> '' then
+    begin
+      Sum := TblResult.Total(ResultFields);
+      TblResult.Append;
+      TblResult.ћес€ц := 13;
+      if WordCount(ResultFields, ';') = 1 then
+        TblResult._Default[ResultFields] := Sum
+      else
+        for k := 1 to WordCount(ResultFields, ';') do
+          TblResult._Default[ExtractWord(k, ResultFields, ';')] := Sum[k - 1];
+      TblResult.Post;
+    end;
+
+  TblResult.GroupBy('ћес€ц', GroupFields);
+  TblResult.Select;
+  while TblResult.SelectNext do
+    begin
+      TblResult.Edit;
+      if TblResult.ћес€ц <= 12 then
+        TblResult.Ќазвћес€ца := GetMonthName(TblResult.ћес€ц)
+      else
+        TblResult.Ќазвћес€ца := '¬сього';
+      TblResult.Post;
+    end;
+  TblResult.SortBy('ћес€ц');
+  TblResult.SelectFirst;
+  TblResult.AddToXGrid(CtrlToVar(GRD), 'MH', 'Ќазвћес€ца;' + GroupFields, 1, TblResult.LineCount - 1);
+  TblResult.AddToXGrid(CtrlToVar(GRD), 'F', 'Ќазвћес€ца;' + GroupFields, TblResult.LineCount, 1);
+
+  GRD.ColCount := i;
+
+  nil(Q);
+  GRD.Cells(5, 1, 5, GRD.ColCount).AdjustColWidths;
+  GRD.Cells(2, 1, 2, GRD.ColCount).GroupCells;
+  GRD.Cell(2, 1).WordWrap := True;
+  GRD.Cell(2, 1).Value := ReportName + ' по рах. ' + edAcc.Text + ' (' + AccName + ')';
+//  GRD.Cells(2, 1, 2, GRD.ColCount).AdjustRowHeights;
+  GRD.Cell(3, 1).Value := 'з ' + FormatDateTime('dd.mm.yyyy', DateFrom) + ' до ' + FormatDateTime('dd.mm.yyyy', DateTo);
+  MyName := GetPartName(MYF);
+  GRD.Cell(1, 1).Value := MyName;
+  GRD.Refresh;
+end;
+
+procedure ToolButton1_Click(Sender : TObject);
+begin
+  GRD.Print(trans('√лавна€ книга'), True);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Plan := CreateObject('ѕланы—четов.ѕлан—четов');
+  Plan.Select();
+  while Plan.SelectNext(True) do
+    edAcc.Items.Add(Plan.CodeField);
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  GRD.ExportToExcel;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ToolBar1:TO4ToolBar
+ToolButton2:TO4ToolButton
+tbRun:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbShowTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton4:TO4ToolButton
+Panel8:TO4Panel
+Label1:TO4Label
+Label3:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+XGridTools1:TXGridTools
+GRD:TO4XGrid
+Panel1:TO4Panel
+Label2:TO4Label
+GroupBox1:TO4GroupBox
+cbDebet:TO4CheckBox
+cbCredit:TO4CheckBox
+edAcc:TO4Edit
+cbPlus:TO4CheckBox
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

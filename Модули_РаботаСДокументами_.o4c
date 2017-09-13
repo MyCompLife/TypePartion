@@ -1,0 +1,268 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений;
+
+const
+  DocFixProgress = 'Фиксация документа "%s"';
+  errFixFail = 'Процесс фиксирования был остановлен пользователем или возникла ошибка.%s' +
+    'Документ "%s" не зафиксирован.';
+  // параметр на отмену проверки по возможности фиксации/расфиксации/удаления документа
+  prmnLockForStandartChangeDocStateCheck = 'LockForStandartChangeDocStateCheck';
+  errDocNotFoundOnServer = 'Документ "%s" не найдено на сервере!';
+
+function GetDocStatesList(DocCurrent : ICDocuments; Delimiter : string = #13) : string;
+procedure ClearDocContents(DocCurrent : ICDocuments;
+  Form : To4CustomForm; dcsName : string = '');
+function CanChangeDocState(DocCurrent : ICDocuments; vblDocAction : TO4Actions;
+  var Accept : Boolean; SemMsg : string {DecGood или DecBank}) : string;
+procedure GetRoundSumsAndCorrect(TblWithSums : ICValueTable; PrecFields, RoundFields,
+  FieldForDelta : string; Precision : Integer = 2);
+procedure AbstractScrollableProcOnDocContents(DocCurrent : ICDocuments;
+  dcsTable : To4DocContentsSource; ProcID : string; InParams : Variant = '');
+procedure AbstractScrollableProcOnDocContentBookmarks(DocCurrent : ICDocuments;
+  dcsTable : To4DocContentsSource; ProcID : string; InParams : Variant = '');
+
+implementation
+
+const
+  msgCanStateUpDoc = 'Фиксировать документ "%s" ?';
+  msgCanStateDownDoc = 'Расфиксировать документ "%s" ?';
+  msgCanDeleteDoc = 'Удалить документ "%s" ?';
+
+  // получает список состояний данного документа. На сервере не имеет аналога.
+
+function GetDocStatesList(DocCurrent : ICDocuments; Delimiter : string = #13) : string;
+var
+  i : Integer;
+  StateName : string;
+begin
+  i := 0;
+  Result := '';
+  while True do
+    begin
+      try
+        StateName := Trans(DocCurrent.GetStateName(i));
+      except
+        StateName := '';
+      end;
+      if StateName = '' then
+        break;
+      inc(i);
+      Result := Result + Delimiter + StateName;
+    end;
+  if Result <> '' then
+    StrDelete(Result, 1, StrLength(Delimiter));
+end;
+
+procedure ClearDocContents(DocCurrent : ICDocuments;
+  Form : To4CustomForm; dcsName : string = '');
+var
+  dcsTable : To4DocContentsSource;
+begin
+  if dcsName = '' then
+    while DocCurrent.FirstLine do
+      DocCurrent.DeleteLine
+  else
+    begin
+      dcsTable := Form.FindComponent(dcsName) as To4DocContentsSource;
+      while DocCurrent.FirstLine do
+        dcsTable.ActionClick(actDel);
+    end;
+end;
+
+var
+  SmpLockDocuments : ICSemaphore;
+
+function GetOptNameFromAction(vblDocAction : TO4Actions) : string;
+begin
+  case vblDocAction of
+    actStateUp, actStateDown :
+      Result := FixAck;
+    actDel :
+      Result := DelAck;
+  end;
+end;
+
+function GetMessageFromAction(vblDocAction : TO4Actions; DocName : string) : string;
+begin
+  case vblDocAction of
+    actStateUp :
+      Result := msgCanStateUpDoc;
+    actStateDown :
+      Result := msgCanStateDownDoc;
+    actDel :
+      Result := msgCanDeleteDoc;
+  end;
+  Result := GetTranslation(Result, ArrayOf(DocName));
+end;
+
+function CanDoGroupAction(DocCurrent : ICDocuments; vblDocAction : TO4Actions;
+  DocName : string; var vblMessage : string) : Boolean;
+var
+  vblMessageResult : Integer;
+begin
+  if DocCurrent.IsGroupAction and (not DocCurrent.FirstInGroupAction) and DocCurrent.YesToAllInGroupAction then
+    begin
+      Result := True;
+      exit;
+    end;
+  vblMessage := GetMessageFromAction(vblDocAction, DocName);
+  if not DocCurrent.IsGroupAction then
+    vblMessageResult := MessageDlg(vblMessage, mtConfirmation, ArrayOf(mbYes, mbNo))
+  else // DocCurrent.FirstInGroupAction or not DocCurrent.YesToAllInGroupAction
+    vblMessageResult := MessageDlg(vblMessage, mtConfirmation, ArrayOf(mbYes, mbYesToAll, mbNo));
+  DocCurrent.YesToAllInGroupAction := vblMessageResult = mrYesToAll;
+  Result := Bits(vblMessageResult) and Bits(mrYesToAll, mrYes) <> 0;
+end;
+
+function CanChangeDocState(DocCurrent : ICDocuments; vblDocAction : TO4Actions;
+  var Accept : Boolean; SemMsg : string {DecGood или DecBank}) : string;
+var
+  vblMessage, vblOptName : string;
+begin
+  Result := GetDefaultLinkValue(DocCurrent);
+  if Accept and not VarAsBool(DocCurrent.Params[prmnLockForStandartChangeDocStateCheck]) and
+    VarAsBool(GetOptions.GetServerPrm(GetOptNameFromAction(vblDocAction))) then
+    Accept := CanDoGroupAction(DocCurrent, vblDocAction, Result, vblMessage);
+  if Accept and (SemMsg <> '') then
+    begin
+      if vblMessage = '' then
+        vblMessage := GetMessageFromAction(vblDocAction, Result);
+      SmpLockDocuments := CreateSemaphore(SemMsg, vblMessage);
+      Accept := SmpLockDocuments.WaitSemaphore;
+    end;
+end;
+
+procedure GetRoundSumsAndCorrect(TblWithSums : ICValueTable; PrecFields, RoundFields,
+  FieldForDelta : string; Precision : Integer = 2);
+var
+  FieldsCounter : Integer;
+  OnePrecField, OneRoundField : string;
+  OneFieldDelta, OneCorrection : Decimal;
+begin
+  OneCorrection := 1 / VarAsInt('1' + FillStrByChar('0', Precision));
+  SaveSortingForTables(ArrayOf(TblWithSums));
+  try
+    for FieldsCounter := 1 to WordCount(PrecFields, ';') do
+      begin
+        OnePrecField := ExtractWord(FieldsCounter, PrecFields, ';');
+        OneRoundField := ExtractWord(FieldsCounter, RoundFields, ';');
+        TblWithSums.DoCalculation(OneRoundField, OnePrecField);
+        // первое округление полученных сумм
+        RoundValuesInTable(TblWithSums, OneRoundField, Precision);
+        // корректировка исходя из общей суммы
+        TblWithSums.DoCalculation(FieldForDelta, OnePrecField + '-' + OneRoundField); // в FieldForDelta должно быть достаточно знаков
+        OneFieldDelta := RoundFloat(VarAsDec(TblWithSums.Total(OnePrecField)), Precision) -
+          RoundFloat(VarAsDec(TblWithSums.Total(OneRoundField)), Precision);
+        if OneFieldDelta = 0 then
+          continue // нечего корректировать
+        else
+          if OneFieldDelta > 0 then
+            begin
+              if OneCorrection < 0 then
+                OneCorrection := -OneCorrection;
+              OnePrecField := '-' + FieldForDelta;
+            end
+          else
+            begin
+              if OneCorrection > 0 then
+                OneCorrection := -OneCorrection;
+              OnePrecField := FieldForDelta;
+            end;
+        TblWithSums.Select;
+        TblWithSums.SortBy(OnePrecField);
+        try
+          while OneFieldDelta <> 0 do
+            begin
+              TblWithSums.SelectNext;
+              TblWithSums.Edit;
+              TblWithSums._Default[OneRoundField] := VarAsDec(TblWithSums._Default[OneRoundField]) + OneCorrection;
+              TblWithSums.Post;
+              OneFieldDelta := OneFieldDelta - OneCorrection;
+            end;
+        finally
+          TblWithSums.SortBy('');
+        end;
+      end;
+  finally
+    RestoreSortingForTables(ArrayOf(TblWithSums));
+  end;
+end;
+
+procedure AbstractScrollableProcOnDocContents(DocCurrent : ICDocuments;
+  dcsTable : To4DocContentsSource; ProcID : string; InParams : Variant = '');
+var
+  Cursor : TCursor;
+  OutPrm : Variant;
+begin
+  Cursor := WaitCursorStart;
+  try
+    DocCurrent.DisableTableControls;
+    try
+      DocCurrent.TableAutoCalcFields := False;
+      try
+        DocCurrent.SaveTableBookmark;
+        try
+          dcsTable.AfterScrollLock := True;
+          try
+            DocCurrent.SelectLines;
+            while DocCurrent.SelectNextLine do
+              DocCurrent.ExecProc(Null, ProcID, InParams, OutPrm);
+            DocCurrent.ExecProc(Null, ProcID + 'After', InParams, OutPrm); // для пересчета сумм, в основном, всередине блокировок
+          finally
+            dcsTable.AfterScrollLock := False;
+          end;
+        finally
+          DocCurrent.GotoTablebookmark(True);
+        end;
+      finally
+        DocCurrent.TableAutoCalcFields := True;
+      end;
+    finally
+      DocCurrent.EnableTableControls;
+    end;
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+end;
+
+procedure AbstractScrollableProcOnDocContentBookmarks(DocCurrent : ICDocuments;
+  dcsTable : To4DocContentsSource; ProcID : string; InParams : Variant = '');
+var
+  Cursor : TCursor;
+  OutPrm : Variant;
+begin
+  Cursor := WaitCursorStart;
+  try
+    DocCurrent.DisableTableControls;
+    try
+      DocCurrent.TableAutoCalcFields := False;
+      try
+        DocCurrent.SaveTableBookmark;
+        try
+          dcsTable.AfterScrollLock := True;
+          try
+            DocCurrent.SelectBookmarks;
+            while DocCurrent.SelectNextBookmark do
+              DocCurrent.ExecProc(Null, ProcID, InParams, OutPrm);
+            DocCurrent.ExecProc(Null, ProcID + 'After', InParams, OutPrm); // для пересчета сумм, в основном, всередине блокировок
+          finally
+            dcsTable.AfterScrollLock := False;
+          end;
+        finally
+          DocCurrent.GotoTablebookmark(True);
+        end;
+      finally
+        DocCurrent.TableAutoCalcFields := True;
+      end;
+    finally
+      DocCurrent.EnableTableControls;
+    end;
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+end;
+
+end.

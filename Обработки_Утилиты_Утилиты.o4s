@@ -1,0 +1,151 @@
+interface
+
+uses
+  System, DispIntf, Фиксация;
+
+implementation
+
+var
+  Client : ISProcessing;
+
+{procedure MakeGoodMotion1(AccGood: ISAccs; Doc: Variant; PartGoodID: Double;
+                         MotionID: Integer; Resources: Variant);
+var
+  Dimensions, Fields: Variant;
+  Docum: ISDocuments;
+begin
+ AccGood.ClearFieldBuffers();
+ Dimensions := ArrayOf(Doc.@Товар, Doc.@Склад, PartGoodID, MotionID);
+ Fields     := ArrayOf(Doc.@ВалютаТовара, Doc.КурсТовара);
+ if VarAsBool(Doc.IsType('Documents')) then Docum := Doc else Docum := DocDoc;
+ if MotionID and 1 = 0
+   then AccGood.OutcomeDirect(Docum, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Fields)
+   else AccGood.IncomeDirect(Docum, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Fields);
+end;}
+
+procedure ConvertMain(Mean : ISProcessing; var Success : Boolean);
+var
+  JNakl, JNakl1, JNakl2 : ISJournal;
+  OldDoc : ISDocuments;
+  AccsGoods : ISAccs;
+  tmpValue : ISValueTable;
+  VarDoc : Variant;
+  Dimensions, Fields : Variant;
+  Tax : Decimal;
+  SumIN : Decimal;
+  i : Integer;
+begin
+  client := Mean;
+  i := 0;
+  tmpValue := CreateObject('ТаблицаЗначений');
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  JNakl := CreateObject('Журналы.ЖурналНакладных');
+  JNakl1 := CreateObject('Журналы.ЖурналНакладных');
+  JNakl2 := CreateObject('Журналы.ЖурналВводовОстатков');
+  JNakl.CancelRangeByField;
+  JNakl.SetDocTypeRange('Документы.НакладнаяПрихода');
+  JNakl.Select;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      tmpValue.Open;
+      VarDoc := OldDoc;
+      AccsGoods.SaveDocMotionToValueTable(VarDoc, midIncome, tmpValue);
+      AccsGoods.RemoveDoc(VarDoc, null, True);
+      OldDoc.SelectLines;
+      while OldDoc.SelectNextLine do
+        begin
+          tmpValue.SortBy('Товар;Склад');
+          SumIn := OldDoc.ЦенаБезНДС * OldDoc.Количество;
+          tmpValue.SetRange(ArrayOf(OldDoc.Товар, OldDoc.Склад), ArrayOf(OldDoc.Товар, OldDoc.Склад));
+          tmpValue.Select;
+          while tmpValue.SelectNext do
+            begin
+              if (OldDoc.Количество = tmpValue.КолОбщ) and (SumIn = tmpValue.СумВх) then
+                begin
+                  Tax := tmpValue.СумОтп - tmpValue.СумВх;
+                  MakeGoodMotion(AccsGoods, OldDoc, tmpValue.Партия, midIncome,
+                    ArrayOf(tmpValue.КолОбщ, tmpValue.СумВх, Tax,
+                    tmpValue.СумОтп, Tax, 0, tmpValue.СумВалВх, tmpValue.СумВалВх));
+                  break;
+                end;
+            end;
+        end;
+      inc(i);
+      Client.NotifyClientEx(1, 'Обработана НакладнаяПрихода ' + OldDoc.НомерДокумента + ' Всего ' + IntToStr(i), i, i);
+      tmpValue.Close;
+    end;
+  i := 0;
+  JNakl1.Select;
+  JNakl.CancelRangeByField;
+  JNakl.SetDocTypeRange('Документы.НакладнаяПриходаПоСчету');
+  while JNakl1.SelectNext do
+    begin
+      tmpValue.Open;
+      OldDoc := JNakl1.GetDoc();
+      VarDoc := OldDoc;
+      AccsGoods.SaveDocMotionToValueTable(VarDoc, midIncome, tmpValue);
+      AccsGoods.RemoveDoc(VarDoc, 1, True);
+      OldDoc.SelectLines;
+      while OldDoc.SelectNextLine do
+        begin
+          tmpValue.SortBy('Товар;Склад');
+          SumIn := OldDoc.ЦенаБезНДС * OldDoc.Количество;
+          tmpValue.SetRange(ArrayOf(OldDoc.Товар, OldDoc.Склад), ArrayOf(OldDoc.Товар, OldDoc.Склад));
+          tmpValue.Select;
+          while tmpValue.SelectNext do
+            begin
+              if (OldDoc.Количество = tmpValue.КолОбщ) and (SumIn = tmpValue.СумВх) then
+                begin
+                  Tax := tmpValue.СумОтп - tmpValue.СумВх;
+                  MakeGoodMotion(AccsGoods, OldDoc, tmpValue.Партия, midIncome,
+                    ArrayOf(tmpValue.КолОбщ, tmpValue.СумВх, Tax,
+                    tmpValue.СумОтп, Tax, 0, tmpValue.СумВалВх, tmpValue.СумВалВх));
+                  break;
+                end;
+            end;
+        end;
+      inc(i);
+      Client.NotifyClientEx(1, 'Обработана НакладнаяПриходаПоСчету ' + OldDoc.НомерДокумента + ' Всего ' + IntToStr(i), i, i);
+      tmpValue.Close;
+    end;
+  i := 0;
+  JNakl2.Select;
+  while JNakl2.SelectNext do
+    begin
+      tmpValue.Open;
+      OldDoc := JNakl2.GetDoc();
+      VarDoc := OldDoc;
+      AccsGoods.SaveDocMotionToValueTable(VarDoc, midInputRest, tmpValue);
+      AccsGoods.RemoveDoc(VarDoc, 1, True);
+      OldDoc.SelectLines;
+      while OldDoc.SelectNextLine do
+        begin
+          tmpValue.SortBy('Товар;Склад');
+          SumIn := OldDoc.ЦенаБезНДС * OldDoc.Количество;
+          tmpValue.SetRange(ArrayOf(OldDoc.Товар, OldDoc.Склад), ArrayOf(OldDoc.Товар, OldDoc.Склад));
+          tmpValue.Select;
+          while tmpValue.SelectNext do
+            begin
+              if (OldDoc.Количество = tmpValue.КолОбщ) and (SumIn = tmpValue.СумВх) then
+                begin
+                  Tax := tmpValue.СумОтп - tmpValue.СумВх;
+                  MakeGoodMotion(AccsGoods, OldDoc, tmpValue.Партия, midInputRest,
+                    ArrayOf(tmpValue.КолОбщ, tmpValue.СумВх, Tax,
+                    tmpValue.СумОтп, Tax, 0, tmpValue.СумВалВх, tmpValue.СумВалВх));
+                  break;
+                end;
+            end;
+        end;
+      inc(i);
+      Client.NotifyClientEx(1, 'Обработан ВводОстатков ' + OldDoc.НомерДокумента + ' Всего ' + IntToStr(i), i, i); tmpValue.Close;
+    end;
+  Success := True;
+end;
+
+function Fix(MasterData : Variant) : Variant; server;
+begin
+  Result := EntryPoint(ConvertMain);
+end;
+
+end.

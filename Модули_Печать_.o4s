@@ -1,0 +1,124 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, УстановкаВажныхОбъектов,
+  ПечатьИВыводНаЭкран;
+
+type
+  TPartNameStyle = T_Set;
+
+const
+  pnsUseAttr = 1; // TPartNameStyle
+  pnsUseAttrAfter = 2; // TPartNameStyle
+  pnsUseAttrShort = 4; // TPartNameStyle
+
+function GetParNameByStyle(DicPartner : ISDictionary; PartNameStyle : TPartNameStyle = 0;
+  ExtendedAttributeName : string = ''; IterField : string = 'Партнер') : string;
+function GetShortPartName(DicPartner : ISDictionary) : string;
+function GetPartName(DicPartner : ISDictionary; Style : Integer = 0) : string;
+
+implementation
+
+function GetFirsLettersFromString(List : string; Delimiter : Char = ' ') : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 1 to WordCount(List, Delimiter) do
+    Result := Result + GetExtStringFieldValue(StrCopy(ExtractWord(i, List, Delimiter), 1, 1), '.', ' ');
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+function GetParNameByStyle(DicPartner : ISDictionary; PartNameStyle : TPartNameStyle = 0;
+  ExtendedAttributeName : string = ''; IterField : string = 'Партнер') : string;
+begin
+  if IterField <> '' then
+    while DicPartner.HasField(IterField) do
+      DicPartner := DicPartner.IterField;
+  Result := StrTrim(VarAsStr(DicPartner.NameField));
+  if PartNameStyle and pnsUseAttr <> 0 then
+    exit;
+  if ExtendedAttributeName = '' then
+    if DicPartner.HasField('ИмяОтчество') then
+      ExtendedAttributeName := 'ИмяОтчество'
+    else
+      if DicPartner.HasField('ОПФ') then
+        ExtendedAttributeName := 'ОПФ';
+  if ExtendedAttributeName = '' then
+    exit;
+  // значение аттрибута
+  IterField := StrTrim(GetExtStringFieldValue(DicPartner._Default[ExtendedAttributeName]));
+  if IterField = '' then
+    exit;
+  // полный/сокращенный - только в разрезе поля ИмяОтчество
+  if PartNameStyle and pnsUseAttrShort <> 0 then
+    case ExtendedAttributeName of
+      'ИмяОтчество' :
+        IterField := GetFirsLettersFromString(IterField);
+      else
+    end;
+  // сторона задания аттрибута
+  if PartNameStyle and pnsUseAttrAfter = 0 then
+    Result := IterField + ' ' + Result
+  else
+    Result := Result + ' ' + IterField;
+end;
+
+// ф-ции для поддержки со старами версиями
+
+function GetPartName(DicPartner : ISDictionary; Style : Integer = 0) : string;
+var
+  OPF, IO : string;
+begin
+  Result := '';
+  if IsObjFocused(DicPartner) then
+    begin
+      if VarAsBool(DicPartner.HasField('Партнер')) then
+        Result := GetPartName(DicPartner.Партнер, Style);
+      if Result <> '' then
+        exit;
+      if VarAsBool(DicPartner.HasField('ОПФ')) and VarAsBool(DicPartner.ОПФ.IsFocused) and
+        (VarAsStr(DicPartner.ОПФ.Value) <> '') then
+        OPF := ' ' + DicPartner.ОПФ.Value
+      else
+        OPF := '';
+      if VarAsBool(DicPartner.HasField('ИмяОтчество')) and (VarAsStr(DicPartner.ИмяОтчество) <> '') then
+        IO := ' ' + DicPartner.ИмяОтчество
+      else
+        IO := '';
+      if (Style and 1 = 0) then
+        Result := Result + OPF;
+      if (Style and 2 <> 0) then
+        Result := Result + IO;
+      if DicPartner.NameField <> '' then
+        Result := Result + ' ' + DicPartner.NameField;
+      if (Style and 2 = 0) then
+        Result := Result + IO;
+      if (Style and 1 <> 0) then
+        Result := Result + OPF;
+      if (Style and 4 = 0) then
+        Result := StrTrim(Result);
+    end;
+end;
+
+function GetShortPartName(DicPartner : ISDictionary) : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  if not IsObjFocused(DicPartner) then
+    exit;
+  if VarAsBool(DicPartner.HasField('Партнер')) then
+    Result := GetShortPartName(DicPartner.Партнер);
+  if Result <> '' then
+    exit;
+  if DicPartner.NameField <> '' then
+    Result := DicPartner.NameField;
+  if VarAsBool(DicPartner.HasField('ИмяОтчество')) then
+    if (VarAsStr(DicPartner.ИмяОтчество) <> '') then
+      for i := 1 to WordCount(DicPartner.ИмяОтчество) do
+        Result := Result + ' ' + StrCopy(ExtractWord(i, DicPartner.ИмяОтчество), 1, 1) + '.';
+end;
+
+end.

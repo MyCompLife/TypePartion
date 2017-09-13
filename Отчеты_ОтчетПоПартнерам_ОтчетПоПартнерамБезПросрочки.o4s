@@ -1,0 +1,432 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, ConstNames;
+
+implementation
+
+var
+ GoodsTbl, PDocsTbl, PrintPartner, PDocsTypeTbl, PartTbl,PGoodsTbl, Partner : ISValueTable;
+ UroPart, ManPart : ISDictionary;
+ AccsPart : ISAccs;
+ DocsTbl, DocsTypeTbl : ISValueTable;
+ Партнер, Валюта : Variant;
+ DateFrom, DateTo, Date : DateTime;//DateFrom1, DateTo1,
+ ShowUroPart, ShowManPart, ShowEmplPart, ShowAccPart, ShowBankPart, ShowZero, HasDet :Boolean;
+ OnePartnerV, OneCurrPartner : Variant;
+ ADR,TLF,OneGood, Regions: ISDictionary;
+ OneDoc: ISDocuments;
+
+procedure CreateSrvObjects; server;
+begin
+ AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+ UroPart := CreateObject('Справочники.ЮрПартнеры');
+ ManPart := CreateObject('Справочники.ФизЛица');
+end;
+
+procedure CreatePartTbl(Doc:ISProcessing; var Accept : boolean);
+var
+ SZ, SU, SM, SE, SA, SB, Res : integer;
+ Count, Total : integer; 
+ tmpTbl: ISValueTable;
+begin
+ AccsPart.ClearFieldBuffers();
+ DateTo := RoundDate(DateTo, rdDay, true);  
+ AccsPart.ClearFieldFilters;
+// AccsPart.NotIncludeNullMotionInRest := DateFrom;
+ AccsPart.AppendRestToValueTable(DateFrom,'Партнер;СумОбщВал;СумОбщВал=СумНач;СумПрихВал;СумРасхВал;Валюта', PartTbl);
+ AccsPart.AppendRestToValueTable(DateTo,'Партнер;СумОбщВал;СумОбщВал=СумКон;СумПрихВал;СумРасхВал;Валюта', PartTbl);
+ PartTbl.GroupBy('Партнер;Валюта','СумОбщВал;СумНач;СумКон;СумПрихВал;СумРасхВал');
+ 
+ PartTbl.DoGetLinks('Регион=Партнер.Регион');
+ 
+ tmpTbl := CreateObject('ValueTable'); 
+ PartTbl.CopyColumnsTo(tmpTbl);
+ tmpTbl.Open;
+ 
+ if not IsNil(Regions) then
+   begin
+     PartTbl.SortBy('Регион');
+     PartTbl.SetRange(Regions,Regions);
+     PartTbl.Select;
+     PartTbl.AppendTo('',tmpTbl);
+     PartTbl.Clear;
+     tmpTbl.AppendTo('',PartTbl);
+   end;
+
+
+ PartTbl.SortBy('СумОбщВал');
+
+ Count := 1;
+ Total := PartTbl.LineCount();  
+ if not ShowUroPart then
+   begin
+     PartTbl.SelectFirst();
+     While not PartTbl.EOF() do begin
+       if VarAsBool (PartTbl.Партнер.IsFocused) and (PartTbl.Партнер.GetSign = 'ЮрПартнеры') then PartTbl.Delete() else if not PartTbl.Selectnext() then break;
+       // отправка сообщения клиенту
+       if Count mod 10 = 0 then begin
+         Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+         if Doc.Terminated then break;
+       end;
+       inc(Count);
+      end;
+   end;
+ if not ShowManPart then
+   begin
+     PartTbl.SelectFirst();
+     While not PartTbl.EOF() do begin
+       if VarAsBool (PartTbl.Партнер.IsFocused) and (PartTbl.Партнер.GetSign = 'ФизЛица') then PartTbl.Delete() else if not PartTbl.Selectnext() then break;
+       // отправка сообщения клиенту
+       if Count mod 10 = 0 then begin
+         Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+         if Doc.Terminated then break;
+       end;
+       inc(Count);
+      end;
+   end;
+ if not ShowEmplPart then
+   begin
+     PartTbl.SelectFirst();
+     While not PartTbl.EOF() do begin
+       if VarAsBool (PartTbl.Партнер.IsFocused) and (PartTbl.Партнер.GetSign = 'Служащие') then PartTbl.Delete() else if not PartTbl.Selectnext() then break;
+       // отправка сообщения клиенту
+       if Count mod 10 = 0 then begin
+         Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+         if Doc.Terminated then break;
+       end;
+       inc(Count);
+      end;
+   end;
+ if not ShowAccPart then
+   begin
+     PartTbl.SelectFirst();
+     While not PartTbl.EOF() do begin
+       if VarAsBool (PartTbl.Партнер.IsFocused) and (PartTbl.Партнер.GetSign = 'РасчСчета') then PartTbl.Delete() else if not PartTbl.Selectnext() then break;
+       // отправка сообщения клиенту
+       if Count mod 10 = 0 then begin
+         Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+         if Doc.Terminated then break;
+       end;
+       inc(Count);
+      end;
+   end;
+ if not ShowBankPart then
+   begin
+     PartTbl.SelectFirst();
+     While not PartTbl.EOF() do begin
+       if VarAsBool (PartTbl.Партнер.IsFocused) and (PartTbl.Партнер.GetSign = 'Банки') then PartTbl.Delete() else if not PartTbl.Selectnext() then break;
+       // отправка сообщения клиенту
+       if Count mod 10 = 0 then begin
+         Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+         if Doc.Terminated then break;
+       end;
+       inc(Count);
+      end;
+   end;
+ Accept := True;//not Doc.Terminated;
+end;
+
+procedure GetDocMotions(Doc:ISProcessing; var Accept : boolean); server;
+var
+ i : double;
+ SumAccum : decimal;
+ Count, Total : integer;
+begin
+ if (not IsNil(Партнер)) and VarAsBool(Партнер.IsFocused) then begin
+   AccsPart.ClearFieldBuffers();
+   AccsPart.ClearFieldFilters();
+   DocsTbl.Clear();
+   DateFrom := RoundDate(DateFrom, rdDay, false);
+   DateTo := RoundDate(DateTo, rdDay, true);
+  // i := AccsPart.FindDimIDDirect(Партнер);
+   AccsPart.SetFieldFilter('Партнер',Партнер);
+   if VarAsBool(Валюта.IsFocused) then
+     AccsPart.SetFieldFilter('Валюта',Валюта);
+   AccsPart.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+    'Document;Date;Валюта;СумОбщВал;MotionSign', -1, DocsTbl);
+   DocsTbl.DoCalculation('СумОбщВал','MotionSign*СумОбщВал');
+   DocsTbl.GroupBy('Document;Валюта;Date', 'СумОбщВал');
+   DocsTbl.SortBy('Date;Document');
+
+   AccsPart.CalcRestByDimID(DateFrom, i);//   AccsPart.CalcRestByDimID(DateFrom1, i);
+   SumAccum := AccsPart.СумОбщВал;
+
+   Count := 1;
+   Total := DocsTbl.LineCount();
+   DocsTbl.Select();
+   while DocsTbl.SelectNext() do begin
+     DocsTbl.Edit();
+     DocsTbl.СумНакоп := SumAccum;
+     SumAccum := SumAccum + DocsTbl.СумОбщВал;
+     DocsTbl.Post();
+     // отправка сообщения клиенту
+     if Count mod 10 = 0 then begin
+       Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+       if Doc.Terminated then break;
+     end;
+     inc(Count);
+   end;
+   DocsTbl.DoGetMeanNames('Document', 'DNames');
+ end;
+ DocsTypeTbl.Clear();
+ DocsTbl.AppendTo('Document;Date;Валюта;СумОбщВал;СумНакоп;DNames', DocsTypeTbl);
+ DocsTypeTbl.GroupBy('DNames;Валюта','СумОбщВал;СумНакоп');
+ DocsTypeTbl.SortBy('DNames');
+ Accept := True;//not Doc.Terminated;
+end;
+
+procedure GetDocsTypeVars(var Balans : decimal); server;
+begin
+ Balans := DocsTypeTbl.Total('СумОбщВал');
+end;
+
+procedure GetPartVars(var BalansPartBeg,BalansPartEnd  : decimal); server;
+begin
+ BalansPartBeg := PartTbl.Total('СумНач');
+ BalansPartEnd := PartTbl.Total('СумКон');
+end;
+
+function CreatePartTblEP(PartTbls : ISValueTable;
+                         ShowZeros, ShowUroParts, ShowManParts, ShowEmplParts, ShowAccParts, ShowBankParts : boolean; DateFroms, DateTos : DateTime; RegionsS: Variant) : Variant; server;
+begin
+ PartTbl := PartTbls;
+ ShowZero := ShowZeros;
+ ShowUroPart := ShowUroParts;
+ ShowManPart := ShowManParts;
+ ShowEmplPart := ShowEmplParts;
+ ShowAccPart := ShowAccParts;
+ ShowBankPart := ShowBankParts;
+ DateFrom := DateFroms;
+ DateTo := DateTos;
+ Regions := RegionsS;
+ Result := EntryPoint(CreatePartTbl);
+end;
+
+function GetDocMotionsEP(DocsTbls, DocsTypeTbls : ISValueTable;
+                        Партнерs : Variant; Валютаs : Variant; DateFroms, DateTos : DateTime) : Variant; server;
+begin
+ DocsTbl := DocsTbls;
+ DocsTypeTbl := DocsTypeTbls;
+ Партнер := Партнерs;
+ Валюта := Валютаs;
+ DateFrom := DateFroms;
+ DateTo := DateTos;
+ Result := EntryPoint(GetDocMotions);
+end;
+
+procedure LoadPrintTable(Doc:ISProcessing; var Accept : boolean);
+var
+ PartList:ISValueList;
+ Tmp:ISValueTable;
+ PlusSum,PrevSum:Decimal;    
+ i : integer;
+begin
+  if IsObject(OnePartnerV) and VarAsBool(OnePartnerV.IsFocused) then begin
+   PartTbl.SortBy('Партнер;Валюта');
+   PartTbl.SetRange(ArrayOf(OnePartnerV,OneCurrPartner),ArrayOf(OnePartnerV,OneCurrPartner));
+  end;
+ PartTbl.AppendTo('Партнер;Валюта;СумОбщВал;СумНач;СумКон;СумРасхВал;СумПрихВал',PrintPartner);
+ PartTbl.CancelRange;
+ PrintPartner.Select();
+ Doc.NotifyClient(Trans('Просмотр партнеров'), 1, 4);
+ while PrintPartner.SelectNext() do
+   if VarAsBool(PrintPartner.Партнер.IsFocused) then begin
+     PrintPartner.Edit();
+     if PrintPartner.Партнер.GetSign = 'РасчСчета' then
+       PrintPartner.НазвПартнер := PrintPartner.Партнер.НомерСчета
+     else
+       PrintPartner.НазвПартнер := PrintPartner.Партнер.ПолноеНазвание;
+     PrintPartner.Post();
+   end;
+ PartList:=CreateObject('СписокЗначений');
+ Tmp := CreateObject('ТаблицаЗначений');
+ Tmp.AddColumn('Партнер', lftLink,0);
+ Tmp.AddColumn('Валюта', lftLink,0);
+ Tmp.AddColumn('СумОбщВал', lftFFt,4);
+ Tmp.AddColumn('СумНач', lftFFt,4);
+ Tmp.AddColumn('СумКон', lftFFt,4);
+ Tmp.AddColumn('DocType', lftString, 40);
+ Tmp.Open();
+ PrintPartner.GroupToList('Партнер',PartList);
+ AccsPart.ClearFieldFilters();
+ PDocsTbl.Clear();
+
+  if IsObject(OnePartnerV) and VarAsBool(OnePartnerV.IsFocused) then 
+    begin
+      AccsPart.SetFieldFilter('Партнер',OnePartnerV);
+      AccsPart.SetFieldFilter('Валюта',OneCurrPartner)
+    end
+  else
+   AccsPart.SetFieldFilter('Партнер',PartList);
+ Doc.NotifyClient(Trans('Просмотр движения за период'), 2, 4);
+ AccsPart.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+  'Партнер;Document;Date;Валюта;СумОбщВал;СумОбщВал=СумНач;СумОбщВал=СумКон;MotionSign', -1, PDocsTbl); //i, DocsTbl);
+ PDocsTbl.DoCalculation('СумОбщВал','MotionSign*СумОбщВал');
+ PDocsTbl.DoCalculation('MotionSign','0');
+ PDocsTbl.GroupBy('Партнер;Валюта;Document;Date', 'СумОбщВал;СумНач;СумКон');
+ PDocsTbl.SortBy('Партнер;Document;Date');
+ PDocsTbl.Select();
+ while PDocsTbl.SelectNext() do
+   if VarAsBool(PDocsTbl.Document.IsFocused) then begin
+     PDocsTbl.Edit();
+     PDocsTbl.DocType:=PDocsTbl.Document.GetName();
+     PDocsTbl.НомерДокумента:=PDocsTbl.Document.НомерДокумента;
+     PDocsTbl.Post();
+   end;
+// PDocsTbl.GroupBy('Партнер;DocType;MotionSign','СумОбщВал');
+ Doc.NotifyClient(Trans('Просмотр документов'), 3, 4);
+ PDocsTbl.SortBy('Партнер;Date');
+ if HasDet then begin
+     PDocsTbl.Select();
+     while PDocsTbl.SelectNext() do begin     
+          i := 1;
+          OneDoc:=PDocsTbl.Document;
+          if OneDoc.HasTableField('Товар') and (OneDoc.GetSign <> 'НовАвансовыйОтчет') then begin
+          OneDoc.SelectLines();
+          while OneDoc.SelectNextLine() do begin
+            PGoodsTbl.Append();
+            PGoodsTbl.НомСтроки := i;
+            PGoodsTbl.AssignFields('Количество;Цена',OneDoc);
+            PGoodsTbl.Сумма := PGoodsTbl.Количество * PGoodsTbl.Цена;
+            OneGood:=OneDoc.Товар;
+            if VarAsBool(OneGood.IsFocused) then begin
+              PGoodsTbl.Код := OneGood.Код;
+              PGoodsTbl.НазвТовара := OneGood.НазвТовара;
+              if VarAsBool(OneGood.ЕдИзм.IsFocused) then
+                PGoodsTbl.ЕдИзм := OneGood.ЕдИзм.Value;
+            end;
+            PGoodsTbl.Document := OneDoc;
+            PGoodsTbl.Партнер := OneDoc.Партнер;
+            PGoodsTbl.Post();   
+            inc(i);
+          end;
+     end;
+   end;
+ end;
+ AccsPart.ClearFieldFilters();
+ PrintPartner.Select();
+ while PrintPartner.SelectNext() do
+   if VarAsBool(PrintPartner.Партнер.IsFocused) then begin
+     PDocsTbl.SetRange(PrintPartner.Партнер,PrintPartner.Партнер);
+     PlusSum:=0;
+     PrevSum:=0;
+     AccsPart.CalcGroupRestDirect(DateFrom, PrintPartner.Партнер);//     AccsPart.CalcGroupRestDirect(DateFrom1, PrintPartner.Партнер);
+     PrevSum:=AccsPart.СумОбщВал;
+     PDocsTbl.Select();
+     while PDocsTbl.SelectNext() do begin
+       OneDoc := PDocsTbl.Document;
+       if PDocsTbl.DocType <> '' then
+         begin
+          Tmp.Append();
+          Tmp.AssignFields('Партнер;DocType;Валюта;СумОбщВал;СумНач;СумКон',PDocsTbl);
+          Tmp.Post();
+         end;
+       PDocsTbl.Edit();
+       PDocsTbl.СумНакоп:=PrevSum;
+       PrevSum:=PrevSum+PDocsTbl.СумОбщВал;
+       PDocsTbl.Post();
+     end;
+     Tmp.GroupBy('Партнер;Валюта;DocType','СумОбщВал;СумНач;СумКон');
+     Tmp.SortBy('Партнер;DocType');
+     Tmp.AppendTo('Партнер;Валюта;DocType;СумОбщВал;СумНач;СумКон',PDocsTypeTbl);
+     PDocsTypeTbl.GroupBy('Партнер;Валюта;DocType;СумОбщВал', '');
+     Tmp.Clear();
+     if PlusSum<>0 then begin
+       PDocsTbl.Append();
+       PDocsTbl.Партнер:=PrintPartner.Партнер;
+       PDocsTbl.Валюта:=PrintPartner.Валюта;
+       PDocsTbl.СумОбщВал:=PlusSum;
+       PDocsTbl.MotionSign:=2;
+       PDocsTbl.DocType:=Trans('Всего');
+       PDocsTbl.СумНакоп:=PrevSum;
+//       PDocsTbl.СумОбщМин := ;
+       ///
+       PDocsTbl.Post();
+   end;
+  end;
+//**************
+// DocsTbl.DoCalculation('СумОбщВал','MotionSign*СумОбщВал')
+end;
+
+
+function GetLoadPrintTableEP(PrintPartnerS,PDocsTblS,PDocsTypeTblS,PGoodsTblS:ISValueTable;HasDetS: boolean; OnePartnerS, OneCurrPartnerS: Variant) : Variant; server;
+begin
+ HasDet:=HasDetS;
+ PrintPartner:=PrintPartnerS;
+ PDocsTbl:=PDocsTblS;
+ PDocsTypeTbl:=PDocsTypeTblS;
+ PGoodsTbl:=PGoodsTblS;
+ OnePartnerV:=OnePartnerS;
+ OneCurrPartner:=OneCurrPartnerS;
+ Result := EntryPoint(LoadPrintTable);
+end;
+
+procedure LoadPartAttr(AttrPartTbl:ISValueTable); server;
+Var
+  OnePart:ISDictionary;
+begin
+ if IsNil(ADR) then begin
+   ADR:=CreateObject('Справочники.Адреса');
+   TLF:=CreateObject('Справочники.Телефоны');
+ end;
+ if AttrPartTbl.LineCount()=0 then begin
+   if not IsNil(PrintPartner) then
+     PrintPartner.AppendTo('Партнер',AttrPartTbl)
+ end;
+ AttrPartTbl.Select();
+ While AttrPartTbl.SelectNext() do begin
+   OnePart:=AttrPartTbl.Партнер;
+   if OnePart.IsFocused then begin
+     AttrPartTbl.Edit();
+     AttrPartTbl.Название:=OnePart.ПолноеНазвание;//GetPartName(OnePart,1);
+     AttrPartTbl.Адрес := GetActiv(ADR,'Адрес',OnePart);
+     AttrPartTbl.Телефон := GetActiv(TLF,'Номер',OnePart);
+     AttrPartTbl.Post();
+   end;
+ end;
+end;   
+
+procedure FillGoodsTbl(Doc : ISReport; var Accept : Boolean);
+var
+  V : Variant;
+  Count, Total : Integer;
+begin
+  Count := 1;
+  Total := GoodsTbl.LineCount();
+
+  GoodsTbl.Select();
+  while GoodsTbl.SelectNext() do
+    begin
+      GoodsTbl.Edit();
+      OneGood := GoodsTbl.Товар;
+      if VarAsBool(OneGood.IsFocused) then
+        begin
+          GoodsTbl.Код := OneGood.Код;
+          GoodsTbl.ЕдИзм := OneGood.ЕдИзм;
+        end;
+      GoodsTbl.СуммаСтроки := GoodsTbl.Количество * GoodsTbl.Цена;
+      GoodsTbl.НДССтроки := GetTaxFromBrutto(GoodsTbl.СуммаСтроки, GoodsTbl.СтавкаНДС);
+      GoodsTbl.СуммаСтрокиБезНДС := GoodsTbl.СуммаСтроки - GoodsTbl.НДССтроки;
+      GoodsTbl.СуммаВВалютеСНДС := GoodsTbl.ЦенаВВалюте * GoodsTbl.Количество;
+      GoodsTbl.Post();
+      // отправка сообщения клиенту
+      if (Total mod Count) = 10 then
+        begin
+          Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+          if Doc.Terminated then
+            break;
+        end;
+      inc(Count);
+    end;
+  Accept := True; //not Doc.Terminated;
+end;
+
+
+function FillGoodsTblEP(GoodsTbls : ISValueTable) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;
+  Result := EntryPoint(FillGoodsTbl);
+end;
+
+end.

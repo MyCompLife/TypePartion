@@ -1,0 +1,356 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, Расчеты, РаботаСОбъектами, 
+  РаботаСДокументамиВЖурналах, Пользователи, ДополнительныйФункционал, РаботаСДокументамиCL;
+
+implementation
+
+var
+  ChildPaysOut, MasterData : ICJournal;
+  Constants :IC4VPAConst;
+  Doc : ICDocuments;
+  Options : ICOptions;
+  PrintList : ICValueList;
+  Users: ICDictionary;
+  PaysTbl: ICValueTable;
+  PreView: Boolean;
+  PrintForm: String;
+  PrintFormsTbl: ICValueTable;
+
+const
+  VisibleHappy = 'VisibleHappy';
+
+procedure GetTotalSums;
+var
+  V : Variant;
+begin
+  MasterData.SrvAssignClientSelectParams;
+  lPay.Caption := FormatFloat('0.00', 0);
+  lSum.Caption := FormatFloat('0.00', 0);
+  V := server.GetTotalSumsSrv(MasterData.SrvMean);
+  if cbSoldSum.Checked then
+    lSum.Caption := FormatFloat('0.00', V);
+  if cbPaySum.Checked then
+    begin
+      V := server.GetTotalPaySrv(MasterData.SrvMean);
+      lPay.Caption := FormatFloat('0.00', V);
+    end
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Options := GetOptions;
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+  ChildPaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  ChildPaysOut.UseMaster(MasterData);
+
+  PaysTbl := CreateObject('ValueTable');
+  PaysTbl.AddColumn('Документ',vtcLink,0);
+  PaysTbl.AddColumn('Дата',vtcDateTime,0);
+  PaysTbl.AddColumn('СуммаДок',vtcFFT,2);
+  PaysTbl.AddColumn('Сумма',vtcFFT,2);
+  PaysTbl.AddColumn('Calc',vtcInteger,0);
+  PaysTbl.Open;
+  PaysTbl.SetColumnFormat('СуммаДок','0.00');
+  PaysTbl.SetColumnFormat('Сумма','0.00');
+  server.InitSrvDate;
+end;
+
+procedure TabSet1_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  MasterData.SetDocStateRange(NewTab-1);
+  MasterData.Select;
+end;
+
+
+procedure Form_Open(Sender: TObject);
+var
+  Nobody : TO4Toolbar;
+  i : integer;
+  ItemMenu : TO4MenuItem;
+begin
+  Constants := GetConstants;
+  miDocMove.Visible := GetUDASet('viewdocmove');   
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  //MakeInterface(tbr, Nobody, dbGridData);
+  for i := 0 to MasterData.StateCount - 1 do
+    TabSet1.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.CancelRangeByField;
+  GetPrintersList(PrintList, edPrinters, MasterData.GetSign);
+  MakeUserInterface(MasterData.GetSign, pPrintPrm, PreView, PrintFormsTbl);
+  if not isNil(PrintFormsTbl) then
+    begin
+      btnPrint.Style := tbsDropDown;
+      btnPrint.DropdownMenu := pmPrintForms;
+//      if not(MasterData.IsFocused) or (PrintFormsTbl.LineCount = 0) then
+      if PrintFormsTbl.LineCount = 0 then
+        btnPrint.Enabled := false; //если не указана печ.форма или не спозиционирован документ, тогда блокируется кнопка печати
+      PrintFormsTbl.DoNumbering('НомСтроки',1,1);
+      PrintFormsTbl.Select;
+      while PrintFormsTbl.SelectNext do
+        begin
+          ItemMenu := form.FindComponent('miPrinForm' + VarAsStr(PrintFormsTbl.НомСтроки)) as TO4MenuItem;
+          ItemMenu.Caption := PrintFormsTbl.ПечФорма;
+          ItemMenu.Visible := true;
+          ItemMenu.Tag := PrintFormsTbl.НомСтроки;
+          if PrintFormsTbl.НомСтроки = 1 then
+            ItemMenu.Default := true;
+        end;
+    end;
+  MasterData.DefineSelectParams(True);
+  TabSet1.TabIndex := MasterData.GetDocStateRange+1;
+  GetTotalSums;
+end;
+
+procedure btnRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+  GetTotalSums;
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  GetTotalSums;
+end;
+
+procedure ToolButton3_Click(Sender: TObject);
+var V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ОбработкаОбъектов');
+  V.OpenForm('Главная');
+end;
+
+procedure cbPaySum_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+  GetTotalSums;
+end;
+
+{$D-}
+procedure dbGridData_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if (MasterData.ОплаченоВал > 0) and (MasterData.ОплаченоВал < MasterData.СуммаВал) then
+        Index1 := 8
+      else
+        if (MasterData.ОплаченоВал > 0) and (MasterData.ОплаченоВал > MasterData.СуммаВал) then
+          Index1 := 7
+        else
+          if (MasterData.ОплаченоВал > 0) and (MasterData.ОплаченоВал = MasterData.СуммаВал) then
+            Index1 := 6;
+      if MasterData.GetDocState > 0 then
+        begin
+          if MasterData.GetDocState = 1 then
+            Index2 := 22
+          else
+            Index2 := 10;
+        end
+      else
+        Index2 := 9;
+    end;
+end;
+
+procedure dbGridData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if MasterData.IsFocused and (MasterData.Импорт > 0) then
+    if Highlight then
+      DrawFont.Color := clWhite
+    else
+      DrawFont.Color := clBlue;
+end;
+{$D+}
+
+
+procedure miPayCash_Click(Sender: TObject);
+var
+  PayDoc: ICDocuments;
+  OptUser : Variant;
+begin
+  PayDoc := CreateObject('Документы.ПриходВКассу');
+  PayDoc.Params['AddPay'] := true;
+  PayDoc.Params['OwnerDoc'] := MasterData.GetDoc;
+  PayDoc.Params['PaySum'] := MasterData.ДолжныВал;
+  PayDoc.EditInForm('ПриходВКассуПоЧеку',null);
+  if PayDoc.HasParam('mrOk') then
+  begin
+    try
+      OptUser := Options.GetServerPrm(FixAck);
+      Options.SetServerPrm(FixAck, false);
+      PayDoc.StateUp;
+    finally
+      Options.SetServerPrm(FixAck, OptUser);
+    end
+  end;
+  MasterData.Refresh;
+  ChildPaysOut.Refresh;
+end;
+
+procedure miPayBank_Click(Sender: TObject);
+var
+  PayDoc: ICDocuments;
+  OptUser : Variant;
+begin
+  PayDoc := CreateObject('Документы.ПриходНаРасчСчет');
+  PayDoc.Params['AddPay'] := true;
+  PayDoc.Params['OwnerDoc'] := MasterData.GetDoc;
+  PayDoc.Params['PaySum'] := MasterData.ДолжныВал;
+  PayDoc.EditInForm('ПриходНаРасчСчетПоЧеку',null);
+  if PayDoc.HasParam('mrOk') then
+  begin
+    try
+      OptUser := Options.GetServerPrm(FixAck);
+      Options.SetServerPrm(FixAck, false);
+      PayDoc.StateUp;
+    finally
+      Options.SetServerPrm(FixAck, OptUser);
+    end
+  end;
+  MasterData.Refresh;
+  ChildPaysOut.Refresh;
+end;
+
+procedure miCopyInNaklIn_Click(Sender: TObject);
+Var
+  DocNew: ICDocuments;
+begin
+  DocNew := CreateObject('Документы.НакладнаяПрихода');
+  DocNew.Params['CheckDoc'] := MasterData.GetDoc;
+  DocNew.EditInForm('НакладнаяПрихода', 0);
+end;
+
+procedure btnPrint_Click(Sender: TObject);
+var
+  PrinterName: String;
+  ObjTag : Integer;
+begin
+  if Sender.ClassName = 'TO4ToolButton' then
+    ObjTag := (Sender as TO4ToolButton).Tag;
+  if Sender.ClassName = 'TO4MenuItem' then
+    ObjTag := (Sender as TO4MenuItem).Tag;
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+//  if MasterData.GetDocState = 0 then
+//    PrintOnUserDevice('Обработки.ПечатьЧека', 'ЧекКол58мм', PrinterName, MasterData.GetDoc, PreView)
+//  else
+    begin
+      PrintFormsTbl.SortBy('НомСтроки');
+      if PrintFormsTbl.Find(ObjTag) then
+        PrintOnUserDevice('Обработки.ПечатьЧека', PrintFormsTbl.ПечФорма, PrinterName, MasterData.GetDoc, PreView);
+    end;
+end;
+
+procedure MenuItem13_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintOnUserDevice('Обработки.ПечУнивЖурнала', 'ПечУнивЖурналаЧеков', PrinterName, MasterData, PreView)
+end;
+
+procedure miPrintBarCode_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintOnUserDevice('Обработки.ПечатьЧека', 'ПечатьШтрихКодовДляКлиента', PrinterName, MasterData, PreView)
+end;
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  SaveUserActivePrinter(PrinterName, MasterData.GetSign);
+end;
+
+procedure miFindDoc_Click(Sender: TObject);
+begin
+  form.ActiveControl := eFindDoc
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel2:TO4Panel
+Tbr:TO4ToolBar
+btnAdd:TO4ToolButton
+btnEdit:TO4ToolButton
+btnStateUp:TO4ToolButton
+btnStateDown:TO4ToolButton
+btnDel:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbSelect:TO4ToolButton
+btnPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+btnRefresh:TO4ToolButton
+tbParams:TO4ToolButton
+Panel10:TO4Panel
+Panel9:TO4Panel
+pPrintPrm:TO4Panel
+Label4:TO4Label
+edPrinters:TO4Edit
+eFindDoc:TO4Edit
+btSaveActivPrinter:TO4Button
+Panel1:TO4Panel
+lSum:TO4Label
+lPay:TO4Label
+cbPaySum:TO4CheckBox
+cbSoldSum:TO4CheckBox
+TabSet1:TO4TabSet
+dbGridData:TO4DBGrid
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+MenuItem4:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem15:TO4MenuItem
+MenuItem7:TO4MenuItem
+MenuItem13:TO4MenuItem
+MenuItem8:TO4MenuItem
+miRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+TVSPays:TO4TableValueSource
+pmPrintForms:TO4PopupMenu
+miPrinForm1:TO4MenuItem
+miPrinForm2:TO4MenuItem
+miPrinForm3:TO4MenuItem
+miPrinForm4:TO4MenuItem
+miPrinForm5:TO4MenuItem
+miPrinForm6:TO4MenuItem
+miPrinForm7:TO4MenuItem
+miPrinForm8:TO4MenuItem
+miPrinForm9:TO4MenuItem
+miPrinForm10:TO4MenuItem
+pmAddDoc:TO4PopupMenu
+miCheck:TO4MenuItem
+miLoadFromFtpFile:TO4MenuItem
+miInfoChange:TO4MenuItem

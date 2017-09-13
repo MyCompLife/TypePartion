@@ -1,0 +1,71 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+const
+  errThisCommentAlreadyExists = 'Данный элемент коллекции уже существует';
+
+var
+  ColCurrent : ICCollection;
+  TblCollections : ICValueTable;
+  ValueSign : string;
+  V : ICProcessing;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+  ColCurrent := Params[0];
+  TblCollections := Params[1];
+  if ArrayHigh(Params) = 2 then
+    begin // изменение
+      ValueSign := VarAsStr(TblCollections.Название);
+      edComment.Text := VarAsStr(TblCollections.Комментарий);
+    end
+  else // добавление
+    ValueSign := '';
+  lbTitle.Caption := ' ' + ColCurrent.GetName;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  if ColCurrent.FindByComment(StrTrim(edComment.Text), False) and (ColCurrent.ValueSign <> ValueSign) then
+    begin
+      Form.ModalResult := mrNone;
+      raise(Trans(errThisCommentAlreadyExists));
+    end;
+  if ValueSign = '' then // должно сгенерировать новый
+    GenerateNewCollElem(ColCurrent, StrTrim(edComment.Text))
+  else
+    begin // изменение
+      ColCurrent := CreateObject('Коллекции.' + ColCurrent.GetSign);
+      ColCurrent.Change(ValueSign, StrTrim(edComment.Text));
+      ColCurrent.ApplyUpdates;
+    end;
+  if ColCurrent.FindByComment(StrTrim(edComment.Text), False) then
+    begin
+      if ValueSign = '' then
+        TblCollections.Append
+      else
+        TblCollections.Edit;
+      TblCollections.Название := ColCurrent.ValueSign;
+      TblCollections.Комментарий := ColCurrent.Value;
+      TblCollections.Post;
+    end;
+  V.Params['FindByComment'] := StrTrim(edComment.Text);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbTitle:TO4Label
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+pnMain:TO4Panel
+Label2:TO4Label
+edComment:TO4Edit
+pnBottom:TO4Panel
+pnButtons:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button

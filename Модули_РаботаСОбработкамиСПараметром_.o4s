@@ -1,0 +1,69 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений;
+
+const
+  prmnPrcSign = 'PrcSign'; // GetSign для обработки
+  errAtProcInvokingErrorRaised = 'При выполнении функции "%s"%sвозникла ошибка "%s"'; // второй параметр = #13#10
+  infProcInvokedSuccesfully = 'Функция "%s" выполнена без ошибок';
+  errFunctionNotSupported = 'Для данной обработки "%s"%sпереданная функция "%s" не поддерживается'; // поскольку GetSign для обработки пока не доступен, вместо первого параметра используется prmnPrcSign; второй параметр = #13#10
+  errParametrizedProcNotLocked = 'Параметризированная обработка не подключена';
+
+function InvokeParamProcFunction(PrcParametrized : Variant; ProcName : string;
+  var LogText : string; InvokeException : Boolean = True;
+  InParams, NilProcError : Variant = '') : Variant;
+
+implementation
+
+// ф-ция по работе с параметризированной обработкой, в которой ведется log-система и учет ошибок
+// функция ExecProc доп. интерфейса обязана возвращать массив со структурой:
+// ArrayOf(Результат (если вызывается функция), Название процедуры)
+
+function InvokeParamProcFunction(PrcParametrized : Variant; ProcName : string;
+  var LogText : string; InvokeException : Boolean = True;
+  InParams, NilProcError : Variant = '') : Variant; server;
+var
+  OutParam : Variant;
+  msgException : string;
+begin
+  if IsNil(PrcParametrized) then
+    begin
+      Result := Null;
+      if InvokeException then
+        begin
+          if VarAsStr(NilProcError) = '' then
+            msgException := errParametrizedProcNotLocked
+          else
+            msgException := NilProcError;
+          raise(Trans(msgException));
+        end;
+    end
+  else
+    begin
+      try
+        OutParam := Null;
+        PrcParametrized.ExecProc(Null, ProcName, InParams, OutParam);
+        if IsArray(OutParam) then
+          msgException := ''
+        else
+          msgException := GetTranslation(errFunctionNotSupported,
+            ArrayOf(PrcParametrized.Params[prmnPrcSign], #13#10, ProcName));
+      except
+        if IsArray(OutParam) then
+          ProcName := OutParam[1];
+        OutParam := Null;
+        msgException := GetTranslation(errAtProcInvokingErrorRaised, ArrayOf(ProcName, #13#10, ExceptMessage));
+      end;
+      if (msgException = '') then
+        msgException := GetTranslation(infProcInvokedSuccesfully, ArrayOf(OutParam[1]))
+      else
+        if InvokeException then
+          raise(VarAsStr(msgException));
+      Result := OutParam;
+      LogText := msgException;
+    end;
+end;
+
+end.

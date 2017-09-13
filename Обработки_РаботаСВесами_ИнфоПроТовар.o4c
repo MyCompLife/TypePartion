@@ -1,0 +1,83 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation    
+var
+  MasterProc : IcProcessing;
+  GoodDic : IcDictionary;
+  Interval : Integer;
+  IsQuest : Boolean;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+  GoodDic := CreateObject('Справочники.Товары');
+  GoodDic.Select;
+  GoodDic.Find(Params);
+  lbCode.Caption := VarAsStr(GoodDic.Код);
+  lbName.Caption := VarAsStr(GoodDic.НазвТовара);
+  lbPrice.Caption := DecToStr(GoodDic.Цена,2)+' Грн.';
+  Interval := 10;
+  IsQuest := false;
+  Timer.Enabled := True;
+end;
+
+procedure Timer_Timer(Sender: TObject);
+begin
+  lbQuestion.Visible := true;
+  Timer.Enabled := False;
+  tbOk.Caption := '  Да ('+IntToStr(Interval)+')';
+  IsQuest := True;
+  TimerQuestion.Enabled := True;
+end;
+
+procedure TimerQuestion_Timer(Sender: TObject);
+begin
+  if Interval>0 then
+    begin
+      dec(Interval);
+      tbOk.Caption := '  Да ('+IntToStr(Interval)+')';
+    end
+  else
+    begin
+      Form.ModalResult := mrOk;
+      Form.Close;
+    end;
+end;
+
+procedure tbOk_Click(Sender: TObject);
+begin
+  if IsQuest then
+    begin
+      TimerQuestion.Enabled := False;
+      IsQuest := false;
+      tbOk.Caption := '   Ок  ';
+      Interval := 10;
+      lbQuestion.Visible := False;
+      Timer.Enabled := True;
+    end
+  else
+    begin
+      Form.ModalResult := mrOk;
+      Form.Close;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbName:TO4Label
+zagl:TO4Panel
+Panel1:TO4Panel
+Panel2:TO4Panel
+tbrData:TO4ToolBar
+tbOk:TO4ToolButton
+lbCode:TO4Label
+Panel3:TO4Panel
+Panel4:TO4Panel
+Label3:TO4Label
+lbPrice:TO4Label
+lbQuestion:TO4Label
+Timer:TO4Timer
+TimerQuestion:TO4Timer

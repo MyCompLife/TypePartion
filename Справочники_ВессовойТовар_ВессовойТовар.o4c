@@ -1,0 +1,123 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+var
+  MasterData, DicMaster : ICDictionary;
+  ChangeLock : Boolean;
+
+function GetCode(Article : Integer): String;
+var
+  i : integer;
+  BarCode: String;
+begin
+  BarCode := IntToStr(Article);
+  i := 4;
+  while StrLength(BarCode) < i do
+    begin
+      BarCode := '0' + BarCode;
+    end;
+  Result := BarCode;
+end;
+
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+ DicMaster := MasterData._GetOwner;
+ DicMaster.SetSrvToClientPos;
+ MasterData.НомПозиции := Server.GetNextNumberForSort(DicMaster.SrvMean);
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if VarAsInt(MasterData.НомПозиции)=0 then
+    begin
+      DicMaster := MasterData._GetOwner;
+      DicMaster.SetSrvToClientPos;
+      MasterData.НомПозиции := Server.GetNextNumberForSort(DicMaster.SrvMean);
+    end;
+end;
+
+procedure miLoadFromFile_Click(Sender : TObject);
+begin
+  case (Sender as TO4MenuItem).tag of
+    0 :
+      if opDlg.Execute then
+        iLogoType.LoadFromFile(opDlg.FileName);
+    1 :
+      if spDlg.Execute then
+        iLogoType.SaveToFile(spDlg.FileName);
+    2 :
+      MasterData.Фото := Null;
+  end;
+end;
+
+procedure dbeName_Change(Sender: TObject);
+begin
+  pnName.Caption := eGood.Text;
+end;
+
+procedure Form_Open(Sender: TObject);
+Var
+  Ima : TPicture;
+  NewGraphic: TGraphic;
+begin
+  pnName.Caption := VarAsStr(MasterData.Название);
+  eGood.Text := VarAsStr(MasterData.Название);
+  pnName.Caption := eGood.Text;
+end;
+
+procedure eGood_ActionClear(Sender: TObject);
+begin
+  MasterData.Товар := Null;
+  MasterData.Название := '';
+  MasterData.Код := '';
+  eGood.Text := VarAsStr(MasterData.Название);
+  pnName.Caption := eGood.Text;
+
+end;
+
+procedure eGood_ActionExecute(Sender: TObject);
+Var
+  V : IcProcessing;
+begin
+  V := CreateObject('Обработки.РаботаСВесами');
+  if V.Execute('ВыборВесовогоТовара',Null)=mrOk then
+    begin
+      MasterData.Товар := V.Params['Good'];
+      V.Params['Good'] := Null;
+      MasterData.AssignFields('Название=НазвТовара;Код',MasterData.Товар);
+      eGood.Text := VarAsStr(MasterData.Название);
+      pnName.Caption := eGood.Text;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Label1:TO4Label
+Panel1:TO4Panel
+Panel2:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+Panel3:TO4Panel
+LinkImage1:TO4LinkImage
+pnGroup1:TO4Panel
+pnName:TO4Label
+iLogoType:TO4DBImage
+eGood:TO4Edit
+MDS:TO4DataSource
+opDlg:TO4OpenPictureDialog
+pmLogoType:TO4PopupMenu
+miLoadFromFile:TO4MenuItem
+miSaveToFile:TO4MenuItem
+miClear:TO4MenuItem
+spDlg:TO4SavePictureDialog
+DBEdit1:TO4DBEdit

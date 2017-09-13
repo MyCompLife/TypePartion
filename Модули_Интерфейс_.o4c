@@ -1,0 +1,109 @@
+interface
+
+uses 
+  System, DispIntf, ConstNames;
+
+procedure MakeInterface(tbr1, tbr2 : TO4ToolBar; Grid : TO4DBGrid);
+function SetDetailDict(Master : ICDictionary; Dict, OIFormName : string; Place : Variant) : ICDictionary; // ”становка в форму детализирующего справочника
+procedure SetReadOnlyForm(Ctrl : TWinControl); //блокировка редактировани€ зафиксированного документа
+
+implementation
+
+procedure AdjustToolBar(CliParams : ICOptions; tbr1, tbr2 : TO4ToolBar);
+begin
+  if not IsNil(tbr1) then
+    begin
+      tbr1.Flat := VarAsBool(CliParams.GetServerPrm(Flat));
+      tbr1.ShowCaptions := VarAsBool(CliParams.GetServerPrm(ShowCaptions));
+      tbr1.List := VarAsBool(CliParams.GetServerPrm(CaptionsList));
+      tbr1.Transparent := VarAsBool(CliParams.GetServerPrm(Transparent));
+      if not tbr1.Transparent then
+        begin
+          tbr1.EdgeInner := esRaised;
+          tbr1.EdgeOuter := esNone;
+          tbr1.EdgeBorders := Bits(ebLeft, ebTop, ebRight);
+        end
+      else
+        tbr1.EdgeBorders := 0;
+      //tbr1.AutoSize := tbr1.ShowCaptions or (not tbr1.Transparent);
+      if not IsNil(tbr2) then
+        begin
+          tbr2.Flat := tbr1.Flat;
+          tbr2.ShowCaptions := tbr1.ShowCaptions;
+          tbr2.List := tbr1.List;
+          tbr2.Transparent := tbr1.Transparent;
+          tbr2.EdgeBorders := tbr1.EdgeBorders;
+          tbr2.EdgeInner := tbr1.EdgeInner;
+          tbr2.EdgeOuter := tbr1.EdgeOuter;
+          //tbr2.AutoSize := tbr1.AutoSize;
+        end;
+    end;
+end;
+
+procedure SetGridEditable(CliParams : ICOptions; Grid : TO4DBGrid);
+begin
+  if VarAsBool(CliParams.GetServerPrm(GridReadOnly)) then
+    begin
+      Grid.Options := Grid.Options and not Bits(dgEditing, dgAlwaysShowEditor);
+      Grid.ReadOnly := True
+    end
+end;
+
+procedure MakeInterface(tbr1, tbr2 : TO4ToolBar; Grid : TO4DBGrid);
+var
+  CliParams : ICOptions;
+begin
+  CliParams := CreateObject('ќпции лиента');
+  AdjustToolBar(CliParams, tbr1, tbr2);
+  if not IsNil(Grid) then
+    SetGridEditable(CliParams, Grid);
+end;
+
+function SetDetailDict(Master : ICDictionary; Dict, OIFormName : string; Place : Variant) : ICDictionary;
+begin
+  Result := CreateObject('—правочники.' + Dict);
+  Result.UseMasterAndSelect(Master);
+  Result.OpenFormInplace(OIFormName, Place);
+end;
+
+procedure SetReadOnlyForm(Ctrl : TWinControl);
+var
+  i : Integer;
+  WC : TComponent;
+begin
+  if not IsNil(Ctrl) and (Ctrl is TWinControl) then
+    begin
+      for i := 0 to Ctrl.ComponentCount - 1 do
+        begin
+          WC := Ctrl.Components[i];
+          if WC is TO4Edit then
+            (WC as TO4Edit).Enabled := False;
+          if WC is TO4DBEdit then
+            (WC as TO4DBEdit).Enabled := False;
+          if WC is TO4Memo then
+            (WC as TO4Memo).Enabled := False;
+          if WC is TO4DBMemo then
+            (WC as TO4DBMemo).Enabled := False;
+          if WC is TO4DBGrid then
+            (WC as TO4DBGrid).ReadOnly := True;
+          if WC is TO4CheckBox then
+            (WC as TO4CheckBox).Enabled := False;
+          if WC is TO4RadioButton then
+            (WC as TO4RadioButton).Enabled := False;
+          //     if WC is TO4ToolBar then (WC as TO4ToolBar).Enabled := false;
+          if WC is TO4Button then
+            if (WC as TO4Button).ModalResult <> 2 then //mrcancel
+              (WC as TO4Button).Enabled := False;
+          if WC is TO4MenuItem then
+            (WC as TO4MenuItem).Enabled := False;
+          if WC is TO4CheckListBox then
+            (WC as TO4CheckListBox).Enabled := False;
+          if WC is TO4RadioGroup then
+            (WC as TO4RadioGroup).Enabled := False;
+          if WC is TO4GroupBox then
+            (WC as TO4GroupBox).Enabled := False;
+        end;
+    end
+end;
+
+end.

@@ -1,0 +1,753 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –абота—ѕеременными, –абота—ќбъектами;
+
+type
+  TInterfaceFormType = T_Enum;
+
+const
+  // стандартные типы форм
+  itMainForm = 0; // TInterfaceFormType
+  itSelectForm = 1; // TInterfaceFormType
+  itDropForm = 2; // TInterfaceFormType
+  itInPlaceForm = 3; // TInterfaceFormType
+  itInPlaceForMain = 4; // TInterfaceFormType
+  itCategoryMain = 5; // TInterfaceFormType
+  itCategoryDrop = 6; // TInterfaceFormType
+  itCategoryReport = 7; // TInterfaceFormType
+  //  параметр, что отвечает за тип интерфейса
+  prmInterfaceType = 'InterfaceType';
+  prmnSelectedMean = 'SelectedMean';
+  // название пол€ в табл. значений, что отвечает за сортировку
+  fnSorting = '—ортировка';
+  ptEnabled = 0;//TPropertyType
+  ptVisible = 1;//TPropertyType
+  ptTabVisible = 2;//TPropertyType
+  ptChecked = 3;//TPropertyType
+  ptShortCut = 4;//TPropertyType
+
+procedure RefreshEditsItemIndex(Owner : TComponent; EditsList : string);
+procedure SetPropertyForComponentList(TPropertyType : integer; Owner : TComponent;
+  AComponentList : string; Value : Variant);                            
+procedure SetEnabledForComponentList(Owner : TComponent; AComponentList : string;
+  Value : Boolean);//дл€ совместимости со старыми пон€ти€ми
+procedure CreateSelectedLinksTable(var TblSelectedLinks : ICValueTable;
+  LinkIDsList : string = ''; DefValuesList : Variant = '');
+function IsLinkSelected(TblSelectedLinks : ICValueTable; LinkID : string = '') : Boolean;
+procedure FindIDInSelectedLinkValues(TblSelectedLinks : ICValueTable; LinkID : string = '');
+function FillSelectedLinksValue(TblSelectedLinks : ICValueTable; Value : IObject;
+  FormName, LinkID : string = ''; DoFindLinkID : Boolean = False) : string;
+function ImitatedLinkSelection(ObjMeanForSelect : IObject; TblSelectedLinks : ICValueTable;
+  FormName, LinkID : string = ''; Params : Variant = '') : string;
+function ImitatedLinkSelectionWithChangeAnalys(var MeanChanged : Boolean;
+  ObjMeanForSelect : IObject; TblSelectedLinks : ICValueTable;
+  FormName, LinkID : string = ''; Params : Variant = '') : string;
+procedure SetReadOnlyForm(Form : To4CustomForm);
+procedure MakeStandartInterface(ObjSupporter : IObject; Form : To4CustomForm;
+  TbrList, GridsList, MenuItemsList : string = '');
+function OpenSubordinatedInterface(Master : IObject; ObjID, FormName : string;
+  cmpPlaceID : Variant) : IObject;
+function ChangeSortingAtMenuItems(Form : To4CustomForm; minList, minChanged : string;
+  minBefore : string = '') : Integer;
+procedure ShowErrorMessageForAttachedForm(msgExcept : string);
+function GetParentForm(Form : To4CustomForm) : To4CustomForm;
+procedure ReturnFocusToGridForWindowsVista(dbgData : TO4DBGrid);
+procedure RefreshDataWithOutCtg(dsMaster : TO4DataSource; dbtCtg : TO4DBTreeView;
+                                Master : IObject);
+procedure SetMenuDatesCL(Sender : TObject; var DateFrom, DateTo : DateTime; eDateFrom, eDateTo : TO4Edit);
+procedure SaveDatesPeriodType(var DateFrom, DateTo : DateTime; ConstantName:string='DatesPeriodTypeForReports');
+procedure SetDatesByPeriodType(var DateFrom, DateTo : DateTime; eDateFrom, eDateTo : TO4Edit; ConstantName:string='DatesPeriodTypeForReports');
+
+
+implementation
+
+const
+  errLinkIDNotFoundInTableForSelection =
+    'LinkID %s не найдено в таблице значений дл€ выбора записей';
+
+procedure RefreshEditsItemIndex(Owner : TComponent; EditsList : string);
+var
+  i : Byte;
+  edActive : TO4Edit;
+begin
+  for i := 1 to WordCount(EditsList, ';') do
+    begin
+      edActive := Owner.FindComponent(ExtractWord(i, EditsList, ';')) as TO4Edit;
+      if not IsNil(edActive) then 
+        begin
+          edActive.ItemIndex := edActive.Items.IndexOf(edActive.Text);
+          if edActive.ItemIndex = -1 then
+            edActive.Text := '';
+        end;
+    end;
+end;
+
+procedure SetVisibleForComponent(Comp : TComponent; Visible : Boolean);
+begin
+  if IsNil(Comp) then
+    Exit;
+  case Comp.ClassName of
+    'TO4Button' :
+      (Comp as TO4Button).Visible := Visible;
+    'TO4CheckBox' :
+      (Comp as TO4CheckBox).Visible := Visible;
+    'TO4CheckListBox' :
+      (Comp as TO4CheckListBox).Visible := Visible;
+    'TO4DBEdit' :
+      (Comp as TO4DBEdit).Visible := Visible;
+    'TO4DBGrid' :
+      (Comp as TO4DBGrid).Visible := Visible;
+    'TO4DBMemo' :
+      (Comp as TO4DBMemo).Visible := Visible;
+    'TO4DBTreeView' :
+      (Comp as TO4DBTreeView).Visible := Visible;
+    'TO4Edit' :
+      (Comp as TO4Edit).Visible := Visible;
+    'TO4Label' :
+      (Comp as TO4Label).Visible := Visible;
+    'TO4Memo' :
+      (Comp as TO4Memo).Visible := Visible;
+    'TO4MenuItem' :
+      (Comp as TO4MenuItem).Visible := Visible;
+    'TO4Panel' :
+      (Comp as To4Panel).Visible := Visible;
+    'TO4RadioButton' :
+      (Comp as TO4RadioButton).Visible := Visible;
+    'TO4RadioGroup' :
+      (Comp as TO4RadioGroup).Visible := Visible;
+    'TO4Splitter' :
+      (Comp as TO4Splitter).Visible := Visible;
+    'TO4ToolButton' :
+      (Comp as TO4ToolButton).Visible := Visible;
+    'TTabSheet' :
+      (Comp as TTabSheet).Visible := Visible;   
+    'TO4Image':
+      (Comp as TO4Image).Visible := Visible;
+    'TO4GroupBox' :
+      (Comp as TO4GroupBox).Visible := Visible;
+  end;
+end;
+
+procedure SetPropertyForComponentList(TPropertyType : integer; Owner : TComponent;
+  AComponentList : string; Value : Variant);
+var
+  i : Byte;
+  ctrlTemp : TComponent;
+begin
+  for i := 1 to WordCount(AComponentList, ';') do
+    begin
+      ctrlTemp := Owner.FindComponent(ExtractWord(i, AComponentList, ';'));
+      if not IsNil(ctrlTemp) then
+        if (ctrlTemp is TControl) then
+          case TPropertyType of
+            ptEnabled :
+              (ctrlTemp as TControl).Enabled := Value;
+            ptVisible :
+              SetVisibleForComponent(ctrlTemp, Value);
+            ptTabVisible :
+              if ctrlTemp.ClassName = 'TTabSheet' then
+                (ctrlTemp as TTabSheet).TabVisible := Value;
+            ptChecked :
+              if ctrlTemp.ClassName = 'TO4CheckBox' then
+                (ctrlTemp as TO4CheckBox).Checked := Value;
+          end
+        else
+          case ctrlTemp.ClassName of
+            'TO4MenuItem' :
+              case TPropertyType of
+                ptEnabled :
+                  (ctrlTemp as TO4MenuItem).Enabled := Value;
+                ptChecked :
+                  (ctrlTemp as TO4MenuItem).Checked := Value;
+                ptVisible :
+                  (ctrlTemp as TO4MenuItem).Visible := Value;
+                ptShortCut :
+                  (ctrlTemp as TO4MenuItem).ShortCut := Value;
+              end;
+          end;
+    end;
+end;
+
+procedure SetEnabledForComponentList(Owner : TComponent; AComponentList : string;
+  Value : Boolean);
+var
+  i : Byte;
+  ctrlTemp : TComponent;
+begin
+  for i := 1 to WordCount(AComponentList, ';') do
+    begin
+      ctrlTemp := Owner.FindComponent(ExtractWord(i, AComponentList, ';'));
+      if not IsNil(ctrlTemp) then
+        if (ctrlTemp is TControl) then
+          (ctrlTemp as TControl).Enabled := Value
+        else
+          case ctrlTemp.ClassName of
+            'TO4MenuItem' :
+              (ctrlTemp as TO4MenuItem).Enabled := Value;
+          end;
+    end;
+end;
+
+procedure SetReadOnlyForm(Form : TO4CustomForm);
+var
+  i : Integer;
+  cmpTemp : TComponent;
+begin
+  for i := 0 to Form.ComponentCount - 1 do
+    begin
+      cmpTemp := Form.Components[i];
+      if cmpTemp is TWinControl then
+        case cmpTemp.ClassName of
+          'TO4Button' :
+            case (cmpTemp as TO4Button).O4Action of
+              actGridParam, actCancel :
+                ;
+              else
+                (cmpTemp as TWinControl).Enabled := False;
+            end;
+          'TO4GroupBox', 'TO4Panel', 'TO4ScrollBox', 'TO4PageControl', 'TO4Notebook',
+            'TO4ToolBar', 'TO4TabSet', 'TO4DataForm' :
+            ;
+          'TO4DBGrid' :
+            (cmpTemp as TO4DBGrid).ReadOnly := True;
+          else
+            (cmpTemp as TWinControl).Enabled := False;
+        end
+      else
+        case cmpTemp.ClassName of
+          'TO4ToolButton' :
+            case (cmpTemp as TO4ToolButton).O4Action of
+              actGridParam, actCancel :
+                ;
+              else
+                (cmpTemp as TO4ToolButton).Enabled := False;
+            end;
+          'TO4MenuItem' :
+            case (cmpTemp as TO4MenuItem).O4Action of
+              actGridParam, actCancel :
+                ;
+              else
+                (cmpTemp as TO4MenuItem).Enabled := False;
+            end;
+        end;
+    end;
+end;
+
+procedure CreateSelectedLinksTable(var TblSelectedLinks : ICValueTable;
+  LinkIDsList : string = ''; DefValuesList : Variant = '');
+var
+  i : Integer;
+  OneDefValue : Variant;
+begin
+  if IsNil(TblSelectedLinks) then
+    TblSelectedLinks := CreateObject('ValueTable')
+  else
+    TblSelectedLinks.Close;
+  TblSelectedLinks.AddColumn('»дентификатор', vtcString, 20);
+  TblSelectedLinks.AddColumn('Ќазв‘ормы', vtcString, 20);
+  TblSelectedLinks.AddColumn('Ћинкѕоле', vtcLink, 0);
+  TblSelectedLinks.Open;
+  //
+  for i := 1 to WordCount(LinkIDsList, ';') do
+    begin
+      TblSelectedLinks.Append;
+      TblSelectedLinks.»дентификатор := ExtractWord(i, LinkIDsList, ';');
+      if IsArray(DefValuesList) and (ArrayHigh(DefValuesList) >= i - 1) then
+        begin
+          OneDefValue := DefValuesList[i - 1];
+          if IsArray(OneDefValue) then
+            begin
+              TblSelectedLinks.Ћинкѕоле := OneDefValue[0];
+              TblSelectedLinks.Ќазв‘ормы := OneDefValue[1];
+            end
+          else
+            TblSelectedLinks.Ћинкѕоле := OneDefValue;
+        end;
+      TblSelectedLinks.Post;
+    end;
+  //
+  TblSelectedLinks.SortBy('»дентификатор');
+end;
+
+function IsLinkSelected(TblSelectedLinks : ICValueTable; LinkID : string = '') : Boolean;
+begin
+  FindIDInSelectedLinkValues(TblSelectedLinks, LinkID);
+  Result := VarAsBool(TblSelectedLinks.@Ћинкѕоле.IsFocused)
+end;
+
+procedure FindIDInSelectedLinkValues(TblSelectedLinks : ICValueTable; LinkID : string = '');
+begin
+  if not TblSelectedLinks.Find(LinkID) then
+    raise(GetTranslation(errLinkIDNotFoundInTableForSelection, Arrayof(LinkID)));
+end;
+
+function FillSelectedLinksValue(TblSelectedLinks : ICValueTable; Value : IObject;
+  FormName, LinkID : string = ''; DoFindLinkID : Boolean = False) : string;
+begin
+  if DoFindLinkID then
+    FindIDInSelectedLinkValues(TblSelectedLinks, LinkID);
+  TblSelectedLinks.Edit;
+  TblSelectedLinks.Ћинкѕоле := Value;
+  TblSelectedLinks.Ќазв‘ормы := FormName;
+  TblSelectedLinks.Post;
+  Result := TblSelectedLinks.DefValue['Ћинкѕоле'];
+end;
+
+function ImitatedLinkSelection(ObjMeanForSelect : IObject; TblSelectedLinks : ICValueTable;
+  FormName, LinkID : string = ''; Params : Variant = '') : string;
+begin
+  // проверка на наличие идентификатора выбора
+  if (LinkID <> '') and not TblSelectedLinks.Find(LinkID) then
+    begin
+      TblSelectedLinks.Append;
+      TblSelectedLinks.»дентификатор := LinkID;
+      TblSelectedLinks.Post;
+    end;
+  // изменение типа в случае выбора по нескольким типам
+  case ExtractWord(1, ObjMeanForSelect.GetType, ';') of
+    'Documents', 'Dictionaries' :
+      if not IsObject(ObjMeanForSelect) and VarAsBool(TblSelectedLinks.@Ћинкѕоле.IsFocused) and
+        not IsObjEQ(ObjMeanForSelect, TblSelectedLinks.@Ћинкѕоле, True) then
+        begin
+          ObjMeanForSelect := TblSelectedLinks.Ћинкѕоле;
+          ObjMeanForSelect := CreateObject(ExtractWord(1, ObjMeanForSelect.GetType, ';') + '.' +
+            ObjMeanForSelect.GetSign);
+          ObjMeanForSelect.Select;
+        end;
+  end;
+  // позиционирование на выбранный до этого элемент
+  case ExtractWord(1, ObjMeanForSelect.GetType, ';') of
+    'Documents', 'Dictionaries' :
+      begin
+        if VarAsBool(TblSelectedLinks.@Ћинкѕоле.IsFocused) and not
+          IsObjEQ(TblSelectedLinks.@Ћинкѕоле, ObjMeanForSelect) then
+          ObjMeanForSelect.Find(TblSelectedLinks.@Ћинкѕоле);
+        if FormName = '' then
+          FormName := TblSelectedLinks.Ќазв‘ормы;
+      end;
+    'Processings' :
+      ObjMeanForSelect.Params[prmnSelectedMean] := TblSelectedLinks.@Ћинкѕоле;
+  end;
+  // выбор нового
+  case ExtractWord(1, ObjMeanForSelect.GetType, ';') of
+    'Documents', 'Dictionaries' :
+      if VarAsBool(ObjMeanForSelect.SelectInForm(FormName, Result, Params)) then
+        Result := FillSelectedLinksValue(TblSelectedLinks, ObjMeanForSelect, FormName, LinkID)
+      else
+        if VarAsBool(TblSelectedLinks.@Ћинкѕоле.IsFocused) then
+          if VarAsBool(ObjMeanForSelect.Find(TblSelectedLinks.@Ћинкѕоле)) then
+            Result := TblSelectedLinks.DefValue['Ћинкѕоле'] // не совсем правильно, значение может быть изменено интерфейсом ObjMeanForSelect
+          else //запись была удалена
+            begin
+              FillSelectedLinksValue(TblSelectedLinks, Null);
+              Result := '';
+            end
+        else
+          Result := '';
+    'Processings' : // выбор из обработок
+      if VarAsInt(ObjMeanForSelect.Execute(FormName, Params)) = mrOk then
+        Result := FillSelectedLinksValue(TblSelectedLinks, ObjMeanForSelect.Params[prmnSelectedMean], FormName, LinkID);
+  end;
+end;
+
+function ImitatedLinkSelectionWithChangeAnalys(var MeanChanged : Boolean;
+  ObjMeanForSelect : IObject; TblSelectedLinks : ICValueTable;
+  FormName, LinkID : string = ''; Params : Variant = '') : string;
+var
+  ObjMeanBefore : IObject;
+begin
+  // проверка на наличие идентификатора выбора
+  if (LinkID <> '') and not TblSelectedLinks.Find(LinkID) then
+    begin
+      TblSelectedLinks.Append;
+      TblSelectedLinks.»дентификатор := LinkID;
+      TblSelectedLinks.Post;
+    end;
+  ObjMeanBefore := TblSelectedLinks.@Ћинкѕоле;
+  Result := ImitatedLinkSelection(ObjMeanForSelect, TblSelectedLinks, FormName,
+    LinkID, Params);
+  MeanChanged := (not IsObjFocused(ObjMeanBefore) and IsObjFocused(TblSelectedLinks.@Ћинкѕоле)) or
+    not IsObjEQ(ObjMeanBefore, TblSelectedLinks.@Ћинкѕоле);
+end;
+
+var
+  Options : ICOptions;
+
+procedure AdjustToolBar(tbrCurrent : TO4ToolBar);
+begin
+  Options := GetOptions;
+  tbrCurrent.Flat := VarAsBool(Options.GetServerPrm(Flat));
+  tbrCurrent.ShowCaptions := VarAsBool(Options.GetServerPrm(ShowCaptions));
+  tbrCurrent.List := VarAsBool(Options.GetServerPrm(CaptionsList));
+  tbrCurrent.Transparent := VarAsBool(Options.GetServerPrm(Transparent));
+  if tbrCurrent.Transparent then
+    tbrCurrent.EdgeBorders := 0
+  else
+    begin
+      tbrCurrent.EdgeInner := esRaised;
+      tbrCurrent.EdgeOuter := esNone;
+      tbrCurrent.EdgeBorders := Bits(ebLeft, ebTop, ebRight);
+    end;
+end;
+
+procedure SetGridEditable(grdCurrent : TO4DBGrid);
+begin
+  Options := GetOptions;
+  if VarAsBool(Options.GetServerPrm(GridReadOnly)) then
+    begin
+      grdCurrent.Options := grdCurrent.Options and not Bits(dgEditing, dgAlwaysShowEditor);
+      grdCurrent.ReadOnly := True
+    end
+  else
+    begin
+      grdCurrent.Options := grdCurrent.Options or Bits(dgEditing, dgAlwaysShowEditor);
+      grdCurrent.ReadOnly := False
+    end;
+end;
+
+procedure HideMenuItem(miCurrent : To4MenuItem);
+begin
+  miCurrent.Visible := False;
+  miCurrent.ShortCut := 0;
+end;
+
+procedure MakeStandartInterface(ObjSupporter : IObject; Form : TO4CustomForm;
+  TbrList, GridsList, MenuItemsList : string = '');
+var
+  i : Byte;
+  TmpToolBar : TO4ToolBar;
+  TmpDBGrid : TO4DBGrid;
+  TmpMenuItem : TO4MenuItem;
+begin
+  case Form.ClassName of
+    'TO4DataForm' :
+      case VarAsInt(ObjSupporter.Params[prmInterfaceType]) of
+        itMainForm :
+          begin
+            (Form as TO4DataForm).BorderWidth := 5;
+            (Form as TO4DataForm).Transparent := True;
+          end;
+        itCategoryMain :
+          begin
+            (Form as TO4DataForm).BorderWidth := 0;
+            (Form as TO4DataForm).Transparent := True;
+          end;
+        itInPlaceForMain :
+          (Form as TO4DataForm).BorderWidth := 0; // ничего
+        else
+          begin
+            case VarAsInt(ObjSupporter.Params[prmInterfaceType]) of
+              itCategoryDrop, itCategoryReport :
+                if TbrList <> '' then
+                  for i := 1 to WordCount(TbrList, ';') do
+                    begin
+                      TmpToolBar := (Form.FindComponent(ExtractWord(i, TbrList, ';')) as TO4ToolBar);
+                      if not IsNil(TmpToolBar) then
+                        TmpToolBar.Visible := False;
+                    end;
+            end;
+            (Form as TO4DataForm).BorderWidth := 0;
+            (Form as TO4DataForm).Transparent := False;
+            TbrList := '';
+          end;
+      end;
+    'TO4Form' :
+      case VarAsInt(ObjSupporter.Params[prmInterfaceType]) of
+        itMainForm :
+          begin
+            (Form as TO4Form).BorderWidth := 5;
+            (Form as TO4Form).Transparent := True;
+          end;
+        itCategoryMain :
+          begin
+            (Form as TO4Form).BorderWidth := 0;
+            (Form as TO4Form).Transparent := True;
+          end;
+        itInPlaceForMain :
+          (Form as TO4Form).BorderWidth := 0; // ничего
+        else
+          begin
+            case VarAsInt(ObjSupporter.Params[prmInterfaceType]) of
+              itCategoryDrop, itCategoryReport :
+                if TbrList <> '' then
+                  for i := 1 to WordCount(TbrList, ';') do
+                    begin
+                      TmpToolBar := (Form.FindComponent(ExtractWord(i, TbrList, ';')) as TO4ToolBar);
+                      if not IsNil(TmpToolBar) then
+                        TmpToolBar.Visible := False;
+                    end;
+            end;
+            (Form as TO4Form).BorderWidth := 0;
+            (Form as TO4Form).Transparent := False;
+            TbrList := '';
+          end;
+      end;
+  end;
+  if TbrList <> '' then
+    for i := 1 to WordCount(TbrList, ';') do
+      begin
+        TmpToolBar := Form.FindComponent(ExtractWord(i, TbrList, ';')) as TO4ToolBar;
+        if not IsNil(TmpToolBar) then
+          AdjustToolBar(TmpToolBar);
+      end;
+  if GridsList <> '' then
+    for i := 1 to WordCount(GridsList, ';') do
+      begin
+        TmpDBGrid := (Form.FindComponent(ExtractWord(i, GridsList, ';')) as TO4DBGrid);
+        if not IsNil(TmpDBGrid) then
+          SetGridEditable(TmpDBGrid);
+      end;
+  if (VarAsInt(ObjSupporter.Params[prmInterfaceType]) = itCategoryReport) and (MenuItemsList <> '') then
+    for i := 1 to WordCount(MenuItemsList, ';') do
+      begin
+        TmpMenuItem := (Form.FindComponent(ExtractWord(i, MenuItemsList, ';')) as TO4MenuItem);
+        if not IsNil(TmpMenuItem) then
+          HideMenuItem(TmpMenuItem);
+      end; 
+end;
+
+function OpenSubordinatedInterface(Master : IObject; ObjID, FormName : string;
+  cmpPlaceID : Variant) : IObject;
+begin
+  Result := CreateObject(ObjID);
+  Result.UseMaster(Master);
+  // параметр, что отвечает за тип интерфейса
+  Result.Params[prmInterfaceType] := itInPlaceForm;
+  Result.OpenFormInplace(FormName, cmpPlaceID);
+end;
+
+function ChangeSortingAtMenuItems(Form : To4CustomForm; minList, minChanged : string;
+  minBefore : string = '') : Integer;
+var
+  miAssist, TmpMenuItem : TO4MenuItem;
+  IndexBefore, i : Integer;
+begin
+  miAssist := Form.FindComponent(minChanged) as To4MenuItem;
+  case miAssist.ImageIndex of
+    224, 225 :
+      miAssist.ImageIndex := 449 - miAssist.ImageIndex;
+    -1 :
+      begin
+        if minBefore = '' then
+          begin
+            for i := 1 to WordCount(minList, ';') do
+              begin
+                TmpMenuItem := (Form.FindComponent(ExtractWord(i, minList, ';')) as TO4MenuItem);
+                if not IsNil(TmpMenuItem) then
+                  TmpMenuItem.ImageIndex := -1;
+              end;
+          end
+        else
+          begin
+            TmpMenuItem := (Form.FindComponent(minBefore) as TO4MenuItem);
+            if not IsNil(TmpMenuItem) then
+              TmpMenuItem.ImageIndex := -1;
+          end;
+        miAssist.ImageIndex := 224;
+      end;
+  end;
+  Result := miAssist.ImageIndex;
+end;
+
+// показывает сообщение с ошибкой (если такое было) дл€ форм, открытых через OpenAttachFormTo
+
+procedure ShowErrorMessageForAttachedForm(msgExcept : string);
+begin
+  MessageDlg(msgExcept, mtError, mbOk); // OpenAttachFormTo не показывает ошибки инициализации
+  raise(msgExcept); // дл€ закрыти€ формы
+end;
+
+function GetParentForm(Form : TO4CustomForm) : TO4CustomForm;
+var
+  cmpParent : TWinControl;
+begin
+  cmpParent := Form.Parent.Parent;
+  while not (cmpParent is TO4CustomForm) do
+    cmpParent := cmpParent.Parent;
+  Result := cmpParent as TO4CustomForm;
+end;
+
+procedure ReturnFocusToGridForWindowsVista(dbgData : TO4DBGrid);
+begin
+  // ¬озврат курсора дл€ Windows Vista
+  dbgData.Options := dbgData.Options - Bits(dgColumnResize);
+  dbgData.Options := dbgData.Options + Bits(dgColumnResize);
+  //
+end;
+
+procedure RefreshDataWithOutCtg(dsMaster : TO4DataSource; dbtCtg : TO4DBTreeView; Master : IObject);
+var
+  TmpDataSource : TO4DataSource;
+begin
+  dbtCtg.O4MDSource := TmpDataSource;
+  try
+    Master.Refresh;
+  finally
+    dbtCtg.O4MDSource := dsMaster;
+  end;
+end;
+
+procedure SetMenuDatesCL(Sender : TObject; var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+var
+  Prd : Variant;
+  Year,Month : Integer;
+begin
+  if (Sender as TO4MenuItem).Tag>18 then
+   Year := GetYear(CurrentDate)
+  else
+   Year := GetYear(DateTo);
+  Month := GetMonth(CurrentDate);
+  case (Sender as TO4MenuItem).Tag of
+    0 :
+      Prd := ArrayOf(1, 1, 6, 30); //первое полугодие
+    1 :
+      Prd := ArrayOf(1, 1, 3, 31); //первый квартал
+    2 :
+      Prd := ArrayOf(1, 1, 1, 31); //€нварь
+    3 :
+      begin //февраль
+        Prd := ArrayOf(2, 1, 2, 28);
+        if IsLeapYear(Year) then
+          Prd[3] := 29;
+      end;
+    4 :
+      Prd := ArrayOf(3, 1, 3, 31); //март
+    5 :
+      Prd := ArrayOf(4, 1, 6, 30); //второй квартал
+    6 :
+      Prd := ArrayOf(4, 1, 4, 30); //апрель
+    7 :
+      Prd := ArrayOf(5, 1, 5, 31); //май
+    8 :
+      Prd := ArrayOf(6, 1, 6, 30); //июнь
+    9 :
+      begin //предыдущий год
+        Prd := ArrayOf(1, 1, 12, 31);
+        Year := GetYear(CurrentDate);
+        Dec(Year);
+      end;
+    10 :
+      Prd := ArrayOf(7, 1, 12, 31); //второе полугодие
+    11 :
+      Prd := ArrayOf(7, 1, 9, 30); //третий квартал
+    12 :
+      Prd := ArrayOf(7, 1, 7, 31); //июль
+    13 :
+      Prd := ArrayOf(8, 1, 8, 31); //август
+    14 :
+      Prd := ArrayOf(9, 1, 9, 30); //сент€брь
+    15 :
+      Prd := ArrayOf(10, 1, 12, 31); //четвертый квартал
+    16 :
+      Prd := ArrayOf(10, 1, 10, 31); //окт€брь
+    17 :
+      Prd := ArrayOf(11, 1, 11, 30); //но€брь
+    18 :
+      Prd := ArrayOf(12, 1, 12, 31); //декабрь
+    19:
+      Prd := ArrayOf(Month, GetDay(CurrentDate), Month, GetDay(CurrentDate)); // текущий день
+    20: begin                         // текущий мес€ц
+         Prd := ArrayOf(Month, 1, Month, 31);
+         case Month of
+          1,3,5,7,8,10,12 : Prd[3] := 31;
+                 4,6,9,11 : Prd[3] := 30;
+                        2 : if IsLeapYear(Year) then Prd[3] := 29 else Prd[3] := 28;
+         end;
+        end;
+    21: case Month of  // текущий квартал
+         1,2,3    : Prd := ArrayOf(1, 1, 3, 31);
+         4,5,6    : Prd := ArrayOf(4, 1, 6, 30);
+         7,8,9    : Prd := ArrayOf(7, 1, 9, 30);
+         10,11,12 : Prd := ArrayOf(10, 1, 12, 31);
+        end;
+    22:  Prd := ArrayOf(1, 1, 12, 31); //текущий год (весь, 22)
+    //23:   // предыдущий день
+    24: begin  // предыдущий мес€ц
+          if month>1 then
+           dec(Month)
+          else
+           begin
+            Dec(Year);
+            Month:=12;
+           end;
+          Prd := ArrayOf(Month, 1, Month, 31);
+          case Month of
+           1,3,5,7,8,10,12 : Prd[3] := 31;
+                  4,6,9,11 : Prd[3] := 30;
+                         2 : if IsLeapYear(Year) then Prd[3] := 29 else Prd[3] := 28;
+          end;
+        end;
+     25: case Month of  // текущий квартал
+          1,2,3    : begin
+                      Dec(Year);
+                      Prd := ArrayOf(10, 1, 12, 31);
+                     end;
+
+          4,5,6    : Prd := ArrayOf(1, 1, 3, 31);
+          7,8,9    : Prd := ArrayOf(4, 1, 6, 30);
+          10,11,12 : Prd := ArrayOf(7, 1, 9, 30);
+        end;
+  end;
+
+  case (Sender as TO4MenuItem).Tag of
+    23 :  // предыдущий день
+         begin
+           DateFrom := CurrentDate-1;
+           DateTo := CurrentDate-1;
+         end;
+     26 :   // ѕредыдуща€ недел€
+         begin
+          DateFrom := RoundDate(CurrentDate,rdWeek,false)-7;
+          DateTo := RoundDate(CurrentDate,rdWeek,false)-1;
+         end;
+     27 :  // текуща€ недел€
+         begin 
+          DateFrom := RoundDate(CurrentDate,rdWeek,false);
+          DateTo := RoundDate(CurrentDate,rdWeek,false)+6;
+         end;
+    else
+      begin
+       DateFrom := EncodeDate(Year, Prd[0], Prd[1]);
+       DateTo := EncodeDate(Year, Prd[2], Prd[3]);
+      end;
+  end;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+procedure SaveDatesPeriodType(var DateFrom, DateTo : DateTime; ConstantName:string='DatesPeriodTypeForReports');
+begin
+ if (RoundDate(DateFrom,rdDay,false)=RoundDate(CurrentDate,rdDay,false)) and
+    (RoundDate(DateTo,rdDay,false)=RoundDate(CurrentDate,rdDay,false)) then
+      GetOptions.SetServerPrm(ConstantName,rdDay)
+ else
+ if (RoundDate(DateFrom,rdWeek,false)=RoundDate(CurrentDate,rdWeek,false)) and
+    (RoundDate(DateTo,rdWeek,false)=RoundDate(CurrentDate,rdWeek,false)) then
+      GetOptions.SetServerPrm(ConstantName,rdWeek)
+ else
+ if (RoundDate(DateFrom,rdDay,false)=RoundDate(CurrentDate,rdMonth,false)) and
+    (RoundDate(DateTo,rdDay,false)=RoundDate(CurrentDate,rdMonth,true)-1) then
+      GetOptions.SetServerPrm(ConstantName,rdMonth)
+ else
+ if (RoundDate(DateFrom,rdDay,false)=RoundDate(CurrentDate,rdQuarter,false)) and
+    (RoundDate(DateTo,rdDay,false)=RoundDate(CurrentDate,rdQuarter,true)-1) then
+      GetOptions.SetServerPrm(ConstantName,rdQuarter)
+ else
+ if (RoundDate(DateFrom,rdDay,false)=RoundDate(CurrentDate,rdYear,false)) and
+    (RoundDate(DateTo,rdDay,false)=RoundDate(CurrentDate,rdYear,true)-1) then
+      GetOptions.SetServerPrm(ConstantName,rdYear);
+end;
+
+procedure SetDatesByPeriodType(var DateFrom, DateTo : DateTime; eDateFrom, eDateTo : TO4Edit; ConstantName:string='DatesPeriodTypeForReports');
+var rndDatesType : TRoundDateType;
+begin
+  rndDatesType := VarAsInt(GetOptions.GetServerPrm(ConstantName),0);
+  DateFrom :=  RoundDate(CurrentDate,rndDatesType,false);
+  DateTo :=  RoundDate(CurrentDate,rndDatesType,true)-1;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+end.

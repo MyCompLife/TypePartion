@@ -1,0 +1,578 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  Options : ICOptions; 
+  Constants : IC4VPAConst;
+  CursorVis : TCursor;
+  Stores, GoodList, RealList, FilterList : ICValueList;
+  S, UrPartner, ManPartner, Partner, Store, GoodDict : ICDictionary;
+  GoodsTbl, StoreTbl, RealTbl, tmpTbl, TblHead1, TblHead2 : ICValueTable;
+  V : ICReport;
+  DateFrom, DateTo : DateTime; 
+  AccsCurr : ICAccs;
+
+procedure SetGoodsTblColumnsFormat(GoodsTbl : ICValueTable);
+begin
+  SetFormatStdColumnsList(GoodsTbl, server.GetGoodLinksList);
+end;
+
+procedure SetGoodsTblColumns(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn('Код', lftString, 20);
+  GoodsTbl.AddColumn('Товар', lftLink, 0);
+  GoodsTbl.AddColumn('ЕдИзм', lftLink, 0);
+  AddFFtColumnsList(GoodsTbl, server.GetGoodLinksList);
+  GoodsTbl.AddColumn('Партия', lftFloat, 0);
+  GoodsTbl.AddColumn('Склад', lftLink, 0);  
+  GoodsTbl.AddColumn('Модель', lftString, 4);
+  if DoOpen then
+    GoodsTbl.Open();
+end;
+
+procedure CreateObjects;
+var j:integer;
+begin
+  Options := GetOptions;
+  Constants := GetConstants;
+  Stores := CreateObject('СписокЗначений');
+  Store := CreateObject('Справочники.Склады');
+  S := CreateObject('Справочники.Склады');
+  Stores.AddValue(Trans('Все склады'), Null);
+  S.Select;
+  if S.FindByField('Активность', True, False) then
+    Stores.AddValue(S.Название, S);
+  S.Select;
+  while S.SelectNext do
+    if not VarAsBool(S.Активность) then
+      Stores.AddValue(S.Название, S); // или ('',S)
+  Stores.UseControl(CtrlToVar(eStores));
+  Stores.CurIndex := 0;
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  SetGoodsTblColumns(GoodsTbl, False);
+  // GoodsTbl.AddColumn('НазвТовара',vtcString,70);
+  // GoodsTbl.AddColumn('ЕдИзмТекст',vtcString,20);
+  GoodsTbl.Open;
+  SetGoodsTblColumnsFormat(GoodsTbl);
+  StoreTbl := CreateObject('ТаблицаЗначений');
+  StoreTbl.Close();
+  StoreTbl.AddColumn('Код', lftString, 20);
+  StoreTbl.AddColumn('Товар', lftLink, 0);
+  StoreTbl.AddColumn('ЕдИзм', lftLink, 0);
+  AddFFtColumnsList(StoreTbl, server.GetGoodLinksList);
+  StoreTbl.AddColumn('Партия', lftFloat, 0);
+  StoreTbl.AddColumn('Склад', lftLink, 0);
+  StoreTbl.Open();
+  SetGoodsTblColumnsFormat(StoreTbl);
+  UrPartner := CreateObject('Справочники.ЮрПартнеры');
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  //категории
+  GoodDict := CreateObject('Справочники.Товары');
+  GoodList := CreateObject('СписокЗначений');   
+  
+  //************ 27.03.12 Snizhok ****************//
+  RealTbl := CreateObject('ТаблицаЗначений');
+  RealTbl.AddColumn('КодПост', lftString, 2);
+  RealTbl.AddColumn('Товар', lftLink, 0);
+  RealTbl.Open;
+  
+  tmpTbl := CreateObject('ТаблицаЗначений');
+  tmpTbl.AddColumn('КодПост', lftString, 2);
+  tmpTbl.Open;
+
+  FilterList := CreateObject('СписокЗначений');
+  RealList := CreateObject('СписокЗначений');
+  RealList.AddValue('все',Null);
+  RealList.AddValue('собственный',Null);
+
+  AccsCurr := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  AccsCurr.AppendGroupMotionToValueTable(0,400000,amtBoth,'Товар',-1,RealTbl);
+  RealTbl.DoGetLinks('КодПост=Товар.Код');
+  RealTbl.GroupTo('КодПост','',tmpTbl);
+  tmpTbl.SortBy('КодПост');
+  tmpTbl.SetRange('aa','zz');
+  tmpTbl.Select;
+  tmpTbl.GroupToList('КодПост',RealList);
+  RealList.UseControl(ctrlToVar(eGoods));
+  RealTbl.SortBy('КодПост');
+
+  for j := 0 to clbTypeDoc.Items.Count-1 do
+    clbTypeDoc.Checked[j] := true;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  CreateObjects;
+  server.CreateSrvObjects;
+  cbGroupModel.Visible := VarAsBool(Constants.ХарактеристикаМодель);
+  GoodDict.OpenFormInplace('КатегорииТоваров', CtrlToVar(pGoodsCtg));
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  XGrid.AddSection('Hed');
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  i, j, k, f, t : Integer;
+  goodCode, NameHeadFieldTbl, NameDetFieldTbl, ConstNameField, NameDetField,
+  NameFieldsHead1, NameFieldsHead2, DopSymbol : String;
+  DetFieldTbl : ICValueTable;
+begin
+  try
+    CursorVis := WaitCursorStart;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    GetStore(Stores, Store);
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer;
+    StoreTbl.Clear;
+    StoreTbl.CopyDataToServer;
+    // категории
+    if not VarAsBool(GoodDict.Params['UseLevel']) then
+      GoodDict.AssignSelectParamsOnSrv(Null)
+    else
+      begin
+        GoodDict.GetCheckLevelsAsValueList(GoodList);
+        if GoodDict.InteractiveUseLevels and (GoodList.Count = 0) then
+          begin
+            ShowMessage(CheckCtg);
+            exit;
+          end;
+      end;
+    GoodList.CopyDataToServer();
+    try    
+    /// построение таблицы по отмеченым ///
+    ConstNameField := 'На начало;Ввод остатков;Приход;Внутренний приход;Возврат от покупателя;Ревизия товара;'+
+                      'Расход;Внутренний расход;Возврат поставщикам;Списание товара;На конец;Сумма наценки';
+    DetFieldTbl := CreateObject('ТаблицаЗначений');
+    DetFieldTbl.AddColumn('ПолеОбщШапка0', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка01', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка02', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка1', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка12', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка2', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка22', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка3', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка32', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка4', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка42', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка5', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка52', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка53', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка54', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка6', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка62', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка7', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка72', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка73', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка74', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка8', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка82', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка9', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка92', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка10', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка102', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка11', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка112', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеОбщШапка13', lftString, 50);
+
+    DetFieldTbl.AddColumn('ПолеШапка0', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка01', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка02', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка1', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка12', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка2', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка22', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка3', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка32', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка4', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка42', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка5', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка52', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка53', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка54', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка6', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка62', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка7', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка72', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка73', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка74', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка8', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка82', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка9', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка92', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка10', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка102', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка11', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка112', lftString, 50);
+    DetFieldTbl.AddColumn('ПолеШапка13', lftString, 50);
+
+    DetFieldTbl.AddColumn('Поле0', lftString, 50);
+    DetFieldTbl.AddColumn('Поле1', lftString, 50);
+    DetFieldTbl.AddColumn('Поле2', lftString, 50);
+    DetFieldTbl.AddColumn('Поле3', lftString, 50);
+    DetFieldTbl.AddColumn('Поле4', lftString, 50);
+    DetFieldTbl.AddColumn('Поле5', lftString, 50);
+    DetFieldTbl.AddColumn('Поле6', lftString, 50);
+    DetFieldTbl.AddColumn('Поле7', lftString, 50);
+    DetFieldTbl.AddColumn('Поле8', lftString, 50);
+    DetFieldTbl.AddColumn('Поле9', lftString, 50);
+    DetFieldTbl.AddColumn('Поле10', lftString, 50);
+    DetFieldTbl.AddColumn('Поле11', lftString, 50);
+    DetFieldTbl.AddColumn('Поле12', lftString, 50);
+    DetFieldTbl.Open;
+    DetFieldTbl.Append;
+    DetFieldTbl.ПолеШапка0 := 'Код';
+    DetFieldTbl.ПолеШапка01 := 'Товар';
+    DetFieldTbl.ПолеШапка02 := 'Ед.изм';
+    DetFieldTbl.ПолеШапка1 := 'К-во';
+    DetFieldTbl.ПолеШапка12 := 'Сумма';
+    DetFieldTbl.ПолеШапка2 := 'К-во';
+    DetFieldTbl.ПолеШапка22 := 'Сумма';
+    DetFieldTbl.ПолеШапка3 := 'К-во';
+    DetFieldTbl.ПолеШапка32 := 'Сумма';
+    DetFieldTbl.ПолеШапка4 := 'К-во';
+    DetFieldTbl.ПолеШапка42 := 'Сумма';
+    DetFieldTbl.ПолеШапка5 := 'К-во';
+    DetFieldTbl.ПолеШапка52 := 'Сумма вх.';
+    DetFieldTbl.ПолеШапка53 := 'Сумма';
+    DetFieldTbl.ПолеШапка54 := 'Наценка';
+    DetFieldTbl.ПолеШапка6 := 'К-во';
+    DetFieldTbl.ПолеШапка62 := 'Сумма';
+    DetFieldTbl.ПолеШапка7 := 'К-во';
+    DetFieldTbl.ПолеШапка72 := 'Сумма вх.';
+    DetFieldTbl.ПолеШапка73 := 'Сумма';
+    DetFieldTbl.ПолеШапка74 := 'Наценка';
+    DetFieldTbl.ПолеШапка8 := 'К-во';
+    DetFieldTbl.ПолеШапка82 := 'Сумма';
+    DetFieldTbl.ПолеШапка9 := 'К-во';
+    DetFieldTbl.ПолеШапка92 := 'Сумма';
+    DetFieldTbl.ПолеШапка10 := 'К-во';
+    DetFieldTbl.ПолеШапка102 := 'Сумма';
+    DetFieldTbl.ПолеШапка11 := 'К-во';
+    DetFieldTbl.ПолеШапка112 := 'Сумма';
+    DetFieldTbl.ПолеШапка13 := '';
+                             //   Сумма наценки
+    //    ConstNameField := 'На начало;Ввод остатков;Приход;Внутренний приход;Возврат от покупателя;Ревизия товара;'+
+    //                      'Расход;Внутренний расход;Возврат поставщикам;Списание товара;На конец;Сумма наценки';
+
+    DetFieldTbl.ПолеОбщШапка0 := 'Товар';
+    DetFieldTbl.ПолеОбщШапка1 := 'На начало';
+    DetFieldTbl.ПолеОбщШапка2 := 'Ввод остатков';
+    DetFieldTbl.ПолеОбщШапка3 := 'Приход';
+    DetFieldTbl.ПолеОбщШапка4 := 'Внутренний приход';
+    DetFieldTbl.ПолеОбщШапка5 := 'Возврат от покупателя';
+    DetFieldTbl.ПолеОбщШапка6 := 'Ревизия товара';
+    DetFieldTbl.ПолеОбщШапка7 := 'Расход';
+    DetFieldTbl.ПолеОбщШапка8 := 'Внутренний расход';
+    DetFieldTbl.ПолеОбщШапка9 := 'Возврат поставщикам';
+    DetFieldTbl.ПолеОбщШапка10 := 'Списание товара';
+    DetFieldTbl.ПолеОбщШапка11 := 'На конец';
+    DetFieldTbl.ПолеОбщШапка12 := 'Сумма наценки';
+
+    DetFieldTbl.Поле0 := 'Код;Товар;ЕдИзм';
+    DetFieldTbl.Поле1 := 'КолНач;СумНачВх';
+    DetFieldTbl.Поле2 := 'КолОст;СумОстВх';
+    DetFieldTbl.Поле3 := 'КолПрих;СумПрихВх';
+    DetFieldTbl.Поле4 := 'КолВПрих;СумВПрихВх';
+    DetFieldTbl.Поле5 := 'КолВозвр;СумВозврВх;СумВозврОтп;СумВозврНац';
+    DetFieldTbl.Поле6 := 'КолРевиз;СумРевизВх';
+    DetFieldTbl.Поле7 := 'КолРасх;СумРасхВх;СумРасхОтп;СумРасхНац';
+    DetFieldTbl.Поле8 := 'КолВРасх;СумВРасхВх';
+    DetFieldTbl.Поле9 := 'КолВозврПост;СумВозврПостВх';
+    DetFieldTbl.Поле10 := 'КолСпис;СумСписВх';
+    DetFieldTbl.Поле11 := 'КолКон;СумКонВх';
+    DetFieldTbl.Поле12 := 'СумНац';
+    DetFieldTbl.Post;
+    DetFieldTbl.Select;
+    NameHeadFieldTbl := '';
+    NameDetFieldTbl := '';
+    NameDetField := '';
+    NameFieldsHead1 := '';
+    NameFieldsHead2 := '';
+    k := 0;
+    for j := 0 to clbTypeDoc.Items.Count-1 do
+    if clbTypeDoc.Checked[j] then
+      Begin
+        // типы документов - шапка
+
+        // поля количество и сум
+
+        if NameDetField = '' then
+          NameDetField := DetFieldTbl._Default['Поле'+VarAsStr(j+1)]
+        else
+          NameDetField := NameDetField + ';' + DetFieldTbl._Default['Поле'+VarAsStr(j+1)];
+
+        k := j+1;
+        if j = 11 then k := 13;
+
+        if NameFieldsHead1 = '' then
+          begin
+            if (k = 5) or (k = 7) then
+              NameFieldsHead1 := 'ПолеШапка'+VarAsStr(k) + ';ПолеШапка'+VarAsStr(k)+'2'+
+                                 ';ПолеШапка'+VarAsStr(k)+'3' + ';ПолеШапка'+VarAsStr(k)+'4'
+            else
+              if (k<>13) then
+                NameFieldsHead1 := 'ПолеШапка'+VarAsStr(k) + ';ПолеШапка'+VarAsStr(k)+'2'
+              else
+                NameFieldsHead1 := 'ПолеШапка'+VarAsStr(k);
+          end
+        else
+          begin
+            if (k = 5) or (k = 7) then
+              NameFieldsHead1 := NameFieldsHead1 + ';' + 'ПолеШапка'+VarAsStr(k) + ';ПолеШапка'+VarAsStr(k)+'2'+
+                                                         ';ПолеШапка'+VarAsStr(k)+'3' + ';ПолеШапка'+VarAsStr(k)+'4'
+            else
+              if (k<>13) then
+                NameFieldsHead1 := NameFieldsHead1 + ';' + 'ПолеШапка'+VarAsStr(k) + ';ПолеШапка'+VarAsStr(k)+'2';
+             // else
+             //   NameFieldsHead1 := NameFieldsHead1 + ';' + 'ПолеШапка'+VarAsStr(k);
+          end;
+
+          if NameFieldsHead2 = '' then
+            begin
+              if (k = 5) or (k = 7) then
+                NameFieldsHead2 := 'ПолеОбщШапка'+VarAsStr(k)+';;;'
+              else
+                if (k<>13) then
+                  NameFieldsHead2 := 'ПолеОбщШапка'+VarAsStr(k)+';'
+                else
+                  NameFieldsHead2 := 'ПолеОбщШапка'+VarAsStr(k-1);
+            end
+          else
+            begin
+              if (k = 5) or (k = 7) then
+                NameFieldsHead2 := NameFieldsHead2 + ';' + 'ПолеОбщШапка'+VarAsStr(k)+';;;'
+              else
+                if (k<>13) then
+                  NameFieldsHead2 := NameFieldsHead2 + ';' + 'ПолеОбщШапка'+VarAsStr(k)+';'
+                else
+                  NameFieldsHead2 := NameFieldsHead2 + ';' + 'ПолеОбщШапка'+VarAsStr(k-1);
+            end;
+
+      End;
+    ///////////////////////////////////////
+      //************ 27.03.12 Snizhok ****************//
+      FilterList.Clear;
+      if RealList.ValidIndex(RealList.CurIndex) then  
+        begin   
+          goodCode := RealList.GetStr(RealList.CurIndex);
+          if goodCode = 'собственный' then
+            begin
+              RealTbl.SetRange('00','99');
+              RealTbl.Select;
+              RealTbl.GroupToList('Товар',FilterList);
+            end;
+          if (goodCode <> 'собственный') and (goodCode <> 'все') then
+            begin
+              RealTbl.SetRange(goodCode,goodCode);
+              RealTbl.Select;
+              RealTbl.GroupToList('Товар',FilterList);
+            end;
+        end;
+      FilterList.CopyDataToServer;
+      V.RunThreadProcess(server.GetRunReportEP(GoodsTbl.SrvMean, StoreTbl.SrvMean, GoodList.SrvMean,
+        Partner, Store, VarAsBool(Options.GetServerPrm(ShowCodeUnitName)),
+        GoodDict.Params['UseLevel'], GoodDict.SrvMean,
+        DateFrom, DateTo, cbMoving.Checked, cbGroupModel.Checked, FilterList.SrvMean, NameDetField),
+        ReportRunning);
+      FilterList.CopyDataFromServer;
+      GoodsTbl.CopyDataFromServer;
+      StoreTbl.CopyDataFromServer;
+    finally
+      GoodList.SrvMean.Clear;
+      GoodsTbl.SrvMean.Clear;
+      StoreTbl.SrvMean.Clear;
+    end;
+
+    StoreTbl.Select;
+    DetFieldTbl.AddToXGrid(CtrlToVar(XGrid), 'Hed1', 'ПолеОбщШапка0;;;'+NameFieldsHead2, 0, 0);
+    f := 4;
+    t := 5;
+    i := 0;
+    while i < WordCount(NameFieldsHead2,';') do
+      begin
+        if (XGrid.Cells(3,f,3,t).Value <> 'Расход') and (XGrid.Cells(3,f,3,t).Value <> 'Возврат от покупателя') then
+          t := f + 1
+        else
+          t := f + 3;
+        if XGrid.Cells(3,f,3,t).Value = 'Сумма наценки' then t := f;
+        XGrid.Cells(3,f,3,t).GroupCells;
+        XGrid.Cells(3,f,3,t).Alignment := taCenter;
+        XGrid.Cells(3,f,3,t).BorderLeft := 1;
+        XGrid.Cells(3,f,3,t).BorderTop := 1;
+        XGrid.Cells(3,f,3,t).BorderRight := 1;
+        XGrid.Cells(3,f,3,t).BorderBottom := 1;
+        if (XGrid.Cells(3,f,3,t).Value <> 'Расход') and (XGrid.Cells(3,f,3,t).Value <> 'Возврат от покупателя') then
+          i := i + 2
+        else
+          i := i + 4;
+        f := t + 1;
+        t := f + 1;
+      end;
+
+    DetFieldTbl.AddToXGrid(CtrlToVar(XGrid), 'Hed2', 'ПолеШапка0;ПолеШапка01;ПолеШапка02;'+NameFieldsHead1, 0, 0);
+    i := 1;
+    GoodsTbl.SortBy('Склад;Товар;Код');
+    while StoreTbl.SelectNext do
+      begin
+        StoreTbl.AddToXGrid(CtrlToVar(XGrid), 'Store', 'Код;Товар;ЕдИзм;'+NameDetField, i, 1);
+        GoodsTbl.SetRange(StoreTbl.Склад, StoreTbl.Склад);
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Det', 'Код;Товар;ЕдИзм;'+NameDetField, 0, 0);
+        inc(i);
+      end;
+    GoodsTbl.SortBy('Код');
+    GoodsTbl.SetRange(lblTotal, lblTotal);
+    GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Total', 'Код;Товар;ЕдИзм;'+NameDetField, 0, 0);
+    XGrid.Cells(3, 1, XGrid.RowCount, 3).AdjustColWidths(0);  
+    XGrid.ColCount := 3+WordCount(NameFieldsHead2,';');
+    XGrid.FixedColCount := 3;
+    if XGrid.RowCount > 4 then
+      XGrid.FixedRowCount := 4;
+    XGrid.Cell(1, 1).Value := XGrid.Cell(1, 1).Value + ' ' + DateToStr(DateFrom) + '-' + DateToStr(DateTo);
+  finally
+    SetCursor(CursorVis);
+  end;
+  tbPrint.Enabled := True;
+end;
+
+procedure ePartner_ActionExecute(Sender : TObject);
+var
+  PartName : string;
+begin
+  PartName := ePartner.Text;
+  case VarAsInt(ePartnerType.ItemIndex) of
+    0 :
+      if UrPartner.SelectInForm('ВыборПартнера', PartName, Null) then
+        begin
+          ePartner.Text := PartName;
+          Partner := UrPartner;
+        end;
+    1 :
+      if ManPartner.SelectInForm('ВыборФизЛица', PartName, Null) then
+        begin
+          ePartner.Text := PartName;
+          Partner := ManPartner;
+        end;
+  end;
+end;
+
+procedure ePartner_ActionClear(Sender : TObject);
+begin
+  Partner := Null;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(V.GetActiveFormComment(), True);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+Panel2:TO4Panel
+GroupBox2:TO4GroupBox
+eStores:TO4Edit
+GroupBox3:TO4GroupBox
+ePartnerType:TO4Edit
+ePartner:TO4Edit
+cbMoving:TO4CheckBox
+cbGroupModel:TO4CheckBox
+GroupBox1:TO4GroupBox
+eGoods:TO4Edit
+XGrid:TO4XGrid
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel4:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel3:TO4Panel
+Label3:TO4Label
+pGoodsCtg:TO4Panel
+Label1:TO4Label
+clbTypeDoc:TO4CheckListBox
+XGrid1:TO4XGrid
+TableValueSource1:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

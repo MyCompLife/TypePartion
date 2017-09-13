@@ -1,0 +1,127 @@
+interface
+
+uses
+  System, DispIntf, Reports;  
+
+implementation
+
+var
+  DateFrom, DateTo : DateTime;
+  PrcCurrent : ICProcessing;
+  ObjActivation : IObject;
+  OutParams : Variant;
+  Lock_edDateFrom_Change : Boolean;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo, edDateFrom, edDateTo);
+  (Sender as TO4MenuItem).Checked := True;  
+  if not IsNil(ObjActivation) then
+    ObjActivation.ExecProc(Null, 'ReportDateChanged', ArrayOf(DateFrom, DateTo), OutParams);
+end;
+
+procedure edDateFrom_Change(Sender : TObject);
+begin
+  if Lock_edDateFrom_Change then
+    exit;
+  SetOneDates(Sender, DateFrom, DateTo);
+  if not IsNil(ObjActivation) then
+    ObjActivation.ExecProc(Null, 'ReportDateChanged', ArrayOf(DateFrom, DateTo), OutParams);
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  PrcCurrent := Mean;
+  ObjActivation := PrcCurrent.Params['ObjActivation'];
+end;
+
+procedure SetOtherDates(Dates : Variant);
+begin
+  DateFrom := Dates[0];
+  DateTo := Dates[1];
+  //
+  Lock_edDateFrom_Change := True;
+  try
+    edDateFrom.Text := DateToStr(DateFrom);
+    edDateTo.Text := DateToStr(DateTo);
+  finally
+    Lock_edDateFrom_Change := False;
+  end;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if PrcCurrent.HasParam('AnotherDefDates') then
+    SetOtherDates(PrcCurrent.Params['AnotherDefDates'])
+  else
+    begin
+      Lock_edDateFrom_Change := True;
+      try
+        SetDatesOnOpenForm(DateFrom, DateTo, edDateFrom, edDateTo);
+      finally
+        Lock_edDateFrom_Change := False;
+      end;
+    end;
+end;
+
+procedure Form_Show(Sender : TObject);
+begin
+  tbrData.Height := Form.Parent.Parent.Height; // ширина будет зависеть от MakeInterface
+  Form.Parent.Parent.Width := tbrData.Width;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case ProcID of
+    'GetDates' :
+      OutParams := ArrayOf(DateFrom, DateTo + 1);
+    'SetDates' :
+      SetOtherDates(ArrayOf(InParams[0], InParams[1]));
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+tbrData:TO4ToolBar
+pnDates:TO4Panel
+lbDateFrom:TO4Label
+lbDateTo:TO4Label
+edDateFrom:TO4Edit
+edDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

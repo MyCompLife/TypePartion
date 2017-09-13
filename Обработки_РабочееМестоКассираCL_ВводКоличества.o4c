@@ -1,0 +1,156 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation  
+
+var
+  V: ICProcessing;
+  Driver: OleVariant; 
+  Price: Integer;
+  Count: String;
+
+procedure btnClick(Sender: TObject);
+Var
+  TOper : Integer;
+begin
+  PlaySound('Ding');
+  TOper := (Sender as TO4Button).Tag;
+  case TOper of
+    10: Count := Count + ',';
+    11: Count := '';
+    12: Count := StrCopy(Count, 0, StrLength(Count) - 1);
+    else
+      Count := Count + VarAsStr(TOper);
+  end;
+  edCount.Text := Count;
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  PlaySound('Ding');
+  V.Params['Count'] := StrToDec(edCount.Text);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+{
+  if not VarAsBool(GetUsersField('Весы').IsFocused) then
+    btGetWeight.Visible := false
+  else
+    try
+      if GetUsersField('Весы').Тип = 'ВТА' then
+        Driver := CreateOleObject('ScalesCOMServer.ScalesServerBTA.1');
+    except
+      btGetWeight.Visible := false;
+    end;
+}
+  Price := VarAsInt(Params[0]*100);
+  edCount.Text := VarAsStr(Params[1]);
+  pnInfoCnt.Caption := VarAsStr(Params[2]);
+  pnGood.Caption := VarAsStr(Params[3]);
+end;
+
+function CheckError(Error: Integer): boolean;
+begin
+  if Error = 0 then 
+    begin
+      result := true;
+      exit; 
+    end;
+  case Error of
+    1: begin
+      ShowMessage('Ошибка при работе с СОМ-портом, убедитесь в правильности имени СОМ-порта,'+#13+'а также или СОМ-порт не занят другим приложением.');
+      result := false;
+    end;
+    2: begin
+      ShowMessage('Сом-порт закрыт. Возможно, был аппаратный сбой.');
+      result := false;
+    end;
+    3: begin
+      ShowMessage('Нет ответа от весов. Проверьте включены ли весы, а также кабель подключения к весам.');
+      result := false;
+    end;
+    4: begin
+      ShowMessage('Ошибка в формате цены.');
+      result := false;
+    end;
+    5: begin
+      ShowMessage('Ошибка в типе весов. Этот тип весов не поддерживат данной команды.');
+      result := false;
+    end;
+    6: begin
+      ShowMessage('Даная копия компонента для работы с весами нелицензионная.'+#13+'Обратитесь к поставщику за получением лицензионного кода.');
+      result := false;
+    end;
+    else
+      begin
+      ShowMessage('Ошибка ' + VarAsStr(Error));
+      result := false;
+    end;
+  end;
+end;
+
+procedure btGetWeight_Click(Sender: TObject);
+var
+  Weight, Cost, Error: Integer; 
+  Scales: ICDictionary;
+  ComPort: String;
+begin
+  PlaySound('Ding');
+  edCount.Text := '';
+{
+  Scales := GetUsersField('Весы');
+  if Scales.Тип = 'ВТА' then
+    begin
+      if Scales.ComPort <= 8 then
+        ComPort := 'COM' + IntToStr(Scales.ComPort)
+      else
+        ComPort := '\\.\COM' + IntToStr(Scales.ComPort);
+      Driver.OpenComPort(ComPort, Error);
+      if not CheckError(Error) then
+       exit;
+      Driver.SetPrice(Price, Error);
+      if not CheckError(Error) then
+       exit;
+      Driver.GetInfo(Weight, Price, Cost, Error);
+      if not CheckError(Error) then
+        exit;
+      edCount.Text := edCount.Text + VarAsStr(Weight/1000);
+      Driver.CloseComPort(Error);
+      if not CheckError(Error) then
+        exit;
+    end;
+}
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+ Driver := Null;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+bt7:TO4Button
+bt8:TO4Button
+bt9:TO4Button
+btMin:TO4Button
+btOk:TO4Button
+bt6:TO4Button
+bt5:TO4Button
+bt4:TO4Button
+bt1:TO4Button
+bt2:TO4Button
+bt3:TO4Button
+bt0:TO4Button
+btPoint:TO4Button
+btGetWeight:TO4Button
+btBack:TO4Button
+Panel1:TO4Panel
+pnNum:TO4Panel
+edCount:TO4Edit
+pnGood:TO4Panel
+pnInfoCnt:TO4Panel

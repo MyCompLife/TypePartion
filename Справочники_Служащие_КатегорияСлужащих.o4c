@@ -1,0 +1,37 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Validate(Sender : TObject);
+begin
+  MasterData.ПолноеНазвание := MasterData.Фамилия;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label5:TO4Label
+deCtgName:TO4DBEdit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem
+MDS:TO4DataSource

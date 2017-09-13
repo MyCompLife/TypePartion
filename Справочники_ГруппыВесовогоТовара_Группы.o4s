@@ -1,0 +1,68 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+function GetEndPosition:Integer;server;
+var
+  TmpDic : ISDictionary;
+begin
+  TmpDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+  TmpDic.SortByField('-НомПозиции');
+  TmpDic.Select;
+  TmpDic.SelectNext;
+  Result:= TmpDic.НомПозиции;
+end;    
+ 
+procedure RenumberingDicAfterDelete; server;
+var
+  TmpDic : IsDictionary;
+  PriorNumber : Integer;
+begin
+//  PriorNumber := -1;
+  PriorNumber := 0;
+  TmpDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+  TmpDic.SetFieldFilter('Тип','=',0,'','',Null);
+  TmpDic.SortByField('НомПозиции');
+  TmpDic.Select;
+  While TmpDic.SelectNext do
+    begin
+      if VarAsInt(TmpDic.НомПозиции)<>PriorNumber+1 then
+        begin
+          TmpDic.Edit;
+          TmpDic.НомПозиции := PriorNumber+1;
+          TmpDic.Post;
+          TmpDic.ApplyUpdates;
+        end;
+
+      inc(PriorNumber);
+    end;
+end;
+
+function CheckGoodsInGroup (OwnerDic : IsDictionary): boolean;Server;
+var
+  WGoodsDic : IsDictionary;
+Begin
+  WGoodsDic := CreateObject('Справочники.ВессовойТовар');
+  WGoodsDic.UseMaster(OwnerDic);
+  WGoodsDic.Select;
+  Result:= WGoodsDic.RecordCount=0;
+  Nil(WGoodsDic);
+end;
+
+
+function CheckChieldGroupsInGroup (OwnerDic : IsDictionary): boolean;Server;
+var
+  WGoodsDic : IsDictionary;
+Begin
+  WGoodsDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+  WGoodsDic.UseMaster(OwnerDic);
+  WGoodsDic.Select;
+  Result:= WGoodsDic.RecordCount=0;
+  Nil(WGoodsDic);
+end;
+
+
+end.

@@ -1,0 +1,202 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, Пользователи, НумерацияДокументов, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  Currency, HdCurrency : ICDictionary;
+  OwnerDoc,MasterData : ICDocuments;
+  Constants : IC4VPAConst;
+  ChangeLock, CreateDoc, EditLock, isSave : Boolean;
+  Options : ICOptions;
+  Sum, Pay, Surrender : Decimal;
+  AddDoc : Boolean;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  Currency := CreateObject('Справочники.Валюты');
+  HdCurrency := GetHdCurrency(Currency);
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  CreateObjects;
+end;
+
+procedure eSumNT_Change(Sender : TObject);
+begin
+  if ChangeLock then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  if ChangeLock then
+    exit;
+  try
+    ChangeLock := True;
+    SetSums(FieldName, Value, MasterData, MasterData.СтавкаНДС); //расчеты
+    case StrLowerCase(FieldName) of
+      'сумма', 'суммабезндс', 'суммандс', 'валюта' :
+        begin
+          SetCurSumma(MasterData);
+        end;
+      'курс' :
+        begin
+          SetCurSumma(MasterData);
+        end;
+      'суммаввалюте' :
+        begin
+          SetMainSumma(MasterData, MasterData.СтавкаНДС);
+        end;
+    end;
+  finally
+    ChangeLock := False;
+  end;
+end;
+
+procedure MDS_Append(Sender : TObject);
+var
+  TmpLHead : ICValueTable;
+  Number : string;
+  Users : ICDictionary;
+begin
+  AddDoc := true;
+  if MasterData.HasParam('AddPay') then
+    begin
+      OwnerDoc := MasterData.Params['OwnerDoc'];
+      MasterData.SetMaster(OwnerDoc);
+      MasterData.ДатаДокумента := CurrentDateTime;
+      MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+      MasterData.Взаиморасчет := VarAsInt(True);
+      MasterData.ЕстьНДС := VarAsInt(True);
+      MasterData.СтавкаНДС := Constants.ProcentPDV;
+      if not Currency.FindByField('Активность', VarAsInt(True), True) then
+        Currency := GetNatCurrency(Currency);
+      if Currency.IsFocused then
+        begin
+          MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+          MasterData.Валюта := Currency;
+        end;
+      MasterData.AssignFields('Партнер;Регион;СуммаВВалюте', OwnerDoc);
+      if VarAsBool(OwnerDoc.@АналитикаВзаиморасчета.IsFocused) then
+        MasterData.АналитикаВзаиморасчета := OwnerDoc.@АналитикаВзаиморасчета;
+      MasterData.Сумма := MasterData.СуммаВВалюте*MasterData.Курс;
+      SetSums('Сумма', MasterData.Сумма, MasterData, Constants.ProcentPDV);
+      MasterData.Касса := GetUsersField('Касса');
+      MasterData.BaseID := VarAsInt(Constants.КодИБ); 
+      MasterData.AppendLine();
+      MasterData.PostLine();
+    end;
+  edSum.Text := FormatFloat('# ##0.00', OwnerDoc.СуммаВВалюте*MasterData.Курс);
+  if MasterData.HasParam('PaySum') then
+    begin
+      if MasterData.Params['PaySum'] > 0 then
+        edPay.Text := FormatFloat('# ##0.00', MasterData.Params['PaySum'])
+      else
+        edPay.Text := FormatFloat('# ##0.00', 0);
+    end
+  else
+    edPay.Text := FormatFloat('# ##0.00', OwnerDoc.СуммаВВалюте*MasterData.Курс);
+end;
+
+procedure tsPay_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbPay.PageIndex := NewTab;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  EditLock := True;
+  eRespons.Enabled := GetUDASet('changeresp');
+//  eDate.Enabled := GetUDASet('ChangeDate');
+  if VarAsBool(MasterData.Owner.IsFocused) then
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form);
+  EditLock := False;
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  if AddDoc then
+    ChangeDoc(clmtAppend,MasterData)
+  else
+    ChangeDoc(clmtEdit,MasterData);
+  if VarAsBool(Options.GetServerPrm(FixPays)) and CreateDoc then
+    MasterData.StateUp;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  MasterData.Сумма := VarAsDec(edPay.Text);
+  MasterData.Params['mrOk'] := true;
+  MasterData.Комментарий := 'Оплата згідно чека №' + OwnerDoc.НомерДокумента + ' від ' + DateToStr(OwnerDoc.ДатаДокумента);
+  if MasterData.NumID = 0 then
+    MasterData.NumID := УстановитьНомерДокумента(MasterData, '');
+end;
+
+procedure miPayCheck_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ПараметрыНастройкиКассы');
+  V.Params['PartCode'] := VarAsDec(edPay.text);
+  V.Params['FormName'] := 'Введите сумму';
+  V.Execute('ВводКодаПартнераППК',Null);
+  edPay.Text := VarAsStr(V.Params['PartCode']);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+LinkImage1:TO4LinkImage
+Panel1:TO4Panel
+nbPay:TO4Notebook
+Label4:TO4Label
+Label7:TO4Label
+Label3:TO4Label
+Panel4:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+eDate:TO4DBEdit
+eNumber:TO4DBEdit
+ePartName:TO4DBEdit
+edSum:TO4Edit
+edPay:TO4Edit
+Panel12:TO4Panel
+ToolBar7:TO4ToolBar
+tbPay:TO4ToolButton
+Label12:TO4Label
+DBMemo1:TO4DBMemo
+Panel5:TO4Panel
+Label5:TO4Label
+Label26:TO4Label
+Label6:TO4Label
+eCtg:TO4DBEdit
+eRespons:TO4DBEdit
+eAnalit:TO4DBEdit
+tsPay:TO4TabSet
+Panel2:TO4Panel
+Panel3:TO4Panel
+btnOK:TO4Button
+btnCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem

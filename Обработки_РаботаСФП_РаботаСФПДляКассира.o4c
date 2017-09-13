@@ -1,0 +1,343 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, Пользователи, 
+  РаботаС_ICS_EP_09, РаботаСФП_Unisystem, РаботаСФРЭкселлио, РаботаСWebApi, РаботаФП_MG_N707TS;
+
+implementation
+var UserDic, FiscalPrinerDic : ICDictionary;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  UserDic := GetDictUser;
+  if IsObjFocused(UserDic) then
+    begin
+      FiscalPrinerDic := CreateObject('Справочники.ФискальныеРегистраторы');
+      if FiscalPrinerDic.Find(UserDic.@ФискальныйРегистратор) then
+        case VarAsStr(FiscalPrinerDic.Тип) of
+           'ICS' :  nbFP.PageIndex := 0;
+           'Unisystem' : nbFP.PageIndex := 1;
+           'Excellio' : nbFP.PageIndex := 2;
+           'MG-N707' : nbFP.PageIndex := 3
+           else
+             ShowMessage('Неизвестный тип фискального регистратора!');
+        end
+      else
+        raise('У пользователя не указан фискальный принтер!');
+    end
+  else
+    raise('Не задан пользователь');
+end;
+
+procedure btXReportICS_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить X-отчет?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   XReportFP_ICS_EP_09(FiscalPrinerDic);
+end;
+
+procedure btZReportICS_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить Z-отчет?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   ZReportFP_ICS_EP_09(FiscalPrinerDic);
+end;
+
+procedure btRepOnItemICS_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить дневной отчет по товарам?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   ReportOnItemsFP_ICS_EP_09(FiscalPrinerDic);
+end;
+
+procedure miPeriodReportICS_Click(Sender: TObject);
+var BegDate,EndDate:DateTime;
+    P:ICProcessing;
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   begin
+     P := CreateObject('Обработки.Диалоги');
+     if P.Execute('ВыборПериодаДат',Null)=mrOK then
+       begin
+         PeriodicReportFP_ICS_EP_09(FiscalPrinerDic,VarAsDate(P.Params['BegDate']),VarAsDate(P.Params['EndDate']));
+       end;
+   end;
+end;
+
+procedure btCashInICS_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму внесения денег:',Sum) then
+   begin
+     if Sum>0 then
+       begin
+         CashInFP_ICS_EP_09(FiscalPrinerDic,Sum);
+       end
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure miCashOutICS_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму выдачи денег:',Sum) then
+   begin
+     if Sum>0 then
+       begin
+         CashOutFP_ICS_EP_09(FiscalPrinerDic,Sum);
+       end
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure miPrintZeroReceiptICS_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   PrintZeroReceiptFP_ICS_EP_09(FiscalPrinerDic);
+end;
+
+
+procedure miCancelReceiptICS_Click(Sender: TObject);
+begin
+  if IsObjFocused(FiscalPrinerDic) and AnnulReceiptFP_ICS_EP_09(FiscalPrinerDic) then
+    ShowMessage('Текущий чек отменен!');
+end;
+
+procedure btXReportUnisystem_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить X-отчет?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   XReportMiniFP(FiscalPrinerDic);
+end;
+
+procedure btZReportUnisystem_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить Z-отчет?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   ZReportMiniFP(FiscalPrinerDic);
+end;
+
+
+procedure btCashInUnisystem_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму внесения денег:',Sum) then
+   begin
+     if Sum>0 then
+       begin
+         CashInMiniFP(FiscalPrinerDic,Sum);
+       end
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure miCashOutUnisystem_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму выдачи денег:',Sum) then
+   begin
+     if Sum>0 then
+       begin
+         CashOutMiniFP(FiscalPrinerDic,Sum);
+       end
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure miPrintZeroReceiptUnisystem_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   PrintZeroReceiptMiniFP(FiscalPrinerDic);
+end;
+
+
+procedure miCancelReceiptUnisystem_Click(Sender: TObject);
+begin
+  if IsObjFocused(FiscalPrinerDic) and CancelReceiptMiniFP(FiscalPrinerDic) then
+    ShowMessage('Текущий чек отменен!');
+end;
+
+procedure btLineFeedUnisystem_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   try
+     if OpenMiniFP(FiscalPrinerDic) then
+       LineFeedMiniFP(1);
+   finally
+     CloseMiniFP;
+   end;
+end;
+
+procedure btPrintLastReceiptCopyUnisystem_Click(Sender: TObject);
+begin
+  if IsObjFocused(FiscalPrinerDic) then
+   PrintLastReceiptCopyMiniFP(FiscalPrinerDic);
+end;
+
+procedure btGetStatusUnisystem_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   ShowMessage(GetStatusStrMiniFP(FiscalPrinerDic));
+end;
+
+procedure btXReportExcellio_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   XReportFPExellio(FiscalPrinerDic);
+end;
+
+procedure btZReportExcelio_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   ZReportFPExellio(FiscalPrinerDic);
+end;
+
+procedure btRepOnItemExcellio_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   ReportOnItemsFPExellio(FiscalPrinerDic);
+end;
+
+procedure btPeriodReportIExcellio_Click(Sender: TObject);
+var BegDate,EndDate:DateTime;
+    P:ICProcessing;
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   begin
+     P := CreateObject('Обработки.Диалоги');
+     if P.Execute('ВыборПериодаДат',Null)=mrOK then
+       begin
+         PeriodicReportFPExellio(FiscalPrinerDic,VarAsDate(P.Params['BegDate']),VarAsDate(P.Params['EndDate']));
+       end;
+   end;
+end;  
+
+procedure btCashInExcellio_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму внесения денег:',Sum) then
+   begin
+     if Sum>0 then
+      CashInOutFPExellio(FiscalPrinerDic,Sum)
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure btCashOutExcellio_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму выдачи денег:',Sum) then
+   begin
+     if Sum>0 then
+      CashInOutFPExellio(FiscalPrinerDic,-Sum)
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure PrintZeroRecepitExcellio_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   PrintZeroReceiptFPExellio(FiscalPrinerDic);
+end;
+
+procedure btCancelRecepitExcellio_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   CancelLastDocFPExellio(FiscalPrinerDic);
+end;
+
+procedure btXReportMGN707_Click(Sender: TObject);
+begin
+ PrintFiscalReportMGN707(FiscalPrinerDic, '10');
+end;
+
+procedure btZReportMGN707_Click(Sender: TObject);
+begin
+ PrintFiscalReportMGN707(FiscalPrinerDic, '0');
+end;
+
+procedure btRepOnItemMGN707_Click(Sender: TObject);
+begin
+ PrintFiscalReportMGN707(FiscalPrinerDic, '20');
+end;
+
+procedure btGetStatusMGN707_Click(Sender: TObject);
+begin
+ ShowMessage(GetFiscalPrinterStateMGN707(FiscalPrinerDic));
+end;
+
+procedure btCashInMGN707_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму внесения денег:',Sum) then
+   begin
+     if Sum>0 then
+      InputOutputCashMGN707(FiscalPrinerDic, Sum)
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure btCashOutMGN707_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму выдачи денег:',Sum) then
+   begin
+     if Sum>0 then
+      InputOutputCashMGN707(FiscalPrinerDic, -Sum)
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure btPrintZeroRecepitMGN707_Click(Sender: TObject);
+begin
+ PrintZeroReceiptMGN707(FiscalPrinerDic);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+btClose:TO4Button
+nbFP:TO4Notebook
+GroupBox1:TO4GroupBox
+btXReportICS:TO4Button
+btZReportICS:TO4Button
+btRepOnItemICS:TO4Button
+miPeriodReportICS:TO4Button
+GroupBox2:TO4GroupBox
+btCashInICS:TO4Button
+miCashOutICS:TO4Button
+miPrintZeroReceiptICS:TO4Button
+miCancelReceiptICS:TO4Button
+GroupBox3:TO4GroupBox
+btXReport:TO4Button
+btZReport:TO4Button
+btPrintLastReceiptCopy:TO4Button
+btGetStatus:TO4Button
+GroupBox4:TO4GroupBox
+btCashIn:TO4Button
+miCashOut:TO4Button
+miPrintZeroReceipt:TO4Button
+miCancelReceipt:TO4Button
+btLineFeed:TO4Button
+GroupBox5:TO4GroupBox
+btXReportExcellio:TO4Button
+btZReportExcelio:TO4Button
+btRepOnItemExcellio:TO4Button
+btPeriodReportIExcellio:TO4Button
+GroupBox6:TO4GroupBox
+btCashInExcellio:TO4Button
+btCashOutExcellio:TO4Button
+PrintZeroRecepitExcellio:TO4Button
+btCancelRecepitExcellio:TO4Button
+GroupBox7:TO4GroupBox
+btXReportMGN707:TO4Button
+btZReportMGN707:TO4Button
+btRepOnItemMGN707:TO4Button
+GroupBox8:TO4GroupBox
+btCashInMGN707:TO4Button
+btCashOutMGN707:TO4Button
+btPrintZeroRecepitMGN707:TO4Button
+btGetStatusMGN707:TO4Button

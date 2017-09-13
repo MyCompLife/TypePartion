@@ -1,0 +1,90 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений, –абота—∆урналом»зменений;
+
+implementation
+
+var
+  FullName : string;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniFix, FixAck);
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+begin
+  case Doc.GetDocState of
+    1 :
+      begin
+        if not Doc.RunThreadProcess(server.GetChangeStateUpEP, UniFixProgress + FullName) then
+          raise(emsgFixFail);
+        ChangeDoc(clmtStateUp, Doc);
+        //первое событие
+        Doc.SendEvent(evCount, Unassigned, False);
+        Doc.SendEvent(evNakladn, Unassigned, False);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniUnFix, FixAck);
+  if Accept then
+    case Doc.GetDocState of
+      1 :
+        begin
+          Accept := CheckOverGoodStore(Doc, FullName, actStateDown);
+
+          //первое событие
+        end;
+      2 :
+        ;
+    end;
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin     
+  ChangeDoc(clmtStateDown, Doc);
+  Doc.SendEvent(evCount, Unassigned, False);
+  Doc.SendEvent(evNakladn, Unassigned, False);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniDel, DelAck);
+  if Accept then
+    case Doc.GetDocState of
+      1, 2 :
+        begin
+          Accept := CheckOverGoodStore(Doc, FullName, actDel);
+
+          //первое событие
+        end;
+    end;  
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoDelete(Doc : ICDocuments);
+begin       
+  Doc.SendEvent(evCount, Unassigned, False);
+  Doc.SendEvent(evNakladn, Unassigned, False);
+end;
+
+procedure CanChangeBuhStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  if (not Doc.ISGroupAction) or (Doc.FirstInGroupAction) then
+    begin
+      Doc.BuhWizard := CreateObject('Ѕух”чет.Ѕух”чет').CreateWizard();
+      Accept := Doc.BuhWizard.OpenAskForm(Doc);
+    end
+  else
+    Accept := Doc.BuhWizard.AsceptUp;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

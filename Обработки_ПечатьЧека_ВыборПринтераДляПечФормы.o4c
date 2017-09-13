@@ -1,0 +1,113 @@
+interface
+
+uses  System, DispIntf, Интерфейс, Расчеты, РаботаСПеременными, ConstNames, Reports, ДополнительныйФункционал, РаботаСТаблицамиЗначенийCL;
+
+implementation
+var
+   Constants : IC4VPAConst;
+   Options : ICOptions;
+   V : ICProcessing;
+   PrintList: ICValueList;
+   PrintFormList,PrintForm, PrintJournName : String;
+   isUseUser : Boolean; 
+   UserDic : IcDictionary;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  i : integer;
+  s : string;
+begin
+  V := Mean;
+  Constants := GetConstants;
+  Options := GetOptions;
+  If IsArray(Params) then
+    begin
+      PrintFormList := VarAsStr(Params[0]);
+      PrintJournName := VarAsStr(Params[1]);
+      isUseUser := True;
+      UserDic := CreateObject('Справочники.Пользователи');
+      if UserDic.FindByCode(GetUserLogin,false) then
+          cbPreview.Checked := VarAsBool(UserDic.ПредПросмотрЧекаРабМестоКасс)
+      else
+        begin
+          cbPreview.Visible := false;
+          isUseUser := False;
+        end;
+    end
+  else
+    begin
+      PrintFormList := VarAsStr(Params);
+      cbPreview.Visible := false;
+      isUseUser := False;
+    end;
+  edPrintForm.Items.Clear;
+  if PrintFormList<>'' then
+    begin
+      for i:=1 to WordCount(PrintFormList,';') do
+        begin  
+          s:= ExtractWord(i,PrintFormList,';');
+          if StrPos('|',s)<>0 then
+            s:= ExtractWord(1,s,'|');
+          if s<>'' then
+            edPrintForm.Items.Add(s);
+        end;
+    end
+  else
+    edPrintForm.Items.Add('Чек80мм');
+  edPrintForm.ItemIndex := 0;
+  PrintForm := edPrintForm.Items.Strings[edPrintForm.ItemIndex]; 
+  edLeftMargin.Text := VarAsStr(Options.GetServerPrm('LeftMargin ' + PrintForm), '0');
+  edTopMargin.Text := VarAsStr(Options.GetServerPrm('TopMargin ' + PrintForm), '0');
+  GetPrintersList(PrintList, edPrinters, PrintForm);
+end;
+
+procedure btOK_Click(Sender: TObject);
+Var
+  PrintName: String; 
+begin
+
+  if PrintList.CurIndex <> -1 then
+    PrintName := PrintList.GetStr(PrintList.CurIndex);
+  PrintForm := edPrintForm.Items.Strings[edPrintForm.ItemIndex];
+  SetPrintNameForCurPrintForm(PrintForm, PrintName);
+  if PrintForm<>'' then
+    begin
+      Options.SetServerPrm('LeftMargin ' + PrintForm, edLeftMargin.Text);
+      Options.SetServerPrm('TopMargin ' + PrintForm, edTopMargin.Text);
+    end;  
+    
+  if isUseUser and IsObjFocused(UserDic) then
+    begin
+      UserDic.Edit;
+      UserDic.ПредПросмотрЧекаРабМестоКасс := cbPreview.Checked;
+      UserDic.Post;
+      UserDic.ApplyUpdates;
+    end;
+end;
+
+procedure edPrintForm_Change(Sender: TObject);
+begin
+ PrintForm := edPrintForm.Items.Strings[edPrintForm.ItemIndex];
+  edLeftMargin.Text := VarAsStr(Options.GetServerPrm('LeftMargin ' + PrintForm), '0');
+  edTopMargin.Text := VarAsStr(Options.GetServerPrm('TopMargin ' + PrintForm),'0');
+ GetPrintersList(PrintList, edPrinters, PrintForm);
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+Label1:TO4Label
+edPrintForm:TO4Edit
+Panel2:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel3:TO4Panel
+Label4:TO4Label
+edPrinters:TO4Edit
+Panel4:TO4Panel
+Label2:TO4Label
+Label3:TO4Label
+edLeftMargin:TO4Edit
+edTopMargin:TO4Edit
+cbPreview:TO4CheckBox

@@ -1,0 +1,41 @@
+interface
+
+uses
+  System, DispIntf,РаботаСКомпонентамиVCL;
+
+implementation
+var
+  MasterData : ICDictionary;
+
+procedure Form_Open(Sender: TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itSelectForm;
+  MakeStandartInterface(MasterData, Form, '', '');
+  MasterData.SetFieldFilter('НаличиеПодгрупы','=',false,'','',Null);
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+  MasterData.SortByField('НомПозиции');
+
+end;
+
+procedure miRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

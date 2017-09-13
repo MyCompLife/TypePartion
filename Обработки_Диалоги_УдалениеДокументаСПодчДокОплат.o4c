@@ -1,0 +1,37 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);  
+var DelChildPayJrn : ICJournal;
+    MasterData : ICDocuments;
+    MessageStr : string;
+begin
+ MasterData := Params;
+ MessageStr := 'К документу '+MasterData.GetName+' №'+MasterData.GetNumber+' от '+DateToStr(MasterData.GetDate)+' привязаны следующие подчиненные документы:';
+ if MasterData.HasHeaderField('Отпуск') then
+  case VarAsBool(MasterData.Отпуск) of
+    false : DelChildPayJrn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+    true : DelChildPayJrn := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  end
+ else
+  DelChildPayJrn := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+ DelChildPayJrn.UseMaster(MasterData);
+ if DelChildPayJrn.Select then
+   While DelChildPayJrn.SelectNext do
+    MessageStr := MessageStr + #13+'  - '+VarAsStr(DelChildPayJrn.Документ)+' №'+VarAsStr(DelChildPayJrn.НомерДокумента)+
+                 ' от '+ DateToStr(VarAsDate(DelChildPayJrn.ДатаДокумента))+' сумма '+VarAsStr(DelChildPayJrn.Сумма)+' грн.';
+ mmMessage.Lines.Text := MessageStr;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+btDeWithChildPay:TO4Button
+btDelDoc:TO4Button
+btCancel:TO4Button
+mmMessage:TO4Memo

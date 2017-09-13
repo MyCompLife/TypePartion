@@ -1,0 +1,45 @@
+interface
+
+uses
+  System, DispIntf, –асчеты, –абота—ќбъектами, –абота—ѕеременными,
+  –абота—“аблицами«начений;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  Store, UrPartner, ManPartner, Partner, Admin, Rule, State, Disc : ICDictionary;
+
+procedure ActionExecute(edMean : TO4Edit; MeanName, FormName : String; var Mean : ICDictionary);
+var
+  s : string;
+begin
+  if IsNil(Mean) then
+    Mean := CreateObject(MeanName);
+  if Mean.SelectInForm(FormName, s, Null) then
+    edMean.Text := s;
+end;
+
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Constants := GetConstants;
+  if VarAsStr(Constants.ѕуть  аталогу‘ото) = '' then
+    exit;
+  if FileExists(Constants.ѕуть  аталогу‘ото + 'BigFoto\' + VarAsStr(Params) + '_01.jpg') then
+    begin
+      dbImgGood.Visible := true;
+      dbImgGood.LoadFromFile(VarAsStr(Constants.ѕуть  аталогу‘ото) + 'BigFoto\' + VarAsStr(Params) + '_01.jpg');
+    end
+  else
+    dbImgGood.Visible := False
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+btCancel:TO4Button
+Panel2:TO4Panel
+dbImgGood:TO4DBImage

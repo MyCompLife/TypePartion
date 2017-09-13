@@ -1,0 +1,58 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  Store : ISDictionary;
+  Date : DateTime;
+
+procedure InitSrvData; server;
+begin
+  Date := CurrentDate;
+end;
+
+procedure GetMyGoodCount(tmpCtx : ISValueTable; Date : DateTime; AccsGoods, AccsReserv : ISAccs); server;
+begin
+  GetGoodCount(tmpCtx, Date, AccsGoods, AccsReserv);
+end;
+
+procedure SetStoreParams(DT : DateTime; Stores : ISValueList; Index : Integer); server;
+begin
+  Date := RoundDate(DT, rdDay, True);
+  if Stores.ValidIndex(Index) and (Index <> 0) then
+    Store := Stores.GetValue(Index)
+  else
+    nil(Store);
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure CreateApplyTableS(TblPartGood : ISValueTable; Source, Store : ISDictionary; DocDate : DateTime); server;
+var
+  AccsPartGood, AccsGoods : ISAccs;
+begin
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  //  AccsPartGood.ClearFieldFilters();
+  //  AccsPartGood.ClearFieldBuffers();
+  if not IsNil(Store) and Store.IsFocused then
+    AccsGoods.SetFieldFilter('Склад', Store);
+  AccsGoods.SetFieldFilter('Товар', Source);
+  AccsGoods.AppendRestToValueTable(DocDate, 'Товар;Склад;КолОбщ;Партия', TblPartGood);
+  //RoundDate(CurrentDate, rdDay, true)
+  TblPartGood.GroupBy('Товар;Склад;Партия', 'КолОбщ');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;Комиссия;ДатаПр', TblPartGood);
+end;
+
+end.

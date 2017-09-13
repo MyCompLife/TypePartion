@@ -1,0 +1,163 @@
+interface
+
+uses
+  System, DispIntf, Reports;
+
+implementation
+
+var
+ Dic : ICDictionary;
+ DicNames : String;
+ DicTbl, DicGroupTable : ICValueTable;
+
+procedure btnDicList_Click(Sender : TObject);
+var
+ i, j : Integer;
+begin
+  btnDicList.Flat := true;
+  DicTbl := CreateObject('ТаблицаЗначений');
+  DicGroupTable.UseDataSource(0);
+  DicGroupTable.Close;
+  deFields.Text := '';
+  if StrPos(DicList.Text,DicNames)<> 0 then
+    begin
+     Server.DicTbl_Fill(DicList.Text,DicTbl.SrvMean);
+     DicTbl.CopyDataFromServer();
+     dbgData.PosColumns.Clear;
+     dbgData.Update;
+     deFields.Items.Clear;
+     for i := 1 to DicTbl.GetColumnCount-1 do
+       if (DicTbl.GetColumnDataType(i)<> vtcBlob) and (DicTbl.GetColumnDataType(i)<> vtcMemo) then
+         deFields.Items.Add(DicTbl.GetColumnName(i));
+   end
+  else
+    ShowMessage('Cправочник "'+DicList.Text+'" не доступен в данной обработке!');
+end;
+
+procedure DicList_Change(Sender : TObject);
+begin
+  btnDicList.Flat := false;
+  deFields.Items.Clear;
+end;
+
+
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  DicNames := 'Email;Адреса;Банки;Валюты;Города;ГруппыСкидок;КатегорииПлатежей;Комплектующие;ЛичДокументы;Партнеры;ПостНаРеализацию;Правила;'
+             +'Представители;РасчСчета;Реализаторы;РегНомера;Склады;Служащие;Телефоны;Товары;Упаковки;Услуги;ФизЛица;ЮрПартнеры';
+  DicGroupTable := CreateObject('ТаблицаЗначений'); 
+  DicTbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  i, index : Integer;
+begin
+  dbgData.PosColumns.Clear;
+  DicGroupTable.UseDataSource(0);
+  DicGroupTable.Close;
+  if DicTbl.HasField(deFields.Text) then
+    begin
+      index := null;
+      for i := 1 to DicTbl.GetColumnCount do
+        if DicTbl.GetColumnName(i-1) = deFields.Text then
+          begin
+            index := i-1;
+            break;
+          end;
+      DicGroupTable.AddColumn(deFields.Text,vtcString,100);
+      DicGroupTable.AddColumn('Количество',vtcInteger,0);
+      DicGroupTable.Open;
+      DicTbl.Select;
+      Dictbl.SelectFirst;
+      if DicTbl.GetColumnDataType(index) = vtcLink then
+        for i:=1 to DicTbl.LineCount do
+          begin
+            if DicTbl._default[deFields.text].IsFocused = true then
+              begin
+                DicGroupTable.Append;
+                  if  StrPos('Справочники',DicTbl._Default[deFields.text].GetType)<> 0 then
+                    DicGroupTable._Default[deFields.text] := VarAsStr(DicTbl._Default[deFields.text].NameField)
+                  else DicGroupTable._Default[deFields.text] := VarAsStr(DicTbl._Default[deFields.text].Value);
+                  DicGroupTable.Количество := 1;
+                DicGroupTable.Post;
+              end
+            else
+              begin
+                DicGroupTable.Append;
+                  DicGroupTable._Default[deFields.text] := '*ПУСТОЕ ЗНАЧЕНИЕ*';
+                  DicGroupTable.Количество := 1;
+                DicGroupTable.Post;
+              end;
+            DicTbl.SelectNext;
+          end
+      else
+         for i:=1 to DicTbl.LineCount do
+           begin
+             DicGroupTable.Append;
+               DicGroupTable._Default[deFields.text] := VarAsStr(DicTbl._Default[deFields.text],'*ПУСТОЕ ЗНАЧЕНИЕ*');
+               DicGroupTable.Количество := 1;
+             DicGroupTable.Post;
+             DicTbl.SelectNext;
+           end;
+      for i := 0 to 1 do
+        begin
+          dbgData.PosColumns.Add;
+            (dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName := DicGroupTable.GetColumnName(i);
+            (dbgData.PosColumns.Items[i] as TO4GridColumn).Title.Caption := DicGroupTable.GetColumnName(i);
+            if i = 0 then
+              (dbgData.PosColumns.Items[i] as TO4GridColumn).Width := 100;
+        end;
+      DicGroupTable.GroupBy(deFields.Text,'Количество');
+      DicGroupTable.Select;
+      DicGroupTable.SelectFirst;
+      While DicGroupTable.LineCount<>0 do
+        begin
+          if DicGroupTable.Количество = 1 then
+           begin
+            DicGroupTable.Delete;
+            DicGroupTable.SelectFirst;
+           end
+          else
+           if not (DicGroupTable.SelectNext) then
+            break;
+        end;
+      DicGroupTable.UseDataSource(CtrlToVar(TVS));
+    end
+  else
+    ShowMessage('У справочника "'+DicList.Text+'" нет поля "'+deFields.Text+'"!');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Head:TO4Panel
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbParam:TO4ToolButton
+GroupBox1:TO4GroupBox
+DicList:TO4Edit
+btnDicList:TO4Button
+dbgData:TO4DBGrid
+Panel3:TO4Panel
+Panel1:TO4Panel
+Panel2:TO4Panel
+Label1:TO4Label
+GroupBox4:TO4GroupBox
+ListAtribut:TO4CheckListBox
+GroupBox3:TO4GroupBox
+ListZnach:TO4CheckListBox
+GroupBox2:TO4GroupBox
+ListIzmer:TO4CheckListBox
+Panel4:TO4Panel
+Label2:TO4Label
+lblFilter1:TO4Label
+lblFilter2:TO4Label
+lblFilter3:TO4Label
+deFilter1:TO4Edit
+deFilter2:TO4Edit
+deFilter3:TO4Edit
+deFilter0:TO4Edit
+deFields:TO4Edit
+TVS:TO4TableValueSource

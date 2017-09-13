@@ -1,0 +1,76 @@
+interface
+
+uses
+  System, DispIntf, ConstNames;
+
+implementation
+var
+      GoodsDic : ISDictionary;
+      GoodsTbl,CtgTbl:ISValueTable;
+      TypePrice : string;
+      Count, Total : integer; 
+      TmpTbl : ISValueTable;
+      Constants : IS4VPAConst;
+      PhotoPath : string;
+procedure SaveDicToTbl(Proc : ISProcessing; var Accept : Boolean);
+begin   
+ Accept := false;
+ GoodsDic :=  CreateObject('Справочники.Товары');
+ if not GoodsDic.HasField(TypePrice) then
+   exit;
+ TmpTbl := CreateObject('ТаблицаЗначений');
+ Constants :=  CreateObject('Константы');
+ PhotoPath := VarAsStr(Constants.ПутьККаталогуФото);
+ if (StrLength(PhotoPath)>0) and (StrCopy(PhotoPath,StrLength(PhotoPath),1) <> '\') then
+   PhotoPath := PhotoPath + '\';
+
+ // Выгрузка категорий товаров
+ GoodsDic.IncludeLevels(true);
+ GoodsDic.IncludeOnlyLevels(true);
+ GoodsDic.Select;  
+ GoodsDic.SaveToValueTable('Self;Код;НазвТовара',TmpTbl,1,GoodsDic.RecordCount);
+ TmpTbl.AppendTo('Self;Код=category_id;НазвТовара=name',CtgTbl);
+ TmpTbl.Clear;   
+ GoodsDic.IncludeOnlyLevels(false);
+ GoodsDic.IncludeLevels(false);
+ Count := 0;
+ Total := CtgTbl.LineCount; 
+ CtgTbl.Select;
+ While CtgTbl.SelectNext do
+   begin
+     CtgTbl.Edit;
+     if VarAsBool(CtgTbl.Self.GetParent.IsFocused) then
+       CtgTbl.parent_id := CtgTbl.Self.GetParent.Код;
+     CtgTbl.status := true;
+     CtgTbl.Post;   
+      // Выгрузка товаров по категориям категорий
+     GoodsDic.UseParent(CtgTbl.Self);
+     GoodsDic.Select;
+     While GoodsDic.SelectNext do
+       begin  
+         GoodsTbl.Append;
+         GoodsTbl.AssignFields('product_id=Код;name=НазвТовара;Производитель;Price='+TypePrice,GoodsDic);
+         GoodsTbl.categories := CtgTbl.category_id;
+         GoodsTbl.image_name := PhotoPath+VarAsStr(GoodsDic.Код)+'.jpg';
+         GoodsTbl.Post;
+       end;
+     inc(Count);
+     Proc.NotifyClient('Выгрузка категорий',Count,Total);
+     if Proc.Terminated then
+       exit;
+   end;
+ GoodsTbl.DoGetLinks('manufacturer=Производитель.Название');
+ Nil(GoodsDic);
+ Nil(TmpTbl);
+ Accept := true;
+end;
+
+function SaveDicToTblEP(GoodsTbls,CtgTbls:ISValueTable; TypePrices:string): Variant; server;
+begin
+ GoodsTbl := GoodsTbls;
+ CtgTbl := CtgTbls;
+ TypePrice := TypePrices;
+ Result := EntryPoint(SaveDicToTbl);
+end;
+
+end.

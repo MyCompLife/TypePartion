@@ -1,0 +1,41 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+procedure Tables_Fill(MasterData : ISDocuments; StoreTbl, KassaTbl, BankTbl, DebTbl, KredTbl : ISValueTable); server;
+var 
+  Vtbl : ISVAlueTable;
+begin
+  Vtbl := CreateObject('ТаблицаЗначений');
+  Vtbl.Close;
+  Vtbl.AddColumn('Наименование',vtcString,100);
+  Vtbl.AddColumn('СумОбщ',vtcFFt,4);
+  Vtbl.AddColumn('Тип',vtcInteger,0);
+  Vtbl.Open;
+  MasterData.SelectLines;
+  While MasterData.SelectNextLine do
+    begin
+      Vtbl.Append;
+        Vtbl.Наименование := MasterData.Наименование;
+        Vtbl.СумОбщ := MasterData.СумОбщ;
+        Vtbl.Тип := MasterData.Тип;
+      Vtbl.Post;
+    end;
+  Vtbl.SortBy('Тип');
+  Vtbl.SetRange(0,0);
+  Vtbl.CopyTo('Наименование;СумОбщ',StoreTbl);
+  Vtbl.SetRange(4,4);
+  Vtbl.CopyTo('Наименование;СумОбщ',KassaTbl);
+  Vtbl.SetRange(5,5);
+  Vtbl.CopyTo('Наименование;СумОбщ',BankTbl);
+  Vtbl.SetRange(6,6);
+  Vtbl.CopyTo('Наименование;СумОбщ',DebTbl);
+  Vtbl.SetRange(7,7);
+  Vtbl.CopyTo('Наименование;СумОбщ',KredTbl);
+end;
+
+
+end.

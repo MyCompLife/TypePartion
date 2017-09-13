@@ -1,0 +1,122 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData, DetAdr, DetPhone, DetBankAcc, DetRepresenter, DetEmail : ICDictionary;
+  CollectTbl : ICValueTable;
+  Collection : ICCollection;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(edCollect.Text, dbeName.Text), ' ');
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if VarAsBool(MasterData.ОПФ.IsFocused) then
+    edCollect.Text := MasterData.ОПФ.Value;
+  Collection := CreateObject('Коллекции.ОПФ');
+  CollectTbl := CreateObject('ТаблицаЗначений');
+  CreateCollectionTbl(CollectTbl, Collection);
+  while CollectTbl.SelectNext() do
+    edCollect.Items.Add(CollectTbl.Comment);
+  lbTitle.Caption := SetTitleCaption(ArrayOf(edCollect.Text, dbeName.Text), ' ');
+end;
+
+procedure pgcLists_Change(Sender : TObject);
+begin
+  case pgcLists.ActivePage.PageIndex of
+    1 :
+      if IsNil(DetPhone) then
+        DetPhone := SetDetailDict(MasterData, 'Телефоны', 'ПросмотрТелефонов', CtrlToVar(pgcLists.ActivePage));
+    2 :
+      if IsNil(DetAdr) then
+        DetAdr := SetDetailDict(MasterData, 'Адреса', 'ПросмотрАдресов', CtrlToVar(pgcLists.ActivePage));
+    3 :
+      if IsNil(DetBankAcc) then
+        DetBankAcc := SetDetailDict(MasterData, 'РасчСчета', 'ПросмотрРасчСчетов', CtrlToVar(pgcLists.ActivePage));
+    4 :
+      if IsNil(DetRepresenter) then
+        DetRepresenter := SetDetailDict(MasterData, 'ФизЛица', 'ПросмотрПредставителей', CtrlToVar(pgcLists.ActivePage));
+    5 :
+      if IsNil(DetEmail) then
+        DetEmail := SetDetailDict(MasterData, 'Email', 'ПросмотрEmail', CtrlToVar(pgcLists.ActivePage));
+  end
+end;
+
+procedure MDS_Validate(Sender : TObject);
+begin
+  ChangeCollectionField(Collection, MasterData, 'ОПФ', edCollect.Text);
+  if (edCollect.Text = '') then
+    MasterData.ПолноеНазвание := dbeName.Text
+  else
+    MasterData.ПолноеНазвание := dbeName.Text + ' ' + edCollect.Text;
+end;
+
+procedure deKassaAccount_ActionExecute(Sender : TObject);
+begin
+  DetBankAcc.Refresh;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+pgcLists:TO4PageControl
+tsGeneral:TTabSheet
+Label1:TO4Label
+Label8:TO4Label
+Label3:TO4Label
+Label5:TO4Label
+Label4:TO4Label
+Label2:TO4Label
+dbeTaxNumber:TO4DBEdit
+dbeTaxDocNum:TO4DBEdit
+dbeName:TO4DBEdit
+dbeZKPO:TO4DBEdit
+dbeOPF:TO4DBEdit
+dbeMFO:TO4DBEdit
+edCollect:TO4Edit
+tsPhone:TTabSheet
+tsAdr:TTabSheet
+tsBankAcc:TTabSheet
+pnlKassaAccount:TO4Panel
+Label24:TO4Label
+deKassaAccount:TO4DBEdit
+tsRepresenter:TTabSheet
+tsEmail:TTabSheet
+tsService:TTabSheet
+Label6:TO4Label
+Label7:TO4Label
+deServiceAcc:TO4DBEdit
+deServiceCost:TO4DBEdit
+tsNotes:TTabSheet
+dmNotes:TO4DBMemo
+TitlePanel:TO4Panel
+lbTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

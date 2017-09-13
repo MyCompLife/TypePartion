@@ -1,0 +1,197 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 352
+  Height = 352
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'Button2.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'dbgList.PosColumns[  0].Title.Caption'
+    0
+    #1'-1'#1'Код'
+    'dbgList.PosColumns[  1].Title.Caption'
+    0
+    #1'-1'#1'Название'
+    'pmiAdd.Caption'
+    0
+    #1'-1'#1'Добавить'
+    'pmiAdd.Hint'
+    0
+    #1'-1'#1'Добавить'
+    'pmiDelete.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'pmiDelete.Hint'
+    0
+    #1'-1'#1'Удалить'
+    'pmiEdit.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'pmiEdit.Hint'
+    0
+    #1'-1'#1'Изменить')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  ActiveControl = dbgList
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object Panel1: TO4Panel
+    Left = 0
+    Top = 323
+    Width = 352
+    Height = 29
+    Align = alBottom
+    BorderSides = []
+    BevelOuter = bvNone
+    TabOrder = 1
+    Transparent = False
+    object Panel2: TO4Panel
+      Left = 180
+      Top = 0
+      Width = 172
+      Height = 29
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object Button1: TO4Button
+        Left = 11
+        Top = 1
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        O4MDSource = MDS
+        O4Action = actSelect
+      end
+      object Button2: TO4Button
+        Left = 87
+        Top = 1
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object dbgList: TO4DBGrid
+    Left = 0
+    Top = 24
+    Width = 352
+    Height = 299
+    AutoAlign = True
+    Align = alClient
+    IndicatorWidth = 20
+    Images = ImagesHolder.ForBuh16x16
+    DragDisabled = False
+    Options = [dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = MDS
+    TabOrder = 0
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    VPAOnGetImageIndex.EventName = 'dbgList_GetImageIndex'
+    PosColumns = <
+      item
+        O4FieldName = 'CODE'
+        Title.Caption = 'Код'
+        Width = 77
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '15.07.2002'
+      end
+      item
+        O4FieldName = 'NAME'
+        Title.Caption = 'Название'
+        Width = 247
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '15.07.2002'
+      end>
+  end
+  object tbMain: TO4ToolBar
+    Left = 0
+    Top = 0
+    Width = 352
+    Height = 24
+    AutoSize = True
+    Caption = 'tbMain'
+    EdgeBorders = [ebTop, ebBottom]
+    EdgeOuter = esNone
+    Flat = True
+    Images = ImagesHolder.Bmp16x16
+    TabOrder = 2
+    O4MDSource = MDS
+    object tbParam: TO4ToolButton
+      Left = 0
+      Top = 0
+      AutoSize = True
+      Caption = 'tbParam'
+      ImageIndex = 48
+      O4Action = actGridParam
+    end
+  end
+  object MDS: TO4DataSource
+    VPAAfterScroll.EventName = 'MDS_VPAAfterScroll'
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 54
+    Top = 88
+  end
+  object pmData: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 135
+    Top = 122
+    object pmiAdd: TO4MenuItem
+      Caption = 'Добавить'
+      Hint = 'Добавить'
+      ImageIndex = 0
+      ShortCut = 45
+      O4Action = actAdd
+      SortMenuParent = False
+    end
+    object pmiEdit: TO4MenuItem
+      Caption = 'Изменить'
+      Hint = 'Изменить'
+      ImageIndex = 1
+      ShortCut = 113
+      O4Action = actEdit
+      SortMenuParent = False
+    end
+    object pmiDelete: TO4MenuItem
+      Caption = 'Удалить'
+      Hint = 'Удалить'
+      ImageIndex = 2
+      ShortCut = 46
+      VPAOnClick.EventName = 'pmiDelete_Click'
+      O4Action = actDel
+      SortMenuParent = False
+    end
+  end
+end

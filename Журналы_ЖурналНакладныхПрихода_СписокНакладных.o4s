@@ -1,0 +1,102 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты,
+  РаботаСДокументамиВЖурналах, ПодключениеДопИнтерфейса, СтруктураТаблицДляDBF, РаботаСТаблицамиDBF;
+
+implementation
+
+var
+  PaysIn, PaysOut : ISJournal;
+  FillDoc:ISDocuments;
+  FillTaxGroup : integer;
+
+procedure OrderCalcFields(Order : ISJournal);
+begin
+  if Order.GetDocSign = 'НакладнаяОтпуска' then
+    begin
+      PaysOut.UseMaster(Order);
+      Order.Оплачено := PaysOut.Total('Сумма');
+      Order.ОплаченоВал := PaysOut.Total('СуммаВВалюте');
+      PaysOut.UseMaster(Null);
+      Order.Должны := Order.Сумма - Order.Оплачено;
+      Order.ДолжныВал := Order.СуммаВал - Order.ОплаченоВал;
+    end
+  else
+    if Order.GetDocSign = 'НакладнаяПрихода' then
+      begin
+        PaysIn.UseMaster(Order);
+        Order.Оплачено := PaysIn.Total('Сумма');
+        Order.ОплаченоВал := PaysIn.Total('СуммаВВалюте');
+        PaysIn.UseMaster(Null);
+        Order.Должны := Order.Сумма - Order.Оплачено;
+        Order.ДолжныВал := Order.СуммаВал - Order.ОплаченоВал;
+      end;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  PaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  PaysIn.SetDocMultiStateRange('1;2;');
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+function OrderAfterScroll(Order : Variant) : string; server;
+var
+  OneDoc : Variant;
+begin
+  Result := '';
+  if VarAsBool(Order.HasDocOwner) then
+    begin
+      OneDoc := Order.GetDocOwner;
+      if VarAsBool(OneDoc.IsFocused) then
+        if OneDoc.GetType() = 'Dictionaries;Справочники;Довідники' then
+          Result := Trans(VarAsStr(OneDoc.GetName())) + ' ' + OneDoc.Партнер.ПолноеНазвание
+        else
+          Result := Trans(VarAsStr(OneDoc.GetName())) + ' № ' + OneDoc.НомерДокумента
+            + Trans(' от ') + DateToStr(OneDoc.ДатаДокумента) + Trans(' г.');
+    end
+end;
+
+procedure SetGoods(Dic : ISJournal; var Accept : Boolean);
+var Count, Total : integer;
+    ContentsTbl : ISValueTable;
+    GoodsDic : ISDictionary;
+begin
+  Accept := false;
+  GoodsDic := CreateObject('Справочники.Товары');
+  ContentsTbl := CreateObject('ТаблицаЗначений');
+  ContentsTbl.AddColumn('Товар',vtcLink,0);
+  ContentsTbl.Open;
+  FillDoc.AppendLinesTo('Товар',ContentsTbl);
+  ContentsTbl.GroupBy('Товар','');
+  ContentsTbl.Select;
+  Count := 0;
+  Total := ContentsTbl.LineCount;
+  While ContentsTbl.SelectNext do
+   if GoodsDic.Find(ContentsTbl.@Товар) then
+    begin
+      GoodsDic.Edit;
+      GoodsDic.НалоговаяГруппа := FillTaxGroup;
+      GoodsDic.Post;
+      GoodsDic.ApplyUpdates;
+      inc(Count);
+      if Count mod 10 = 0 then
+        begin
+          Dic.NotifyClient('Заполнение налоговой группы товаров',Count,Total);
+          if Dic.Terminated then exit;
+        end;
+    end;
+  Accept := not Dic.Terminated;
+end;
+
+function FillGoodTaxGroupEP(FillDocS:ISDocuments; FillTaxGroupS:integer) : Variant; server;
+begin
+  FillDoc := FillDocS;
+  FillTaxGroup := FillTaxGroupS;
+  Result := EntryPoint(SetGoods);
+end;
+
+end.

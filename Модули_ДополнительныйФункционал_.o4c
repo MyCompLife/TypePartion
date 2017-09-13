@@ -1,0 +1,156 @@
+interface
+
+uses
+  System, DispIntf, –асчеты, –абота—ѕеременными;
+
+const
+  addDefAction = 'addDefAction';
+
+procedure SetMyPropertyForComponentList(PropName: String; Owner : TComponent; ComponentsList: String; Value: Variant);
+procedure GetPrintersList(var PrintList: ICValueList; var edPrinters: TO4Edit; JournalSign : string);
+procedure SetPrintNameForCurPrintForm(PrintForm, PrintName: string);
+function GetPrintNameForCurPrintForm(PrintForm : string): String;
+procedure PrintOnUserDevice(ProcName, FormName, PrinterName: String; Data: Variant; Preview: Boolean; PrintOnlyFixDoc: Boolean  = false);
+procedure SaveUserActivePrinter(PrinterName, JournalSign: String);
+procedure SaveUserActiveCountOne(NameValue : String; TypeValue : boolean);
+function GetShortCut: Integer;
+
+implementation
+
+procedure SetMyPropertyForComponentList(PropName: String; Owner : TComponent; ComponentsList: String; Value: Variant);
+var
+  i: Integer;
+  Component: TComponent;
+  tempVal: Variant;
+begin
+  for i := 1 to WordCount(ComponentsList,';') do
+    begin
+      Component := Owner.FindComponent(ExtractWord(i,ComponentsList,';'));
+      case PropName of
+        'O4Action': begin
+            tempVal := Value;
+            if VarAsStr(tempVal) = addDefAction then
+              begin
+                case ExtractWord(i,ComponentsList,';') of
+                  'tbAdd', 'miAdd'        : tempVal := actAdd;
+                  'tbEdit', 'miEdit'      : tempVal := actEdit;
+                  'tbFixUp', 'miFixUp'    : tempVal := actStateUp;
+                  'tbFixDown', 'miFixDown': tempVal := actStateDown;
+                  'tbDelete', 'miDelete'  : tempVal := actDel;
+                end;
+              end;
+            case Component.ClassName of
+              'TO4ToolButton': (Component as TO4ToolButton).O4Action := tempVal;
+              'TO4MenuItem': (Component as TO4MenuItem).O4Action := tempVal;
+            end;
+          end;
+      end;
+    end;
+end;
+
+procedure GetPrintersList(var PrintList: ICValueList; var edPrinters: TO4Edit; JournalSign : string);
+var
+  Prints, Print : String;
+  PCnt: Integer;
+  PrinterName: String;
+  Options : ICOptions;
+begin
+  Options := GetOptions;
+  PrintList := CreateObject('—писок«начений');
+  Prints := GetPrinterNames;
+  for PCnt := 1 to WordCount(Prints ,#10) do
+    PrintList.AddValue(ExtractWord(PCnt,Prints,#10),null);
+  for PCnt := 0 to PrintList.Count-1 do
+    begin
+      Print := PrintList.GetStr(PCnt);
+      PrintList.SetStr(PCnt, ReplaceOneStrWithAnother(Print, #13,''));
+    end;
+  PrintList.SortByStr(true);
+  PrintList.UseControl(CtrlToVar(edPrinters));                                        // Form.Caption
+  PrinterName := VarAsStr(Options.GetServerPrm('јктивныйѕринтер ' + JournalSign));
+  PrintList.CurIndex := PrintList.FindByStr(PrinterName);
+end;
+
+procedure PrintOnUserDevice(ProcName, FormName, PrinterName: String; Data: Variant; Preview: Boolean; PrintOnlyFixDoc: Boolean  = false);
+var
+  V : ICProcessing;
+begin
+  if not VarAsBool(Data.IsFocused) then
+    exit;
+  if PrintOnlyFixDoc and (Data.GetDocState = 0) then
+    begin
+      MessageDlg('¬ам запрещено печатать неутвержденный чек!',mtWarning,mbOk);
+      exit;
+    end;  
+  if PrinterName <> '' then
+    SetActivePrinter(PrinterName);
+  V := CreateObject(ProcName);
+  V.PrintForm(FormName, Preview, Data);
+end;
+
+procedure SaveUserActivePrinter(PrinterName, JournalSign: String);
+var
+  Options : ICOptions;
+begin
+  Options := GetOptions;
+  Options.SetServerPrm('јктивныйѕринтер ' + JournalSign, PrinterName);
+end;
+
+procedure SaveUserActiveCountOne(NameValue : String; TypeValue : boolean);
+var
+  Options : ICOptions;
+begin
+  Options := GetOptions;
+  Options.SetServerPrm(NameValue, TypeValue);
+end;
+
+function GetShortCut: Integer;
+begin
+  Case VarAsStr(GetConstants.ѕрефикс—канераЎтрих одов) of
+    'F2': result := 113;
+    'F3': result := 114;
+    'F4': result := 115;
+    'F5': result := 116;
+    'F6': result := 117;
+    'F7': result := 118;
+    'F8': result := 119;
+    'F9': result := 120;
+    'F10': result := 121;
+    'F11': result := 122;
+    'F12': result := 123;
+  end;
+end;  
+
+function GetPrintNameForCurPrintForm(PrintForm : string): String;
+var
+  Options : ICOptions;
+  PrintList: ICValueList;
+  PrinterName, PrintListStr: String;
+  PCnt: Integer;
+begin
+  Options := GetOptions;
+  PrintList := CreateObject('—писок«начений');
+  PrintListStr := GetPrinterNames;
+  for PCnt := 1 to WordCount(PrintListStr, #10) do
+    PrintList.AddValue(ExtractWord(PCnt,PrintListStr,#10),null);
+  for PCnt := 0 to PrintList.Count-1 do
+    begin
+      PrinterName := PrintList.GetStr(PCnt);
+      PrintList.SetStr(PCnt, ReplaceOneStrWithAnother(PrinterName, #13,''));
+    end;
+  PrintList.SortByStr(true);
+  PrinterName := VarAsStr(Options.GetServerPrm('јктивныйѕринтер ' + PrintForm));
+ if PrintList.FindByStr(PrinterName) <> -1 then
+    Result := PrintList.GetStr(PrintList.FindByStr(PrinterName));
+end;
+
+procedure SetPrintNameForCurPrintForm(PrintForm, PrintName: string);
+var
+  Options : ICOptions;
+begin
+  Options := GetOptions;
+  Options.SetServerPrm('јктивныйѕринтер ' + PrintForm, PrintName);
+end;
+
+
+end.

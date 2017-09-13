@@ -1,0 +1,438 @@
+interface
+
+const
+  evlkInfo = 0; //Integer
+  evlkWarning = 1; //Integer
+  evlkError = 2; //Integer
+  evlkException = 3; //Integer
+  lftString = 0; //TLogicalFieldType
+  lftInteger = 1; //TLogicalFieldType
+  lftBoolean = 2; //TLogicalFieldType
+  lftFloat = 3; //TLogicalFieldType
+  lftFFT = 4; //TLogicalFieldType
+  lftDate = 5; //TLogicalFieldType
+  lftTime = 6; //TLogicalFieldType
+  lftDateTime = 7; //TLogicalFieldType
+  lftLink = 8; //TLogicalFieldType
+  lftBlob = 9; //TLogicalFieldType
+  lftMemo = 10; //TLogicalFieldType
+  dupIgnore = 0; //TDuplicates
+  dupAccept = 1; //TDuplicates
+  dupError = 2; //TDuplicates
+  rdDay = 0; //TRoundDateType
+  rdWeek = 1; //TRoundDateType
+  rdDecade = 2; //TRoundDateType
+  rdMonth = 3; //TRoundDateType
+  rdQuarter = 4; //TRoundDateType
+  rdHalfYear = 5; //TRoundDateType
+  rdYear = 6; //TRoundDateType
+  clBlack = $00000000; //TColor
+  clMaroon = $00000080; //TColor
+  clGreen = $00008000; //TColor
+  clOlive = $00008080; //TColor
+  clNavy = $00800000; //TColor
+  clPurple = $00800080; //TColor
+  clTeal = $00808000; //TColor
+  clGray = $00808080; //TColor
+  clSilver = $00C0C0C0; //TColor
+  clRed = $000000FF; //TColor
+  clLime = $0000FF00; //TColor
+  clYellow = $0000FFFF; //TColor
+  clBlue = $00FF0000; //TColor
+  clFuchsia = $00FF00FF; //TColor
+  clAqua = $00FFFF00; //TColor
+  clWhite = $00FFFFFF; //TColor
+  clScrollBar = $80000000; //TColor
+  clBackground = $80000001; //TColor
+  clActiveCaption = $80000002; //TColor
+  clInactiveCaption = $80000003; //TColor
+  clMenu = $80000004; //TColor
+  clWindow = $80000005; //TColor
+  clWindowFrame = $80000006; //TColor
+  clMenuText = $80000007; //TColor
+  clWindowText = $80000008; //TColor
+  clCaptionText = $80000009; //TColor
+  clActiveBorder = $8000000A; //TColor
+  clInactiveBorder = $8000000B; //TColor
+  clAppWorkSpace = $8000000C; //TColor
+  clHighlight = $8000000D; //TColor
+  clHighlightText = $8000000E; //TColor
+  clBtnFace = $8000000F; //TColor
+  clBtnShadow = $80000010; //TColor
+  clGrayText = $80000011; //TColor
+  clBtnText = $80000012; //TColor
+  clInactiveCaptionText = $80000013; //TColor
+  clBtnHighlight = $80000014; //TColor
+  cl3DDkShadow = $80000015; //TColor
+  cl3DLight = $80000016; //TColor
+  clInfoText = $80000017; //TColor
+  clInfoBk = $80000018; //TColor
+  clNone = $1FFFFFFF; //TColor
+  crDefault = 0; //TCursor
+  crArrow = -2; //TCursor
+  crCross = -3; //TCursor
+  crIBeam = -4; //TCursor
+  crSizeNESW = -6; //TCursor
+  crSizeNS = -7; //TCursor
+  crSizeNWSE = -8; //TCursor
+  crSizeWE = -9; //TCursor
+  crUpArrow = -10; //TCursor
+  crHourGlass = -11; //TCursor
+  crDrag = -12; //TCursor
+  crNoDrop = -13; //TCursor
+  crHSplit = -14; //TCursor
+  crVSplit = -15; //TCursor
+  crMultiDrag = -16; //TCursor
+  crSQLWait = -17; //TCursor
+  crNo = -18; //TCursor
+  crAppStart = -19; //TCursor
+  crHelp = -20; //TCursor
+  crHandPoint = -21; //TCursor
+  crSizeAll = -22; //TCursor
+  HKEY_CLASSES_ROOT = 0; //Integer
+  HKEY_LOCAL_MACHINE = 1; //Integer
+  HKEY_CURRENT_USER = 2; //Integer
+  HKEY_USERS = 3; //Integer
+
+type
+  T_Set = Integer;
+  T_Enum = Integer;
+  OleVariant = Variant;
+  AnsiString = String;
+  WideString = String;
+  HKEY = Integer;
+  TLogicalFieldType = T_Enum;
+  TDuplicates = T_Enum;
+  TRoundDateType = T_Enum;
+  TColor = Integer;
+  TCursor = Integer;
+
+type
+  TObject = classinterface;
+  TPersistent = classinterface;
+  TStrings = classinterface;
+  TStringList = classinterface;
+  TStream = classinterface;
+  TComponent = classinterface;
+  TControl = classinterface;
+  TWinControl = classinterface;
+  TCollection = classinterface;
+  TCollectionItem = classinterface;
+  TOwnedCollection = classinterface;
+  TPicture = classinterface;
+  TClipboard = classinterface;
+  TRegistry = classinterface;
+
+type
+
+  TObject = classinterface
+    function  ClassName: String; external;
+    procedure Free; external;
+  end;
+
+  TPersistent = classinterface(TObject)
+    procedure Assign(Source: TPersistent); external;
+  end;
+
+  TStrings = classinterface(TPersistent)
+    function  Add(S: String): Integer; external;
+    function  AddObject(S: String; AObject: TObject): Integer; external;
+    procedure AddStrings(Strings: TStrings); external;
+    procedure Assign(Source: TPersistent); external;
+    procedure BeginUpdate; external;
+    procedure Clear; external;
+    property  Count: Integer; readonly; external;
+    procedure Delete(Index: Integer); external;
+    procedure EndUpdate; external;
+    function  Equals(Strings: TStrings): Boolean; external;
+    procedure Exchange(Index1, Index2: Integer); external;
+    function  IndexOf(S: String): Integer; external;
+    function  IndexOfName(Name: String): Integer; external;
+    function  IndexOfObject(AObject: TObject): Integer; external;
+    procedure Insert(Index: Integer; S: String); external;
+    procedure InsertObject(Index: Integer; S: String; AObject: TObject); external;
+    procedure LoadFromFile(FileName: String); external;
+    procedure LoadFromStream(Stream: TStream); external;
+    procedure Move(CurIndex, NewIndex: Integer); external;
+    property  Names[Index: Integer]: String; readonly; external;
+    property  Objects[Index: Integer]: TObject; external;
+    procedure SaveToFile(FileName: String); external;
+    procedure SaveToStream(Stream: TStream); external;
+    property  Strings[Index: Integer]: String; external;
+    property  Text: String; external;
+    property  Values[Name: String]: String; external;
+  end;
+
+  TStringList = classinterface(TStrings)
+    property  Duplicates: TDuplicates; external;
+    function  Find(S: String; var Index: Integer): Boolean; external;
+    procedure Sort; external;
+    property  Sorted: Boolean; external;
+  end;
+
+  TStream = classinterface(TObject)
+  end;
+
+  TComponent = classinterface(TPersistent)
+    property  ComponentCount: Integer; readonly; external;
+    property  Components[Index: Integer]: TComponent; readonly; external;
+    function  FindComponent(AName: String): TComponent; external;
+    property  Name: String; external;
+    property  Owner: TComponent; readonly; external;
+    property  Tag: Integer; external;
+  end;
+
+  TControl = classinterface(TComponent)
+    property  Cursor: Integer; external;
+    property  Enabled: Boolean; external;
+    procedure GetScreenPos(var X, Y: Integer); external;
+    property  Height: Integer; external;
+    property  Hint: String; external;
+    property  Left: Integer; external;
+    property  Parent: TWinControl; external;
+    procedure Refresh; external;
+    property  Top: Integer; external;
+    procedure Update; external;
+    property  Width: Integer; external;
+  end;
+
+  TWinControl = classinterface(TControl)
+    function  ContainsControl(Control: TControl): Boolean; external;
+    property  ControlCount: Integer; readonly; external;
+    property  Controls[Index: Integer]: TControl; readonly; external;
+    property  HelpContext: Integer; external;
+    procedure SetFocus; external;
+  end;
+
+  TCollection = classinterface(TPersistent)
+    function  Add: TCollectionItem; external;
+    procedure BeginUpdate; external;
+    procedure Clear; external;
+    property  Count: Integer; readonly; external;
+    procedure Delete(Index: Integer); external;
+    procedure EndUpdate; external;
+    function  FindItemID(ID: Integer): TCollectionItem; external;
+    function  GetNamePath: String; external;
+    function  Insert(Index: Integer): TCollectionItem; external;
+    property  ItemClass: Integer; readonly; external;
+    property  Items[Index: Integer]: TCollectionItem; external;
+  end;
+
+  TCollectionItem = classinterface(TPersistent)
+    property  Collection: TCollection; external;
+    property  DisplayName: String; external;
+    function  GetNamePath: String; external;
+    property  ID: Integer; readonly; external;
+    property  Index: Integer; external;
+  end;
+
+  TOwnedCollection = classinterface(TCollection)
+  end;
+
+  TPicture = classinterface(TPersistent)
+    procedure LoadFromFile(FileName: string); external;
+    procedure SaveToFile(FileName: string); external;
+  end;
+
+  TClipboard = classinterface(TPersistent)
+    property  AsText: String; external;
+  end;
+
+  TRegistry = classinterface(TObject)
+    procedure CloseKey; external;
+    function  CreateKey(const Key: String): Boolean; external;
+    function  DeleteKey(const Key: String): Boolean; external;
+    function  OpenKey(const Key: String; CanCreate: Boolean): Boolean; external;
+    function  ReadFloat(const Name: String): Double; external;
+    function  ReadInteger(const Name: String): Integer; external;
+    function  ReadString(const Name: String): String; external;
+    property  RootKey: HKEY; writeonly; external;
+    procedure WriteFloat(const Name: string; Value: Double); external;
+    procedure WriteInteger(const Name: string; Value: Integer); external;
+    procedure WriteString(const Name: string; Value: String); external;
+  end;
+
+procedure AddToLog(Source: String; evKind, MsgID: Integer; Msg, LogType: String); external;
+function  AnsiStrToOem(SWin: String): String; external;
+function  CreateObject(ObjectID: String): Variant; external;
+function  CreateObjectOnDBID(ObjectID, DBID: String): Variant; external;
+function  CreateUsersInfoTool: Variant; external;
+function  CheckObjectExists(ObjectID: String): Boolean; external;
+function  ConnectionEstablished: Boolean; external;
+function  FloatToHexStr(Value: Double): String; external;
+function  GetSessionID: Integer; external;
+function  CreateObjDescriptor(ObjectID: String): Variant; external;
+function  CreateObjectByDescriptor(ObjDesc: Variant): Variant; external;
+function  IsQFObject(RequestVal: String): Boolean; external;
+function  GetUDASet(UDAID: string; RaiseStandartMessage: Boolean = False): boolean; external;
+function  GetUserID: String; external;
+function  GetUserName: String; external;
+function  GetUserLogin: String; external;
+function  OemToAnsiStr(SDos: String): String; external;
+function  Trans(AStr: String): String; external;
+procedure Run(Path: String; Wait: Boolean); external;
+procedure Sleep(Milliseconds: Integer); external;
+function  CreateSemaphore(Name: String): Variant; external;
+function  DeleteFile(FileName: String): Boolean; external;
+procedure MkDir(Path: String); external;
+procedure ForceDir(APath: String); external;
+procedure DeleteDir(APath: String); external;
+procedure CopyDir(ASourceDIR, ADestDIR: String); external;
+procedure MoveDir(ASourceDIR, ADestDIR: String); external;
+procedure RenameDir(APath, ANewName: String); external;
+function  StartTransaction(DBID: String): Integer; external;
+function  EndTransaction(DBID: String; Commit: Boolean): Integer; external;
+procedure SysProgress(Min, Max, Pos: Integer; Text: String); external;
+function  GetDBID: String; external;
+function  GetDBName: String; external;
+function  GetDBDesc: String; external;
+function  GetComputerName: String; external;
+procedure ProcessMessages; external;
+procedure AssignTxtFile(const FileName: String); external;
+procedure CloseTxtFile; external;
+function  RewriteTxtFile: Integer; external;
+procedure WriteToTxtFile(const Line: String); external;
+procedure WriteLnToTxtFile(const Line: String); external;
+function  ResetTxtFile: Integer; external;
+function  ReadFromTxtFile: String; external;
+function  ReadLnFromTxtFile: String; external;
+function  TxtFileEOF: Boolean; external;
+function  CreateStringList: TStringList; external;
+function  CreateOleObject(ClassName: String; MachineName: String = ''): Variant; external;
+function  CtrlToVar(Control: TObject): Variant; external;
+function  SysGetTickCount: Integer; external;
+function  CurrentDate: DateTime; external;
+function  CurrentTime: DateTime; external;
+function  CurrentDateTime: DateTime; external;
+function  GetYear(Date: DateTime): Integer; external;
+function  GetMonth(Date: DateTime): Integer; external;
+function  GetDay(Date: DateTime): Integer; external;
+function  DayOfWeek(Date: DateTime): Integer; external;
+function  GetHour(Time: DateTime): Integer; external;
+function  GetMinute(Time: DateTime): Integer; external;
+function  GetSecond(Time: DateTime): Integer; external;
+function  EncodeDate(Year, Month, Day: Integer): DateTime; external;
+function  EncodeTime(Hour, Min, Sec: Integer; mSec: Integer = 0): DateTime; external;
+procedure DecodeDate(Date: DateTime; var Year, Month, Day: Integer); external;
+procedure DecodeTime(Time: DateTime; var Hour, Min, Sec, mSec: Integer); external;
+function  DaysPerYear(Year: Integer): Integer; external;
+function  DaysPerMonth(Month: Integer; IsLeapYear: Boolean = False): Integer; external;
+function  IsLeapYear(Year: Integer): Boolean; external;
+function  RoundDate(Date: DateTime; RoundType: TRoundDateType; RoundToNext: Boolean = False): DateTime; external;
+function  IncMonth(Date: DateTime; NumberOfMonths: Integer): DateTime; external;
+function  StrUpperCase(Src: String): String; external;
+function  StrLowerCase(Src: String): String; external;
+function  StrLength(Str: String): Integer; external;
+function  StrPos(SubStr, Src: String): Integer; external;
+function  StrCopy(Str: String; Index, Count: Integer): String; external;
+procedure StrDelete(var Str: String; Index, Count: Integer); external;
+procedure StrInsert(InsStr: String; var Str: String; Index: Integer); external;
+function  StrTrim(Str: String): String; external;
+function  StrTrimLeft(Str: String): String; external;
+function  StrTrimRight(Str: String): String; external;
+function  StrDelSpace(Str: String): String; external;
+function  StrOptimizeSpace(Str: String): String; external;
+function  CompareStr(Str1, Str2: String): Integer; external;
+function  CompareText(Str1, Str2: String): Integer; external;
+function  WordCount(Str: String; DelimChar: Char = ' '): Integer; external;
+function  ExtractWord(WordNum: Integer; Str: String; DelimChar: Char = ' '): String; external;
+function  DecimalSeparator: Char; external;
+function  ParseText(Text: String; RegExp: String): Variant; external;
+function  IndistinctStringCompare(Str1, Str2: String; MaxMatching: Integer): Integer; external;
+function  ArrayDimCount(var V: Variant): Integer; external;
+function  ArrayLow(var V: Variant; Dim: Integer = 1): Integer; external;
+function  ArrayHigh(var V: Variant; Dim: Integer = 1): Integer; external;
+function  IsArray(var V: Variant): Boolean; external;
+function  IsNull(V: Variant): Boolean; external;
+function  Null: Variant; external;
+function  IsEmpty(V: Variant): Boolean; external;
+function  Unassigned: Variant; external;
+function  IsObject(var V: Variant): Boolean; external;
+function  IsEmptyOrNull(V: Variant): Boolean; external;
+function  IsZero(V: Variant): Boolean; external;
+function  VarAsStr(V: Variant; DefVal: String = ''): String; external;
+function  VarAsBool(V: Variant; DefVal: Boolean = False): Boolean; external;
+function  VarAsInt(V: Variant; DefVal: Integer = 0): Integer; external;
+function  VarAsFloat(V: Variant; DefVal: Double = 0): Double; external;
+function  VarAsDate(V: Variant; DefVal: DateTime = 0): DateTime; external;
+function  VarAsDec(V: Variant; DefVal: Decimal = 0): Decimal; external;
+function  Abs(Val: LargeInt): LargeInt; external;
+function  AbsF(Val: Extended): Extended; external;
+function  AbsD(Val: Decimal): Decimal; external;
+function  CharToByte(C: Char): Byte; external;
+function  ByteToChar(B: Byte): Char; external;
+function  Random(Range: Integer = 0): Double; external;
+function  GetScreenWidth: Integer; external;
+function  GetScreenHeight: Integer; external;
+function  GetAppLeft: Integer; external;
+function  GetAppTop: Integer; external;
+function  GetAppWidth: Integer; external;
+function  GetAppHeight: Integer; external;
+function  GetCursor: TCursor; external;
+function  SetCursor(Cursor: TCursor): TCursor; external;
+function  WaitCursorStart: TCursor; external;
+function  WaitCursorFinish(Cursor: TCursor = crDefault): TCursor; external;
+function  StrToInt(S: String): Integer; external;
+function  StrToIntDef(S: String; DefVal: Integer = 0): Integer; external;
+function  StrToInt64(S: String): LargeInt; external;
+function  StrToInt64Def(S: String; DefVal: LargeInt = 0): LargeInt; external;
+function  StrToFloat(S: String): Extended; external;
+function  StrToFloatDef(S: String; DefVal: Extended = 0): Extended; external;
+function  StrToDate(S: String): DateTime; external;
+function  StrToDateDef(S: String; DefVal: DateTime = 0): DateTime; external;
+function  StrToTime(S: String): DateTime; external;
+function  StrToTimeDef(S: String; DefVal: DateTime = 0): DateTime; external;
+function  StrToDateTime(S: String): DateTime; external;
+function  StrToDateTimeDef(S: String; DefVal: DateTime = 0): DateTime; external;
+function  StrToDec(S: String): Decimal; external;
+function  StrToDecDef(S: String; DefVal: Decimal = 0): Decimal; external;
+function  HexToInt(Val: String): Integer; external;
+function  IntToHex(Val: Integer; Digits: Integer): String; external;
+function  IntToStr(Value: LargeInt): String; external;
+function  FloatToStr(Value: Extended): String; external;
+function  DateToStr(Value: DateTime): String; external;
+function  TimeToStr(Value: DateTime): String; external;
+function  DateTimeToStr(Value: DateTime): String; external;
+function  DecToStr(Value: Decimal; AfterComa: Integer = -1): String; external;
+function  FormatFloat(FormatStr: String; Value: Extended): String; external;
+function  FormatDateTime(FormatStr: String; Value: DateTime): String; external;
+function  Round(Value: Extended): LargeInt; external;
+function  RoundFloat(Value: Extended; AfterComa: Integer): Extended; external;
+function  RoundDec(Value: Decimal; AfterComa: Integer): Decimal; external;
+function  Trunc(Value: Extended): LargeInt; external;
+function  TruncFloat(Value: Extended; AfterComa: Integer): Extended; external;
+function  TruncDec(Value: Decimal; AfterComa: Integer): Decimal; external;
+function  Int(Value: Extended): Extended; external;
+function  Frac(Value: Double): Double; external;
+function  DecInt(Value: Decimal): Decimal; external;
+function  DecFrac(Value: Decimal): Decimal; external;
+function  ExtractFilePath(FileName: String): String; external;
+function  FileExists(FileName: String): Boolean; external;
+function  DirectoryExists(DirectoryName: String): Boolean; external;
+function  RunPath: String; external;
+function  TempPath: String; external;
+function  AsciiToWideCharFile(const FileName: String): Boolean; external;
+function  WideCharToAsciiFile(const FileName: String): Boolean; external;
+function  EnumerateFolder(const Path, Mask: String; Recursive, EnumDIRs, EnumFiles: Boolean; IncludePath: Boolean = False): String; external;
+function  RenameFile(const OldName, NewName: String): Boolean; external;
+function  IsObjEQ(Obj1, Obj2: Variant; OnlyTypeEQ: Boolean = False): Boolean; external;
+procedure mailto(Adr: String); external;
+function  SendMail(const RecipientName, EMail, Subject, Attachments: String): Boolean; external;
+function  ReadMail(const EMail: String; DeleteAfterRead: Boolean = False): String; external;
+function  CreateTClipboard: TClipboard; external;
+function  GetCurrentUser: Variant; external;
+function  GetUser(UserID: String): Variant; external;
+function  CreateTRegistry: TRegistry; external;
+function  GetPrinterNames: String; external;
+function  GetActivePrinterName: String; external;
+procedure SetActivePrinter(PrinterName: String); external;
+function  Sqr(Val: Extended): Extended; external;
+function  Sqrt(Val: Extended): Extended; external;
+function  Sin(Val: Extended): Extended; external;
+function  Cos(Val: Extended): Extended; external;
+function  Arctan(Val: Extended): Extended; external;
+function  Pi: Extended; external;
+function  GetMeanNameByMeanID(const AMeanID: string): String; external;
+
+implementation
+end.

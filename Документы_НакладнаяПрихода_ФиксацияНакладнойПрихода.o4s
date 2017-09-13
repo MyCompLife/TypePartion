@@ -1,0 +1,195 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений;
+
+implementation
+
+var
+  AccGood, AccPartGood, AccReserv, AccPartner, AccsPart, AccsGoodCurrent : ISAccs;
+  Constants : IS4VPAConst;
+  Tbl : ISValueTable;
+   PriceTbl, TblGoods : ISValueTable;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  HasReserv : Boolean;
+  DocDate : DateTime;
+  PartGoodID : Double;
+  Count, Total : Integer;
+  Sum, SumNT, Tax, Col, CurSum : Decimal;
+begin
+  DocDate := Doc.GetDate;
+  HasReserv := False;
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  Constants := GetConstants;   
+  while Doc.SelectNextLine do
+    begin
+      if not VarAsBool(Doc.“овар.”слуга) then
+        begin
+          Col := Doc. оличество;
+          Sum := VarAsDec(Doc.÷ена) * Col;
+          SumNt := VarAsDec(Doc.÷енаЅезЌƒ—) * Col;
+          if VarAsBool(Constants.ќкругл€ть—умму—трокиЅезЌƒ—) then
+            SumNt := RoundFloat(SumNt, Constants. оличество«наков¬—умме—трокиЅезЌƒ—);
+          Tax := Sum - SumNT;
+          CurSum := Doc.÷ена¬¬алюте * Col;
+          PartGoodID := AppendGoodsConsignAtIncome(Doc, AccPartGood);
+          //oстатки товаров
+          MakeGoodMotion(AccGood, Doc, PartGoodID, midIncome,
+            ArrayOf(Col, SumNT, Tax, Sum, Tax, 0, CurSum, CurSum));
+          //oстатки товара на сегодн€
+          MakeGoodMotionCurrent(AccsGoodCurrent, Doc, midIncome, Col);
+        end;
+      // отправка сообщени€ клиенту
+      if Count mod 10 = 0 then     
+       begin
+        Doc.NotifyClient(msgProceed, Count, Total);
+        if Doc.Terminated then
+          break;
+        end;
+      inc(Count);
+    end;
+  //взаиморасчеты с партнерами
+  AccsPart.ClearFieldFilters;
+  AccsPart.AssignFields('ѕартнер;—ум–асх¬ал=—умма¬¬алюте;—умќбщ¬ал=—умма¬¬алюте;¬алюта', Doc);
+  if VarAsBool(Doc.@јналитика¬заиморасчета.IsFocused) then
+    AccsPart.јналитика¬заиморасчета := Doc.@јналитика¬заиморасчета;
+  AccsPart.Outcome(Doc, Doc.GetDate, 0);
+
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  AccPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  case Doc.GetDocState of
+    1 :
+      ChangeStateUp(Doc, Accept);
+    2 :
+      ;
+  end;
+end;
+
+ 
+
+procedure ChangeDicPricesAll(Doc : ISDocuments; var Accept:boolean);
+const Comment = '»зменение цены во врем€ фиксации накладной прихода';
+var Count, Total : integer;
+    UserName: String;
+    GoodDic : IsDictionary;  
+    AccsChangePrice: ISAccs;
+
+begin
+ Accept := false;
+ GoodDic := CreateObject('—правочники.“овары');
+ AccsChangePrice := CreateObject('јккумул€торы.»змќтп÷ен—пр“овара');
+ UserName := GetUserName + '('+GetUserLogin+')';
+ TblGoods.SortBy('“овар');
+ PriceTbl.SortBy('IsCange');
+ PriceTbl.SetRange(-1,-1);
+ PriceTbl.Select;
+ Count := 0;
+ Total := PriceTbl.LineCount;
+ While PriceTbl.SelectNext do
+   if GoodDic.Find(PriceTbl.@“овар) then
+     begin
+       TblGoods.Find(PriceTbl.@“овар);
+       PriceTbl.Edit;
+       TblGoods.Edit;
+       GoodDic.Edit;
+       if (VarAsDec(PriceTbl.¬х÷ена—трокиƒок)>VarAsDec(GoodDic.¬х÷ена)) or (not IsObjEQ(PriceTbl.@¬алюта, GoodDic.@¬алюта¬х÷ена, false)) then
+         begin
+           GoodDic.¬х÷ена := PriceTbl.¬х÷ена—трокиƒок;
+           GoodDic.¬алюта¬х÷ена := PriceTbl.@¬алюта;
+
+           PriceTbl.¬х÷ена := PriceTbl.¬х÷ена—трокиƒок;
+           PriceTbl.¬х÷ена√рн := PriceTbl.¬х÷ена—трокиƒок;
+           PriceTbl.—прав÷ены»зм := true;
+           TblGoods.—прав÷ены»зм := true;
+           AccsChangePrice.IncomeDirect(Null,CurrentDateTime,0,ArrayOf(GoodDic,GoodDic.@¬алюта¬х÷ена,'¬х÷ена'),
+                                        PriceTbl.¬х÷ена—трокиƒок, ArrayOf(Comment,UserName) );
+         end;
+
+       case VarAsStr(PriceTbl.“ип÷ены) of
+         '÷ена' :
+            if (VarAsDec(PriceTbl.÷ена–еком)>VarAsDec(GoodDic.÷ена)) or (not IsObjEQ(PriceTbl.@¬алюта, GoodDic.@¬алюта÷ена, false)) then
+              begin
+                GoodDic.÷ена := PriceTbl.÷ена–еком;
+                GoodDic.¬алюта÷ена := PriceTbl.@¬алюта;
+                GoodDic.ѕрЌац÷ена := PriceTbl.ѕрЌац;
+
+                PriceTbl.÷ена—пр := PriceTbl.÷ена–еком;
+                PriceTbl.—прав÷ены»зм := true;
+                TblGoods.—прав÷ены»зм := true;
+                AccsChangePrice.IncomeDirect(Null,CurrentDateTime,0,ArrayOf(GoodDic,GoodDic.@¬алюта÷ена,'÷ена'),
+                                             PriceTbl.÷ена–еком, ArrayOf(Comment,UserName) );
+              end;
+         'ќпт÷ена' :
+            if (VarAsDec(PriceTbl.÷ена–еком)>VarAsDec(GoodDic.ќпт÷ена))  or (not IsObjEQ(PriceTbl.@¬алюта, GoodDic.@¬алютаќпт÷ена, false)) then
+              begin
+                GoodDic.ќпт÷ена := PriceTbl.÷ена–еком;
+                GoodDic.ѕрЌацќпт÷ена := PriceTbl.ѕрЌац;
+
+                GoodDic.¬алютаќпт÷ена := PriceTbl.@¬алюта;
+                PriceTbl.÷ена—пр := PriceTbl.÷ена–еком;
+                PriceTbl.—прав÷ены»зм := true;
+                TblGoods.—прав÷ены»зм := true;
+                AccsChangePrice.IncomeDirect(Null,CurrentDateTime,0,ArrayOf(GoodDic,GoodDic.@¬алютаќпт÷ена,'ќпт÷ена'),
+                                             PriceTbl.÷ена–еком, ArrayOf(Comment,UserName) );
+              end;
+         ' рќпт÷ена' :
+            if (VarAsDec(PriceTbl.÷ена–еком)>VarAsDec(GoodDic. рќпт÷ена)) or (not IsObjEQ(PriceTbl.@¬алюта, GoodDic.@¬алюта рќпт÷ена, false)) then
+              begin
+                GoodDic. рќпт÷ена := PriceTbl.÷ена–еком;
+                GoodDic.ѕрЌац рќпт÷ена := PriceTbl.ѕрЌац;
+
+                GoodDic.¬алюта рќпт÷ена := PriceTbl.@¬алюта;
+                PriceTbl.÷ена—пр := PriceTbl.÷ена–еком;
+                PriceTbl.—прав÷ены»зм := true;
+                TblGoods.—прав÷ены»зм := true;
+                AccsChangePrice.IncomeDirect(Null,CurrentDateTime,0,ArrayOf(GoodDic,GoodDic.@¬алюта рќпт÷ена,' рќпт÷ена'),
+                                             PriceTbl.÷ена–еком, ArrayOf(Comment,UserName) );
+              end;
+       end;
+       PriceTbl.Post;
+       TblGoods.Post;
+       GoodDic.Post;
+       GoodDic.ApplyUpdates;
+
+       inc(Count);
+       Doc.NotifyClient('»зменение цен в справочнике',Count,Total);
+       if Doc.Terminated then exit;
+     end;
+ GoodDic.ApplyUpdates;
+ Accept := not Doc.Terminated;
+end;
+
+
+
+function ChangeDicPricesAllEP(PriceTblS, TblGoodsS : ISValueTable) : Variant; server;
+begin
+  PriceTbl := PriceTblS;
+  TblGoods := TblGoodsS;
+  Result := EntryPoint(ChangeDicPricesAll);
+end;
+
+end.

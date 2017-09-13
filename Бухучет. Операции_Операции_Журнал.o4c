@@ -1,0 +1,184 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, Расчеты;
+
+implementation
+
+var
+  Opers : ICOpers;
+
+procedure MDS_VPABeforeOpen(Sender:TObject);
+begin
+  Opers := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender:TObject);
+var
+  Nobody : TO4ToolBar;
+begin
+  MakeInterface(tbMain, Nobody, dbgData);
+  Opers.OpenProvDetailsInplace('ПроводкиПоОперации', CtrlToVar(Panel1));
+  Opers.DefineSelectParams(True);
+end;
+
+procedure pmiSort_Click(Sender:TObject);
+begin
+  Opers.DefineSelectParams(False);
+  Opers.Refresh;
+end;
+
+procedure miRefresh_Click(Sender:TObject);
+begin
+  Opers.Refresh;
+end;
+
+procedure ToolButton3_Click(Sender:TObject);
+var
+  Docs : ICDocuments;
+begin
+  if VarAsBool(GetOptions.GetServerPrm(DelAck)) and 
+    (MessageDlg(Trans('Удалить запись?'), mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo) then
+    exit;
+  Docs := Opers.Document;
+  MDS.ActionClick(actDel);
+  if VarAsBool(Docs.IsFocused) and (Docs.GetBuhState > 0) then
+    Docs.BuhStateDown;
+  Opers.Refresh;
+end;
+
+procedure pmiCopyDoc_Click(Sender:TObject);
+var
+  OldDoc, NewDoc : ICOpers;
+begin
+  NewDoc := CreateObject('БухОперации.Операции');
+  OldDoc := CreateObject('БухОперации.Операции');
+  OldDoc.Find(Opers);
+  NewDoc.Select;
+  NewDoc.Append(Null);
+  NewDoc.Дата := CurrentDate; //OldDoc.Дата;
+  NewDoc.Документ := Opers.Документ;
+  NewDoc.НомерДок := Opers.НомерДок;
+  NewDoc.Комментарий := Opers.Комментарий;
+  NewDoc.Сумма := Opers.Сумма;
+
+  OldDoc.SelectLines;
+  while OldDoc.SelectNextLine do
+    begin
+      NewDoc.AppendLine;
+      NewDoc.Номер := OldDoc.Номер;
+      NewDoc.Дебет := OldDoc.Дебет;
+      NewDoc.Кредит := OldDoc.Кредит;
+      NewDoc.ДокНомер := OldDoc.ДокНомер;
+      NewDoc.ДатаПроводки := CurrentDate; //OldDoc.ДатаПроводки;
+      NewDoc.СуммаПроводки := OldDoc.СуммаПроводки;
+
+      if (VarAsBool(NewDoc.Дебет.IsCount)) or (VarAsBool(NewDoc.Кредит.IsCount)) then
+        NewDoc.Количество := OldDoc.Количество;
+      if (VarAsBool(NewDoc.Дебет.IsCurrency)) or (VarAsBool(NewDoc.Кредит.IsCurrency)) then
+        begin
+          NewDoc.СуммаВВалюте := OldDoc.СуммаВВалюте;
+          NewDoc.Валюта := OldDoc.Валюта;
+        end;
+      NewDoc.Курс := OldDoc.Курс;
+      NewDoc.АОДебет1 := OldDoc.АОДебет1;
+      NewDoc.АОДебет2 := OldDoc.АОДебет2;
+      NewDoc.АОДебет3 := OldDoc.АОДебет3;
+      NewDoc.АОКредит1 := OldDoc.АОКредит1;
+      NewDoc.АОКредит2 := OldDoc.АОКредит2;
+      NewDoc.АОКредит3 := OldDoc.АОКредит3;
+      NewDoc.Цена := OldDoc.Цена;
+      NewDoc.Количество := OldDoc.Количество;
+      NewDoc.КомментарийПроводки := OldDoc.КомментарийПроводки;
+      NewDoc.PostLine;
+    end;
+  NewDoc.Post;
+  Opers.Refresh;
+  Opers.FindDoc(NewDoc);
+end;
+
+procedure tbPrint_Click(Sender:TObject);
+begin
+  Opers.PrintForm('', True, 0, Null)
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender:TObject; var Index1, Index2:Integer);
+begin
+  case Opers.DocState of
+    0 :
+      Index1 := -1;
+    1 :
+      Index1 := 7;
+    2 :
+      Index1 := 8;
+  end;
+end;
+{$D+}
+
+procedure MDS_VPABeforeDelete(Source:Variant; IsGroup:Boolean; var Accept:Boolean);
+var
+  Docs : ICDocuments;
+begin
+  Docs := Source.Document;
+  if VarAsBool(Docs.IsFocused) and (Docs.GetBuhState > 0) then
+    Docs.BuhStateDown;
+end;
+
+procedure miChangedOpers_Click(Sender: TObject);
+var
+  TmpMenuItem : TO4MenuItem;
+begin
+  TmpMenuItem := Sender as TO4MenuItem;
+  TmpMenuItem.Checked := not TmpMenuItem.Checked;
+  if not (miChangedOpers.Checked or miDeletedOpers.Checked) then
+    begin
+      Opers.ClearDocStateRange;
+      Opers.Select;
+    end
+  else
+    begin
+      case TmpMenuItem.Tag of
+        1 :
+           miDeletedOpers.Checked := False;
+        2 :
+           miChangedOpers.Checked := False;
+      end;
+      Opers.SetDocStateRange(TmpMenuItem.Tag);
+      Opers.Select;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+tbMain:TO4ToolBar
+ToolButton1:TO4ToolButton
+ToolButton2:TO4ToolButton
+ToolButton3:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton10:TO4ToolButton
+ToolButton7:TO4ToolButton
+ToolButton6:TO4ToolButton
+ToolButton5:TO4ToolButton
+ToolButton8:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+Panel1:TO4Panel
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiCopyDoc:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem4:TO4MenuItem
+miSort:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem3:TO4MenuItem
+miRefresh:TO4MenuItem
+pmShowOpers:TO4PopupMenu
+miChangedOpers:TO4MenuItem
+miDeletedOpers:TO4MenuItem

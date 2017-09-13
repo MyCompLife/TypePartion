@@ -1,0 +1,41 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  Store : ISDictionary;
+  Date : DateTime;
+
+procedure InitSrvData; server;
+begin
+  Date := CurrentDate;
+end;
+
+procedure GetMyGoodCount(tmpCtx : ISValueTable; Date : DateTime; AccsGoods, AccsReserv : ISAccs); server;
+begin
+  GetGoodCount(tmpCtx, Date, AccsGoods, AccsReserv);
+end;
+
+procedure SetStoreParams(DT : DateTime; Stores : ISValueList; Index : Integer); server;
+begin
+  Date := RoundDate(DT, rdDay, True);
+  if Stores.ValidIndex(Index) and (Index <> 0) then
+    Store := Stores.GetValue(Index)
+  else
+    nil(Store);
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+end.

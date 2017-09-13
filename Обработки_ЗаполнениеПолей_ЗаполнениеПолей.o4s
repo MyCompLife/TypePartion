@@ -1,0 +1,147 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты;
+
+implementation
+var
+    TypePrice : string;
+    CurrPriceInDic, CurrPrice1Dic, CurrPrice2Dic, CurrPrice3Dic, PartnerCurrency : ISDictionary;
+
+procedure FillTypePrice(Proc:ISProcessing; var Accept : boolean);
+var Count, Total : integer;
+    PartnerDic:ISDictionary;
+begin
+ Accept := false;
+ PartnerDic := CreateObject('—правочники.ёрѕартнеры');
+ PartnerDic.Select;
+ Count := 1;
+ Total := PartnerDic.RecordCount;
+ While PartnerDic.SelectNext do
+   begin
+     PartnerDic.Edit;
+     PartnerDic.“ип÷ены := TypePrice;
+     PartnerDic.¬алюта :=  PartnerCurrency;
+     PartnerDic.Post;
+     if (Count mod 10)=0 then
+       Proc.NotifyClient('«аполнение типов цен', Count, Total);
+     inc(Count);
+     if Proc.Terminated then
+       exit;
+   end;
+ PartnerDic.ApplyUpdates;
+ Accept := not Proc.Terminated;
+end;
+
+function FillTypePriceEP(TypePrices:string; PartnerCurrencys:ISDictionary) : Variant; server;
+begin        
+ PartnerCurrency := PartnerCurrencys;
+ TypePrice := TypePrices;
+ Result := EntryPoint(FillTypePrice);
+end;
+
+procedure FillCurrencyPrice(Proc:ISProcessing; var Accept : boolean);
+var Count, Total : integer; 
+    GoodDic:ISDictionary; 
+    CoursePriceIn, CoursePrice1, CoursePrice2, CoursePrice3 : Double;  
+    Constant : IS4VPAConst;
+begin
+ Accept := false;
+ Constant := GetConstants;
+ CoursePriceIn := CurrPriceInDic.GetTimedValue(' урсЌаличный', CurrentDate);
+ CoursePrice1 := CurrPrice1Dic.GetTimedValue(' урсЌаличный', CurrentDate);
+ CoursePrice2 := CurrPrice2Dic.GetTimedValue(' урсЌаличный', CurrentDate);
+ CoursePrice3 := CurrPrice3Dic.GetTimedValue(' урсЌаличный', CurrentDate);
+
+ GoodDic := CreateObject('—правочники.“овары');
+ GoodDic.Select;
+ Count := 1;
+ Total := GoodDic.RecordCount;
+ While GoodDic.SelectNext do
+   begin
+     GoodDic.Edit;
+     if VarAsBool(GoodDic.@¬алюта¬х÷ена.IsFocused) and (CoursePriceIn<>0) and
+         (not IsObjEQ(GoodDic.@¬алюта¬х÷ена,CurrPriceInDic,false)) then
+       GoodDic.¬х÷ена :=  (GoodDic.¬х÷ена* GoodDic.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDate))/ CoursePriceIn;
+     GoodDic.¬алюта¬х÷ена := CurrPriceInDic;
+     if VarAsBool(GoodDic.@¬алюта÷ена.IsFocused) and (CoursePrice1<>0) and
+         (not IsObjEQ(GoodDic.@¬алюта÷ена,CurrPrice1Dic,false)) then
+       GoodDic.÷ена :=  (GoodDic.÷ена* GoodDic.¬алюта÷ена.GetTimedValue(' урсЌаличный', CurrentDate))/ CoursePrice1;
+     GoodDic.¬алюта÷ена := CurrPrice1Dic;
+     if VarAsBool(GoodDic.@¬алютаќпт÷ена.IsFocused) and (CoursePrice2<>0) and
+         (not IsObjEQ(GoodDic.@¬алютаќпт÷ена,CurrPrice2Dic,false)) then
+       GoodDic.ќпт÷ена :=  (GoodDic.ќпт÷ена* GoodDic.¬алютаќпт÷ена.GetTimedValue(' урсЌаличный', CurrentDate))/ CoursePrice2;
+     GoodDic.¬алютаќпт÷ена := CurrPrice2Dic;
+     if VarAsBool(GoodDic.@¬алюта рќпт÷ена.IsFocused) and (CoursePrice3<>0) and
+         (not IsObjEQ(GoodDic.@¬алюта рќпт÷ена,CurrPrice3Dic,false)) then
+       GoodDic. рќпт÷ена :=  (GoodDic. рќпт÷ена* GoodDic.¬алюта рќпт÷ена.GetTimedValue(' урсЌаличный', CurrentDate))/ CoursePrice3;
+     GoodDic.¬алюта рќпт÷ена := CurrPrice3Dic;
+     GoodDic.Post;
+     if (Count mod 10)=0 then
+       Proc.NotifyClient('«аполнение валют цен', Count, Total);
+     inc(Count);
+     if Proc.Terminated then
+       exit;
+   end;
+ GoodDic.ApplyUpdates;
+ Accept := not Proc.Terminated;
+end;
+
+function FillCurrencyPriceEP(CurrPriceInDics, CurrPrice1Dics, CurrPrice2Dics, CurrPrice3Dics:ISDictionary) : Variant; server;
+begin
+ CurrPriceInDic := CurrPriceInDics;
+ CurrPrice1Dic := CurrPrice1Dics;
+ CurrPrice2Dic := CurrPrice2Dics;
+ CurrPrice3Dic := CurrPrice3Dics;
+ Result := EntryPoint(FillCurrencyPrice);
+end;
+
+procedure FillOneTypeDoc(DocSign:string; var Proc:ISProcessing; var Accept : boolean);
+var Count : integer;
+    Doc : ISDocuments;
+    NativeCurrency : ISDictionary;
+    Constant : IS4VPAConst;
+begin
+ Accept := false;
+ Constant := GetConstants;
+ NativeCurrency := GetNativeCurrency;
+ if not IsObjFocused(NativeCurrency) then
+  exit;
+ Doc := CreateObject('ƒокументы.'+DocSign);
+ Doc.Select;
+ Count := 0;
+ While Doc.SelectNext do
+   begin
+     Doc.Edit;
+     if not VarAsBool(Doc.@¬алюта.IsFocused) then
+       begin
+         Doc.¬алюта := NativeCurrency;
+         Doc. урс := 1;
+         Doc.—умма¬¬алюте := Doc.—умма;
+       end;
+     if Doc.HasField('¬алюта“овара') then
+       begin
+         Doc.SelectLines;
+         While Doc.SelectNextLine do
+           if not VarAsBool(Doc.@¬алюта“овара.IsFocused) then
+             begin
+               Doc.EditLine;
+               Doc.¬алюта“овара := NativeCurrency;
+               Doc. урс“овара := 1;
+               Doc.÷ена¬¬алюте := Doc.÷ена;
+               Doc.PostLine;
+             end;
+       end;
+     Doc.Post;
+     inc(Count);
+     if (count mod 10)=0 then
+       Proc.NotifyClient('«аполнение пол€ "¬алюта" в "'+DocSign+'". ќбработано - '+IntToStr(Count),1,10);
+     if Proc.Terminated then exit;
+   end;
+ Accept := true;
+end;
+
+
+
+
+end.

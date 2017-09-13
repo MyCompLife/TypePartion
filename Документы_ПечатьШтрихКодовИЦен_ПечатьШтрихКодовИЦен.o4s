@@ -1,0 +1,61 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure ReFillGoodsPrices(ContentsTbl:ISValueTable; TypePriceTitle:string; OnDate:DateTime); server;
+var CurrencyDic : ISDictionary;
+    TypePrice : string; 
+    Constants : IS4VPAConst; 
+    Course : Decimal;
+begin  
+ Constants := GetConstants;
+ case TypePriceTitle of
+   'Розничная': TypePrice := 'Цена';
+   'Оптовая':   TypePrice := 'ОптЦена';
+   'Крупнооптовая': TypePrice := 'КрОптЦена'
+  else
+   TypePrice := 'Цена';
+ end;
+ ContentsTbl.DoGetLinks('Цена=Товар.'+TypePrice+';Валюта=Товар.Валюта'+TypePrice);
+ ContentsTbl.UpdateObjNames;
+ ContentsTbl.SortBy('Валюта');
+ CurrencyDic := CreateObject('Справочники.Валюты');
+ CurrencyDic.Select;
+ While CurrencyDic.SelectNext do
+   begin
+     ContentsTbl.SetRange(CurrencyDic,CurrencyDic);
+     Course := CurrencyDic.GetTimedValue(Constants.UsedCurs,OnDate);
+     if Course<=0 then Course := 1;
+     ContentsTbl.DoCalculation('Цена','Цена*'+DecToStr(Course));
+   end; 
+ ContentsTbl.CancelRange;
+ if VarAsBool(Constants.ОкруглятьЦеныГрн) then
+   begin
+     ContentsTbl.Select;
+     While ContentsTbl.SelectNext do
+       begin
+         ContentsTbl.Edit;  
+         if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then 
+           ContentsTbl.Цена := RoundTo5Cop(ContentsTbl.Цена)
+         else
+           ContentsTbl.Цена := RoundDec(ContentsTbl.Цена, VarAsInt(Constants.ОкруглениеЦенГрн));
+         ContentsTbl.Post;
+       end;
+   end;
+
+end;
+
+end.

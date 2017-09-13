@@ -1,0 +1,483 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, Интерфейс, Reports,
+  Пользователи, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  MasterData: ICDocuments;
+  Options: ICOptions;   
+  Constants : IC4VPAConst;
+  Employ, TimeSch, MyFirm, LinkDict, linkDictMan, ParamsSt, PartDic, Currency, Region, ActiveRegion : ICDictionary;
+  Month, Year, k, DayCount: Integer;
+  Date: DateTime;
+  IndexRange: String;
+  PartTbl, BonusTbl : ICValueTable;
+  DateFrom, DateTo : DateTime; 
+  ChangeLock, LockCalc, DropMode, isSave, AddDoc  : boolean;
+  CursorVis : TCursor;    
+
+function CreateTableForBLOB : ICValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Structure', vtcBlob, 0);
+  Result.AddColumn('Data', vtcBlob, 0);
+  Result.Open;
+end;
+
+function CreateTableForBLOBStructure : ICValueTable;
+begin                            
+  Options := GetOptions;
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Name', vtcString, 100);
+  Result.AddColumn('Type', vtcInteger, 0);
+  Result.AddColumn('Size', vtcInteger, 0);
+  Result.AddColumn('ColFormat', vtcString, 20);
+  Result.Open;
+end;
+
+// создание таблицы значений из BLOB-поля
+function CreateTblFromBLOB(OldData : Variant): ICValueTable;
+var
+  TblOldProps, TblStructure, TblAll : ICValueTable;
+  CommonFields : string;
+  DoExit : Boolean;
+begin
+  TblAll := CreateTableForBLOB;
+  try
+    TblAll.PackedData := OldData;
+  except // данные полностью несовместимы
+    DoExit := true;
+  end;
+  if DoExit then
+    begin
+      Result := Null;
+      exit;
+    end;
+  if not TblAll.SelectFirst then
+    begin
+      Result := Null;
+      exit;
+    end;
+  //
+  TblStructure := CreateTableForBLOBStructure;
+  TblStructure.PackedData := TblAll.Structure;
+  //
+  TblOldProps := CreateObject('ValueTable');
+  TblStructure.Select;
+  while TblStructure.SelectNext do
+    TblOldProps.AddColumn(TblStructure.Name, TblStructure.Type, TblStructure.Size);
+  TblOldProps.Open;
+  TblStructure.Select;
+  while TblStructure.SelectNext do
+    TblOldProps.SetColumnFormat(TblStructure.Name, VarAsStr(TblStructure.ColFormat));
+  TblOldProps.PackedData := TblAll.Data;
+  Result := TblOldProps;
+end;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+  Constants := GetConstants;
+  PartTbl := CreateObject('ValueTable');
+  PartTbl.AddColumn('Партнер',vtcLink,0);
+  PartTbl.AddColumn('Document',vtcLink,0);
+  PartTbl.AddColumn('DocName',vtcString,100);
+  PartTbl.AddColumn('СуммаЧек',vtcFFT,2);
+  PartTbl.AddColumn('СуммаВозврат',vtcFFT,2);
+  PartTbl.AddColumn('СуммаКРасчету',vtcFFT,2);
+  PartTbl.AddColumn('Процент',vtcFFT,2);
+  PartTbl.AddColumn('Сумма',vtcFFT,2);
+  PartTbl.AddColumn('Валюта',vtcLink,0);
+  PartTbl.AddColumn('Курс',vtcFFT,2);
+  PartTbl.AddColumn('СуммаВВалюте',vtcFFT,2);
+  PartTbl.Open;
+  PartTbl.SetColumnFormat('СуммаЧек','0.00');
+  PartTbl.SetColumnFormat('СуммаВозврат','0.00');
+  PartTbl.SetColumnFormat('СуммаКРасчету','0.00');
+  PartTbl.SetColumnFormat('Процент','0.00');
+  PartTbl.SetColumnFormat('Сумма','0.00');
+  PartTbl.SetColumnFormat('СуммаВВалюте','0.00');
+  MyFirm := CreateObject('Справочники.ВашеПредприятие');
+  MyFirm.Select;
+  BonusTbl := CreateTblFromBLOB(MyFirm.Диапазон);
+  if IsNil(BonusTbl) then
+    begin
+      BonusTbl := CreateObject('ТаблицаЗначений');
+      BonusTbl.AddColumn('СуммаС',vtcFloat,2);
+      BonusTbl.AddColumn('СуммаПо',vtcFloat,2);
+      BonusTbl.AddColumn('Процент',vtcFloat,2);
+      BonusTbl.Open;
+    end;
+  ParamsSt := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');   
+  Currency := CreateObject('Справочники.Валюты');
+end;
+
+procedure CalcSums;
+begin
+ // MasterData.SaveContents('Сумма;Долг', tbl);
+ // tbl.CopyDataToServer;
+  MasterData.СуммаОбщ := MasterData.Total('Сумма');
+  if MasterData.КурсОбщ <> 0 then
+    MasterData.СуммаОбщВВал := MasterData.СуммаОбщ / MasterData.КурсОбщ;
+end;
+
+procedure CalcFields(Doc : ICDocuments);
+begin
+  if MasterData.СуммаКРасчету <> 0 then
+        MasterData.Процент := (MasterData.Сумма/MasterData.СуммаКРасчету)*100;
+ // GetCalcValSumma(Doc); //находится в модуле Расчёты
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  isSave := false;
+  //LockCalc := false;
+  MasterData := MDS.GetMean;
+  CreateObjects;
+//  MasterData.SetOnCalcFields(EntryPoint(CalcFields));
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin   
+  AddDoc := true;
+//  MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  MasterData.НачалоПериода := DateFrom;
+  MasterData.КонецПериода := DateTo;    
+  ParamsSt.Select;
+  if VarAsBool(ParamsSt.@НачислениеВознаграждения.IsFocused) then
+    MasterData.Статья := ParamsSt.НачислениеВознаграждения;
+
+  eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+  MasterData.Регион := GetUsersField('Регион');       
+  
+  if not Currency.FindByField('Активность', VarAsInt(True), True) then
+    Currency := GetNatCurrency(Currency);
+  if Currency.IsFocused then
+    begin
+      MasterData.КурсОбщ := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+      MasterData.ВалютаОбщ := Currency;
+    end;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+  if FieldName = '' then
+    begin
+//      MasterData.ClearContents;
+    end;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  if MasterData.GetDocState >0 then
+    SetReadOnlyForm(Form);
+  DateFrom := MasterData.НачалоПериода;
+  DateTo := MasterData.КонецПериода;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);    
+  if VarAsBool(MasterData.@Регион.IsFocused) then
+    tbCalc.Enabled := true;      
+  if VarAsBool(MasterData.Регион.IsFocused) then
+    Region := MasterData.Регион
+  else
+    Region := CreateObject('Справочники.Регионы');
+end;
+
+procedure ToolButton1_Click(Sender: TObject);
+begin
+  PartDic := CreateObject('Справочники.ЮрПартнеры');
+  if VarAsBool(MasterData.Регион.IsFocused) then
+    Region := MasterData.Регион;
+  ChangeLock := true;
+  DropMode := true;
+  MasterData.SaveContents('',PartTbl);
+  PartTbl.CopyDataToServer;
+  BonusTbl.CopyDataToServer;
+  server.CalcTblDoc(Region,PartDic,PartTbl.SrvMean,BonusTbl.SrvMean,DateFrom,DateTo);
+  PartTbl.CopyDataFromServer;
+  BonusTbl.CopyDataFromServer;
+
+  MasterData.ClearContents;
+  MasterData.LoadContents('',PartTbl);
+  MasterData.SortByField('НомСтроки');
+  if PartTbl.LineCount <> 0 then
+    MasterData.FindLineBy('НомСтроки',1);//SelectLines;
+  ChangeLock := false;
+  DropMode := false;
+  MasterData.НачалоПериода := DateFrom;
+  MasterData.КонецПериода := DateTo;
+    CalcSums;
+end;
+
+procedure eDateTo_Change(Sender: TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+  if VarAsBool(MasterData.@Регион.IsFocused) then
+    tbCalc.Enabled := true;
+end;
+
+procedure miFirstHalfYear_Click(Sender: TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo, eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+//  MasterData.Период := (Sender as TO4MenuItem).Caption;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+ // MasterData.НачалоПериода := DateFrom;
+ // MasterData.КонецПериода := DateTo;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+  if ChangeLock or DropMode then
+    exit;
+  try
+    ChangeLock := True;
+    case StrLowerCase(FieldName) of
+      'сумма':
+        begin
+          if MasterData.СуммаКРасчету <> 0 then
+            MasterData.Процент := (MasterData.Сумма/MasterData.СуммаКРасчету)*100;
+          if MasterData.Курс <> 0 then
+            MasterData.СуммаВВалюте := MasterData.Сумма/MasterData.Курс;
+          MasterData.Тип := 1;
+      //    LockCalc := true;
+        end;
+      'курс' :
+        begin
+          if MasterData.Курс <> 0 then
+            MasterData.СуммаВВалюте := MasterData.Сумма/MasterData.Курс;
+      //    LockCalc := true;
+        end;
+      'валюта' :
+        begin
+          if VarAsBool(MasterData.@Валюта.IsFocused) then
+            MasterData.Курс := MasterData.Валюта.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+          if VarAsDec(MasterData.Курс) <> 0 then
+            MasterData.СуммаВВалюте := MasterData.Сумма / MasterData.Курс;
+     //     LockCalc := true;
+        end;
+      'суммаввалюте' :
+        begin
+          if MasterData.Курс <> 0 then
+            MasterData.Сумма := MasterData.СуммаВВалюте*MasterData.Курс;
+          MasterData.Тип := 1;
+      //    LockCalc := true;
+        end;
+      'процент' :
+        begin
+          MasterData.Сумма := MasterData.СуммаКРасчету * (MasterData.Процент/100);  
+          if MasterData.Курс <> 0 then
+            MasterData.СуммаВВалюте := MasterData.Сумма/MasterData.Курс;
+          MasterData.Тип := 1;
+      //    LockCalc := true;
+        end;
+    end;
+  finally
+    ChangeLock := False
+  end
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.LinesCount() > 0 then
+    if MasterData.Тип = 1 then
+      Index1 := 207
+    else
+      Index1 := -1;
+end;
+{$D+}
+
+procedure MenuItem4_Click(Sender : TObject);
+begin
+  if VarAsBool(MasterData.Регион.IsFocused) then
+    LinkDict := MasterData.OpenDropSource('Справочники.ЮрПартнеры', 'ВыборПартнераВознагр', MasterData.Регион)
+  else
+    ShowMessage('Не указан регион!');
+end;
+
+procedure tbSelectDates_Click(Sender: TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure TDS_StartDrop(Source: Variant; var Accept: boolean);
+begin
+//  LockCalc := True;
+  MasterData.UpdateLine(True);
+  DropMode := True;
+  MasterData.TableAutoCalcFields := False;
+  CursorVis := WaitCursorStart;
+end;
+
+procedure TDS_Drop(Source: Variant; var Accept: boolean);
+begin    
+  if IsObjEQ(Source.Регион,MasterData.Регион,false) then
+    begin
+      if not MasterData.FindLineBy('Партнер', Source) then
+        begin
+          MasterData.AppendLine();
+          MasterData.Партнер := Source;
+          PartDic := Source;
+          if VarAsBool(MasterData.Регион.IsFocused) then
+            Region := MasterData.Регион;
+          PartTbl.Clear;
+          PartTbl.CopyDataToServer;
+          BonusTbl.Params['Source'] := PartDic;
+          BonusTbl.CopyDataToServer;
+          server.CalcTblDoc(Region,PartDic,PartTbl.SrvMean,BonusTbl.SrvMean,DateFrom,DateTo);
+          PartTbl.CopyDataFromServer;
+          BonusTbl.CopyDataFromServer;
+          MasterData.СуммаКРасчету := PartTbl.СуммаКРасчету;
+          MasterData.СуммаЧек := PartTbl.СуммаЧек;
+          MasterData.СуммаВозврат := PartTbl.СуммаВозврат;
+          MasterData.Процент := PartTbl.Процент;
+          MasterData.Сумма := PartTbl.Сумма;
+          MasterData.СуммаВВалюте := PartTbl.СуммаВВалюте;
+          if not Currency.FindByField('Активность', VarAsInt(True), True) then
+            Currency := GetNatCurrency(Currency);
+          if Currency.IsFocused then
+            begin
+              MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+              MasterData.Валюта := Currency;
+            end;
+          MasterData.PostLine();
+        end;
+    end
+  else
+    ShowMessage('Етот партнер относится к другом региону!');
+end;
+
+procedure TDS_EndDrop(Source: Variant);
+begin
+  DropMode := False;
+//  LockCalc := False;
+  SetCursor(CursorVis);
+  MasterData.TableAutoCalcFields := True;
+  CalcSums;
+end;
+
+procedure eRegion_ActionExecute(Sender: TObject);  
+Var InParams, OutParams : Variant;
+begin
+  tbCalc.Enabled := true;
+  if Region.Название <> MasterData.Регион.Название then
+    MasterData.ClearContents;
+  if not IsNil(LinkDict) then
+    LinkDict.ExecProc(Null, 'region', MasterData.Регион, OutParams);
+end;
+
+procedure eRegion_ActionClear(Sender: TObject); 
+Var InParams, OutParams : Variant;
+begin
+  MasterData.ClearContents;
+  if not IsNil(LinkDict) then
+    LinkDict.ExecProc(Null, 'closformdic', InParams, OutParams);
+end;
+
+procedure TDS_VPAAfterPost(Sender: TObject);
+begin
+  if not DropMode then
+    CalcSums;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+Label7:TO4Label
+Label5:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+eCostItem:TO4DBEdit
+eRegion:TO4DBEdit
+Panel2:TO4Panel
+mbOk:TO4Button
+mbCancel:TO4Button
+Panel3:TO4Panel
+dbgData:TO4DBGrid
+Panel4:TO4Panel
+Panel5:TO4Panel
+ToolBar1:TO4ToolBar
+tbCalc:TO4ToolButton
+tbDel:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+ToolBar3:TO4ToolBar
+Panel6:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel7:TO4Panel
+Label34:TO4Label
+Label19:TO4Label
+Label15:TO4Label
+Label4:TO4Label
+eSummaV:TO4DBEdit
+eCourseDoc:TO4DBEdit
+eSumma:TO4DBEdit
+eCurrencyDoc:TO4DBEdit
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem4:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem5:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

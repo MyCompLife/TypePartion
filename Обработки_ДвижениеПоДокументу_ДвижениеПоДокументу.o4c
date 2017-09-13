@@ -1,0 +1,195 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+var 
+    MasterProc: ICProcessing;
+    Doc : ICDocuments;
+    DocMoveTbl : ICValueTable;
+    AsscList : string;
+    CursorVis : TCursor;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var i,AccsCount:integer;
+begin
+  MasterProc :=  Mean; 
+  if not GetUDASet('viewdocmove') then
+    raise('У пользователя нет прав промотра движения по документам!');
+  if IsObjFocused(Params) then
+    Doc := Params
+  else
+    raise('Не верно заданы параметры обработки!');
+  lbTitle.Caption := VarAsStr(Doc.GetName) + ' №'+ VarAsStr(Doc.GetNumber) + ' от '+ DateTimeToStr(Doc.GetDate);
+  if Doc.GetDocState=0 then
+    begin
+      ShowMessage('Документ не зафиксирован!');
+      exit;
+    end;
+  DocMoveTbl := CreateObject('ТаблицаЗначений');
+  case StrLowerCase(Doc.GetSign) of
+    'накладнаяотпуска' :
+      AsscList := 'ОстаткиТоваров;РасчетыСПартнерами;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'накладнаяприхода' :
+      AsscList := 'ОстаткиТоваров;РасчетыСПартнерами;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'актнаполучениеуслуг' :
+      AsscList := 'РасчетыСПартнерами;ДоходыРасходы';     
+    'актнаоказаниеуслуг' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиТоваровТМЦпоСчетам';
+    'вводостатков' :
+      AsscList := 'ОстаткиТоваров;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'вводостатковпобанкуикассе' :
+      AsscList := 'ОстаткиНаРасчСчет;ОстаткиПоКассе';   
+    'вводостатковповзаиморасчетам' :  
+      AsscList := 'РасчетыСПартнерами';
+    'возвратотпокупателей' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиТоваров;ДоходыРасходы;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'возвратпоставщикам' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиТоваров;ДоходыРасходы;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'возвратпоставщикам' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиТоваров;ДоходыРасходы';
+    'накладнаявнутрперемещ' :
+      AsscList := 'ОстаткиТоваров;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'приходвкассу' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиПоКассе';
+    'приходнарасчсчет' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиНаРасчСчет;РасчетыСПостНаРеал;РасчетыСРеализаторами';
+    'приходпоэквайрингу' :
+      AsscList := 'РасчетыСПартнерами;ДоходыРасходы';   
+    'расходизкассы' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиПоКассе';
+    'расходсрасчсчета' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиНаРасчСчет;РасчетыСПостНаРеал;РасчетыСРеализаторами';
+    'расходпоэквайрингу' :
+      AsscList := 'РасчетыСПартнерами;ДоходыРасходы';
+    'трансфернарасчсчет', 'трансферсрасчсчета' :
+      AsscList := 'ОстаткиНаРасчСчет;ОстаткиПоКассе';
+    'ревизиятовара' :
+      AsscList := 'ОстаткиТоваров;ДоходыРасходы;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'списаниетовара' :
+      AsscList := 'ОстаткиТоваров;ДоходыРасходы;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'смена':
+      AsscList := 'ОстаткиТоваров;РасчетыСПартнерами';
+    'документизменвхцен' :
+      AsscList := 'ОстаткиТоваров;ПартииТоваров';
+    'измценоптцены'  :
+      AsscList := 'ИзмОтпЦенСпрТовара';
+    'корректировкаостаткатовара'  :
+      AsscList := 'ПартииТоваров;ОстаткиТоваров;ОстаткиТоваровНаСегодня'; 
+    'начислениевознаграждения' :
+      AsscList := 'РасчетыСПартнерами';
+    'начислениезп_повремени' :
+      AsscList := 'РасчетыСПартнерами';
+    'начислениезарплаты' :
+      AsscList := 'РасчетыСПартнерами;ДоходыРасходы';
+    'обменвалютвкассе' :
+      AsscList := 'ОстаткиПоКассе';
+    'перемещениемеждукассами' :
+      AsscList := 'ОстаткиПоКассе';
+    'ревизионныйлисток' :
+      AsscList := 'ПартииТоваров;ОстаткиТоваров;ОстаткиТоваровНаСегодня';  
+    'установкаскидок' :
+      AsscList := 'УстановкаСкидок';
+    'чек' :
+      AsscList := 'РасчетыСПартнерами;ОстаткиТоваров;ПартииТоваров;ОстаткиТоваровНаСегодня;ДоходыРасходы;РасчетыПоДокументам';
+    'вводостнареал' :
+      AsscList := 'ПартииТоваров;ОстаткиТоваровНаРеализаторах;РасчетыСРеализаторами;РасчетыСПартнерами;ОстаткиТоваров';  
+    'вводостприхнареал' :
+       AsscList := 'ПартииТоваров;ОстаткиТоваров;РасчетыСПартнерами;ОстаткиТоваровНаПостРеал;РасчетыСПостНаРеал;ОстаткиТоваровНаСегодня';
+    'вводостатковтмцпосчету' :
+      AsscList := 'ТоварыВРезерве;ОстаткиТМЦНаОтвет;ОстаткиТоваровТМЦпоСчетам;ОстаткиТоваров';
+    'возвраттмц' :
+      AsscList := 'ПартииТоваров;ОстаткиТоваров;ОстаткиТМЦНаОтвет;ОстаткиТоваровНаСегодня;ОстаткиТоваровТМЦпоСчетам';
+    'передачаврезерв', 'снятиесрезерва' :
+      AsscList := 'ТоварыВРезерве';
+    'счетнаоказаниеуслуг':
+      AsscList := 'ОстаткиТоваровТМЦпоСчетам;ТоварыВРезерве'; 
+    'счетнапродажу' :
+      AsscList := 'ТоварыВРезерве';
+    'накладнаяотпускапосчету':
+       AsscList := 'ТоварыВРезерве;РасчетыСПартнерами;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'накладнаяотпускатмцпосчету' :
+       AsscList := 'ТоварыВРезерве;ОстаткиТМЦНаОтвет;ОстаткиТоваровТМЦпоСчетам;ПартииТоваров;ОстаткиТоваровНаСегодня';
+    'накладнаяприходапосчету' :
+      AsscList := 'ПартииТоваров;ОстаткиТоваров;РасчетыСПартнерами;ОстаткиТоваровНаСегодня';
+  end;
+  AccsCount := WordCount(AsscList,';');
+  if AccsCount>0 then
+    begin
+      for i:=1 to AccsCount do
+        tsTypeAccs.Tabs.Add(ExtractWord(i,AsscList,';'));
+      tsTypeAccs.TabIndex := 0;
+    end;
+end;
+
+procedure tsTypeAccs_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+var i:integer;
+    ColumnName : string;
+begin
+ try
+   CursorVis := WaitCursorStart;
+   XGrid.Visible := false;
+   XGrid.ClearAll;
+   DocMoveTbl.Close;
+   DocMoveTbl.Open;
+   DocMoveTbl.CopyDataToServer;
+   Doc.SetSrvToClientPos;
+   if MasterProc.RunThreadProcess(server.GetDocMotionEP(DocMoveTbl.SrvMean, Doc.SrvMean, ExtractWord(NewTab+1,AsscList,';')),'Выборка данных') then
+     begin
+       DocMoveTbl.CopyDataFromServer2;  
+       DocMoveTbl.SrvMean.Close;
+       if (DocMoveTbl.GetColumnCount>0) and (DocMoveTbl.LineCount>0) then
+         begin
+           XGrid.AddSection('Hed');
+           for i:=0 to DocMoveTbl.GetColumnCount-1 do
+             begin
+               ColumnName := DocMoveTbl.GetColumnName(i);
+               XGrid.Cell(1,i+1).Value := ColumnName;
+               ColumnName := StrLowerCase(ColumnName);
+               if (StrPos('сум',ColumnName)<>0) or (StrPos('цена',ColumnName)<>0) then
+                 DocMoveTbl.SetColumnFormat(ColumnName,'0.00#####')
+               else
+               if StrPos('кол',ColumnName)<>0 then
+                 DocMoveTbl.SetColumnFormat(ColumnName,'0.#####');
+             end;
+           DocMoveTbl.AddToXGrid(CtrlToVar(XGrid),'Det','-',0,DocMoveTbl.LineCount);
+           XGrid.ColCount := DocMoveTbl.GetColumnCount;
+           XGrid.Cells(1,1,XGrid.RowCount, XGrid.ColCount).AdjustColWidths;
+           for i:=0 to DocMoveTbl.GetColumnCount-1 do
+             begin
+               ColumnName := StrLowerCase(DocMoveTbl.GetColumnName(i));
+               if (StrPos('сум',ColumnName)<>0) or (StrPos('цена',ColumnName)<>0) or (StrPos('кол',ColumnName)<>0) or
+                (StrPos('курс',ColumnName)<>0) or (ColumnName='тип') or (ColumnName='motionsign') or
+                (ColumnName='docstate') or (ColumnName='doclinenum') then
+                 XGrid.Cells(2,i+1,XGrid.RowCount, i+1).Alignment := taRightJustify;
+             end;
+         end;
+     end;
+ finally  
+   XGrid.Visible := true; 
+   WaitCursorFinish(CursorVis);
+ end;
+end;
+
+procedure miExport_Click(Sender: TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+procedure miPrint_Click(Sender: TObject);
+begin
+  XGrid.Print('Движение по документу', true);
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbTitle:TO4Label
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+tsTypeAccs:TO4TabSet
+PopupMenu:TO4PopupMenu
+miExport:TO4MenuItem
+miPrint:TO4MenuItem

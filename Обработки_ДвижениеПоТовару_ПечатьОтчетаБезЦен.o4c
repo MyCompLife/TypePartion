@@ -1,0 +1,137 @@
+interface
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, InitColors;
+
+implementation
+
+Var
+  GoodDic: ICDictionary;
+  V: ICProcessing;
+  MasterTbl, DocListTbl: ICValueTable;
+  TypeRepport: String;
+
+procedure XGrid_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  case Hsect of
+    'Hed' :
+     begin
+       Vars.Goods := GoodDic;
+       Vars.Period := GoodDic.Params['Period'];
+       Vars.Store := GoodDic.Params['Store'];
+       Vars.TypeRepport := TypeRepport;
+     end;
+    'MasterStoreDet' :
+     begin
+       Vars.Store := MasterTbl.Склад;
+       Vars.Cnt := MasterTbl.КолОбщ;
+       Vars.Sum := MasterTbl.СумВх;
+       Vars.SumVal := MasterTbl.СумВалВх;
+     end;
+    'MasterPartDet' :
+     begin
+       Vars.Store := MasterTbl.Склад;
+       Vars.Date := MasterTbl.ДатаПр;
+       Vars.Partner := MasterTbl.Партнер;
+       Vars.Cnt := MasterTbl.КолОбщ;
+       Vars.InPrice := MasterTbl.ВхЦенаБезНДС;
+       Vars.InPriceVal := MasterTbl.ВхЦенаВал;
+     end;
+    'DocListDet' :
+     begin
+       Vars.Date := DocListTbl.Date;
+       Vars.DocName := DocListTbl.Document;
+       Vars.Partner := DocListTbl.НазвПартнера;
+       Vars.Cnt := DocListTbl.КолОбщ;
+       Vars.Price := DocListTbl.Цена;
+       Vars.Sum := DocListTbl.СумОтп;
+     end;
+    'BegEndPosition' :
+     begin
+       Vars.Comment := DocListTbl.НазвПартнера;
+       Vars.Cnt := DocListTbl.КолОбщ;
+     end;
+  end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  FieldsStr: String;
+  Fields: Variant;
+  SectionMastertHed, SectionMasterDet: String;
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  V := Mean;
+  GoodDic := Params;
+  MasterTbl := GoodDic.Params['MasterTbl'];
+  DocListTbl := GoodDic.Params['DocListTbl'];
+  Case VarAsInt(GoodDic.Params['TypeRepport']) of
+    0: begin
+         TypeRepport := '"остатки по складам"';
+         FieldsStr := 'Склад;Sort;Date';
+         SectionMastertHed := 'MasterStoreHed';
+         SectionMasterDet  := 'MasterStoreDet';
+       end;
+    1: begin
+         TypeRepport := '"остатки по складам и партиям"';
+         FieldsStr := 'Партия;Склад;Sort;Date';
+         SectionMastertHed := 'MasterPartHed';
+         SectionMasterDet  := 'MasterPartDet';
+       end;
+  end;
+  Xgrid.ClearAll;
+  Xgrid.AddSection('Hed');
+  Xgrid.AddSection(SectionMastertHed);
+  MasterTbl.Select;
+  while MasterTbl.SelectNext do
+    begin
+      case VarAsInt(GoodDic.Params['TypeRepport']) of
+        0: Fields := ArrayOf(MasterTbl.Склад);
+        1: Fields := ArrayOf(MasterTbl.Партия,MasterTbl.Склад);
+      end;
+      Xgrid.AddSection(SectionMasterDet);
+      DocListTbl.SortBy(FieldsStr);
+      DocListTbl.SetRange(Fields,Fields);
+      DocListTbl.Select;
+      Xgrid.AddSection('DocListHed');
+      while DocListTbl.SelectNext do
+        Case VarAsInt(DocListTbl.Sort) of
+         -1,1: Xgrid.AddSection('BegEndPosition');
+            0: Xgrid.AddSection('DocListDet');
+        end;
+      XGrid.AddSection('Splitter');
+    end;
+ tbPrint.Enabled := true;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+ XGridTools.Visible := not XGridTools.Visible;
+ if XGridTools.Visible
+  then tbXTools.ImageIndex := 98 else tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+Panel2:TO4Panel
+Panel3:TO4Panel
+btCancel:TO4Button
+TVSStore:TO4TableValueSource

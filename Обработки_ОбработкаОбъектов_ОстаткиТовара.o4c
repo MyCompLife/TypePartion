@@ -1,0 +1,44 @@
+interface
+
+uses
+  System, DispIntf, Reports;
+
+implementation
+
+var
+ AccsPartGood, AccsGoodCurrent : ICAccs;
+ Tbl : ICValueTable;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin  
+ Tbl := CreateObject('ТаблицаЗначений');
+ Tbl.AddColumn('Товар',vtcLink,0);
+ Tbl.AddColumn('КолНаСегодня',lftFFT,5);
+ Tbl.AddColumn('КолПартии',lftFFT,5);
+ Tbl.AddColumn('КолОбщ',lftFFT,0);
+ Tbl.Open;  
+ Tbl.Clear;
+ AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+ AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+ AccsGoodCurrent.AppendGroupRestToValueTable(CurrentDateTime,'Товар;КолОбщ=КолНаСегодня', Tbl);
+ AccsPartGood.AppendGroupRestToValueTable(CurrentDateTime,'Товар;КолОбщ=КолПартии', Tbl);
+ Tbl.GroupBy('Товар','КолНаСегодня;КолПартии;КолОбщ');
+ Tbl.DoCalculation('КолОбщ','КолНаСегодня-КолПартии');
+ Tbl.Select;
+ while Tbl.SelectNext do
+   begin
+     if Tbl.КолОбщ = 0 then
+       Tbl.Delete;
+   end;      
+ Tbl.SortBy('Товар');
+ Tbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+dbGood:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+TVS:TO4TableValueSource

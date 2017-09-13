@@ -1,0 +1,106 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  GoodsTbl, DocsTbl : ICValueTable;
+  Sum, OverSum : Double;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  GoodsTbl := Form.GetParams;
+  DocsTbl := GoodsTbl.Params['PDocsTbl'];
+  Label43.Caption := DateToStr(GoodsTbl.Params['DateFrom']);
+  Label45.Caption := DateToStr(GoodsTbl.Params['DateTo']);
+end;
+
+procedure sGoods_tblGoods_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  OneGood : ICDictionary;
+  UnitName : ICCollection;
+begin
+  if Index = 0 then
+    Accept := GoodsTbl.SelectFirst()
+  else
+    Accept := GoodsTbl.SelectNext();
+  if not Accept then
+    exit;
+  DocsTbl.SortBy('Товар');
+  DocsTbl.SetRange(GoodsTbl.Товар, GoodsTbl.Товар);
+  Sum := 0;
+  OverSum := 0;
+  with Table do
+    begin
+      Value['Code'] := GoodsTbl.Код;
+      OneGood := GoodsTbl.Товар;
+      if OneGood.IsFocused then
+        begin
+          Value['Name'] := OneGood.NameField;
+          UnitName := OneGood.ЕдИзм;
+          if UnitName.IsFocused then
+            Value['UnitName'] := UnitName.Value;
+        end;
+    end;
+end;
+
+procedure sGoods_tblGoods_tblDocs_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := DocsTbl.SelectFirst()
+  else
+    Accept := DocsTbl.SelectNext();
+  if not Accept then
+    exit;
+  Sum := Sum + DocsTbl.СумОтп;
+  OverSum := OverSum + DocsTbl.СумНац;
+  with Table do
+    begin
+      Value['Date'] := DocsTbl.Date;
+      //   Value['Document'] := DocsTbl.Document;
+      Value['DNames'] := DocsTbl.DNames + ' №' + DocsTbl.Document.НомерДокумента;
+      Value['Count'] := DocsTbl.КолОбщ;
+      Value['Sum'] := DocsTbl.СумОтп;
+      Value['OverSum'] := DocsTbl.СумНац;
+    end;
+end;
+
+procedure Band3_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Label15.Caption := FormatFloat('0.00##', Sum);
+  Label42.Caption := FormatFloat('0.00##', OverSum);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label1:TRBLabel
+Label43:TRBLabel
+Label44:TRBLabel
+Label45:TRBLabel
+Label48:TRBLabel
+dbGoods:TRBDetailBand
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label11:TRBLabel
+Band4:TRBBand
+Label34:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label5:TRBLabel
+Label7:TRBLabel
+dbDoc:TRBDetailBand
+Label26:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label6:TRBLabel
+Label10:TRBLabel
+Band3:TRBBand
+Label15:TRBLabel
+Label42:TRBLabel
+sGoods:TRBStructure

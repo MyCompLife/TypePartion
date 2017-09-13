@@ -1,0 +1,141 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€;
+
+implementation
+
+var
+  AccGood, AccPartGood, AccReserv, AccPartner, AccRozrPostReal,
+    AccPostRealGood, AccsPart, AccsGoodCurrent : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  Com : Boolean;
+  DocDate : DateTime;
+  PartGoodID : Double;
+  Count, Total, MotionID : Integer;
+  Sum, SumNT, Tax, Col, CurSum : Decimal;
+begin
+  DocDate := Doc.GetDate;
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  Constants := GetConstants;
+  Com := VarAsBool(Doc. омисси€);
+  while Doc.SelectNextLine do
+    begin
+      if not VarAsBool(Doc.“овар.”слуга) then
+        begin
+          AccGood.ClearFieldBuffers();
+          AccsGoodCurrent.ClearFieldBuffers();
+          AccPostRealGood.ClearFieldBuffers();
+          AccPostRealGood.AssignFields('“овар;ѕартнер', Doc);
+          —уммаЌƒ—(Doc, Sum, SumNT, Tax, Col);
+          CurSum := VarAsDec(Doc.÷ена¬¬алюте) * Col;
+          PartGoodID := Doc.ѕарти€;
+          if Com then
+            MotionID := midComInputRest
+          else
+            MotionID := midInputRest;
+          AccPostRealGood.ѕарти€ := PartGoodID;
+          AccPostRealGood.“ип := MotionID;
+          AccPostRealGood.—ум¬х := SumNT;
+          AccPostRealGood.—ум¬хЌƒ— := Tax;
+          AccPostRealGood.—ум¬ал¬х := CurSum;
+          AccPostRealGood. олќбщ := Col;
+          AccPostRealGood.Income(Doc, DocDate, Doc.Ќом—троки);
+        end;
+      // отправка сообщени€ клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+
+  //взаиморасчеты с партнерами
+  AccsPart.ClearFieldFilters();
+  if VarAsBool(Doc.@ѕартнер.IsFocused) then
+    AccsPart.ѕартнер := Doc.ѕартнер.@ѕартнер;
+  AccsPart.—ум–асх := Doc.—умма;
+  AccsPart.—умќбщ := Doc.—умма;
+  AccsPart.—ум–асх¬ал := Doc.—умма¬¬алюте;
+  AccsPart.—умќбщ¬ал := Doc.—умма¬¬алюте;
+  AccsPart.Outcome(Doc, Doc.GetDate(), 0);
+
+  //взаиморасчеты с поставщиками на реализацию
+  AccRozrPostReal.ClearFieldFilters();
+  if VarAsBool(Doc.ќстатки) then
+    AccRozrPostReal.AssignFields('ѕартнер;—умќст=—умма;—умќбщ=—умма;—умќст¬ал=—умма¬¬алюте;—умќбщ¬ал=—умма¬¬алюте', Doc)
+  else
+    AccRozrPostReal.AssignFields('ѕартнер;—умѕрих=—умма;—умќбщ=—умма;—умѕрих¬ал=—умма¬¬алюте;—умќбщ¬ал=—умма¬¬алюте', Doc);
+  AccRozrPostReal.Income(Doc, Doc.GetDate(), 0);
+
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  AccPostRealGood := CreateObject('јккумул€торы.ќстатки“оваровЌаѕост–еал');
+  AccRozrPostReal := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+  AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+        AccGood := CreateObject('јккумул€торы.ќстатки“оваров');
+        AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+        AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+        AccPostRealGood := CreateObject('јккумул€торы.ќстатки“оваровЌаѕост–еал');
+        AccRozrPostReal := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  SumNt, SumInNt : Decimal;
+begin
+  case StrLowerCase(Synonym) of
+    'суммастрокибезндс' :
+      begin
+        SumNt := Doc.÷енаЅезЌƒ— * (1 + Doc.ѕроцентќбщий / 100) * Doc. оличество;
+        if VarAsBool(Constants.ќкругл€ть—умму—трокиЅезЌƒ—) then
+          Value := RoundFloat(SumNt, Constants. оличество«наков¬—умме—трокиЅезЌƒ—)
+        else
+          Value := SumNt;
+      end;
+    'суммастроки' :
+      Value := Doc.÷енаЅезЌƒ— * (1 + Doc.ѕроцентќбщий / 100) * Doc. оличество * (1 + Doc.—тавкаЌƒ— / 100);
+    'суммандсстроки' :
+      Value := Doc.÷енаЅезЌƒ— * (1 + Doc.ѕроцентќбщий / 100) * Doc. оличество * Doc.—тавкаЌƒ— / 100;
+    'реализатор' :
+      Value := Doc.ѕартнер.ѕартнер;
+  end
+end;
+
+end.

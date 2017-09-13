@@ -1,0 +1,185 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСПеременными, ДополнительныйФункционал, РаботаСВесами;
+
+implementation
+Var
+  Cursor: TCursor;
+  StopPrint, IsWeightError, OpenedPort : Boolean;
+  GoodDic, UserDic : IcDictionary;
+  Options: ICOptions;
+  Driver: OleVariant;
+  ComPort: String;
+  PriceD, Summa : Decimal;
+  Weight, OldWeight, Error : Integer;
+  MasterProc : IcProcessing;
+
+procedure pnQuit_Click(Sender: TObject);
+begin
+  Form.ModalResult := mrOk;
+  Form.Close;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+Var
+  ErrorMessage : String;
+begin
+  MasterProc := Mean;
+  Cursor := WaitCursorStart;
+  try
+    StopPrint := False;
+    UserDic := CreateObject('Справочники.Пользователи');
+    Options := GetOptions;
+
+    GoodDic := CreateObject('Справочники.Товары');
+    GoodDic.Select;
+    if GoodDic.Find(Params) then
+      begin
+        if UserDic.FindByCode(GetUserLogin,false)then
+          begin
+
+            IsWeightError := False;
+            if IsObjFocused(UserDic.Весы) then
+              try
+                if UserDic.Весы.Тип = 'ВТА' then
+                  Driver := CreateOleObject('ScalesCOMServer.ScalesServerBTA.1');
+                OpenedPort:= True;
+              except
+                ShowMessage('Ошибка подключения весов!!');
+                IsWeightError := true;
+                OpenedPort := False;
+              end;
+            if not IsWeightError then
+              begin
+                if UserDic.Весы.ComPort <= 8 then
+                  ComPort := 'COM' + IntToStr(UserDic.Весы.ComPort)
+                else
+                  ComPort := '\\.\COM' + IntToStr(UserDic.Весы.ComPort);
+              end;
+            Driver.OpenComPort(ComPort, Error);
+            if not CheckError(Error,ErrorMessage) then
+              begin
+                ShowMessage(ErrorMessage);
+                IsWeightError := True;
+                OpenedPort := False;
+              end;
+
+
+            PriceD := VarAsDec(GoodDic.Цена);
+            lbPrice.Caption := FormatFloat('0.00',PriceD);
+            Summa := (Weight/1000)*PriceD;
+            lbSumma.Caption := FormatFloat('0.00',Summa);
+            lTitle.Caption := VarAsStr(GoodDic.NameField);
+            if not IsWeightError then
+              GetWeitTimer.Enabled := True;
+          end;
+      end
+    else
+      Raise('Не верные входные данные!');
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+
+
+end;
+
+procedure PrintWeightGood(WeightGood:Integer);
+var
+  PrinterName, PrintFormName : string;
+  PreviewPrintForm:boolean;
+  PrintWeitProc : IcProcessing;
+begin
+ PrintFormName := VarAsStr(Options.GetLocalPrm('WorkPlacePrintForm'));
+ PreviewPrintForm := VarAsBool(Options.GetLocalPrm('WorkPlacePreviewPrintForm'));
+
+ if PrintFormName='' then
+   PrintFormName := 'ПечВесЦенника40х25';
+
+ PrinterName := GetPrintNameForCurPrintForm('WeightWorkPlace');
+ if PrinterName<>'' then
+   SetActivePrinter(PrinterName);
+ PrintWeitProc := CreateObject('Обработки.РаботаСВесами');
+ PrintWeitProc.PrintForm(PrintFormName,PreviewPrintForm,ArrayOf(GoodDic,WeightGood));
+
+end;
+
+procedure GetWeitTimer_Timer(Sender: TObject);
+Var
+  Cost, Error, Price: Integer;
+  PrintWeitProc : IcProcessing;
+  ErrorMessage : String;
+begin
+  Cost :=-1;
+  Price := Round(PriceD*100);
+  Weight :=0;
+  Driver.GetInfo(Weight, Price, Cost, Error);
+  if not CheckError(Error, ErrorMessage) and (Weight<>0) then
+    exit;
+
+  if StopPrint and (Weight<>0) then
+    exit
+  else
+    StopPrint := False;
+
+  lbWeight.Caption := FormatFloat('0.000',(Weight/1000));
+  lbPrice.Caption := FormatFloat('0.00',PriceD);
+  Summa := (Weight/1000)*PriceD;
+  lbSumma.Caption := FormatFloat('0.00',Summa);
+
+  if (OldWeight=Weight) and (Weight<>0) then
+    begin
+      GetWeitTimer.Enabled := false;
+      StopPrint := True;
+      OldWeight := 0;
+
+      PrintWeightGood(Weight);
+      GetWeitTimer.Enabled := True;
+    end
+  else
+    OldWeight := Weight;
+end;
+
+procedure pnPrint_Click(Sender: TObject);
+begin
+  GetWeitTimer.Enabled := false;
+  PrintWeightGood(Weight);
+  GetWeitTimer.Enabled := True;
+end;
+
+procedure pnPrintSett_Click(Sender: TObject);
+Var
+  V: ICProcessing;
+  PrintForms : String;
+begin
+  PrintForms:= MasterProc.GetPrintForms;
+  V := CreateObject('Обработки.РаботаСВесами');
+  V.Execute('ВыборПринтера', ArrayOf(PrintForms,'ФасовкаТовара'));
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lTitle:TO4Label
+InfoPanel:TO4Panel
+pnWeight:TO4Panel
+Label1:TO4Label
+lbWeight:TO4Label
+pnSumma:TO4Panel
+Label3:TO4Label
+lbSumma:TO4Label
+pnPrice:TO4Panel
+Label2:TO4Label
+lbPrice:TO4Label
+Panel6:TO4Panel
+Panel10:TO4Panel
+pnQuit:TO4Panel
+imPayCredit:TO4Image
+pnQuitName:TO4Panel
+pnPrintSett:TO4Panel
+imPrintSett:TO4Image
+pnPrintSettName:TO4Panel
+pnPrint:TO4Panel
+imPrint:TO4Image
+pnPrintName:TO4Panel
+GetWeitTimer:TO4Timer

@@ -1,0 +1,42 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsPartGood, AccGood : ISAccs;
+  Partner : Variant;
+  SDateBeg, SDateEnd : DateTime;
+
+procedure ВозврТовары(PostReal : Variant; DateBeg, DateEnd : DateTime; TblPartGood : ISValueTable); server;
+var
+  PartList : ISValueList;
+begin
+  SDateBeg := RoundDate(DateBeg, rdDay, False);
+  SDateEnd := RoundDate(DateEnd, rdDay, True);
+  Partner := PostReal;
+  PartList := CreateObject('СписокЗначений');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  //  AccGood.IncludeZerorest := True;
+  TblPartGood.Clear();
+  AccsPartGood.SetFieldFilter('Партнер', Partner);
+  AccsPartGood.AppendMotionToValueTable(SDateBeg, SDateEnd, amtIncome,
+    'DimensionID=Партия', -1, TblPartGood);
+  TblPartGood.GroupToList('Партия', PartList);
+  TblPartGood.Clear();
+  if (PartList.Count <> 0) then
+    begin
+      AccGood.SetFieldFilter('Партия', PartList);
+      AccGood.AppendMotionToValueTable(SDateBeg, SDateEnd, amtIncome, 'Товар;Склад;Партия;КолОбщ=КолОбщПартнер;СумВх', -1, TblPartGood);
+      AccGood.AppendRestToValueTable(SDateEnd, 'Товар;Склад;Партия;КолОбщ;СумВх', TblPartGood);
+      TblPartGood.GroupBy('Товар;Склад;Партия;Партнер', 'СумВх;КолОбщ;КолОбщПартнер');
+      TblPartGood.SortBy('Товар;Склад;Партия;Партнер');
+      AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ДатаПр;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', TblPartGood);
+      TblPartGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+    end;
+end;
+
+end.

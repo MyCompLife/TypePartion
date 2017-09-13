@@ -1,0 +1,25 @@
+interface
+
+uses
+  System, DispIntf;           
+Var
+  PaysIn, PaysOut : ISJournal;
+
+implementation
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := Data.Total('СуммаВалОпт');
+end;
+
+function FindDoc : Variant; server;
+var
+  Docs : ISDocuments;
+begin
+  Docs := CreateObject('Документы.Чек'); 
+  Docs.SortByField('ДатаДокумента');
+  Docs.SelectNext;
+  Result := Docs;
+end;
+
+end.

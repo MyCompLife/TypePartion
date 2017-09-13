@@ -1,0 +1,46 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+
+procedure EPDeleteLogs(Mean : ISJournal; var Success : Boolean); server;
+const
+  msgCompleted = 'ќбработано ';
+  msgFrom = ' из ';
+var
+  i, Total : integer;
+  Doc : ISDocuments;
+  Journ : ISJournal;
+  Constants : IS4VPAConst;
+  DateFrom, DateTo : DateTime;
+begin
+  Success := False;
+  Constants := GetConstants;
+  Journ := CreateObject('∆урналы.∆урналѕротоколовќбменаDBF');
+  Journ.SetDateRange(0,CurrentDate - Constants.”далѕротќбмена);
+  Journ.Select;
+  Total := Journ.RecordCount;
+  i := 0;
+  while Journ.SelectNext do
+    begin
+      Journ.GetDoc.Delete;
+      if Mean.Terminated then
+        begin
+          Success := False;
+          exit
+        end;
+      inc(i);
+      Mean.NotifyClient(Trans(msgCompleted) + IntToStr(i) + ':' + IntToStr(Total), i, Total);
+    end;
+  Journ.CancelRangeByField;
+  Success := True;
+end;
+
+function DeleteLogs : Variant; server;
+begin
+  Result := EntryPoint(EPDeleteLogs);
+end;
+
+end.

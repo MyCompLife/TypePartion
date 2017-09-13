@@ -1,0 +1,185 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, –асчеты;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Buh : ICBuhWizard;
+  Doc : ICDocuments;
+  Options : ICOptions;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Options := GetOptions;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;
+begin
+  MakeInterface(tbrData, Nobody, dbgData);
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  Buh := CreateObject('Ѕухучет.Ѕухучет').CreateWizard;
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if MasterData.GetDocState > 0 then
+        Index1 := 10
+      else
+        Index1 := 9;
+      if MasterData.GetDocBuhState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9
+    end
+end;
+{$D+}
+
+procedure pmiTaxStateUp_Click(Sender : TObject);
+var
+  IVList : ICValueList;
+begin
+  IVList := CreateObject('—писок«начений');
+  MasterData.GetSelectedDocsAsValueList(IVList);
+  CreateObject('ƒекларации.ƒеклараци€').CreateWizard.DocStateUp(IVList)
+end;
+
+procedure pmiTaxShowDoc_Click(Sender : TObject);
+var
+  ITax, ITaxWin : IC4VPATax;
+  IVList : ICValueList;
+begin
+  IVList := CreateObject('—писок«начений');
+  MasterData.GetSelectedDocsAsValueList(IVList);
+  ITax := CreateObject('Ќалоговыеќперации.Ќалќпераци€');
+  if ITax.FindDoc(IVList) then
+    begin
+      ITaxWin := ITax.OpenForm('∆урналЌалќпераций');
+      if not IsObjEQ(ITax, ITaxWin) then
+        ITaxWin.Find(ITax)
+    end
+  else
+    ShowMessage(Trans('ƒокумент не найден в журнале налоговых операций'))
+end;
+
+procedure ToolButton1_VPABeforeActionClick(Sender : TObject);
+begin
+  Doc := MasterData.GetDoc();
+  Buh.OpenAskForm(Doc);
+  Doc.BuhWizard := Buh;
+  Buh.DocStateUp(Doc);
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ѕеч”нив∆урнала');
+  V.PrintForm('ѕеч”нив∆урнала—“ипом', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure tbDelete_Click(Sender : TObject);
+begin
+  if MessageDlg(Trans('ѕри удалении документа из списка, он будет удален из оперативного учета. ѕродолжить?'), mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes then
+    MDS.ActionClick(actDel);
+end;
+
+procedure miChangedOpers_Click(Sender: TObject);
+begin
+  if miChangedOpers.Checked then
+    MasterData.ClearFilterByModifiedDocs
+  else
+    MasterData.SetFilterByModifiedDocs;
+  miChangedOpers.Checked := not miChangedOpers.Checked;
+  MasterData.Select;
+end;
+
+procedure MenuItem6_Click(Sender: TObject);
+begin
+  StatusText('∆дите ...');
+  try
+    server.Exec;
+    MasterData.Refresh;
+    ShowMessage('ƒокументы успешно добавлены');
+  finally
+    StatusText('');
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+tbrData:TO4ToolBar
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton4:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+tsState:TO4TabSet
+Panel2:TO4Panel
+DBMemo1:TO4DBMemo
+pmData:TO4PopupMenu
+pmiEdit:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiPrint:TO4MenuItem
+MenuItem2:TO4MenuItem
+miSort:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiTaxShowDoc:TO4MenuItem
+pmiTaxStateUp:TO4MenuItem
+MenuItem7:TO4MenuItem
+miRefresh:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem6:TO4MenuItem
+MDS:TO4DataSource
+pmShowOpers:TO4PopupMenu
+miChangedOpers:TO4MenuItem

@@ -1,0 +1,160 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : Variant;
+  Doc, DocCheck : ICDocuments;
+  i: Integer;
+  Tbl, TblGoods : ICValueTable; 
+  TypeDocPrint : string;
+  S1, S2, S3, S4 : Decimal;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams; //Form.GetMean;
+  Tbl := CreateObject('ТаблицаЗначений');
+  Doc := CreateObject('Документы.Смена');
+  DocCheck := CreateObject('Документы.Чек');
+  Label1.Caption := 'Звіт касира за ' + VarAsStr(CurrentDate);
+  i := 1;
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if i > 0 then
+    Accept := true
+  else
+    Accept := false; 
+  S3 := 0;
+  S1 := 0;
+  S2 := 0;
+  S4 := 0;
+  if not Accept then
+    exit;
+  dec(i);
+  with Table do
+    begin
+      Value['SumNal'] := FormatFloat('0.00',MasterData[0]);
+      Value['SumBN'] := FormatFloat('0.00',MasterData[1]);
+      Value['SumDebt'] := FormatFloat('0.00',MasterData[2]);
+      Value['SumSert'] := FormatFloat('0.00',MasterData[3]);
+      Value['Name'] := MasterData[3];
+      Value['Doc'] := MasterData[4];
+      Tbl := MasterData[6];
+      if Tbl.LineCount <> 0 then
+        begin
+          Tbl.Select;
+          while Tbl.SelectNext do
+            begin
+              if Tbl.ТипДокумента = 0 then  ///   'Чек'
+                begin
+                  S1 := S1 + (Tbl.Количество*Tbl.Цена);
+                  S2 := S2 + (Tbl.Количество*Tbl.ЦенаБезСкидкиНадбавки);// S2, S3
+                end
+              else
+                 S4 := S4 + (Tbl.Количество*Tbl.Цена);
+            end;
+          S3 := S1 - S2;
+        end;
+      //Value['Allow'] :=
+      Label13.Caption := VarAsStr(FormatFloat('0.00',S3));
+      //Value['SumAllow'] :=
+      Label17.Caption :=  VarAsStr(FormatFloat('0.00',S1));
+    //  Value['SumAll'] :=
+      Label15.Caption := VarAsStr(FormatFloat('0.00',S2));
+      Label19.Caption := VarAsStr(FormatFloat('0.00',S4));   
+      Label21.Caption := VarAsStr(FormatFloat('0.00',S1-AbsD(S4)));
+    end;
+  if Tbl.LineCount <> 0 then
+    Tbl.Select;
+end;
+
+procedure Structure1_ROOT_DET_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+var
+  GoodName, комментарий : String;
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then Exit;
+  GoodName := Tbl.DefValue['Товар'];
+  with Table do
+    begin
+      комментарий := '';
+      if Tbl.ТипДокумента = 0 then //  'Чек'
+        begin
+          if Tbl.комментарий <> '' then
+            begin
+              if ExtractWord(1,Tbl.комментарий,' ') = 'Документ' then
+                комментарий := ExtractWord(5,Tbl.комментарий,' ')
+              else
+                if ExtractWord(1,Tbl.комментарий,' ') = 'Дисконтная' then
+                   комментарий := 'Д.к. №' + ExtractWord(4,Tbl.комментарий,' ');
+            end
+          else
+            if Tbl.ЦенаБезСкидкиНадбавки <> Tbl.Цена then
+              комментарий := 'Знижка ';
+        end
+      else
+        begin
+          if Tbl.комментарий <> '' then
+            комментарий := 'Д.к. №' + ExtractWord(4,Tbl.комментарий,' ');
+        end;
+      Value['Code'] := Tbl.Код;
+      Value['UnitName'] := Tbl.Товар.ЕдИзм;
+      if комментарий <> '' then
+        begin                                        // ' ('+Tbl.Товар.Код+') ' +
+          Value['NAME'] := Tbl.Код + ' ' + GoodName + #13#10 + комментарий;
+          Value['Count'] := DecToStr(Tbl.Количество) + #13 + DecToStr(Tbl.ЦенаБезСкидкиНадбавки,2)+ #13#10 +
+                            DecToStr( ((Tbl.Цена/Tbl.ЦенаБезСкидкиНадбавки)-1)*100,0) + '%';
+
+          Value['Summa'] := DecToStr(Tbl.Количество*Tbl.ЦенаБезСкидкиНадбавки) + #13 + #13 +
+                               '-' + DecToStr(RoundDec((Tbl.Количество*Tbl.ЦенаБезСкидкиНадбавки)-(Tbl.Количество*Tbl.Цена),2));
+        end
+      else
+        begin                                       //  ' ('+Tbl.Товар.Код+') ' +
+          Value['NAME'] := Tbl.Код + ' ' + GoodName;
+          Value['Count'] := DecToStr(Tbl.Количество) + #13 + DecToStr(Tbl.ЦенаБезСкидкиНадбавки,2);
+          Value['Summa'] := DecToStr(Tbl.Количество*Tbl.ЦенаБезСкидкиНадбавки);
+        end;
+    end;
+end;
+
+end.
+
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+Label5:TRBLabel
+Label1:TRBLabel
+Label6:TRBLabel
+Label3:TRBLabel
+Label2:TRBLabel
+Label4:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+bndHdDet:TRBBand
+Label27:TRBLabel
+Label29:TRBLabel
+Label32:TRBLabel
+dbndGoods:TRBDetailBand
+Label35:TRBLabel
+Label37:TRBLabel
+Label40:TRBLabel
+Band2:TRBBand
+Label12:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label21:TRBLabel
+Label20:TRBLabel
+Structure1:TRBStructure

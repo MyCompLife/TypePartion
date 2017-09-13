@@ -1,0 +1,80 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      Value['RespName'] := GetShortPartName(MasterData.Ответственный);
+      Value['WhoWant'] := GetShortPartName(MasterData.ПоТребованию);
+      Value['Descript'] := MasterData.ПричинаСнятия;
+    end;
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  TmpGood : ICDictionary;
+begin
+  if Index = 0 then
+    MasterData.SelectLines;
+  Accept := MasterData.SelectNextLine;
+  if not Accept then
+    exit;
+  with Table do
+    begin         
+      TmpGood := MasterData.Товар;
+      Value['Code'] := TmpGood.Код;
+      Value['NAME'] := TmpGood.НазвТовара;
+      if VarAsBool(TmpGood.ЕдИзм.IsFocused) then
+        Value['UnitName'] := TmpGood.ЕдИзм.Value;
+      Value['Count'] := MasterData.Количество;
+    end;
+end;
+
+procedure Structure1_ROOT_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := MasterData.LinesCount;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndROOT:TRBDetailBand
+Label5:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label12:TRBLabel
+Label19:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+SysData1:TRBSysData
+bndFtDET:TRBBand
+Label6:TRBLabel
+Label7:TRBLabel
+Structure1:TRBStructure

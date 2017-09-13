@@ -1,0 +1,80 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, СтруктураТаблицДляDBF,
+  РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  FullName, StrError : string;
+  ApplyTbl : ICValueTable;
+  Constants : IC4VPAConst;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+var TblContents : ICValueTable;
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniFix, FixAck); 
+ // Constants := GetConstants;
+ // if Accept then
+  // case Doc.GetDocState of
+     // 0 :
+       // if not VarAsBool(Doc.НеФиксироватьНакладные) then
+       //   begin
+       //     ApplyTbl := CreateObject('ТаблицаЗначений');
+       //     CreateStructureBLOBField(ApplyTbl, 'таб_товарыпочекам');
+       //     ReadPropsFromBLOB(ApplyTbl, Doc.Таб_ТоварыПоЧекам);
+        //    CheckAllRestrictions(Doc, ApplyTbl, FullName, Accept);
+       //   end;
+
+   // end;
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+begin
+  case Doc.GetDocState of
+    1 : 
+      begin
+        //if not VarAsBool(Doc.НеФиксироватьНакладные) then
+        //  begin
+            //if not Doc.RunThreadProcess(server.GetChangeStateUpEP(ApplyTbl.SrvMean), UniFixProgress + FullName) then
+            //    raise(emsgFixFail);
+        //  end;
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.SendEvent(evCount, Unassigned, False);
+        Doc.SendEvent(evNakladn, Unassigned, False);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniUnFix, FixAck);  
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin
+  ChangeDoc(clmtStateDown, Doc);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniDel, DelAck);  
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoDelete(Doc : ICDocuments);
+begin    
+  Doc.SendEvent(evCount, Unassigned, False);
+  Doc.SendEvent(evNakladn, Unassigned, False);
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

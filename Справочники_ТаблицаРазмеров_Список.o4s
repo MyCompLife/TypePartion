@@ -1,0 +1,263 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var Dic: ISDictionary;
+
+procedure InitSrvData;server;
+begin
+  Dic := CreateObject('Справочники.ТаблицаРазмеров');
+end;
+
+procedure ChangeDicLineNum(LineNum: Integer; MasterData: ISDictionary);server;
+begin
+  Dic.SortByField('НомСтроки');
+  Dic.Select;
+  while Dic.SelectNext do
+    if (Dic.НомСтроки >= LineNum) and (Dic.GetUniID <> MasterData.GetUniID) then
+      begin
+        Dic.Edit;
+        Dic.НомСтроки := Dic.НомСтроки + 1;
+        Dic.Post;
+      end;
+end;
+
+procedure MoveUp(GroupNum, PosNum, LineNum: Integer);server;
+var DicTmp: ISDictionary;
+  PrevTbl, DicTbl: ISValueTable;
+begin
+  DicTmp := CreateObject('Справочники.ТаблицаРазмеров');
+  DicTmp.Select;
+  Dic.SortByField('НомСтроки');
+  DicTmp.SortByField('НомСтроки');
+  if Dic.FindByField('НомСтроки',LineNum,false) and DicTmp.FindByField('НомСтроки',LineNum-1,false) then
+    begin
+      if (LineNum = 2) and (PosNum <> 0) then
+        exit;
+      if Dic.НомПозиции = 0 then
+        begin
+          DicTbl := CreateObject('ValueTable');
+          PrevTbl := CreateObject('ValueTable');
+          Dic.SetFieldFilter('НомГруппы','=',GroupNum,'','',Null);
+          Dic.Select;
+          Dic.SaveToValueTable('НомСтроки',DicTbl,1,Dic.RecordCount);
+          Dic.CancelFieldFilter('НомГруппы');
+          Dic.SetFieldFilter('НомГруппы','=',GroupNum-1,'','',Null);
+          Dic.Select;
+          Dic.SaveToValueTable('НомСтроки',PrevTbl,1,Dic.RecordCount);
+          Dic.CancelFieldFilter('НомГруппы');
+          PrevTbl.AppendTo('НомСтроки',DicTbl);
+          DicTbl.SortBy('НомСтроки');
+
+          Dic.SetFieldFilter('НомГруппы','=',GroupNum,'','',Null);
+          Dic.Select;
+          DicTmp.SetFieldFilter('НомГруппы','=',GroupNum-1,'','',Null);
+          DicTmp.Select;
+          DicTbl.Select;
+          while Dic.SelectNext do
+            begin
+              DicTbl.SelectNext;
+              Dic.Edit;
+              Dic.НомСтроки := DicTbl.НомСтроки;
+              Dic.НомГруппы := GroupNum-1;
+              if Dic.НомПозиции > 0 then
+                Dic.Код := VarAsStr(Dic.НомГруппы) + '.' + VarAsStr(Dic.НомПозиции)
+              else
+                Dic.Код := VarAsStr(Dic.НомГруппы);
+              Dic.Post;
+            end;
+          while DicTmp.SelectNext do
+            begin
+              DicTbl.SelectNext;
+              DicTmp.Edit;
+              DicTmp.НомСтроки := DicTbl.НомСтроки;
+              DicTmp.НомГруппы := GroupNum;
+              if DicTmp.НомПозиции > 0 then
+                DicTmp.Код := VarAsStr(DicTmp.НомГруппы) + '.' + VarAsStr(DicTmp.НомПозиции)
+              else
+                DicTmp.Код := VarAsStr(DicTmp.НомГруппы);
+              DicTmp.Post;
+            end;
+          Dic.CancelFieldFilter('НомГруппы');
+          DicTmp.CancelFieldFilter('НомГруппы');
+          exit;
+        end;
+      if DicTmp.НомПозиции = 0 then
+        begin
+          DicTmp.Edit;
+          DicTmp.НомСтроки := LineNum;
+          DicTmp.Post;
+          DicTmp.FindByField('НомСтроки',LineNum-2,false);
+          Dic.Edit;
+          Dic.НомСтроки := LineNum-1;
+          Dic.НомГруппы := GroupNum-1;
+          Dic.НомПозиции := DicTmp.НомПозиции+1;
+          Dic.Код := VarAsStr(Dic.НомГруппы) + '.' + VarAsStr(Dic.НомПозиции);
+          Dic.Post;
+          DicTmp.Select;
+          while DicTmp.SelectNext do
+            if DicTmp.НомСтроки > LineNum then
+              begin
+                if DicTmp.НомГруппы > GroupNum then
+                  break;
+                DicTmp.Edit;
+                DicTmp.НомПозиции := DicTmp.НомПозиции - 1 ;
+                DicTmp.Код := VarAsStr(DicTmp.НомГруппы) + '.' + VarAsStr(DicTmp.НомПозиции);
+                DicTmp.Post;
+              end;
+        end
+      else
+        begin
+          DicTmp.Edit;
+          DicTmp.НомСтроки := LineNum;
+          DicTmp.НомПозиции := PosNum;
+          DicTmp.Код := VarAsStr(GroupNum) + '.' + VarAsStr(PosNum);
+          DicTmp.Post;
+          Dic.Edit;
+          Dic.НомСтроки := LineNum-1;
+          Dic.НомПозиции := PosNum-1;
+          Dic.Код := VarAsStr(GroupNum) + '.' + VarAsStr(PosNum-1);
+          Dic.Post;
+        end;
+    end;
+end;
+
+procedure MoveDown(GroupNum, PosNum, LineNum: Integer);server;
+var DicTmp: ISDictionary;
+  NextTbl, DicTbl: ISValueTable;
+  RecCount: Integer;
+begin
+  DicTmp := CreateObject('Справочники.ТаблицаРазмеров');
+  DicTmp.Select;
+  Dic.SortByField('НомСтроки');
+  Dic.Select;
+  RecCount := Dic.RecordCount;
+  DicTmp.SortByField('НомСтроки');
+  if Dic.FindByField('НомСтроки',LineNum,false) and DicTmp.FindByField('НомСтроки',LineNum+1,false) then
+    begin
+      if (LineNum = RecCount) or ((PosNum = 0) and not Dic.FindByField('НомГруппы',GroupNum+1,false)) then
+        exit;
+      if Dic.НомПозиции = 0 then
+        begin
+          DicTbl := CreateObject('ValueTable');
+          NextTbl := CreateObject('ValueTable');
+          Dic.SetFieldFilter('НомГруппы','=',GroupNum,'','',Null);
+          Dic.Select;
+          Dic.SaveToValueTable('НомСтроки',DicTbl,1,Dic.RecordCount);
+          Dic.CancelFieldFilter('НомГруппы');
+          Dic.SetFieldFilter('НомГруппы','=',GroupNum+1,'','',Null);
+          Dic.Select;
+          Dic.SaveToValueTable('НомСтроки',NextTbl,1,Dic.RecordCount);
+          Dic.CancelFieldFilter('НомГруппы');
+          NextTbl.AppendTo('НомСтроки',DicTbl);
+          DicTbl.SortBy('НомСтроки');
+
+          Dic.SetFieldFilter('НомГруппы','=',GroupNum+1,'','',Null);
+          Dic.Select;
+          DicTmp.SetFieldFilter('НомГруппы','=',GroupNum,'','',Null);
+          DicTmp.Select;
+          DicTbl.Select;
+          while Dic.SelectNext do
+            begin
+              DicTbl.SelectNext;
+              Dic.Edit;
+              Dic.НомСтроки := DicTbl.НомСтроки;
+              Dic.НомГруппы := GroupNum;
+              if Dic.НомПозиции > 0 then
+                Dic.Код := VarAsStr(Dic.НомГруппы) + '.' + VarAsStr(Dic.НомПозиции)
+              else
+                Dic.Код := VarAsStr(Dic.НомГруппы);
+              Dic.Post;
+            end;
+          while DicTmp.SelectNext do
+            begin
+              DicTbl.SelectNext;
+              DicTmp.Edit;
+              DicTmp.НомСтроки := DicTbl.НомСтроки;
+              DicTmp.НомГруппы := GroupNum+1;
+              if DicTmp.НомПозиции > 0 then
+                DicTmp.Код := VarAsStr(DicTmp.НомГруппы) + '.' + VarAsStr(DicTmp.НомПозиции)
+              else
+                DicTmp.Код := VarAsStr(DicTmp.НомГруппы);
+              DicTmp.Post;
+            end;
+          Dic.CancelFieldFilter('НомГруппы');
+          DicTmp.CancelFieldFilter('НомГруппы');
+          exit;
+        end;
+      if DicTmp.НомПозиции = 0 then
+        begin
+          DicTmp.Edit;
+          DicTmp.НомСтроки := LineNum;
+          DicTmp.Post;
+          Dic.Edit;
+          Dic.НомСтроки := LineNum+1;
+          Dic.НомГруппы := GroupNum+1;
+          Dic.НомПозиции := 1;
+          Dic.Код := VarAsStr(Dic.НомГруппы) + '.' + VarAsStr(Dic.НомПозиции);
+          Dic.Post;
+          DicTmp.Select;
+          while DicTmp.SelectNext do
+            if DicTmp.НомСтроки > LineNum+1 then
+              begin
+                if DicTmp.НомГруппы > GroupNum+1 then
+                  break;
+                DicTmp.Edit;
+                DicTmp.НомПозиции := DicTmp.НомПозиции + 1;
+                DicTmp.Код := VarAsStr(DicTmp.НомГруппы) + '.' + VarAsStr(DicTmp.НомПозиции);
+                DicTmp.Post;
+              end;
+        end
+      else
+        begin
+          DicTmp.Edit;
+          DicTmp.НомСтроки := LineNum;
+          DicTmp.НомПозиции := PosNum;
+          DicTmp.Код := VarAsStr(GroupNum) + '.' + VarAsStr(PosNum);
+          DicTmp.Post;
+          Dic.Edit;
+          Dic.НомСтроки := LineNum+1;
+          Dic.НомПозиции := PosNum+1;
+          Dic.Код := VarAsStr(GroupNum) + '.' + VarAsStr(PosNum+1);
+          Dic.Post;
+        end;
+    end;
+end;
+
+procedure DeleteLine(LineNum, GroupNum: Integer);server;
+begin   
+  if Dic.FindByField('НомСтроки',LineNum,false) then
+    if Dic.НомПозиции = 0 then
+      begin 
+        Dic.SetFieldFilter('НомГруппы','=',GroupNum,'','',Null);
+        Dic.Select;
+        while Dic.SelectNext do 
+          begin
+            Dic.Delete;
+            Dic.Select;
+          end;
+        Dic.CancelFieldFilter('НомГруппы');
+      end
+    else
+      Dic.Delete;
+  Dic.SortByField('НомСтроки');
+  Dic.Select;
+  while Dic.SelectNext do
+    if Dic.НомСтроки > LineNum then
+      begin
+        Dic.Edit;
+        Dic.НомСтроки := LineNum;
+        inc(LineNum);
+        if Dic.НомГруппы = GroupNum then
+          begin
+            Dic.НомПозиции := Dic.НомПозиции - 1;
+            Dic.Код := VarAsStr(Dic.НомГруппы) + '.' + VarAsStr(Dic.НомПозиции);
+          end;
+        Dic.Post;
+      end;
+end;
+
+end.

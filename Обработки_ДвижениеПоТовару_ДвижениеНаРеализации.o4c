@@ -1,0 +1,232 @@
+interface
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, InitColors;
+
+implementation
+
+const
+  errUserBreak = 'Формирование отчета прекращено пользователем!';
+
+Var
+  Stores : ICValueList;
+  GoodDict, S, Store : ICDictionary;
+  PartionTbl, DocListTbl : ICValueTable;
+  RepCurrent : ICProcessing;
+  Constants : IC4VPAConst;
+  CursorVis : TCursor;
+  CursorsRefCount : Integer;
+  IsZerro, LockStoreEdit : Boolean;
+
+procedure CreateTblObjects;
+Begin
+  //партии товара
+  PartionTbl := CreateObject('ТаблицаЗначений');
+  CreatePartGoodTblCols(PartionTbl, False);
+  PartionTbl.AddColumn('ДатаПр', vtcDate, 0);
+  PartionTbl.AddColumn('СумВалВх', lftFFT, 7);
+  PartionTbl.AddColumn('НазваниеПартнера', vtcString, 70);
+  PartionTbl.AddColumn('СкладНазвание', vtcString, 50);
+  SetFormatStdColumnsList(PartionTbl, 'КолОбщ', '0.####');
+  SetFormatStdColumnsList(PartionTbl, 'ВхЦенаБезНДС;ВхЦенаВал;СумВх;СумВхНДС;СумОтп;СумОтпНДС,СумВалВх', '0.00##');
+  PartionTbl.Open;
+  PartionTbl.SortedColumns := 'ДатаПр;Склад;Партнер';
+  //документы
+  DocListTbl := CreateObject('ТаблицаЗначений');
+  CreateDocsTblCols(DocListTbl, False);
+  DocListTbl.AddColumn('Партнер', vtcLink, 0);
+  DocListTbl.AddColumn('НазваниеПартнера', vtcString, 70);
+  DocListTbl.AddColumn('НомерДокумента', vtcString, 20);
+  DocListTbl.AddColumn('Цена', vtcFFt, 4);
+  DocListTbl.AddColumn('Товар', vtcLink, 0);
+  DocListTbl.AddColumn('Склад', vtcLink, 0);
+  DocListTbl.AddColumn('Партия', vtcFloat, 0);
+  DocListTbl.AddColumn('Отпуск', vtcInteger, 0);
+  SetFormatStdColumnsList(DocListTbl, 'КолОбщ', '0.####');
+  SetFormatStdColumnsList(DocListTbl, 'СумВх;СумВхНДС;СумОтпНДС;СумОтп;СумНакоп;СумНац;СумОбщ;Цена', '0.00##');
+  DocListTbl.Open;
+  DocListTbl.SortBy('Склад;Date;Document;Партнер');
+end;
+
+procedure RunReport;
+begin
+  PartionTbl.Clear;
+  DocListTbl.Clear;
+  PartionTbl.CopyDataToServer;
+  DocListTbl.CopyDataToServer;
+  server.CreateSrvObjects(PartionTbl.SrvMean,DocListTbl.SrvMean);
+  server.GetReportData(GoodDict,Store,IsZerro);
+  server.SetPartScrollParams(PartionTbl.Партия, PartionTbl.@Склад);
+  PartionTbl.CopyDataFromServer;                             
+  PartionTbl.SortBy('Склад;ДатаПр');
+  PartionTbl.UseDataSource(CtrlToVar(TVSPartGood));
+end;
+
+procedure TVSPartGood_VPATimedAfterScroll(Sender : TObject);
+begin
+  if not PartionTbl.IsFocused then
+    exit;
+  CursorsRefCount := UnuseCursor(CursorVis, CursorsRefCount);
+  try
+    DocListTbl.CopyDataFromServer;
+    DocListTbl.CancelRange;
+    DocListTbl.SortBy('Партия;Date');
+    DocListTbl.SetRange(PartionTbl.Партия,PartionTbl.Партия)
+  finally
+    DocListTbl.UseDataSource(CtrlToVar(TVSDoc));
+    CursorsRefCount := UseCursor(CursorVis, CursorsRefCount);
+  end;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  InPriceNt, InPrice, InHdPrice : decimal;
+  GoodName, Units, ГРН, ВалВх, ВалОтп : string;
+begin
+  Constants := GetConstants;
+  CreateTblObjects;
+  GoodDict := Params; //Спавочник товаров
+  IsZerro := cbZeroRest.Checked;
+//--------------------- Склад----------------------
+  LockStoreEdit := true;
+  Stores := CreateObject('СписокЗначений');
+  Store := CreateObject('Справочники.Реализаторы');
+  if VarAsBool(Params.HasParam('Store')) then
+    if IsObjFocused(Params) then
+      Store := Params.Params['Store'];
+  S := CreateObject('Справочники.Реализаторы');
+  Stores.AddValue(Trans('Все объекты'), Null);
+  Stores.AddValue(S.ПолноеНазвание, S);
+  S.Select;
+  while S.SelectNext do
+    Stores.AddValue(S.ПолноеНазвание, S); // или ('', S)
+  Stores.UseControl(CtrlToVar(eStores));
+  if IsObjFocused(Store) then
+    Stores.CurIndex := Stores.FindByValue(Store)
+  else
+    Stores.CurIndex := 0;
+  LockStoreEdit := false;
+//--------------------------------------------------
+  if VarAsBool(GoodDict.IsFocused) then
+    begin
+      if GoodDict.Код <> '' then
+        GoodName := GoodDict.Код + ' ' + GoodDict.НазвТовара
+      else
+        GoodName := GoodDict.НазвТовара;
+    end;
+  lGoodNameWhite.Caption := GoodName;
+  lGoodNameBlack.Caption := GoodName;
+  RunReport;
+  TVSPartGood_VPATimedAfterScroll(dbgDocs);
+end;
+
+procedure eStores_Change(Sender : TObject);
+begin
+  if not LockStoreEdit then
+    begin
+      GetStore(Stores, Store);
+      RunReport;
+    end;
+end;
+
+procedure cbZeroRest_Click(Sender : TObject);
+begin
+  IsZerro := cbZeroRest.Checked;
+  RunReport;
+end;
+
+procedure pmiView_Click(Sender : TObject);
+begin
+  if VarAsBool(DocListTbl.IsFocused) then
+    DocListTbl.Document.EditInForm(DocListTbl.Document.GetSign, 3);
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+Var
+  DocSign : String;
+  V : ICProcessing;
+begin
+  if VarAsBool(DocListTbl.IsFocused) then
+    begin
+      DocSign := DocListTbl.Document.GetSign;
+      Case DocSign of
+        'СписаниеТовара':
+          DocListTbl.Document.PrintForm('', not VarAsBool(GetOptions.GetServerPrm(DirectPrint)), DocListTbl.Document);
+        'НакладнаяВнутрПеремещ':
+          begin
+            V := CreateObject('Обработки.ПечВнутрПеремещ');
+            V.PrintForm('', not VarAsBool(GetOptions.GetServerPrm(DirectPrint)), DocListTbl.Document)
+          end;
+        'ВводОстатков':
+          begin
+            V := CreateObject('Обработки.ПечВводОстатков');
+            V.PrintForm('', not VarAsBool(GetOptions.GetServerPrm(DirectPrint)), DocListTbl.Document)
+          end;
+//        'НакладнаяОтпуска','НакладнаяОтпускаПоСчету','НакладнаяОтпускаТМЦПоСчету',
+//        'НакладнаяПрихода','НакладнаяПриходаСчету'
+      else
+        begin
+          V := CreateObject('Обработки.ПечУнивНакладнаяОтпуска');
+          V.PrintForm('', not VarAsBool(GetOptions.GetServerPrm(DirectPrint)), DocListTbl.Document)
+        end;
+      end
+    end;
+end;
+
+{$D-}
+procedure dbgDocs_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+ if DocListTbl.Document.GetDocState = 0 then
+   Index1 := 92
+ else
+   Index1 := 86;
+//--------------------------------------------
+ if DocListTbl.КолОбщ > 0 then
+   Index2 := 82
+ else
+   Index2 := 83;
+end;
+{$D+}
+
+{$D-}
+procedure dbgPartGood_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : boolean);
+begin
+ if PartionTbl.IsFocused and (PartionTbl.КолОбщ <= 0) then
+   if Highlight then
+     begin
+       BackColor:=BlZeroSel;
+       DrawFont.Color := BlFZeroSel;
+     end
+   else
+     begin
+       BackColor:=BlZero;
+       DrawFont.Color := BlFZero;
+     end;
+end;
+{$D+}
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel5:TO4Panel
+Splitter3:TO4Splitter
+Label3:TO4Label
+Label4:TO4Label
+dbgPartGood:TO4DBGrid
+Panel1:TO4Panel
+lbGoodName:TO4Label
+lGoodNameBlack:TO4Label
+lGoodNameWhite:TO4Label
+GroupBox2:TO4GroupBox
+eStores:TO4Edit
+cbZeroRest:TO4CheckBox
+Panel2:TO4Panel
+dbgDocs:TO4DBGrid
+tbrData1:TO4ToolBar
+tbView:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbPrint:TO4ToolButton
+tbParam1:TO4ToolButton
+TVSPartGood:TO4TableValueSource
+TVSDoc:TO4TableValueSource
+pmDocs:TO4PopupMenu
+pmiView:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiPrint:TO4MenuItem

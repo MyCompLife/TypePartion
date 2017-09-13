@@ -1,0 +1,100 @@
+interface
+
+uses
+ System, DispIntf, Расчеты, Интерфейс;
+
+var
+  GoodDict, GoodStore : ICDictionary;
+  GoodCtg : ICDictionary;
+
+implementation
+    
+
+procedure Button1_Click(Sender : TObject);
+Var
+  GoodDict : ICDictionary;
+  GoodCtg : ICDictionary;
+  RecCnt, RecAll : Integer;
+  TblCtg : ICValueTable;
+
+begin
+  GoodCtg := CreateObject('Справочники.Товары');
+  GoodCtg.IncludeOnlyLevels(true);
+  TblCtg := CreateObject('ТаблицаЗначений');
+  TblCtg.AddColumn('Товар',LftLink,0);
+  TblCtg.Open;
+
+  GoodCtg.Select;
+  While GoodCtg.SelectNext do
+    begin
+      TblCtg.Append;
+       TblCtg.Товар := GoodCtg;
+      TblCtg.Post;
+    end;
+
+  RecAll := TblCtg.LineCount;
+  TblCtg.Select;
+  While TblCtg.SelectNext do
+    begin
+      if GoodCtg.Find(TblCtg.@Товар) then
+        begin
+          GoodCtg.Delete;
+          inc(RecCnt);
+        end;
+      StatusText('Удалено: ' + VarAsStr(RecCnt) + ' из ' + VarAsStr(RecAll));
+    end;
+end;
+
+procedure Button2_Click(Sender : TObject);
+Var
+  TblCtg : ICValueTable;
+  RecCnt, i : Integer;
+  Ctg : Variant;
+begin
+  GoodDict := CreateObject('Справочники.Товары');
+  GoodDict.IncludeOnlyLevels(true);
+  GoodStore := CreateObject('Справочники.Товары');
+ // GoodStore.IncludeLevels(true);
+  GoodCtg := CreateObject('Справочники.КатегорииТовара');
+  TblCtg := CreateObject('ТаблицаЗначений');
+  TblCtg.AddColumn('Товар',LftLink,0);
+  TblCtg.AddColumn('Категория',LftString,150);
+  TblCtg.AddColumn('Код',LftString,150);
+  TblCtg.Open;
+  RecCnt := 1;
+  GoodDict.Select;
+  While (GoodDict.SelectNext) and (RecCnt < 30 )do
+    begin  
+      GoodDict.Edit;
+      GoodDict.Код := RecCnt;
+      GoodDict.Post;
+      GoodDict.ApplyUpdates;
+      TblCtg.Append;
+      TblCtg.Товар := GoodDict;
+      TblCtg.Категория := GoodDict.НазвТовара;
+      TblCtg.Код := GoodDict.Код;
+      TblCtg.Post;
+      inc(RecCnt);
+    end;
+  TblCtg.Select;
+  while TblCtg.SelectNext do
+    begin
+      GoodCtg.Append;
+      GoodCtg.Название := TblCtg.Категория;
+      GoodCtg.Код23 := TblCtg.Код;
+      GoodCtg.Post;
+      GoodCtg.ApplyUpdates;
+      if GoodStore.Find(TblCtg.@Товар) then
+        begin
+          GoodStore.Edit;
+          GoodStore.Категория := GoodCtg;
+          GoodStore.Post;
+          GoodStore.ApplyUpdates;
+        end;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Button1:TO4Button
+Button2:TO4Button

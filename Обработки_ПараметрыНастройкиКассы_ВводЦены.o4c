@@ -1,0 +1,33 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+Var
+  Good : ICDictionary;
+  CalcNum, FirstNum : Integer;
+  V: ICProcessing;
+implementation
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);       
+begin
+  V := Mean;
+  edCntTablo.text := VarAsStr(V.Params['Price']);
+  lbGoodName.Caption := VarAsStr(V.Params['GoodName']);
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  V.Params['NewPrice'] := VarAsDec(edCntTablo.text)
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnGoodName:TO4Panel
+lbGoodName:TO4Label
+pnNum:TO4Panel
+edCntTablo:TO4Edit
+Panel1:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+TableValueSource1:TO4TableValueSource

@@ -1,0 +1,269 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений;
+
+const
+  // Order types
+  otUp = 1;
+  otDown = 2;
+
+function GetRootParent(DicCurrent : IObject) : IObject;
+procedure ChangeOrder(DicCurrent : ISDictionary; LstCurrRecord : ISValueList;
+  OrderType, Bound : Integer; OrderFieldName : string); server;
+procedure ReorderDicItems(DicCurrent : ISDictionary; OrderFieldName : string);
+function FillDictStructure(DicSource : ISDictionary; TblTarget : ISValueTable) : Boolean;
+function GetNextNumberForField(MeanName, FieldName : string; OnlyLevels : Boolean = False;
+  UnitedMeans : string = '') : Integer; server;
+
+implementation
+
+var
+  LstCachedObjects : ISValueList;
+
+function FindElemInDictTree(MasterToSubord, Elem : Variant; SubordDictSign, MasterFieldName,
+  FieldNameToSearch : string; ExtendedSearchFieldDescr,
+  ExtededMasterFilterDescr : Variant = '';
+  LevelID : Integer = 0) : Boolean; forward;
+
+function FindElemInDictTree_Cycle(MasterToSubord, Elem : Variant; SubordDictList : ISDictionary;
+  MasterFieldName, FieldNameToSearch : string;
+  ExtendedSearchFieldDescr, ExtededMasterFilterDescr : Variant;
+  LevelID : Integer) : Boolean;
+var
+  AssistObj : Variant;
+begin
+  if SubordDictList.Select then
+    begin
+      inc(LevelID);
+      while SubordDictList.SelectNext do
+        begin
+          if MasterFieldName = '' then
+            AssistObj := SubordDictList
+          else
+            AssistObj := SubordDictList._Default[MasterFieldName];
+          Result := FindElemInDictTree(AssistObj, Elem, SubordDictList.GetSign,
+            MasterFieldName, FieldNameToSearch, ExtendedSearchFieldDescr,
+            ExtededMasterFilterDescr, LevelID);
+          if Result then
+            break;
+        end;
+    end;
+end;
+
+function SetFilterByDescr(ObjToSetFilter : IObject; FilterDescr : Variant) : string;
+var
+  j : Integer;
+begin
+  Result := '';
+  if IsArray(FilterDescr) then
+    begin
+      for j := ArrayLow(FilterDescr) to ArrayHigh(FilterDescr) do
+        begin
+          ObjToSetFilter.SetFieldFilter(FilterDescr[j][0], FilterDescr[j][1],
+            FilterDescr[j][2], '', '', '');
+          Result := Result + ';' + FilterDescr[j][0];
+        end;
+      StrDelete(Result, 1, 1);
+    end;
+end;
+
+function FindElemInDictTree(MasterToSubord, Elem : Variant; SubordDictSign, MasterFieldName,
+  FieldNameToSearch : string; ExtendedSearchFieldDescr,
+  ExtededMasterFilterDescr : Variant = ''; LevelID : Integer = 0) : Boolean; server;
+var
+  i, j : Integer;
+  FilterFields : string;
+  SubordDictList : ISDictionary;
+begin
+  try
+    //internal objects cache creating
+    SubordDictList := GetCachedObject(LstCachedObjects, 'Dictionaries.' + SubordDictSign, LevelID);
+    SubordDictList.UseMasterAndSelect(MasterToSubord);
+    //
+    SetFilterByDescr(SubordDictList, ExtendedSearchFieldDescr);
+    if SubordDictList.FindByField(FieldNameToSearch, Elem, False) then
+      begin
+        Result := True;
+        exit;
+      end;
+    for j := 1 to WordCount(FilterFields, ';') do
+      SubordDictList.CancelFieldFilter(ExtractWord(j, FilterFields, ';'));
+    //
+    if IsArray(ExtededMasterFilterDescr) then
+      for i := ArrayLow(ExtededMasterFilterDescr) to ArrayHigh(ExtededMasterFilterDescr) do
+        begin
+          FilterFields := SetFilterByDescr(SubordDictList, ExtededMasterFilterDescr[i]); //must be array!
+          Result := FindElemInDictTree_Cycle(MasterToSubord, Elem, SubordDictList, MasterFieldName,
+            FieldNameToSearch, ExtendedSearchFieldDescr,
+            ExtededMasterFilterDescr, LevelID);
+          if Result then
+            break;
+          //
+          for j := 1 to WordCount(FilterFields, ';') do
+            SubordDictList.CancelFieldFilter(ExtractWord(j, FilterFields, ';'));
+        end
+    else
+      Result := FindElemInDictTree_Cycle(MasterToSubord, Elem, SubordDictList,
+        MasterFieldName, FieldNameToSearch, ExtendedSearchFieldDescr,
+        ExtededMasterFilterDescr, LevelID);
+  finally
+    if LevelID = 0 then
+      LstCachedObjects := Null;
+  end;
+end;
+
+function GetRootParent(DicCurrent : IObject) : IObject; server;
+var
+  TmpParent : IObject;
+begin
+  TmpParent := DicCurrent.GetParent;
+  if VarAsBool(TmpParent.IsFocused) then
+    while VarAsBool(TmpParent.GetParent.IsFocused) do
+      TmpParent := TmpParent.GetParent;
+  Result := TmpParent;
+end;
+
+procedure ChangeOrder(DicCurrent : ISDictionary; LstCurrRecord : ISValueList;
+  OrderType, Bound : Integer; OrderFieldName : string); server;
+var
+  CurrOrder, CurrListOrder : Integer;
+  DoChange : Boolean;
+begin
+  CurrOrder := DicCurrent._Default[OrderFieldName];
+  LstCurrRecord.InsertValue(0, '', DicCurrent);
+  DicCurrent.Select;
+  CurrListOrder := CurrOrder;
+  case OrderType of
+    otUp :
+      begin
+        dec(CurrListOrder);
+        while CurrListOrder > 0 do
+          begin
+            if DicCurrent.FindByField(OrderFieldName, CurrListOrder, False) then
+              break;
+            dec(CurrListOrder);
+          end;
+        DoChange := CurrListOrder > 0;
+      end;
+    otDown :
+      begin
+        inc(CurrListOrder);
+        while CurrListOrder < Bound do
+          begin
+            if DicCurrent.FindByField(OrderFieldName, CurrListOrder, False) then
+              break;
+            inc(CurrListOrder);
+          end;
+        DoChange := CurrListOrder < Bound;
+      end;
+  end;
+  //
+  if DoChange then
+    begin
+      DicCurrent.Edit;
+      DicCurrent._Default[OrderFieldName] := CurrOrder;
+      DicCurrent.Post;
+      DicCurrent.ApplyUpdates;
+      //
+      DicCurrent.Find(LstCurrRecord.GetValue(0));
+      DicCurrent.Edit;
+      DicCurrent._Default[OrderFieldName] := CurrListOrder;
+      DicCurrent.Post;
+      DicCurrent.ApplyUpdates;
+    end
+  else
+    DicCurrent.Find(LstCurrRecord.GetValue(0));
+end;
+
+procedure ReorderDicItems(DicCurrent : ISDictionary; OrderFieldName : string); server;
+var
+  CurrOrder, Count : Integer;
+  TmpTbl : ISValueTable;
+begin
+  if DicCurrent.Select then
+    begin
+      TmpTbl := CreateObject('ValueTable');
+      DicCurrent.SaveToValueTable(OrderFieldName, TmpTbl, 1, DicCurrent.RecordCount)
+    end
+  else
+    exit;
+  TmpTbl.SortBy(OrderFieldName);
+  TmpTbl.Select;
+  Count := TmpTbl.LineCount;
+  CurrOrder := 1;
+  //
+  TmpTbl.Select;
+  while (CurrOrder <= Count) and TmpTbl.SelectNext do
+    begin
+      if (CurrOrder < VarAsInt(TmpTbl._Default[OrderFieldName])) and
+        DicCurrent.FindByField(OrderFieldName, TmpTbl._Default[OrderFieldName], False) then
+        begin
+          DicCurrent.Edit;
+          DicCurrent._Default[OrderFieldName] := CurrOrder;
+          DicCurrent.Post;
+        end;
+      inc(CurrOrder);
+    end;
+end;
+
+function FillDictStructure(DicSource : ISDictionary; TblTarget : ISValueTable) : Boolean; server;
+begin
+  // предполагается, что фильтр на справочник не проставлен, иначе возникнут проблемы
+  // также не будет работать, если имеются в справочнике калькулируемые на клиенте поля
+  Result := DicSource.Select;
+  if Result then
+    DicSource.SaveToValueTable('', TblTarget, 1, 0) // скидывание только структуры
+  else
+    begin // для заполнение таблицы необходимо иметь хотя бы одну запись - штучно её добавляем
+      DicSource.Append;
+      DicSource.Post; // сработает даже в случае присутствия полей, значения по которым не могут быть пустыми
+      DicSource.ApplyUpdates;
+      DicSource.SaveToValueTable('', TblTarget, 1, 1); // скидывание вместе с позицией, которую следует удалить
+    end;
+end;
+
+function GetNextNumberForField(MeanName, FieldName : string; OnlyLevels : Boolean = False;
+  UnitedMeans : string = '') : Integer; server;
+var
+  DicCurrent, DicOther : ISDictionary;
+  i, TmpRes : Integer;
+begin
+  DicCurrent := CreateObject(MeanName);
+  DicCurrent.IncludeOnlyLevels(OnlyLevels);
+  DicCurrent.SortByField(FieldName);
+  DicCurrent.Select;
+  if VarAsBool(DicCurrent.SelectPrior) then
+    begin
+      if not (IsNull(DicCurrent._Default[FieldName]) or (DicCurrent._Default[FieldName] <= 0)) then
+        Result := DicCurrent._Default[FieldName] + 1
+      else
+        Result := 1;
+    end
+  else
+    Result := 1;
+  if UnitedMeans = '' then
+    exit;
+  for i := 1 to WordCount(UnitedMeans, ';') do
+    begin
+      TmpRes := 1;
+      DicOther := CreateObject(ExtractWord(i, UnitedMeans, ';'));
+      DicOther.IncludeOnlyLevels(OnlyLevels);
+      DicOther.SortByField(FieldName);
+      DicOther.Select;
+      if VarAsBool(DicOther.SelectPrior) then
+        begin
+          if not (IsNull(DicOther._Default[FieldName]) or (DicOther._Default[FieldName] <= 0)) then
+            TmpRes := DicOther._Default[FieldName] + 1
+          else
+            TmpRes := 1;
+        end
+      else
+        TmpRes := 1;
+      if TmpRes >= Result then
+        Result := TmpRes
+    end;
+end;
+
+end.

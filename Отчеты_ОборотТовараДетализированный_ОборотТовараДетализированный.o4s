@@ -1,0 +1,158 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  AccsGood : ISAccs;
+  GoodsTbl, DocsTbl, DocsTypeTbl, PGoodsTbl, PDocsTbl : ISValueTable;
+  GoodList : ISValueList;
+  DateFrom, DateTo : DateTime;
+  OneGood, Товар : ISDictionary;
+  ShowCodeUnitname, UseLevel : Boolean;
+  One : Variant;
+  Items : ISDictionary;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  GoodList := CreateObject('СписокЗначений');
+end;
+
+procedure SetGoods(Doc : ISReport; var Accept : Boolean);
+begin
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+  if not SetCtgFilter(UseLevel, GoodList, Items, AccsGood, 'Товар') then
+    begin
+      Accept := True;
+      exit;
+    end;
+  AccsGood.AppendGroupMotionToValueTable(DateFrom, DateTo, amtBoth, 'Товар', -1, GoodsTbl);
+  if ShowCodeUnitname then
+    GoodsTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Doc.NotifyClient(GoodsView, 1, 2);
+  Accept := True;
+end;
+
+procedure GetDocMotions(Doc : ISReport; var Accept : Boolean); server;
+begin
+  if (not IsNil(Товар)) and VarAsBool(Товар.IsFocused) then
+    begin
+      AccsGood.ClearFieldBuffers();
+      AccsGood.ClearFieldFilters();
+      DocsTbl.Clear();
+      AccsGood.SetFieldFilter('Товар', Товар);
+      // отправка сообщения клиенту
+      Doc.NotifyClient(DocsView, 0, 1);
+      AccsGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+        'Document;Date;КолОбщ;СумОтп;СумНац;MotionSign', -1, DocsTbl);
+    end;
+  DocsTypeTbl.Clear();
+  // отправка сообщения клиенту
+  Doc.NotifyClient(DocsGroup, 0, 1);
+  DocsTbl.DoCalculation('СумОтп', 'MotionSign*СумОтп');
+  DocsTbl.DoCalculation('КолОбщ', 'MotionSign*КолОбщ');
+  DocsTbl.GroupBy('Document;Date', 'КолОбщ;СумОтп;СумНац');
+  DocsTbl.SortBy('Date;Document');
+  DocsTbl.DoGetMeanNames('Document', 'DNames');
+  DocsTbl.GroupTo('DNames', 'КолОбщ;СумОтп;СумНац', DocsTypeTbl);
+  DocsTypeTbl.SortBy('DNames');
+  Accept := True; //not Doc.Terminated;
+end;
+
+procedure GetDocsTypeVars(var Balans, Profit : Decimal); server;
+begin
+  Balans := DocsTypeTbl.Total('СумОтп');
+  Profit := DocsTypeTbl.Total('СумНац');
+end;
+
+procedure SetPrintForm(Doc : ISReport; var Accept : Boolean);
+begin
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+  if IsObject(One) and VarAsBool(One.IsFocused) then
+    begin
+      AccsGood.SetFieldFilter('Товар', One);
+      PGoodsTbl.Append();
+      PGoodsTbl.Товар := One;
+      PGoodsTbl.Post();
+      //заполняем таблицу документов
+      AccsGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+        'Товар;Document;Date;КолОбщ;СумОтп;СумНац;MotionSign', -1, PDocsTbl);
+    end
+  else
+    begin
+      if not SetCtgFilter(UseLevel, GoodList, Items, AccsGood, 'Товар') then
+        begin
+          Accept := True;
+          exit;
+        end;
+      AccsGood.AppendGroupMotionToValueTable(DateFrom, DateTo, amtBoth, 'Товар', -1, PGoodsTbl);
+      Doc.NotifyClient(GoodsView, 1, 2);
+      //заполняем таблицу документов
+      AccsGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+        'Товар;Document;Date;КолОбщ;СумОтп;СумНац;MotionSign', -1, PDocsTbl);
+    end;
+  PDocsTbl.DoCalculation('КолОбщ', 'MotionSign*КолОбщ');
+  PDocsTbl.DoCalculation('СумОтп', 'MotionSign*СумОтп');
+  PDocsTbl.GroupBy('Товар;Document;Date', 'КолОбщ;СумОтп;СумНац');
+  PDocsTbl.SortBy('Date;Document');
+  PDocsTbl.DoGetMeanNames('Document', 'DNames');
+  if ShowCodeUnitname then
+    PGoodsTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Accept := True;
+end;
+
+function GetRunReportEP(GoodsTbls : ISValueTable;
+  GoodLists : ISValueList;
+  OneGoods : Variant;
+  ShowCodeUnitnames, UseLevels : Boolean;
+  AItems : ISDictionary;
+  DateFroms, DateTos : DateTime) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;
+  GoodList := GoodLists;
+  OneGood := OneGoods;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  ShowCodeUnitname := ShowCodeUnitnames;
+  UseLevel := UseLevels;
+  Items := AItems;
+  Result := EntryPoint(SetGoods);
+end;
+
+function GetDocMotionsEP(DocsTbls, DocsTypeTbls : ISValueTable;
+  Товарs : Variant) : Variant; server;
+begin
+  DocsTbl := DocsTbls;
+  DocsTypeTbl := DocsTypeTbls;
+  Товар := Товарs;
+  Result := EntryPoint(GetDocMotions);
+end;
+
+function GetPrintReportEP(PGoodsTbls, PDocsTbls : ISValueTable;
+  GoodLists : ISValueList;
+  OneGoods : ISDictionary;
+  Ones : Variant;
+  ShowCodeUnitnames : Boolean;
+  DateFroms, DateTos : DateTime) : Variant; server;
+begin
+  PGoodsTbl := PGoodsTbls;
+  PDocsTbl := PDocsTbls;
+  GoodList := GoodLists;
+  OneGood := OneGoods;
+  One := Ones;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  ShowCodeUnitname := ShowCodeUnitnames;
+  Result := EntryPoint(SetPrintForm);
+end;
+end.

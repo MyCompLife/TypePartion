@@ -1,0 +1,56 @@
+interface
+
+uses
+  System, DispIntf, РаботаСТаблицамиЗначенийCL, Расчеты, Reports;
+
+implementation
+
+var
+  TblDoc, TblDetailDoc, AllDocTbl: ISValueTable;
+  DateFrom, DateTo: DateTime;
+  PaysIn, PaysOut : ISJournal;
+  AccsTech : ISAccs;
+
+procedure CreateObjects; server;
+begin
+  AccsTech := CreateObject('Аккумуляторы.ЖурналИзменений');
+end;
+
+procedure FillTblDocS(TblDoc, TblDetailDoc: ISValueTable; DateFroms, DateTos : DateTime; TypeDoc:string; onlyDeleted : Boolean);server;
+var Count, Total : integer;
+begin
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  AccsTech.ClearFieldBuffers;
+  AccsTech.ClearFieldFilters;
+  if onlyDeleted then
+    AccsTech.SetFieldFilter('ТипДействия', 'Удалён');
+  if TypeDoc<>'' then
+    AccsTech.SetFieldFilter('ТипДокумента', TypeDoc);
+  TblDoc.Clear;
+  AccsTech.SaveMotionToValueTable(DateFrom, DateTo, amtIncome,-1, TblDetailDoc);
+  TblDetailDoc.Select;
+  TblDetailDoc.AppendTo('Идентификатор;ТипДокумента;НомерДокумента', TblDoc);
+  TblDoc.GroupBy('Идентификатор;ТипДокумента;НомерДокумента', '');
+  TblDoc.Select;
+  Count := 0;
+  Total := TblDoc.LineCount;
+  TblDetailDoc.SortBy('Идентификатор;Date');
+  While TblDoc.SelectNext do
+    begin
+      TblDetailDoc.SetRange(TblDoc.@Идентификатор,TblDoc.@Идентификатор); 
+      if TblDetailDoc.SelectFirst then
+        begin
+          TblDoc.Edit;
+          TblDoc.ДатаДокумента := TblDetailDoc.Date;
+          TblDoc.Post;
+        end;          
+      inc(Count);
+      if Count mod 10 = 0 then
+        SysProgress(0,Total,Count,'Расчет даты первого события');
+    end;     
+  TblDetailDoc.CancelRange;
+  SysProgress(0,0,0,'');
+end;
+
+end.

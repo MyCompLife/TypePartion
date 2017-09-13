@@ -1,0 +1,113 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+implementation
+var MasterProc : ICProcessing;
+    Constants : IC4VPAConst;  
+    Good, BarCodes, CheckGood : ICDictionary;
+    UseMultiBarCode : boolean;
+procedure miBarCode_Click(Sender: TObject);
+begin  
+  edBarCode.Text := '';
+  edBarCode.SetFocus;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  if not IsObjFocused(Params) then
+    raise('Неверно задан параметр!');
+  Good := Params;
+  MasterProc := Mean;
+  Constants :=  GetConstants; 
+  UseMultiBarCode := VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров);
+  if UseMultiBarCode then
+    raise('Используеться Мульти Штрих Коды Для Товаров!');
+  lbGoodName.Caption := '('+IntToStr(Good.Код) + ') - '+  Good.NameField;  
+  CheckGood := CreateObject('Справочники.Товары');
+  if UseMultiBarCode then
+    begin
+      BarCodes := CreateObject('Справочники.ШтрихКодыТоваров');   
+      BarCodes.UseMaster(Good);
+      if BarCodes.Select and BarCodes.FindByField('Активность',true, false) then
+        edBarCode.Text :=  VarAsStr(BarCodes.CodeField);  
+      BarCodes.UseMaster(Null);
+    end
+  else
+    begin    
+      edBarCode.Text :=  VarAsStr(Good.ШтрихКод);
+    end;
+end;
+
+procedure btOk_Click(Sender: TObject);
+var Accept : boolean;  
+    OwnerGood : ICDictionary;
+begin
+ if UseMultiBarCode then
+   begin        
+    BarCodes.UseMaster(Null);
+    if BarCodes.FindByCode(edBarCode.Text, false) then
+      begin
+        OwnerGood := BarCodes._GetOwner;
+        if IsObjEQ(OwnerGood, Good, false) then
+          begin   
+            ShowMessage('Этот ШтрихКод уже привязан к этому товару!');
+            exit;
+          end
+        else
+        if IsObjFocused(OwnerGood) and
+          (MessageDlg('Штрих привязан к товару: "'+OwnerGood.NameField+'"'+#13+'Перепривязать?',
+                       mtInformation, ArrayOf(mbYes, mbNo))=mrYes) then
+          BarCodes.Edit
+        else
+          exit;
+      end
+    else
+      BarCodes.Append;  
+
+    BarCodes.SetMaster(Good);
+    BarCodes.Код := edBarCode.Text;
+    BarCodes.Идентификатор := '0';
+    BarCodes.Товар := Good;
+    BarCodes.Активность := not HasActive(BarCodes);   
+    BarCodes.Количество := 1;
+    BarCodes.Post;
+    BarCodes.ApplyUpdates;
+    Form.ModalResult := mrOK;
+    Form.Close;
+   end
+ else
+   begin  
+     CheckGood.SetFieldFilter('ШтрихКод','=',edBarCode.Text,'','',Null);
+     CheckGood.Select;
+     Accept := true;
+     While CheckGood.SelectNext do
+       if not IsObjEQ(CheckGood, Good, false) then
+         begin
+           Accept := false;
+           break;
+         end;
+     if Accept then
+       begin
+         Good.Edit;
+         Good.ШтрихКод := edBarCode.Text;
+         Good.Post;
+         Good.ApplyUpdates;  
+         Form.ModalResult := mrOK;
+         Form.Close;
+       end
+     else
+       ShowMessage('Значение ШтрихКода не уникально!'+#13+'Товар "'+CheckGood.NameField+'" имеет такой же ШтрихКод');
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbGoodName:TO4Label
+Label2:TO4Label
+edBarCode:TO4Edit
+btOk:TO4Button
+btExit:TO4Button
+PopupMenu1:TO4PopupMenu
+miBarCode:TO4MenuItem

@@ -1,0 +1,39 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+const
+  errFindMax = 'Невозможно найти максимум величин';
+  errFindMin = 'Невозможно найти минимум величин';
+
+function Max(Values : Variant) : Variant;
+function Min(Values : Variant) : Variant;
+
+implementation
+
+function Max(Values : Variant) : Variant;
+var
+  i : Integer;
+begin
+  if not IsArray(Values) then
+    raise(Trans(errFindMax));
+  Result := Values[ArrayLow(Values)];
+  for i := ArrayLow(Values) + 1 to ArrayHigh(Values) do
+    if Result < Values[i] then
+      Result := Values[i];
+end;
+
+function Min(Values : Variant) : Variant;
+var
+  i : Integer;
+begin
+  if not IsArray(Values) then
+    raise(Trans(errFindMin));
+  Result := Values[ArrayLow(Values)];
+  for i := ArrayLow(Values) + 1 to ArrayHigh(Values) do
+    if Result > Values[i] then
+      Result := Values[i];
+end;
+
+end.

@@ -1,0 +1,81 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  s1, s2, s3 : Variant;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := CreateObject('Журналы.ЖурналПеремещенияТовара');
+  s1 := 0;
+  s2 := 0;
+  s3 := 0;
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    begin
+      if Form.GetPrintKind = pkWindow then
+        MasterData.AssignSelectParams(Form.GetMean);
+      //    MasterData.SortByName;
+      MasterData.Select;
+    end;
+  Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  s1 := s1 + MasterData.Сумма;
+  s2 := s2 + MasterData.СуммаБезНДС;
+  s3 := s3 + MasterData.СуммаНДС;
+  with Table do
+    begin
+      Value['Number'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if VarAsBool(MasterData.@Ответственный.IsFocused) then
+        Value['RespName'] := MasterData.Ответственный.ПолноеНазвание;
+      Value['Summa'] := MasterData.Сумма;
+      Value['SumNT'] := MasterData.СуммаБезНДС;
+      Value['Tax'] := MasterData.СуммаНДС;
+      if VarAsBool(MasterData.СкладПр.IsFocused) then
+        Value['Store'] := MasterData.СкладПр.Название;
+      //   Value['StoreFrom'] := MasterData.СкладОтпуска.Название;
+    end;
+end;
+
+procedure Band3_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Label14.Caption := FormatFloat('0.00', s2);
+  Label15.Caption := FormatFloat('0.00', s3);
+  Label16.Caption := FormatFloat('0.00', s1);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band2:TRBBand
+Label7:TRBLabel
+Label5:TRBLabel
+Label8:TRBLabel
+Label6:TRBLabel
+Label1:TRBLabel
+Label3:TRBLabel
+Label12:TRBLabel
+Band1:TRBBand
+Label4:TRBLabel
+DetailBand1:TRBDetailBand
+lbName:TRBLabel
+lbAddr:TRBLabel
+lbPhone:TRBLabel
+Label2:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label17:TRBLabel
+Band3:TRBBand
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Structure1:TRBStructure

@@ -1,0 +1,51 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  NewRec : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  NewRec := True;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  cbActive.Checked := MasterData.Активность;
+end;
+
+procedure cbActive_Click(Sender: TObject);
+begin
+  MasterData.Активность := cbActive.Checked;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  ResetActive(MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+lbName:TO4Label
+Label1:TO4Label
+Label2:TO4Label
+deName:TO4DBEdit
+deCode:TO4DBEdit
+dbeRegion:TO4DBEdit
+MDS:TO4DataSource
+cbActive:TO4CheckBox

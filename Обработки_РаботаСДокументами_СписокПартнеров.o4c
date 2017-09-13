@@ -1,0 +1,114 @@
+interface
+
+uses
+  System, DispIntf, Пользователи;
+
+implementation
+
+Var
+  RegionsList : ICValueList;
+  ActiveRegion, Regions : ICDictionary;
+  MasterPartTbl, PartTbl : ICValueTable;
+  V: ICProcessing;
+
+procedure CreateObjects;
+begin
+  RegionsList := CreateObject('СписокЗначений');
+  Regions := CreateObject('Справочники.Регионы');
+
+  MasterPartTbl := CreateObject('ТаблицаЗначений');
+  MasterPartTbl.AddColumn('Название', vtcString, 1);
+  MasterPartTbl.Open;
+
+  PartTbl := CreateObject('ТаблицаЗначений');
+  PartTbl.AddColumn('Партнер', vtcLink, 0);
+  PartTbl.AddColumn('ПолноеНазвание', vtcString, 200);
+  PartTbl.AddColumn('Название', vtcString, 1);
+  PartTbl.AddColumn('Код', vtcString, 5);
+  PartTbl.Open;
+  PartTbl.SortBy('ПолноеНазвание');
+end;
+
+procedure LoadPart(StrRange: String; ActiveRegion: ICDictionary);
+begin
+  PartTbl.DisableControls;
+  PartTbl.Clear;
+  PartTbl.CopyDataToServer;
+  Server.LoadPartToTbl(ActiveRegion, PartTbl.SrvMean, StrRange);
+  PartTbl.CopyDataFromServer;
+  PartTbl.SrvMean.Clear;
+  PartTbl.DoCalculation('Название','ПолноеНазвание');
+  PartTbl.GroupToMaster('Название','',MasterPartTbl);
+  PartTbl.EnableControls;
+end;
+
+procedure Form_Open(Sender: TObject);
+Var
+  ActiveRegion : ICDictionary;
+begin
+  CreateObjects;
+  RegionsList := CreateObject('СписокЗначений');
+  Regions := CreateObject('Справочники.Регионы');
+  RegionsList.AddValue(Trans('Все регионы'), Null);
+  Regions.Select;
+  while Regions.SelectNext do
+    RegionsList.AddValue(Regions.Название, Regions); // или ('',S)
+  RegionsList.UseControl(CtrlToVar(eRegion));
+  RegionsList.CurIndex := 0;
+  eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+  ActiveRegion := GetUsersField('Регион');
+  if not IsNil(ActiveRegion) then
+    RegionsList.CurIndex := RegionsList.FindByValue(ActiveRegion);
+  LoadPart(ePartFilter.Text,ActiveRegion);
+  MasterPartTbl.UseDataSource(CtrlToVar(TVSPartMaster));
+  PartTbl.UseDataSource(CtrlToVar(TVSPart));
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  LoadPart(ePartFilter.Text,ActiveRegion);
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  ePartFilter.Text := '';
+  LoadPart(ePartFilter.Text,ActiveRegion);
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+  if PartTbl.IsFocused then
+    V.Params['Partner']  := PartTbl.Партнер;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+end;
+
+procedure dbgPart_DblClick(Sender: TObject);
+begin
+  btOK_Click(Sender);
+  Form.ModalResult := mrOk
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+Panel3:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+dbgPart:TO4DBGrid
+dbgPartMaster:TO4DBGrid
+Panel1:TO4Panel
+Label2:TO4Label
+eRegion:TO4Edit
+CodePanel:TO4Panel
+Label1:TO4Label
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+ePartFilter:TO4Edit
+TVSPart:TO4TableValueSource
+TVSPartMaster:TO4TableValueSource

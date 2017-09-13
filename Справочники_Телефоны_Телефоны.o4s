@@ -1,0 +1,50 @@
+interface
+
+uses 
+  System, DispIntf;
+
+implementation
+
+procedure CalcFields(MasterData : ISDictionary);
+begin
+  if VarAsBool(MasterData.@Город.IsFocused) then
+    MasterData.КодГорода := MasterData.Город.ТелКод;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  Result := EntryPoint(CalcFields);
+end;
+
+procedure RunFillDic(Doc : ISDictionary; var Accept : Boolean);
+var Count, Total : integer;
+    TelDic : ISDictionary;
+begin
+ Accept := true;
+ TelDic := CreateObject('Справочники.Телефоны');
+ TelDic.Select;
+ Count := 1;
+ Total := TelDic.RecordCount;
+ While TelDic.SelectNext do
+   if StrLength(TelDic.Номер)>8 then
+   begin
+     TelDic.Edit;
+     TelDic.SMSРассылка := true;
+     TelDic.Post;
+     if (Count mod 10) = 0 then
+       Doc.NotifyClient('Заполнение признака "SMS-рассылка"',Count,Total);
+     inc(Count);
+     if Doc.Terminated then
+      exit;
+   end;
+ TelDic.ApplyUpdates;
+ Nil(TelDic);
+ Accept := not Doc.Terminated;
+end;
+
+function RunFillDicEP : Variant; server;
+begin
+ Result := EntryPoint(RunFillDic);
+end;
+
+end.

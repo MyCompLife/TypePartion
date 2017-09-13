@@ -1,0 +1,142 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF, PrivateDocs : ICDictionary;
+  CNV : ICWriNums;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+  PrivateDocs := CreateObject('Справочники.ЛичДокументы');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  Partner : ICDictionary;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      Partner := GetPartner(MasterData.Партнер);
+      if (not IsNil(Partner)) and (VarAsBool(Partner.IsFocused)) then
+        begin
+          Value['PARTADDR'] := GetActiv(ADR, 'Адрес', Partner);
+          Value['PARTPHONE'] := GetActiv(TLF, 'Номер', Partner);
+          Value['PARTNAME'] := GetPartName(MasterData.Партнер);
+        end;
+      Value['Summa'] := MasterData.Сумма;
+      Value['SumNT'] := MasterData.СуммаБезНДС;
+      Value['Tax'] := MasterData.СуммаНДС;
+      Value['AccHiLo'] := MasterData.Счет;
+      Value['AOCode'] := MasterData.ШифрУчета;
+      Value['GoalCode'] := MasterData.ШифрНазначения;
+      Value['Discript'] := MasterData.Комментарий;
+      Value['Added'] := MasterData.Приложение;    
+      Value['Respons'] := GetShortPartName(MasterData.Ответственный);
+    end;
+  lbSumW.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058); //C_GRN,C_KOP,True);
+  lbDate.Caption := ' "' + CNV.FormatDateTime('dd', MasterData.ДатаДокумента, 1, 1058) +
+                    '" ' + StrLowerCase(CNV.FormatDateTime('mmmm yyyy р.', MasterData.ДатаДокумента, 1, 1058));
+  lbDate1.Caption := lbDate.Caption;
+  Partner := MasterData.Партнер;
+  if (Partner.GetSign = 'ФизЛица') or (Partner.GetSign = 'Служащие') then
+    begin
+      PrivateDocs.UseMasterAndSelect(Partner);
+      if PrivateDocs.FindByField('Активность', -1, False) and VarAsBool(PrivateDocs.Название.IsFocused) then
+        lbPassport.Caption := PrivateDocs.Название.Value + ', серія ' + PrivateDocs.СерияНомер +
+          ', виданий ' + PrivateDocs.ОрганВыдачи + ', ' + DateToStr(PrivateDocs.ДатаВыдачи)
+    end;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  Accept := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+Label14:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+lbSumW:TRBLabel
+Label32:TRBLabel
+Label33:TRBLabel
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label39:TRBLabel
+Label40:TRBLabel
+Label41:TRBLabel
+Label42:TRBLabel
+Label43:TRBLabel
+Label44:TRBLabel
+lbDate1:TRBLabel
+Label46:TRBLabel
+Label47:TRBLabel
+lbPassport:TRBLabel
+Label49:TRBLabel
+Label50:TRBLabel
+Label51:TRBLabel
+Label52:TRBLabel
+Label31:TRBLabel
+Label45:TRBLabel
+Label53:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label48:TRBLabel
+Label54:TRBLabel
+Label55:TRBLabel
+Label56:TRBLabel
+Label57:TRBLabel
+Label58:TRBLabel
+Label59:TRBLabel
+Label60:TRBLabel
+Label61:TRBLabel
+Label62:TRBLabel
+Label65:TRBLabel
+Label13:TRBLabel
+Label63:TRBLabel
+lbDate:TRBLabel
+Label64:TRBLabel
+Label66:TRBLabel
+Structure1:TRBStructure

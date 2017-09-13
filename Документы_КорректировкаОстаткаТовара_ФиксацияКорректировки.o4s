@@ -1,0 +1,150 @@
+interface
+
+uses System, DispIntf, Расчеты, ConstNames, Фиксация;
+
+implementation
+
+var
+  AccsGood, AccPartGood, AccsGoodCurrent : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure ApplyTblToAccs(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+  Sum, SumNT, Tax, Col, CurSum : Decimal;
+  PartGoodID : Double;
+  Dimensions, Fields, Resources : Variant;
+  Docum : ISDocuments;
+  MotionID : Integer;
+begin    
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  Count := 1;
+  Total := Doc.LinesCount;
+  Doc.SelectLines;
+  Constants := GetConstants;
+  while Doc.SelectNextLine do
+    begin
+      // партии товаров
+      PartGoodID := Doc.Партия;
+      //Остатки товаров
+    //  MakeGoodMotion(AccsGood, Doc, PartGoodID, midRevision,
+    //    ArrayOf(Col, SumNT, Tax, SumNT, Tax, 0, CurSum, CurSum));
+      if Doc.СуммаСтроки <> 0 then
+        begin     
+          AccsGood.ClearFieldBuffers();
+          if Doc.СуммаСтроки > 0 then
+             MotionID := 1
+           else
+             MotionID := 0;
+          Dimensions := ArrayOf(Doc.@Товар, Doc.@СкладПр, PartGoodID, 11);
+          Fields := ArrayOf(Doc.@ВалютаТовара, Doc.КурсТовара);
+          Resources := ArrayOf(0,AbsD(Doc.СуммаСтроки),0,AbsD(Doc.СуммаСтроки),0,0,0,0);
+          if MotionID = 0 then
+            AccsGood.OutcomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Fields)
+          else
+            AccsGood.IncomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Fields);
+
+           //oстатки товара на сегодня
+         //  MakeGoodMotionCurrent(AccsGoodCurrent, Doc, midRevision, Col);
+          AccsGood.ClearFieldBuffers();
+          Dimensions := ArrayOf(Doc.@Товар, Doc.@СкладПр);
+          Resources := 0;
+          if MotionID = 0 then
+            AccsGood.OutcomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Null)
+          else
+            AccsGood.IncomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Null);
+        end;
+
+      if Doc.СуммаСтрокиВВалюте <> 0 then
+        begin                 
+          AccsGood.ClearFieldBuffers();
+          if Doc.СуммаСтрокиВВалюте > 0 then
+             MotionID := 1
+           else
+             MotionID := 0;
+          Dimensions := ArrayOf(Doc.@Товар, Doc.@СкладПр, PartGoodID, 11);
+          Fields := ArrayOf(Doc.@ВалютаТовара, Doc.КурсТовара);
+          Resources := ArrayOf(0,0,0,0,0,0,AbsD(Doc.СуммаСтрокиВВалюте),AbsD(Doc.СуммаСтрокиВВалюте));
+          if MotionID = 0 then
+            AccsGood.OutcomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Fields)
+          else
+            AccsGood.IncomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Fields);
+
+           //oстатки товара на сегодня
+         //  MakeGoodMotionCurrent(AccsGoodCurrent, Doc, midRevision, Col);
+          AccsGood.ClearFieldBuffers();
+          Dimensions := ArrayOf(Doc.@Товар, Doc.@СкладПр);
+          Resources := 0;
+          if MotionID = 0 then
+            AccsGood.OutcomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Null)
+          else
+            AccsGood.IncomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Null);
+        end;
+
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then 
+        begin
+          Doc.NotifyClient(msgProceed, Count, Total);
+          if Doc.Terminated then
+            break;
+        end;
+      inc(Count);
+    end;
+
+  Accept := not Doc.Terminated
+end;
+
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  Result := EntryPoint(ApplyTblToAccs);
+end;
+
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        ApplyTblToAccs(Doc, Accept);
+      end;
+    2 :
+      begin
+      end;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  SumNt : Decimal;
+begin
+  case StrLowerCase(Synonym) of
+    'суммастрокибезндс' :
+      begin
+        SumNt := Doc.ЦенаБезНДС * Doc.Количество;
+        if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+          Value := RoundFloat(SumNt, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС)
+        else
+          Value := SumNt;
+      end;
+    'суммастроки' :
+      Value := Doc.ЦенаБезНДС * Doc.Количество * (1 + Doc.СтавкаНДС / 100);
+    'суммандсстроки' :
+      Value := Doc.ЦенаБезНДС * Doc.Количество * Doc.СтавкаНДС / 100;
+  end
+end;
+
+end.

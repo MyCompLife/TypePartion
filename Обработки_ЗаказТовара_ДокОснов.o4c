@@ -1,0 +1,30 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+Var
+  V : IcProcessing;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+VAr
+  Doc : IcDocuments; 
+  GridStr : String;
+begin
+  V := Mean;
+  If V.HasParam('NaklPrih') then
+    begin
+      Doc := V.Params['NaklPrih'];
+      if VarAsBool(Doc.ќзƒокќснов) then
+        begin
+          GridStr := VarAsStr(Doc.ƒокќснов);
+          XGrid.LoadFromString(GridStr);
+          XGrid.ReadOnly := true;
+        end;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+XGrid:TO4XGrid

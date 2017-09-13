@@ -1,0 +1,93 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Интерфейс, Расчеты;
+
+implementation
+
+var
+  UseConst : IC4VPAConst;
+  LinkDoc : Variant;
+  TblGood : ICValueTable;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      UseConst := GetConstants;
+      Params.SetColumnFormat('Цена', UseConst.ФорматЦеныГРН);
+      Params.SetColumnFormat('Количество', UseConst.ФорматКол);
+      Params.SetColumnFormat('КоличествоНал', UseConst.ФорматКол);
+      Params.UseDataSource(CtrlToVar(TVSGood));
+      LinkDoc := Params;
+      TblGood := Params;
+      if TblGood.HasParam('НалогСумма') then
+        lblSum.Caption := FormatFloat('0.00', TblGood.Params['НалогСумма'])
+      else
+        lblSum.Caption := '0.00'
+    end;
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  LinkDoc.Locate('Товар', InParams);
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Код;Товар');
+      miSortByCode.Checked := True;
+      miSortByName.Checked := False;
+    end;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Товар;Код');
+      miSortByCode.Checked := False;
+      miSortByName.Checked := True;
+    end;
+end;
+
+{$D-}
+procedure DBGrid1_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if VarAsBool(TblGood.IsFocused) and (TblGood.КоличествоНал < TblGood.Количество) then
+    if Highlight then
+      begin
+        BackColor := BlZeroSel;
+        DrawFont.Color := BlFZeroSel;
+      end
+    else
+      begin
+        BackColor := BlZero;
+        DrawFont.Color := BlFZero;
+      end;
+end;
+{$D+}
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+DBGrid1:TO4DBGrid
+tbrData:TO4ToolBar
+tbParam:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+lblSum:TO4Label
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem

@@ -1,0 +1,90 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  CNV : ICWriNums;
+  V : ICReport;
+  Doc : ICDocuments;
+  MYF, ADR, TLF : ICDictionary;
+  Tbl : ICValueTable;
+  DateDoc, SumInWord : string;
+  i : integer;
+
+implementation
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;   
+  Tbl := CreateObject('ValueTable');
+  Tbl.AddColumn('НомСтроки',vtcInteger,0);
+  Tbl.AddColumn('Код',vtcString,20);
+  Tbl.AddColumn('Товар',vtcLink,0);
+  Tbl.AddColumn('ЕдИзм',vtcLink,0);
+  Tbl.AddColumn('Количество',vtcFFt,5);
+  Tbl.AddColumn('КолОбщ',vtcFFt,5);
+  Tbl.AddColumn('Цена',vtcFFt,7);
+  Tbl.AddColumn('Add',vtcInteger,0);
+  Tbl.Open;
+  Params[0].AppendTo('',Tbl);
+  Tbl.SetColumnFormat('Количество','0.#####');
+  Tbl.SetColumnFormat('КолОбщ','0.#######');
+  Tbl.SetColumnFormat('Цена','0.00#####');
+  Doc := Params[1];
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  Tbl.SortBy('Товар');
+  Tbl.DoNumbering('НомСтроки',1,1);
+  Tbl.SelectFirst;
+  XGrid.AddSection('Head');
+  Tbl.AddToXGrid(CtrlToVar(XGrid), 'Det', 'НомСтроки;Код;Товар;ЕдИзм;КолОбщ;Количество;Цена', 0, 0);
+  XGrid.AddSection('Total');
+end;
+
+procedure XGrid_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  case HSect of
+    'Head' :
+      begin
+        Vars.NumberDate := VarAsStr(Doc.НомерДокумента) + ' від ' + DateToStr(Doc.ДатаДокумента);
+      end;
+    'Total' :
+      begin
+        Vars.totalFact := Tbl.Total('КолОбщ');
+        Vars.totalDoc := Tbl.Total('Количество');
+      end;
+  end;
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure tbXTools_Click(Sender: TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible
+   then tbXTools.ImageIndex := 98 else tbXTools.ImageIndex := 44;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+XGrid:TO4XGrid

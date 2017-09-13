@@ -1,0 +1,251 @@
+object Form: TO4Form
+  Left = 0
+  Top = 0
+  Width = 1075
+  Height = 543
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = ()
+  Translat.ScanedProps.Props = (
+    'cbCrearChar.Caption'
+    1
+    'Оставлять в номере только цыфры'
+    'cbCrearChar.Hint'
+    1
+    ''
+    'cbEmpl.Caption'
+    1
+    'Служащие'
+    'cbEmpl.Hint'
+    1
+    ''
+    'cbFiz.Caption'
+    1
+    'Физ.партнеры'
+    'cbFiz.Hint'
+    1
+    ''
+    'cbOnlySMS.Caption'
+    1
+    'Только телефоны для SMS рассылки'
+    'cbOnlySMS.Hint'
+    1
+    ''
+    'cbUro.Caption'
+    1
+    'Юр.партнеры'
+    'cbUro.Hint'
+    1
+    ''
+    'dbgTel.Hint'
+    1
+    ''
+    'Label1.Caption'
+    1
+    'Список телефонов, не пригодных для SMS-рассылки:'
+    'Label1.Hint'
+    1
+    ''
+    'Panel1.Caption'
+    1
+    'Panel1'
+    'Panel1.Hint'
+    1
+    ''
+    'Panel2.Caption'
+    1
+    'Список телефонов, не пригодных для SMS-рассылки:'
+    'Panel2.Hint'
+    1
+    ''
+    'tbAllPartTel.Caption'
+    1
+    'Просмотр телефонов партнера'
+    'tbAllPartTel.Hint'
+    1
+    ''
+    'tbRun.Caption'
+    1
+    'Проверить'
+    'tbRun.Hint'
+    1
+    ''
+    'tbTel.Caption'
+    1
+    'Редактирование телефона'
+    'tbTel.Hint'
+    1
+    ''
+    'ToolBar1.Caption'
+    1
+    'ToolBar1'
+    'ToolBar1.Hint'
+    1
+    ''
+    'ToolBar2.Caption'
+    1
+    'ToolBar1'
+    'ToolBar2.Hint'
+    1
+    ''
+    'ToolButton4.Caption'
+    1
+    'Просмотр телефонов партнера'
+    'ToolButton4.Hint'
+    1
+    ''
+    'ToolButton5.Caption'
+    1
+    'Редактирование телефона'
+    'ToolButton5.Hint'
+    1
+    '')
+  Translat.LangDict.Cols = ()
+  Translat.LangDict.Words = ()
+  Align = alClient
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  VPAOnExecute.EventName = 'Form_Execute'
+  object Panel1: TO4Panel
+    Left = 1
+    Top = 1
+    Width = 1073
+    Height = 43
+    Align = alTop
+    BevelSides = []
+    BorderSides = []
+    Caption = 'Panel1'
+    ParentCtl3D = False
+    TabOrder = 0
+    Transparent = False
+    object cbUro: TO4CheckBox
+      Left = 7
+      Top = 2
+      Width = 89
+      Height = 17
+      Caption = 'Юр.партнеры'
+      Checked = True
+      State = cbChecked
+      TabOrder = 0
+      WordWrap = False
+    end
+    object cbEmpl: TO4CheckBox
+      Left = 6
+      Top = 22
+      Width = 97
+      Height = 17
+      Caption = 'Служащие'
+      Checked = True
+      State = cbChecked
+      TabOrder = 1
+      WordWrap = False
+    end
+    object cbOnlySMS: TO4CheckBox
+      Left = 104
+      Top = 2
+      Width = 218
+      Height = 17
+      Caption = 'Проверять только телефоны для SMS'
+      TabOrder = 2
+      WordWrap = False
+    end
+    object cbSetSMSType: TO4CheckBox
+      Left = 104
+      Top = 22
+      Width = 301
+      Height = 17
+      Caption = 'Для активных телефонов ставить признак "Для SMS"'
+      Checked = True
+      State = cbChecked
+      TabOrder = 3
+      WordWrap = False
+    end
+  end
+  object dbgTel: TO4DBGrid
+    Left = 1
+    Top = 66
+    Width = 1073
+    Height = 476
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    DragDisabled = False
+    O4MDSource = TVS
+    ReadOnly = True
+    TabOrder = 1
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    VPAOnDblClick.EventName = 'dbgTel_DblClick'
+    PosColumns = <
+      item
+        O4FieldName = 'Партнер'
+        Title.Caption = 'Партнер'
+        Width = 524
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '27.09.2013'
+      end
+      item
+        O4FieldName = 'Телефон'
+        Title.Caption = 'Список телефонов, не пригодных для SMS-рассылки:'
+        Width = 525
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '27.09.2013'
+      end>
+  end
+  object ToolBar1: TO4ToolBar
+    Left = 1
+    Top = 44
+    Width = 1073
+    Height = 22
+    ButtonWidth = 186
+    Caption = 'ToolBar1'
+    EdgeBorders = []
+    Flat = True
+    Images = ImagesHolder.Bmp16x16
+    List = True
+    ShowCaptions = True
+    TabOrder = 2
+    object tbRun: TO4ToolButton
+      Left = 0
+      Top = 0
+      AutoSize = True
+      Caption = 'Проверить телефоны'
+      ImageIndex = 47
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbRun_Click'
+    end
+    object tbTel: TO4ToolButton
+      Left = 140
+      Top = 0
+      AutoSize = True
+      Caption = 'Редактирование'
+      Enabled = False
+      ImageIndex = 1
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbTel_Click'
+    end
+    object tbAllPartTel: TO4ToolButton
+      Left = 255
+      Top = 0
+      AutoSize = True
+      Caption = 'Просмотр телефонов партнера'
+      Enabled = False
+      ImageIndex = 45
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbAllPartTel_Click'
+    end
+  end
+  object TVS: TO4TableValueSource
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 81
+    Top = 136
+  end
+end

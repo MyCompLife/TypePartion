@@ -1,0 +1,51 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+var
+  AccsPartGood, AccsRealizGood : ISAccs;
+  Date : DateTime;
+  Constants : IS4VPAConst;
+
+procedure CreateSrvObj; server;
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetStoreList(TblGood : ISValueTable; Partner : Variant); server;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AccsRealizGood := CreateObject('Аккумуляторы.ОстаткиТоваровНаРеализаторах');
+  AccsRealizGood.ClearFieldFilters();
+  AccsRealizGood.SetFieldFilter('Партнер', Partner);
+  AccsRealizGood.IncludeZeroRest := False;
+  AccsRealizGood.AppendGroupRestToValueTable(Date, 'Товар;КолОбщ', TblGood);
+  TblGood.GroupBy('Товар', 'КолОбщ');
+  // TblGood.SortBy('Товар');
+  GetGoodCUtxt_Tbl(TblGood);
+end;
+
+procedure GetDStoreList(TblGood : ISValueTable; Partner, DGood : Variant); server;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AccsRealizGood := CreateObject('Аккумуляторы.ОстаткиТоваровНаРеализаторах');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsRealizGood.ClearFieldFilters();
+  AccsRealizGood.SetFieldFilter('Партнер', Partner);
+  AccsRealizGood.SetFieldFilter('Товар', DGood);
+  AccsRealizGood.IncludeZeroRest := False;
+  AccsRealizGood.AppendGroupRestToValueTable(Date,
+    'Товар;Цена;Партия;ВалютаТовара;КурсТовара;ЦенаВВалюте;КолОбщ', TblGood);
+  TblGood.GroupBy('Товар;Цена;Партия;ВалютаТовара;КурсТовара;ЦенаВВалюте', 'КолОбщ'); //;КолРасх;СумОбщ;СумРасх;СумОбщ
+  GetGoodCUtxt_Tbl(TblGood);
+  if VarAsBool(Constants.НДСплат) then
+    TblGood.DoGetLinks('СтавкаНДС=Товар.СтавкаНДС')
+  else
+    TblGood.DoCalculation('СтавкаНДС', '0');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ВхЦенаБезНДС;Партнер;ВхЦенаВал;Валюта=ВхВалюта', TblGood); //;ВхЦенаБезНДС;Валюта;ВхЦенаВал=ЦенаВВалюте
+end;
+
+end.

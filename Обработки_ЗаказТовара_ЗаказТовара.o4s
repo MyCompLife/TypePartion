@@ -1,0 +1,167 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+implementation
+Var
+  GoodPartnerTbl, PartnersTbl, OrderTbl : IsValueTable;
+  Date, DateFrom, DateTo : DateTime;
+  Partner : Variant;
+
+procedure GetPartnersTbl(Date : DateTime; PartnersTbl : IsValueTable);Server;
+Var
+  TempTbl : IsValueTable;
+  PartDic : IsDictionary;
+  DaysOfWeek : String;
+begin
+  PartnersTbl.Clear;
+  DaysOfWeek := IntToStr(DayOfWeek(Date))+';';
+  TempTbl := CreateObject('ValueTable');
+  TempTbl.Open;
+  PartDic := CreateObject('Справочники.ЮрПартнеры');
+  PartDic.SetFieldFilter('Поставщик','=',-1,'','',Null);
+  PartDic.SetFieldFilter('ДниНеделиЗаказ','Like','%'+DaysOfWeek+'%','','',Null);
+  PartDic.Select;
+  PartDic.SaveToValueTable('',TempTbl,0,PartDic.RecordCount);
+  TempTbl.AppendTo('SELF=Партнер;ПериодОборота=Период;ПериодОборота=ПериодInt',PartnersTbl);
+  PartnersTbl.UpdateObjNames;
+  PartnersTbl.DoCalculation('Период','Период + '' дн.''');
+end;
+
+//Procedure GetGoodPartnerTbl(Proc : IsProcessing; Var Accept : Boolean);
+Procedure GetGoodPartnerTbl(Partner : Variant; GoodPartnerTbl : IsValueTable; Proc : IsProcessing);
+var
+  AccsPartGood : ISAccs;
+  Count, Total : Integer;
+  TmpTbl,TmpTbl1 : IsValuetable;
+  PartDic : IsDictionary;
+  DaysOfWeek : String;
+begin
+
+//  Accept :=False;
+//  GetPartnersTbl(Date,PartnersTbl);
+  TmpTbl := CreateObject('ValueTable');
+  TmpTbl1 := CreateObject('ValueTable');
+  GoodPartnerTbl.Clear;
+  GoodPartnerTbl.CopyColumnsTo(TmpTbl);
+  GoodPartnerTbl.CopyColumnsTo(TmpTbl1);
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsPartGood.ClearFieldBuffers;
+  AccsPartGood.ClearFieldBuffers;
+
+  AccsPartGood.IncludeZeroRest := True;
+
+  AccsPartGood.SetFieldFilter('Партнер',Partner);
+
+  AccsPartGood.AppendGroupRestToValueTable(400000,'Товар;Партнер;ВхЦенаБезНДС;ДатаПр;КолОбщ',TmpTbl);
+  TmpTbl.GroupToMaster('Товар','КолОбщ',TmpTbl1);
+
+  TmpTbl.SortBy('-ДатаПр');
+  TmpTbl.Select;
+
+  TmpTbl1.Select;
+  Count :=0;
+  Total := TmpTbl1.LineCount;
+  While TmpTbl1.SelectNext do
+    begin
+      TmpTbl.SelectFirst;
+      While not IsObjFocused(TmpTbl.@Партнер) or( (VarAsStr(TmpTbl.Партнер.GetSign)='Служащие') and not TmpTbl.EOF) do
+        TmpTbl.SelectNext;
+      GoodPartnerTbl.Append;
+      GoodPartnerTbl.AssignFields('Партнер;ВхЦенаБезНДС;ДатаПр',TmpTbl);
+      GoodPartnerTbl.AssignFields('Товар;КолОбщ',TmpTbl1);
+      GoodPartnerTbl.Post;
+
+      if (Count mod 10)=0 then
+        begin
+          Proc.NotifyClient('Просмотр товаров: '+IntToStr(Count)+'/'+IntToStr(Total),Count, Total);
+          SysProgress(0,Total,Count,'Подготовка отчета');
+        end;
+      if Proc.Terminated then exit;
+      inc(Count);
+    end;
+//  Accept :=True;
+  SysProgress(0,0,0,'');
+end;
+
+Function GetGoodPartnerTblEP(DateS : DateTime; PartnersTblS, GoodPartnerTblS : IsValueTable):Variant;Server;
+begin
+  Date := DateS;
+  PartnersTbl := PartnersTblS;
+  GoodPartnerTbl := GoodPartnerTblS;
+  Result := EntryPoint(GetGoodPartnerTbl);
+end;
+
+
+Procedure GetOrderTbl(Proc : IsProcessing; Var Accept : Boolean);
+var
+  AccsGood : ISAccs;
+  GoodsLst : IsValueList; 
+  Date60 : Decimal;
+begin
+
+  Accept :=False;
+  OrderTbl.Clear;
+  GoodsLst := CreateObject('ValueList');
+{  GoodPartnerTbl.SortBy('Партнер');
+  GoodPartnerTbl.SetRange(Partner,Partner);
+}
+  GetGoodPartnerTbl(Partner, GoodPartnerTbl, Proc);
+  GoodPartnerTbl.Select;
+  GoodPartnerTbl.GroupToList('Товар',GoodsLst);
+
+  if GoodsLst.Count = 0 then
+    begin
+      Accept :=True;
+      exit;
+    end;
+
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGood.ClearFieldBuffers;
+  AccsGood.ClearFieldBuffers;
+  AccsGood.IncludeZeroRest := True;
+  AccsGood.SetFieldFilter('Тип', ArrayOf(midOutcome,midRetBuyer));
+  AccsGood.SetFieldFilter('Товар', GoodsLst);
+
+//  AccsGood.AppendGroupRest2ToValueTable(DateFrom, DateTo, 'Товар','', 'КолОбщ=ОборотПр', 'КолОбщ=ОборотРс','', OrderTbl);
+  AccsGood.AppendGroupRest2ToValueTable(DateFrom, 400000, 'Товар','', 'КолОбщ=ОборотПр', 'КолОбщ=ОборотРс','', OrderTbl);
+  OrderTbl.DoCalculation('Оборот','ОборотРс-ОборотПр');
+  GoodPartnerTbl.AppendTo('Товар;ВхЦенаБезНДС=Цена;ДатаПр=ДатаПр1;КолОбщ',OrderTbl);
+  OrderTbl.GroupBy('Товар','КолОбщ;Оборот;Цена;ДатаПр1');
+  OrderTbl.DoCalculation('ДатаПр','ДатаПр1');
+
+  Date60 := CurrentDate-60;
+  OrderTbl.DoCalculation('Filtr','ДатаПр>'+DecToStr(Date60));
+
+
+  OrderTbl.SortBy('Оборот;КолОбщ;Filtr');
+  OrderTbl.SetRange(ArrayOf(0,0,0),ArrayOf(0,0,0));
+  OrderTbl.Select;
+  while OrderTbl.LineCount<>0 do
+    OrderTbl.Delete;
+  OrderTbl.CancelRange;
+
+  OrderTbl.SortBy('Товар');
+  OrderTbl.Select;
+  OrderTbl.DoNumbering('NN',1,1);
+//  OrderTbl.DoCalculation('Количество','КолОбщ-Оборот');
+  OrderTbl.DoCalculation('Количество','Оборот');
+  OrderTbl.DoCalculation('Сумма','Количество*Цена');
+  OrderTbl.DoGetLinks('КодТовара=Товар.Код');
+  Accept :=True;
+end;
+
+
+
+Function GetOrderTblEP(DateFromS, DateToS : DateTime; PartnerS : Variant; OrderTblS, GoodPartnerTblS : IsValueTable):Variant;Server;
+begin
+  DateFrom := DateFromS;
+  DateTo := DateToS;
+  Partner := PartnerS;
+  OrderTbl := OrderTblS;
+  GoodPartnerTbl := GoodPartnerTblS;
+  Result := EntryPoint(GetOrderTbl);
+end;
+
+end.

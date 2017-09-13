@@ -1,0 +1,228 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF, EmployPassport : ICDictionary;
+  CNV : ICWriNums;
+  Constants : IC4VPAConst;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+  Constants := GetConstants;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  Sum : Double;
+  AssistStr : string;
+  Employ, Currency : ICDictionary;
+begin
+  with Table do
+    begin
+      Value['Number'] := MasterData.НомерДокумента;
+      lblDate1.Caption := StrLowerCase(CNV.FormatDateTime('dd mmmm yyyy р.', MasterData.ДатаДокумента, 1, 1058));
+      lblDate2.Caption := StrLowerCase(CNV.FormatDateTime('dd mmmm yyyy р.', MasterData.ДатаДокумента, 1, 1058));
+      if not IsNull(MasterData.ДатаВалютирования) then
+        begin
+          lblDateVal1.Caption := StrLowerCase(CNV.FormatDateTime('dd mmmm yyyy р.', MasterData.ДатаВалютирования, 1, 1058));
+          lblDateVal2.Caption := StrLowerCase(CNV.FormatDateTime('dd mmmm yyyy р.', MasterData.ДатаВалютирования, 1, 1058));
+        end;
+      Value['Comment'] := MasterData.Комментарий;
+      Currency := CreateObject('Справочники.Валюты');
+      Currency := GetNatCurrency(Currency);
+      Value['SummaVal'] := MasterData.Сумма; //нет валюты или в ГРН
+      lblSum1.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058);
+      if VarAsBool(MasterData.@Валюта.IsFocused) and not IsObjEQ(Currency, MasterData.@Валюта, False) then
+        begin
+          Currency := MasterData.Валюта;
+          Value['SummaVal'] := MasterData.СуммаВВалюте;
+          Value['Summa'] := MasterData.Сумма;
+          Value['ValCode'] := Currency.Код;
+          lblSum1.Caption := CNV.MoneyToStr(MasterData.СуммаВВалюте, Currency.Код, 1058);
+        end;
+      lblSum2.Caption := lblSum1.Caption;
+      if VarAsBool(MasterData.@СчетПредприятия.IsFocused) then
+        Value['PayAccNum'] := MasterData.СчетПредприятия.НомерСчета;
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        Value['ResponsName'] := GetShortPartName(MasterData.Партнер);
+      if (MasterData.Сумма > 50000) and VarAsBool(MasterData.@Партнер.IsFocused) then
+        begin
+          EmployPassport := CreateObject('Справочники.ЛичДокументы');
+          EmployPassport.UseMasterAndSelect(MasterData.Партнер);
+          if EmployPassport.FindByField('Активность', True, False) then
+            begin
+              if VarAsBool(EmployPassport.@Название.IsFocused) then
+                Value['PasportName'] := EmployPassport.Название.Value;
+              AssistStr := StrTrim(EmployPassport.СерияНомер);
+              Sum := StrPos(' ', AssistStr);
+              Value['PasportSer'] := StrCopy(AssistStr, 1, VarAsInt(Sum) - 1);
+              Value['PasportNo'] := StrCopy(AssistStr, VarAsInt(Sum) + 1,
+                StrLength(AssistStr) - VarAsInt(Sum));
+              Value['PasportYield'] := EmployPassport.ОрганВыдачи;
+              Value['PasportDate'] := EmployPassport.ДатаВыдачи;
+              Employ := MasterData.Партнер;
+              Value['EmployBirth'] := Employ.ДатаРождения;
+              Value['EmployAdress'] := GetActiv(ADR, 'ПочтИндекс', Employ) + ', ' +
+                GetActiv(ADR, 'Город.Название', Employ) + ', ' +
+                GetActiv(ADR, 'Адрес', Employ);
+            end;
+        end;
+    end;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  with Table do
+    begin                       
+      Value['Name1'] := Value['Name'];
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        Value['Name'] := Value['Name'] + ', через ' + GetPartName(MasterData.Партнер);
+      Value['BankName'] := '';
+      Value['BankMFO'] := '';
+      RRR := MasterData.СчетПредприятия;
+      if RRR.IsFocused and VarAsBool(RRR.@Банк.IsFocused) then
+          begin
+            RRR := RRR.Банк;
+            Value['BankName1'] := VarAsStr(GetPartName(RRR, 0));
+            if VarAsBool(RRR.@Город.IsFocused) then
+              Value['BankName1'] :=  Value['BankName1'] + ' м.' + RRR.Город.Название;
+            if VarAsBool(RRR.@КассовыйСчет.IsFocused) then
+              Value['KassaAccount'] := RRR.КассовыйСчет.НомерСчета;
+          end;
+      if MasterData.Сумма <= 50000 then
+        Value['ZKPO'] := '';
+      Accept := False;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+lblNumber:TRBLabel
+Label6:TRBLabel
+Label38:TRBLabel
+Label10:TRBLabel
+Label39:TRBLabel
+Label11:TRBLabel
+Label40:TRBLabel
+Label54:TRBLabel
+Label41:TRBLabel
+Label55:TRBLabel
+Label4:TRBLabel
+LblDate2:TRBLabel
+Label105:TRBLabel
+lblDateVal2:TRBLabel
+Label1:TRBLabel
+Label9:TRBLabel
+Label12:TRBLabel
+Label14:TRBLabel
+Label18:TRBLabel
+Label22:TRBLabel
+Label25:TRBLabel
+Label26:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label5:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label13:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+lblSum2:TRBLabel
+Label28:TRBLabel
+Label31:TRBLabel
+Label32:TRBLabel
+Label33:TRBLabel
+Label34:TRBLabel
+Label36:TRBLabel
+Label42:TRBLabel
+Label44:TRBLabel
+Label45:TRBLabel
+Label46:TRBLabel
+Label47:TRBLabel
+Label48:TRBLabel
+Label43:TRBLabel
+Label49:TRBLabel
+Label50:TRBLabel
+Label51:TRBLabel
+Label52:TRBLabel
+Label53:TRBLabel
+Label56:TRBLabel
+Label57:TRBLabel
+Label59:TRBLabel
+Label61:TRBLabel
+Label62:TRBLabel
+Label63:TRBLabel
+Label64:TRBLabel
+Label65:TRBLabel
+Label66:TRBLabel
+Label35:TRBLabel
+Label58:TRBLabel
+Label67:TRBLabel
+LblDate1:TRBLabel
+Label69:TRBLabel
+lblDateVal1:TRBLabel
+Label71:TRBLabel
+Label72:TRBLabel
+Label73:TRBLabel
+Label74:TRBLabel
+Label75:TRBLabel
+Label76:TRBLabel
+Label77:TRBLabel
+Label78:TRBLabel
+Label79:TRBLabel
+Label80:TRBLabel
+Label81:TRBLabel
+Label82:TRBLabel
+Label83:TRBLabel
+Label84:TRBLabel
+Label85:TRBLabel
+Label86:TRBLabel
+Label87:TRBLabel
+Label88:TRBLabel
+Label89:TRBLabel
+Label90:TRBLabel
+Label91:TRBLabel
+Label92:TRBLabel
+Label93:TRBLabel
+Label94:TRBLabel
+Label95:TRBLabel
+Label96:TRBLabel
+Label97:TRBLabel
+Label98:TRBLabel
+Label99:TRBLabel
+Label100:TRBLabel
+Label101:TRBLabel
+Label102:TRBLabel
+Label103:TRBLabel
+lblSum1:TRBLabel
+Label106:TRBLabel
+Label107:TRBLabel
+Label108:TRBLabel
+Label109:TRBLabel
+Label110:TRBLabel
+Label111:TRBLabel
+Label112:TRBLabel
+Label27:TRBLabel
+Label104:TRBLabel
+Shape5:TRBShape
+Structure1:TRBStructure

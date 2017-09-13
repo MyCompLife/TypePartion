@@ -1,0 +1,119 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений;
+
+implementation
+
+var
+  AccsGood, AccsPart, AccsPartGood, AccsGoodCurrent : ISAccs;
+  ApplyTbl, MinTbl : ISValueTable;
+  Constants : IS4VPAConst;
+
+procedure CreateApplyTable(Doc : ISDocuments; var Accept : Boolean);
+begin
+  // отправка сообщени€ клиенту
+  Doc.NotifyClient(CheckAboutOverflow, 1, 2);
+  CreateApplyTableExternal(Doc, AccsGood, ApplyTbl, MinTbl);
+  Accept := not Doc.Terminated
+end;
+
+procedure ApplyTblToAccs(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+begin
+  Count := 1;
+  Total := ApplyTbl.LineCount;
+  AccsGood.ClearFieldFilters();
+  AccsGoodCurrent.ClearFieldFilters();
+  ApplyTbl.Select;
+  while ApplyTbl.SelectNext do
+    begin
+      // партии товаров
+      RestructureExistedConsg(Doc, AccsPartGood, amtOutcome, ApplyTbl, ' олќбщ');
+      // oстатки товаров
+      MakeGoodMotion(AccsGood, ApplyTbl, ApplyTbl.ѕарти€, midOutcome,
+        ArrayOf(ApplyTbl. олќбщ, ApplyTbl.—ум¬х, ApplyTbl.—ум¬хЌƒ—, ApplyTbl.—умќтп,
+        ApplyTbl.—умќтпЌƒ—, ApplyTbl.—умЌац,
+        ApplyTbl.—ум¬ал¬х, ApplyTbl.—ум¬алќтп));
+      //остатки товара на сегодн€
+      MakeGoodMotionCurrent(AccsGoodCurrent, ApplyTbl, midOutcome, ApplyTbl. олќбщ);
+
+      // отправка сообщени€ клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+  //взаиморасчеты с партнерами
+  AccsPart.ClearFieldFilters();
+  AccsPart.AssignFields('ѕартнер;—умѕрих=—умма;—умќбщ=—умма;—умѕрих¬ал=—умма¬¬алюте;—умќбщ¬ал=—умма¬¬алюте;¬алюта', Doc);
+  AccsPart.Income(Doc, Doc.GetDate(), 0);
+
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP(AccsGoods : ISAccs; ApplyTbls : ISValueTable) : Variant; server;
+begin
+  AccsGood := AccsGoods;
+  ApplyTbl := ApplyTbls;
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+  Result := EntryPoint(ApplyTblToAccs);
+end;
+
+procedure CanChangeStateUp(Data : ISDocuments; var Accept : Boolean);
+begin
+  Accept := True;
+  case Data.GetDocState of
+    0 :
+      begin
+        AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+        AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+        AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+        ApplyTbl := CreateObject('“аблица«начений');
+        MinTbl := CreateObject('“аблица«начений');
+        CreateApplyTable(Data, Accept);
+      end;
+    1 :
+      ;
+  end;
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+        AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+        ApplyTblToAccs(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  Tbl : ISValueTable;
+  SumNt, SumInNt : Decimal;
+begin
+
+end;
+
+end.

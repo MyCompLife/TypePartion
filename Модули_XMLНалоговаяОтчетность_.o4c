@@ -1,0 +1,2187 @@
+interface
+
+uses
+  System, DispIntf, РаботаСПеременными, XMLИмпортЭкспорт;
+
+const
+  DECLAR = 'DECLAR';
+  DECLARHEAD = 'DECLARHEAD';
+  DECLARBODY = 'DECLARBODY';
+  DECLAR_Attr1 = 'xmlns:xsi';
+  DECLAR_Attr1_Value = 'http:/' + '/www.w3.org/2001/XMLSchema-instance';
+  DECLAR_Attr2 = 'xsi:noNamespaceSchemaLocation';
+  SOFTWARE = 'OPZ 1.29.6';
+  LeadingNumberSymbol = '0';
+  DirName = '\xml\';
+  ShemaDirName = '\xsd\';
+  LogFileDirName = '\log\';
+  CheckRangeError = 'Ошибка диапазона данных';
+  CheckMinLengthError = 'Ошибка минимальной длины данных';
+  CheckMaxLengthError = 'Ошибка максимальной длины данных';
+  CheckPatternError = 'Ошибка допустимых значений данных';
+  CheckPatternLengthError = 'Ошибка несовпадения размерности данных для проверки';
+  CheckEnumerationError = 'Ошибка допустимых перечисленных значений данных';
+  CheckSignError = 'Ошибка неотрицательных значений данных';
+  CheckDigitalError = 'Ошибка количества знаков после запятой';
+  CheckNillable = 'Ошибка непустого значения';
+  SystemError = 'Системная ошибка';
+  msgHeadErrorSchemaCheck = 'Выявлены ошибки при проверке файла: ';
+  msgTextErrorSchemaCheck = 'Текст ошибки: ';
+  msgLineNumberErrorSchemaCheck = 'Номер строки: ';
+  msgNumberDataFormat = 'Формат данных должен быть числовой: ';
+  msgErrorEMailFormat = 'Неправильный формат e-mail: ';
+  msgMissingEMailSymbol = 'Отсутствует символ "@": ';
+  msgErrorFieldType = 'Неверный тип данных';
+  msgErrorXMLExport = 'Экспорт данных в XML завершен с ошибками. См. протокол за деталями.';
+  msgFile = 'Файл';
+  msgSuccessCreated = 'создан успешно';
+  PhoneChars = '0123456789()\-+\.,; ';
+  NumberAndUpperCharsAlphabet = 'АБВГДЕЄЖЗИІКЛМНОПРСТУФХЦЧШЩЮЯ0123456789';
+  CellCaption = 'ячейка';
+  RowCaption = 'строка';
+  CellsCaption = 'ячейки';
+  AllCaption = 'всего';
+  FieldCaption = 'поле';
+
+var
+  Log : string; // протокол по результатам выполнения ф-ций
+  HasErrors : Boolean;
+  MyFirm : ICDictionary;
+
+procedure CreateDeclarHead(TIN, C_DOC, C_DOC_SUB, C_DOC_VER, C_DOC_VER_Full, C_REG,
+  C_RAJ, PERIOD_MONTH, PERIOD_YEAR, PERIOD_TYPE : string;
+  D_FILL : DateTime;
+  C_DOC_TYPE, C_DOC_CNT, C_DOC_STAN : Integer;
+  var Doc, Root : OLEVariant; C_STI_ORIG : String = '');
+function SaveDeclarDoc(Doc : OLEVariant; C_REG, C_RAJ, TIN, C_DOC, C_DOC_SUB, C_DOC_VER_Full,
+  PERIOD_MONTH, PERIOD_YEAR : string; C_DOC_CNT, C_DOC_STAN, C_DOC_TYPE : Integer; PERIOD_TYPE : String = '') : string;
+procedure SaveLogFile(FileName, TIN, C_DOC, C_DOC_SUB, C_DOC_VER, C_DOC_VER_Full, C_REG, C_RAJ,
+  PERIOD_MONTH, PERIOD_YEAR, PERIOD_TYPE, NAME : string;
+  D_FILL : DateTime; C_DOC_TYPE, C_DOC_CNT, C_DOC_STAN : Integer);
+function GetLogFileName : string;
+procedure AddTextToLog(Text : string);
+function GetValueForFunction(FunctionName : string; InputValue : Variant; Choice : Boolean;
+  Row : Integer; Col1 : Integer; Col2 : Integer = 0; ColName : string = ''; Nillable : boolean = True) : Variant;
+function GetColumnNameFromNumber(InputValue : Integer) : string;
+procedure SaveXGridTableToXML(xgCurrent : TO4Xgrid; FirstLine : Integer;
+  TablePrefix, TotalText, ExclusionText : string;
+  Doc, Node_DECLARBODY : OLEVariant;
+  Columns : Variant; UseCalcCell : Boolean;
+  var RowCount : Integer; DoTotal : Boolean = True;
+  FirstColumnsCount : Integer = 2; TotalRowNumber : integer = 1);
+procedure SaveDocTableToXML(TblContents : ICValueTable; Doc, Node_DECLARBODY : OLEVariant;
+  Columns : Variant; var RowCount : Integer; DoTotal : Boolean = True);
+function CalcGroupSellValue(xgMain : TO4XGrid; Line, FirstColumn, CellCount, Increment : Integer) : string;
+function GroupSellValue(xgMain : TO4XGrid; Line, FirstColumn, CellCount, Increment : Integer) : string;
+function GetMyFirmTypeChar(TIN : string) : string;
+
+implementation
+
+procedure AddTextToLog(Text : string);
+begin
+  if Text <> '' then
+    Log := Log + Text + #13#10 + '_____________' + #13#10;
+end;
+
+function GetLogDir : string;
+begin
+  Result := CreateStandartLogSubDir('XMLNalog');
+end;
+
+function GetLogFileName : string;
+begin
+  Result := GetLogDir;
+  Result := Result + FormatDateTime('ddmmyyhhnnss', CurrentDateTime) + '.log';
+end;
+
+function GetColNameByNumber(ColNumber : Integer) : string;
+var
+  ColumnsCharNames, TmpRes : string;
+begin
+  ColumnsCharNames := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  TmpRes := '';
+  while (ColNumber - 1) div 26 > 0 do
+    begin
+      TmpRes := TmpRes + StrCopy(ColumnsCharNames[(ColNumber - 1) div 26], 1, 1); //иначе неправильный порядок
+      ColNumber := ColNumber - ((ColNumber - 1) div 26) * 26;
+    end;
+  TmpRes := TmpRes + StrCopy(ColumnsCharNames[ColNumber], 1, 1); //иначе неправильный порядок
+  Result := TmpRes;
+end;
+
+function GetColumnName(Row : Integer; Col1 : Integer; Col2 : Integer = 0; ColName : string = '') : string;
+var
+  ColNameText : string;
+begin
+  if ColName <> '' then
+    ColNameText := ' - ' + Trans(FieldCaption) + ' "' + ColName + '"'
+  else
+    ColNameText := '';
+  if Row = 0 then
+    begin
+      Result := ColNameText;
+      exit
+    end;
+  if Col2 = 0 then
+    begin
+      if Col1 = 0 then
+        Result := '(' + Trans(RowCaption) + ' ' + IntToStr(Row) + ')' + ColNameText
+      else
+        Result := '(' + Trans(CellCaption) + ' ' + GetColNameByNumber(Col1) + IntToStr(Row) +
+          ')' + ColNameText
+    end
+  else
+    Result := '(' + Trans(CellsCaption) + ' ' + GetColNameByNumber(Col1) + IntToStr(Row) +
+      '-' + GetColNameByNumber(Col2) + IntToStr(Row) + ')' + ColNameText;
+
+end;
+
+function GetColumnNameFromNumber(InputValue : Integer) : string;
+const
+  ByteBias = 64;
+var
+  FirstSymbolNumber, LastSymbolNumber : Integer;
+begin
+  Result := '';
+  FirstSymbolNumber := (InputValue div 26);
+  LastSymbolNumber := (InputValue mod 26);
+  if FirstSymbolNumber > 0 then
+    Result := ByteToChar(FirstSymbolNumber + ByteBias);
+  if LastSymbolNumber > 0 then
+    Result := Result + ByteToChar(LastSymbolNumber + ByteBias)
+end;
+
+function CheckRange(InputValue : Variant; minInclusive, maxInclusive : Variant; Row : Integer;
+  Col1 : Integer; Col2 : Integer = 0; ColName : string = '') : Boolean;
+begin
+  try
+    if (VarAsFloat(InputValue) < VarAsFloat(minInclusive)) or
+      (VarAsFloat(InputValue) > VarAsFloat(maxInclusive)) then
+      begin
+        AddTextToLog(Trans(CheckRangeError) + ' (' + VarAsStr(minInclusive) + '-' +
+          VarAsStr(maxInclusive) + '): ' + GetColumnName(Row, Col1, Col2, ColName));
+        Result := True;
+      end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+function CheckLength(InputValue : Variant; Length : Integer; Plus : Boolean; Row : Integer;
+  Col1 : Integer; Col2 : Integer = 0; ColName : string = '') : Boolean;
+begin
+  try
+    case Plus of
+      True :
+        if StrLength(VarAsStr(InputValue)) > Length then
+          begin
+            AddTextToLog(Trans(CheckMaxLengthError) + ' (' + IntToStr(Length) + '): ' +
+              GetColumnName(Row, Col1, Col2, ColName));
+            Result := True;
+          end;
+      False :
+        if StrLength(VarAsStr(InputValue)) < Length then
+          begin
+            AddTextToLog(Trans(CheckMinLengthError) + ' (' + IntToStr(Length) + '): ' +
+              GetColumnName(Row, Col1, Col2, ColName));
+            Result := True;
+          end;
+    end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+function CheckPattern(InputValue : Variant; PatternArray : Variant; Row : Integer;
+  Col1 : Integer; Col2 : Integer = 0; ColName : string = '') : Boolean;
+var
+  i : Integer;
+  PatternRecordArray : Variant;
+begin
+  try
+    if StrLength(VarAsStr(InputValue)) <> (ArrayHigh(PatternArray) + 1) then
+      begin
+        AddTextToLog(Trans(CheckPatternLengthError) + ' (' + VarAsStr(ArrayHigh(PatternArray) + 1) +
+          '): ' + GetColumnName(Row, Col1, Col2, ColName));
+        Result := True;
+        exit;
+      end;
+    for i := 0 to ArrayHigh(PatternArray) do
+      begin
+        PatternRecordArray := PatternArray[i];
+        if ArrayHigh(PatternRecordArray) = 0 then
+          begin
+            if (VarAsStr(InputValue))[i + 1] <> PatternRecordArray[0] then
+              begin
+                AddTextToLog(Trans(CheckPatternError) + ' (' + VarAsStr(PatternRecordArray[0]) + '): ' +
+                  GetColumnName(Row, Col1, Col2, ColName));
+                Result := True;
+              end;
+          end
+        else
+          if ArrayHigh(PatternRecordArray) > 0 then
+            if CheckRange((VarAsStr(InputValue))[i + 1], PatternRecordArray[0], PatternRecordArray[1],
+              Row, Col1, Col2, ColName) then
+              Result := True;
+      end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+function CheckEnumeration(InputValue : Variant; EnumerationArray : Variant; Row : Integer;
+  Col1 : Integer; Col2 : Integer = 0; ColName : string = '') : Boolean;
+var
+  i : Integer;
+  FindValue : Boolean;
+  StrEnumerationArray : string;
+begin
+  try
+    FindValue := False;
+    StrEnumerationArray := '';
+    for i := 0 to ArrayHigh(EnumerationArray) do
+      begin
+        StrEnumerationArray := ',' + VarAsStr(EnumerationArray[i]) + StrEnumerationArray;
+        if InputValue = EnumerationArray[i] then
+          begin
+            FindValue := True;
+            break
+          end;
+      end;
+    if not FindValue then
+      begin
+        if StrLength(StrEnumerationArray) > 0 then
+          StrDelete(StrEnumerationArray, 1, 1);
+        AddTextToLog(Trans(CheckEnumerationError) + ' (' + StrEnumerationArray + '): ' +
+          GetColumnName(Row, Col1, Col2, ColName));
+        Result := True;
+      end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+function CheckSign(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Boolean;
+begin
+  try
+    if VarAsInt(InputValue) < 0 then
+      begin
+        AddTextToLog(Trans(CheckSignError) + GetColumnName(Row, Col1, Col2, ColName));
+        Result := True;
+      end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+function CheckDigital(InputValue : Variant; DigitalCount : Integer; Row : Integer;
+  Col1 : Integer; Col2 : Integer = 0; ColName : string = '') : Boolean;
+begin
+  try
+    case WordCount(VarAsStr(InputValue), '.') of
+      1 :
+        if DigitalCount <> 0 then
+          begin
+            AddTextToLog(Trans(CheckDigitalError) + ' (' + IntToStr(DigitalCount) +
+              '): ' + GetColumnName(Row, Col1, Col2, ColName));
+            Result := True;
+          end;
+      else
+        if StrLength(ExtractWord(2, InputValue, '.')) <> DigitalCount then
+          begin
+            AddTextToLog(Trans(CheckDigitalError) + ' (' + IntToStr(DigitalCount) +
+              '): ' + GetColumnName(Row, Col1, Col2, ColName));
+            Result := True;
+          end;
+    end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+// Загальні типи даних
+// <!--Прості типи-->
+
+// <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 3 розділ 1-->
+function DGKodDocROVPD3_1(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckEnumeration(Result, ArrayOf('ПН', 'РК', 'ВМД', 'ЧК', 'ТК', 'ГР',
+                                                'ПЗ', 'ПО', 'ЗП', 'ПНУ', 'РКУ', 'ВМДУ',
+                                                'ЧКУ', 'ТКУ', 'ГРУ', 'ПЗУ', 'ПОУ', 'ЗПУ'),
+                                                Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 3 розділ 2-->
+function DGKodDocROVPD3_2(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckEnumeration(Result, ArrayOf('ПН', 'РК', 'ВМД', 'ПП', 'ЗЦ',
+                                                'ПНУ', 'РКУ', 'ВМДУ', 'ППУ', 'ЗЦУ'),
+                                                Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Номер для накладної - число, слеш і літери зц"-->
+
+function DGHNUM_N(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+end;
+
+//  <!--Загальний тип "Числові дані 2 знаки крапка знак"-->
+
+function DGKODR(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Decimal;
+begin
+  Result := StrToDec(ReplaceDecDelim(VarAsStr(InputValue)));
+  HasErrors := CheckLength(Result, 1, False, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 4, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Місяц з нолем на початку"-->
+
+function DG0Month(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 2, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Місяць і рік"-->
+
+function DGMonthYear(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 6, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// <!--Загальний тип "Дата кінець квартала у формат_ ддммрррр"-->
+
+function DGDateEndKv(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := GetValueForFunction('DGDate', InputValue, False, Row, Col1, Col2, ColName);
+  HasErrors := CheckLength(Result, 8, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// <!--Загальний тип "Код Стан документа (1, 2, 3) (1-звітний документ 2-новий звітний документ 3-уточнюючий документ)"-->
+
+function DGSTAN(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 3, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// <!--Загальний тип "Код КОАТУУ (9-10 знак_в)"-->
+
+function DGKOATUU(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 9, False, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 10, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// <!--Загальний тип "Код від 1 до 4 знаків ДРФО, ознака типу документа для Реєстра накладних версії 2"-->
+
+function DGOsp(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 4, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код 0/1 для ДРФО"-->
+
+function DGOzn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 0, 1, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код 1/2 для ДРФО"-->
+
+function DGOzn12(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 2, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Ознака доходу від 1 до 60 для ДРФО"-->
+
+function DGOdoh(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 55, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код пільги (8 знаків)"-->
+
+function DGCodPilg(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckSign(Result, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 8, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Місяць від 0 до 12"-->
+
+function DGMonth0(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 0, 12, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код МФО (6 знаків)"-->
+
+function DGmfo(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckSign(Result, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 6, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код транспортного засобу (10 знаків)"-->
+
+function DGTn_Zed(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckSign(Result, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 10, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код номера області"-->
+
+function DGreg(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 29, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код зовнішньоекономічної діяльності"-->
+
+function DGUKTZED(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(InputValue);
+  HasErrors := CheckPattern(Result, ArrayOf(ArrayOf(0, 9), ArrayOf(0, 9), ArrayOf(0, 9),
+    ArrayOf(0, 9), ArrayOf(0, 9), ArrayOf(0, 9),
+    ArrayOf(0, 9), ArrayOf(0, 9), ArrayOf(0, 9),
+    ArrayOf(0, 9)),
+    Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Число від 10000000 до 99999999"-->
+
+function DGI8(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 10000000, 99999999, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Число від 1000 до 99999"-->
+
+function DGI5i(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1000, 99999, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Число від 0 до 999"-->
+
+function DGI3i(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 0, 999, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Число від 0 до 99"-->
+
+function DGI2i(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 0, 99, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "5 значне ціле додатне число"-->
+
+function DGint5(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckSign(Result, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 5, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "2 значне ціле додатне число"-->
+
+function DGint2(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckSign(Result, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 2, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "3 значне ціле додатне число"-->
+
+function DGint3(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckSign(Result, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 3, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "КВЕД"-->
+
+function DGkved(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 4, False, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(Result, 7, True, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckPattern(Result, ArrayOf(ArrayOf(0, 9), ArrayOf(0, 9), ArrayOf('.'),
+    ArrayOf(0, 9), ArrayOf(0, 9), ArrayOf('.'),
+    ArrayOf(0, 9)),
+    Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Ознака"-->
+
+function DGchk(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Byte;
+begin
+  if VarAsStr(InputValue) <> '' then
+    Result := 1
+  else
+    Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckEnumeration(Result, ArrayOf(1), Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Місяць"-->
+
+function DGMonth(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(InputValue, 1, 12, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Квартал"-->
+
+function DGKv(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 4, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Тип звітнoго періоду"-->
+
+function DGPType(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 5, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// <!--Загальний тип "Рік народження"-->
+
+function DGNYear(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1900, 2099, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Рік"-->
+
+function DGYear(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1991, 2099, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Назва підприємства"-->
+
+function DGHNAME(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 1, False, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Адреса підприємства"-->
+
+function DGHLOC(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 1, False, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код міста"-->
+
+function DGHZIP(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : String;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 5, True, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckPattern(Result, ArrayOf(ArrayOf(0, 9), ArrayOf(0, 9), ArrayOf(0, 9),
+                            ArrayOf(0, 9), ArrayOf(0, 9)),
+                            Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+function CheckMail(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Boolean;
+begin
+  try
+    if StrPos('@', InputValue) > 0 then
+      begin
+        if WordCount(InputValue, '@') <> 2 then
+          begin
+            AddTextToLog(Trans(msgErrorEMailFormat) + GetColumnName(Row, Col1, Col2, ColName));
+            Result := True;
+          end;
+      end
+    else
+      begin
+        AddTextToLog(Trans(msgMissingEMailSymbol) + GetColumnName(Row, Col1, Col2, ColName));
+        Result := True;
+      end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+//  <!--Загальний тип "Електронна пошта"-->
+
+function DGHEMAIL(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckMail(InputValue, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+function CheckChars(Chars : string; InputValue : Variant; Row : Integer;
+  Col1 : Integer; Col2 : Integer = 0; ColName : string = '') : Boolean;
+var
+  i : Integer;
+  StrInputValue : string;
+begin
+  try
+    StrInputValue := VarAsStr(InputValue);
+    for i := 1 to StrLength(StrInputValue) do
+      if StrPos(StrInputValue[i], Chars) = 0 then
+        begin
+          AddTextToLog(Trans(CheckPatternError) + ' (' + VarAsStr(StrInputValue[i]) +
+            '): ' + GetColumnName(Row, Col1, Col2, ColName));
+          Result := True;
+        end
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+//  <!--Загальний тип "Номер телефона"-->
+
+function DGHTEL(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(InputValue, 4, False, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckChars(PhoneChars, InputValue, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Номер факса"-->
+
+function DGHFAX(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(InputValue, 4, False, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckChars(PhoneChars, InputValue, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Назва ДПІ"-->
+
+function DGHSTI(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 1, False, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Числові дані 0 знаки після коми"-->
+
+function DGdecimal0(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := FormatFloat('0', InputValue);
+end;
+
+//  <!--Загальний тип "Числові дані 1 знаки після коми"-->
+
+function DGdecimal1(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := ReplaceOneStrWithAnother(FormatFloat('0.0', StrToFloat(ReplaceDecDelim(VarAsStr(InputValue)))), ',', '.');
+  HasErrors := CheckDigital(Result, 1, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Числові дані 2 знаки після коми"-->
+
+function DGdecimal2(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := ReplaceOneStrWithAnother(FormatFloat('0.00', StrToFloat(ReplaceDecDelim(VarAsStr(InputValue)))), ',', '.');
+  HasErrors := CheckDigital(Result, 2, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Числові дані 3 знаки після коми"-->
+
+function DGdecimal3(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := ReplaceOneStrWithAnother(FormatFloat('0.000', StrToFloat(ReplaceDecDelim(VarAsStr(InputValue)))), ',', '.');
+  HasErrors := CheckDigital(Result, 3, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Числові дані 4 знаки після коми"-->
+
+function DGdecimal4(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := ReplaceOneStrWithAnother(FormatFloat('0.0000', StrToFloat(ReplaceDecDelim(VarAsStr(InputValue)))), ',', '.');
+  HasErrors := CheckDigital(Result, 4, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Числові дані 5 знаки після коми"-->
+
+function DGdecimal5(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := ReplaceOneStrWithAnother(FormatFloat('0.00000', StrToFloat(ReplaceDecDelim(VarAsStr(InputValue)))), ',', '.');
+  HasErrors := CheckDigital(Result, 5, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "5-10-15 неоподатковуваних мінімумів "-->
+
+function DG5_10_15nmg(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckEnumeration(Result, ArrayOf('5', '10', '15'), Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Числові дані 6 знаки після коми"-->
+
+function DGdecimal6(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := ReplaceOneStrWithAnother(FormatFloat('0.000000', StrToFloat(ReplaceDecDelim(VarAsStr(InputValue)))), ',', '.');
+  HasErrors := CheckDigital(Result, 6, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+function CheckDRFO(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Boolean;
+var
+  NumberValue : Double;
+  TmpValue : string;
+begin
+  try
+    if StrLength(VarAsStr(InputValue)) <> 8 then
+      begin
+        try
+          NumberValue := StrToFloat(ReplaceDecDelim(VarAsStr(InputValue)))
+        except
+          AddTextToLog(Trans(msgNumberDataFormat) + GetColumnName(Row, Col1, Col2, ColName) +
+            ' - ' + Trans(ExceptMessage));
+          Result := True;
+        end
+      end
+    else
+      begin
+        TmpValue := StrCopy(VarAsStr(InputValue), 3, 6);
+        try
+          NumberValue := StrToFloat(ReplaceDecDelim(VarAsStr(TmpValue)))
+        except
+          AddTextToLog(Trans(msgNumberDataFormat) + GetColumnName(Row, Col1, Col2, ColName) +
+            ' - ' + Trans(ExceptMessage));
+          Result := True;
+        end;
+        if Result then
+          exit;
+        Result := CheckChars(NumberAndUpperCharsAlphabet, StrCopy(VarAsStr(InputValue), 1, 2),
+          Row, Col1, Col2, ColName) or HasErrors;
+      end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) +
+        ' - ' + Trans(ExceptMessage));
+    Result := True;
+  end;
+end;
+
+//  <!--Загальний тип "Код ДРФО фізичної особи допускається числовий код, або № паспорта"-->
+
+function DGDrfo(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(InputValue, 10, True, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(InputValue, 5, False, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckDRFO(InputValue, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код ЄДРПОУ (тiльки числа)"-->
+
+function DGNLong(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+var
+  NumberValue : LargeInt;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(InputValue, 10, True, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(InputValue, 5, False, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код ЄДРПОУ (ДРФО підприємця: числа, або № паспорта)"-->
+
+function DGLong(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(InputValue, 10, True, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckLength(InputValue, 5, False, Row, Col1, Col2, ColName) or HasErrors;
+  HasErrors := CheckDRFO(InputValue, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип " Код HTINJ (Ідентифікаційний код платника згідно з ЄДРПОУ)"-->
+
+function DGHTINJ(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGNLong(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код HTINF (Ідентифікаційний номер платника згідно з ДРФО)"-->
+
+function DGHTINF(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGLong(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код HTINSD (Реєстраційний (обліковий) номер платника )"-->
+
+function DGHTINSD(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGLong(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код HTINNR (Ідентифікаційний код представництвa нерезидента, що не має статусу юридичної особи)"-->
+
+function DGHTINNR(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGNLong(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код HNPDV (Індивідуальний податковий номер платника ПДВ)"-->
+
+function DGHNPDV(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := GetValueForFunction('DGLong12', InputValue, False, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Індивідуальний податковий номер платника"-->
+
+function DGHIPN(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := GetValueForFunction('DGLong12', InputValue, False, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код HDDGVSD (Дата договору про спільну (сумісну) діяльність)"-->
+
+function DGHDDGVSD(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := GetValueForFunction('DGDate', InputValue, False, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код HNDGVSD (№ договору про спільну (сумісну) діяльність)"-->
+
+function DGHNDGVSD(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+end;
+
+//  <!--Загальний тип "Код HNSPDV (номер свідоцтва про реєстрацію платника ПДВ)"-->
+
+function DGHNSPDV(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(InputValue, 10, True, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код ДРФО директора"-->
+
+function DGHKBOS(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGDrfo(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "ПІБ директора"-->
+
+function DGHBOS(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);  
+  HasErrors := CheckLength(Result, 1, False, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Код ДРФО бухгалтера"-->
+
+function DGHKBUH(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGDrfo(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "ПІБ бухгалтера"-->
+
+function DGHBUH(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckLength(Result, 1, False, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "ПІБ фізичної особи"-->
+
+function DGHFO(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue); 
+  HasErrors := CheckLength(Result, 1, False, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Індивідуальний податковий номер "-->
+
+function DGLong12(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  //гасим ошибку с XXXX в налоговом номере
+  try
+    StrToFloat(ReplaceDecDelim(VarAsStr(Result)));
+    HasErrors := CheckRange(StrToFloat(ReplaceDecDelim(VarAsStr(Result))), '1000', '999999999999',
+      Row, Col1, Col2, ColName) or HasErrors;
+  except
+    Result := ''
+  end;
+end;
+
+//  <!--Загальний тип "Код ДПІ, використовується для обмеження коду області"-->
+
+function DGsti(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 99, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Загальний тип "Дата у форматі ддммрррр"-->
+
+function DGDate(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := FormatDateTime('ddmmyyyy', InputValue);
+end;
+
+//  <!--Загальний тип атрибуту ROWNUM для вказання номеру строки в табличних даних-->
+
+function rowInt(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 999999, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//  <!--Опис комплексних типів які використовуються для контролю табличних даних-->
+//  <!--Загальний тип "Код ЕДРПОУ(ДРФО) в колонці"-->
+
+function TinColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGLong(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Числові дані"-->
+
+function DecimalColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+end;
+
+//  <!--Загальний тип "Числові дані 0 знаки після коми"-->
+
+function Decimal0Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGdecimal0(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Числові дані 1 знаки після коми"-->
+
+function Decimal1Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGdecimal1(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Числові дані 2 знаки після коми"-->
+
+function Decimal2Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGdecimal2(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Числові дані 3 знаки після коми"-->
+
+function Decimal3Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGdecimal3(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Числові дані 4 знаки після коми"-->
+
+function Decimal4Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGdecimal4(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Числові дані 5 знаки після коми"-->
+
+function Decimal5Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGdecimal5(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Числові дані 6 знаки після коми"-->
+
+function Decimal6Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGdecimal6(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Строкові дані"-->
+
+function StrColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+end;
+
+//  <!--Загальний тип "Дані типу Дата ддммрррр"-->
+
+function DateColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGDate(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Індивідуальний податковий №"-->
+
+function IndTaxNumColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGLong12(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Цілі дані"-->
+
+function IntColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+end;
+
+//  <!--Загальний тип "Місяць в колонці"-->
+
+function MonthColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGMonth(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Рік в колонці"-->
+
+function YearColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGYear(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Рік народження в колонці"-->
+
+function YearNColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGNYear(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код зовнішньоекономічної діяльності в колонці"-->
+
+function UKTZEDColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGUKTZED(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Число від 10000000 до 99999999 в колонці"-->
+
+function I8Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGI8(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код області в колонці"-->
+
+function RegColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGreg(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "КВЕД в колонці"-->
+
+function DGkvedColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGkved(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Число від 1000 до 999999999999 в колонці"-->
+
+function DGLong12Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGLong12(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Відмітка в колонці"-->
+
+function ChkColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Byte;
+begin
+  Result := DGchk(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код транспортного засобу в колонці"-->
+
+function Tn_ZedColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGTn_Zed(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Код пільги в колонці"-->
+
+function CodPilgColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGCodPilg(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Ознака доходу в колонці ДРФО"-->
+
+function OdohColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGOdoh(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 3 розділ 1-->
+
+function KodDocROVPD3_1Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGKodDocROVPD3_1(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 3 розділ 2-->
+
+function KodDocROVPD3_2Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGKodDocROVPD3_2(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Ознака 1-4 в колонці ДРФО, ознака типу документа для Реєстр накладних" версії 2-->
+
+function OspColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGOsp(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Ознака 0/1 в колонці ДРФО"-->
+
+function OznColumn(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGOzn(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//  <!--Загальний тип "Ознака 1/2 в колонці ДРФО2 (10 колонка)"-->
+
+function Ozn2Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := DGOzn12(InputValue, Row, Col1, Col2, ColName);
+end;
+
+function CheckNonNegativeInteger(InputValue : Variant; Row : Integer; Col1 : Integer;
+  Col2 : Integer = 0; ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  //  HasErrors := CheckSign(Result, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// 	<!--Загальний тип "(тип причини) коли Оригінал ПОДАТКОВА НАКЛАДНА залишається у продавця" (HTYPR) версія 5-->
+
+function DGPNtypr(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : String;
+begin
+  if VarAsInt(InputValue) < 10 then
+    Result := '0' + VarAsStr(InputValue)
+  else
+    Result := VarAsStr(InputValue);
+  HasErrors := CheckPattern(Result, ArrayOf(ArrayOf(0, 1), ArrayOf(0, 9)),
+    Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// 	<!--Загальний тип "Код ДП_, використовується для обмеження коду області"-->
+
+function DGc_dpi(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 100, 2799, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// 	<!--Загальний тип "Число від 1 до ... 9999" використовується для вказання кількості, номера рядка-->
+
+function DGI4nom(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 9999, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//<!--Загальний тип "Число від 1 до ... 9999999" використовується для вказання кількості, номера рядка-->
+
+function DGI7nom(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 9999999, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//	<!--Загальний тип "Признак спеціальної податкової накладної" -->
+
+function DGspecNom(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckPattern(Result, ArrayOf(ArrayOf(2, 4)),
+    Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//	<!--Загальний тип "Індивідуальний податковий номер платника з можливістю внесення 0(нуля)"-->
+
+function DGHIPN0(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckRange(StrToFloat(ReplaceDecDelim(VarAsStr(Result))), '0', '999999999999',
+      Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//	<!--Загальний тип "Числовий 0" 0, 0.0, або 0.00-->
+
+function DGdecimalZero(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := InputValue;
+  HasErrors := CheckRange(StrToFloat(ReplaceDecDelim(VarAsStr(Result))), '0', '0',
+      Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+/// <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 5 розділ 1-->
+function DGKodDocROVPD5_1(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckEnumeration(Result, ArrayOf('ПН', 'РК', 'ВМД', 'ПП', 'ЗЦ', 'БО',
+                                                'ПНУ', 'РКУ', 'ВМДУ', 'ППУ', 'ЗЦУ', 'БОУ',
+                                                'ПН01', 'ПН02', 'ПН03', 'ПН04', 'ПН05', 'ПН06',
+                                                'ПН07', 'ПН08', 'ПН09', 'ПН10', 'ПН11',
+                                                'ПН01У', 'ПН02У', 'ПН03У', 'ПН04У', 'ПН05У', 'ПН06У',
+                                                'ПН07У', 'ПН08У', 'ПН09У', 'ПН10У', 'ПН11У'
+                                                ),
+                                                Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+// <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 5 розділ 2-->
+function DGKodDocROVPD5_2(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := VarAsStr(InputValue);
+  HasErrors := CheckEnumeration(Result, ArrayOf('ПН', 'РК', 'ВМД', 'ЧК', 'ТК', 'ГР',
+                                                'ПЗ', 'ПО', 'ЗП', 'НП',
+                                                'ПНУ', 'РКУ', 'ВМДУ',
+                                                'ЧКУ', 'ТКУ', 'ГРУ', 'ПЗУ', 'ПОУ', 'ЗПУ', 'НПУ',
+                                                'ПНР', 'РКР', 'ВМДР',
+                                                'ЧКР', 'ТКР', 'ГРР', 'ПЗР', 'ПОР', 'ЗПР', 'НПР',
+                                                'ПНРУ', 'РКРУ', 'ВМДРУ',
+                                                'ЧКРУ', 'ТКРУ', 'ГРРУ', 'ПЗРУ', 'ПОРУ', 'ЗПРУ', 'НПРУ'
+                                                ),
+                                                Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+//	<!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 5 розділ 1-->
+function DGKodDocROVPD5_1Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGKodDocROVPD5_1(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//	<!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 5 розділ 2-->
+function DGKodDocROVPD5_2Column(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : string;
+begin
+  Result := DGKodDocROVPD5_2(InputValue, Row, Col1, Col2, ColName);
+end;
+
+//	<!--Загальний тип "Число від 1 до 99" використовується для вказання номера-->
+function DGI2inom(InputValue : Variant; Row : Integer; Col1 : Integer; Col2 : Integer = 0;
+  ColName : string = '') : Integer;
+begin
+  Result := StrToInt(VarAsStr(InputValue));
+  HasErrors := CheckRange(Result, 1, 99, Row, Col1, Col2, ColName) or HasErrors;
+end;
+
+function GetValueForFunction(FunctionName : string; InputValue : Variant; Choice : Boolean;
+  Row : Integer; Col1 : Integer; Col2 : Integer = 0; ColName : string = ''; Nillable : boolean = True) : Variant;
+begin
+  try
+    if VarAsStr(InputValue) = '' then
+      begin
+        if Choice then
+          Result := NilXMLAttr
+        else
+          if Nillable then
+            Result := ''
+          else
+            begin
+              AddTextToLog(Trans(CheckNillable) + GetColumnName(Row, Col1, Col2, ColName));
+              HasErrors := True;
+            end;
+      end
+    else
+      case StrUpperCase(FunctionName) of
+        //  <!--Загальний тип "Номер для накладної - число, слеш і літери зц"-->
+        'DGHNUM_N' :
+          Result := DGHNUM_N(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 2 знаки крапка знак"-->
+        'DGKODR' :
+          Result := DGKODR(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Місяц з нолем на початку"-->
+        'DG0MONTH' :
+          Result := DG0Month(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Місяць і рік"-->
+        'DGMONTHYEAR' :
+          Result := DGMonthYear(InputValue, Row, Col1, Col2, ColName);
+        // <!--Загальний тип "Дата кінець квартала у формат_ ддммрррр"-->
+        'DGDATEENDKV' :
+          Result := DGDateEndKv(InputValue, Row, Col1, Col2, ColName);
+        // <!--Загальний тип "Код Стан документа (1, 2, 3) (1-звітний документ 2-новий звітний документ 3-уточнюючий документ)"-->
+        'DGSTAN' :
+          Result := DGSTAN(InputValue, Row, Col1, Col2, ColName);
+        // <!--Загальний тип "Код КОАТУУ (9-10 знак_в)"-->
+        'DGKOATUU' :
+          Result := DGKOATUU(InputValue, Row, Col1, Col2, ColName);
+        // <!--Загальний тип "Код від 1 до 4 знаків ДРФО"-->
+        'DGOSP' :
+          Result := DGOsp(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код 0/1 для ДРФО"-->
+        'DGOZN' :
+          Result := DGOzn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код 1/2 для ДРФО"-->
+        'DGOZN12' :
+          Result := DGOzn12(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Ознака доходу від 1 до 60 для ДРФО"-->
+        'DGODOH' :
+          Result := DGOdoh(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код пільги (8 знаків)"-->
+        'DGCODPILG' :
+          Result := DGCodPilg(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Місяць від 0 до 12"-->
+        'DGMONTH0' :
+          Result := DGMonth0(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код МФО (6 знаків)"-->
+        'DGMFO' :
+          Result := DGmfo(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код транспортного засобу (9 знаків)"-->
+        'DGTN_ZED' :
+          Result := DGTn_Zed(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код номера області"-->
+        'DGREG' :
+          Result := DGreg(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код зовнішньоекономічної діяльності"-->
+        'DGUKTZED' :
+          Result := DGUKTZED(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Число від 10000000 до 99999999"-->
+        'DGI8' :
+          Result := DGI8(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Число від 1000 до 99999"-->
+        'DGI5I' :
+          Result := DGI5i(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Число від 0 до 999"-->
+        'DGI3I' :
+          Result := DGI3i(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Число від 0 до 99"-->
+        'DGI2I' :
+          Result := DGI2i(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "5 значне ціле додатне число"-->
+        'DGINT5' :
+          Result := DGint5(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "2 значне ціле додатне число"-->
+        'DGINT2' :
+          Result := DGint2(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "3 значне ціле додатне число"-->
+        'DGINT3' :
+          Result := DGint3(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "КВЕД"-->
+        'DGKVED' :
+          Result := DGkved(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Ознака"-->
+        'DGCHK' :
+          Result := DGchk(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Місяць"-->
+        'DGMONTH' :
+          Result := DGMonth(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Квартал"-->
+        'DGKV' :
+          Result := DGKv(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Тип звітнoго періоду"-->
+        'DGPTYPE' :
+          Result := DGPType(InputValue, Row, Col1, Col2, ColName);
+        // <!--Загальний тип "Рік народження"-->
+        'DGNYEAR' :
+          Result := DGNYear(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Рік"-->
+        'DGYEAR' :
+          Result := DGYear(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Назва підприємства"-->
+        'DGHNAME' :
+          Result := DGHNAME(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Адреса підприємства"-->
+        'DGHLOC' :
+          Result := DGHLOC(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код міста"-->
+        'DGHZIP' :
+          Result := DGHZIP(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Електронна пошта"-->
+        'DGHEMAIL' :
+          Result := DGHEMAIL(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Номер телефона"-->
+        'DGHTEL' :
+          Result := DGHTEL(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Номер факса"-->
+        'DGHFAX' :
+          Result := DGHFAX(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Назва ДПІ"-->
+        'DGHSTI' :
+          Result := DGHSTI(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 0 знаки після коми"-->
+        'DGDECIMAL0' :
+          Result := DGdecimal0(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 1 знаки після коми"-->
+        'DGDECIMAL1' :
+          Result := DGdecimal1(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 2 знаки після коми"-->
+        'DGDECIMAL2' :
+          Result := DGdecimal2(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 3 знаки після коми"-->
+        'DGDECIMAL3' :
+          Result := DGdecimal3(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 4 знаки після коми"-->
+        'DGDECIMAL4' :
+          Result := DGdecimal4(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 5 знаки після коми"-->
+        'DGDECIMAL5' :
+          Result := DGdecimal5(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "5-10-15 неоподатковуваних мінімумів "-->
+        'DG5_10_15NMG' :
+          Result := DG5_10_15nmg(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 6 знаки після коми"-->
+        'DGDECIMAL6' :
+          Result := DGdecimal6(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код ДРФО фізичної особи допускається числовий код, або № паспорта"-->
+        'DGDRFO' :
+          Result := DGDrfo(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код ЄДРПОУ (тiльки числа)"-->
+        'DGNLONG' :
+          Result := DGNLong(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код ЄДРПОУ (ДРФО підприємця: числа, або № паспорта)"-->
+        'DGLONG' :
+          Result := DGLong(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип " Код HTINJ (Ідентифікаційний код платника згідно з ЄДРПОУ)"-->
+        'DGHTINJ' :
+          Result := DGHTINJ(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код HTINF (Ідентифікаційний номер платника згідно з ДРФО)"-->
+        'DGHTINF' :
+          Result := DGHTINF(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код HTINSD (Реєстраційний (обліковий) номер платника )"-->
+        'DGHTINSD' :
+          Result := DGHTINSD(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код HTINNR (Ідентифікаційний код представництвa нерезидента, що не має статусу юридичної особи)"-->
+        'DGHTINNR' :
+          Result := DGHTINNR(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код HNPDV (Індивідуальний податковий номер платника ПДВ)"-->
+        'DGHNPDV' :
+          Result := DGHNPDV(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Індивідуальний податковий номер платника"-->
+        'DGHIPN' :
+          Result := DGHIPN(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код HDDGVSD (Дата договору про спільну (сумісну) діяльність)"-->
+        'DGHDDGVSD' :
+          Result := DGHDDGVSD(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код HNDGVSD (№ договору про спільну (сумісну) діяльність)"-->
+        'DGHNDGVSD' :
+          Result := DGHNDGVSD(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код HNSPDV (номер свідоцтва про реєстрацію платника ПДВ)"-->
+        'DGHNSPDV' :
+          Result := DGHNSPDV(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код ДРФО директора"-->
+        'DGHKBOS' :
+          Result := DGHKBOS(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "ПІБ директора"-->
+        'DGHBOS' :
+          Result := DGHBOS(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код ДРФО бухгалтера"-->
+        'DGHKBUH' :
+          Result := DGHKBUH(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "ПІБ бухгалтера"-->
+        'DGHBUH' :
+          Result := DGHBUH(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "ПІБ фізичної особи"-->
+        'DGHFO' :
+          Result := DGHFO(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Індивідуальний податковий номер "-->
+        'DGLONG12' :
+          Result := DGLong12(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код ДПІ, використовується для обмеження коду області"-->
+        'DGSTI' :
+          Result := DGsti(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Дата у форматі ддммрррр"-->
+        'DGDATE' :
+          Result := DGDate(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип атрибуту ROWNUM для вказання номеру строки в табличних даних-->
+        'ROWINT' :
+          Result := rowInt(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Опис комплексних типів які використовуються для контролю табличних даних-->
+        //  <!--Загальний тип "Код ЕДРПОУ(ДРФО) в колонці"-->
+        'TINCOLUMN' :
+          Result := TinColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані"-->
+        'DECIMALCOLUMN' :
+          Result := DecimalColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 0 знаки після коми"-->
+        'DECIMAL0COLUMN' :
+          Result := Decimal0Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 1 знаки після коми"-->
+        'DECIMAL1COLUMN' :
+          Result := Decimal1Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 2 знаки після коми"-->
+        'DECIMAL2COLUMN' :
+          Result := Decimal2Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 3 знаки після коми"-->
+        'DECIMAL3COLUMN' :
+          Result := Decimal3Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 4 знаки після коми"-->
+        'DECIMAL4COLUMN' :
+          Result := Decimal4Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 5 знаки після коми"-->
+        'DECIMAL5COLUMN' :
+          Result := Decimal5Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Числові дані 6 знаки після коми"-->
+        'DECIMAL6COLUMN' :
+          Result := Decimal6Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Строкові дані"-->
+        'STRCOLUMN' :
+          Result := StrColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Дані типу Дата ддммрррр"-->
+        'DATECOLUMN' :
+          Result := DateColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Індивідуальний податковий №"-->
+        'INDTAXNUMCOLUMN' :
+          Result := IndTaxNumColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Цілі дані"-->
+        'INTCOLUMN' :
+          Result := IntColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Місяць в колонці"-->
+        'MONTHCOLUMN' :
+          Result := MonthColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Рік в колонці"-->
+        'YEARCOLUMN' :
+          Result := YearColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Рік народження в колонці"-->
+        'YEARNCOLUMN' :
+          Result := YearNColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код зовнішньоекономічної діяльності в колонці"-->
+        'UKTZEDCOLUMN' :
+          Result := UKTZEDColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Число від 10000000 до 99999999 в колонці"-->
+        'I8COLUMN' :
+          Result := I8Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код області в колонці"-->
+        'REGCOLUMN' :
+          Result := RegColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "КВЕД в колонці"-->
+        'DGKVEDCOLUMN' :
+          Result := DGkvedColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Число від 1000 до 999999999999 в колонці"-->
+        'DGLONG12COLUMN' :
+          Result := DGLong12Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Відмітка в колонці"-->
+        'CHKCOLUMN' :
+          Result := ChkColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код транспортного засобу в колонці"-->
+        'TN_ZEDCOLUMN' :
+          Result := Tn_ZedColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Код пільги в колонці"-->
+        'CODPILGCOLUMN' :
+          Result := CodPilgColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Ознака доходу в колонці ДРФО"-->
+        'ODOHCOLUMN' :
+          Result := OdohColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Ознака 1-4 в колонці ДРФО"-->
+        'OSPCOLUMN' :
+          Result := OspColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Ознака 0/1 в колонці ДРФО"-->
+        'OZNCOLUMN' :
+          Result := OznColumn(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "Ознака 1/2 в колонці ДРФО2 (10 колонка)"-->
+        'OZN2COLUMN' :
+          Result := Ozn2Column(InputValue, Row, Col1, Col2, ColName);
+        'XS:STRING' :
+          Result := VarAsStr(InputValue);
+        'XS:INTEGER' :
+          Result := StrToInt64(VarAsStr(InputValue));
+        'XS:NONNEGATIVEINTEGER' :
+          Result := CheckNonNegativeInteger(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 3 розділ 1-->
+        'KODDOCROVPD3_1COLUMN' :
+          Result := KodDocROVPD3_1Column(InputValue, Row, Col1, Col2, ColName);
+        //  <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 3 розділ 2-->
+        'KODDOCROVPD3_2COLUMN' :
+          Result := KodDocROVPD3_2Column(InputValue, Row, Col1, Col2, ColName);
+        // 	<!--Загальний тип "(тип причини) коли Оригінал ПОДАТКОВА НАКЛАДНА залишається у продавця" (HTYPR) версія 5-->
+        'XS:DGPNTYPR' :
+          Result := DGPNtypr(InputValue, Row, Col1, Col2, ColName);
+        // 	<!--Загальний тип "Код ДП_, використовується для обмеження коду області"-->
+        'DGC_DPI' :
+          Result := DGc_dpi(InputValue, Row, Col1, Col2, ColName);
+        // 	<!--Загальний тип "Число від 1 до ... 9999" використовується для вказання кількості, номера рядка-->
+        'DGI4NOM' :
+          Result := DGI4nom(InputValue, Row, Col1, Col2, ColName);
+         //<!--Загальний тип "Число від 1 до ... 9999999" використовується для вказання кількості, номера рядка-->
+        'DGI7NOM' :
+          Result := DGI7nom(InputValue, Row, Col1, Col2, ColName);
+        //	<!--Загальний тип "Признак спеціальної податкової накладної" -->
+        'DGSPECNOM' :
+          Result := DGspecNom(InputValue, Row, Col1, Col2, ColName);
+        'DGHIPN0' :
+        //	<!--Загальний тип "Індивідуальний податковий номер платника з можливістю внесення 0(нуля)"-->
+          Result := DGHIPN0(InputValue, Row, Col1, Col2, ColName);
+        'DGDECIMALZERO' :
+        //	<!--Загальний тип "Числовий 0" 0, 0.0, або 0.00-->
+          Result := DGdecimalZero(InputValue, Row, Col1, Col2, ColName);
+        'DGKODDOCROVPD5_1' :
+        // <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 5 розділ 1-->
+          Result := DGKodDocROVPD5_1(InputValue, Row, Col1, Col2, ColName);
+        'DGKODDOCROVPD5_2' :
+        // <!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 5 розділ 2-->
+          Result := DGKodDocROVPD5_2(InputValue, Row, Col1, Col2, ColName);
+        'DGKODDOCROVPD5_1COLUMN' :
+        //	<!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 5 розділ 1-->
+          Result := DGKodDocROVPD5_1Column(InputValue, Row, Col1, Col2, ColName);
+        'DGKODDOCROVPD5_2COLUMN' :
+        //	<!--Загальний тип "вид(код) документа" Реєстру отриманих та виданих податкових накладних" версія 5 розділ 2-->
+          Result := DGKodDocROVPD5_2Column(InputValue, Row, Col1, Col2, ColName);
+        'DGI2INOM' :
+        //	<!--Загальний тип "Число від 1 до 99" використовується для вказання номера-->
+          Result := DGI2inom(InputValue, Row, Col1, Col2, ColName);
+     end;
+  except
+    if ExceptMessage <> '' then
+      AddTextToLog(Trans(SystemError) + ': ' + GetColumnName(Row, Col1, Col2, ColName) + ' - ' + Trans('Неверный тип данных'));
+    HasErrors := True;
+  end;
+end;
+
+procedure CreateDeclarHead(TIN, C_DOC, C_DOC_SUB, C_DOC_VER, C_DOC_VER_Full, C_REG,
+  C_RAJ, PERIOD_MONTH, PERIOD_YEAR, PERIOD_TYPE : string;
+  D_FILL : DateTime;
+  C_DOC_TYPE, C_DOC_CNT, C_DOC_STAN : Integer;
+  var Doc, Root : OLEVariant; C_STI_ORIG : String = '');
+var
+  Node, pi : OLEVariant;
+begin
+  if IsNil(MyFirm) then
+    begin
+      MyFirm := CreateObject('Справочники.ВашеПредприятие');
+      MyFirm.Select;
+      MyFirm.SelectNext;
+    end;
+  Doc := CreateDOMDocument;
+  pi := Doc.createProcessingInstruction(XmlWord, XmlVersionCode1251);
+  Doc.AppendChild(pi);
+  Root := Doc.CreateElement(DECLAR);
+  Root.SetAttribute(DECLAR_Attr1, DECLAR_Attr1_Value);
+  Root.SetAttribute(DECLAR_Attr2, C_DOC + C_DOC_SUB + C_DOC_VER_Full + XsdFileExt);
+  Doc.AppendChild(Root);
+
+  Node := Doc.CreateElement(DECLARHEAD);
+  Root.AppendChild(Node);
+  if C_STI_ORIG = '' then
+    CreateXMLElements(Doc, Node,
+      ArrayOf(
+      ArrayOf('TIN', GetValueForFunction('DGLong', TIN, False, 0, 0, 0, 'Код ЄДРПОУ платника', False)),
+      ArrayOf('C_DOC', GetValueForFunction('xs:string', C_DOC, False, 0, 0, 0, 'Код документа', False)),
+      ArrayOf('C_DOC_SUB', GetValueForFunction('xs:string', C_DOC_SUB, False, 0, 0, 0, 'Підтип документа', False)),
+      ArrayOf('C_DOC_VER', GetValueForFunction('xs:string', C_DOC_VER, False, 0, 0, 0, 'Номер версії документа', False)),
+      ArrayOf('C_DOC_TYPE', GetValueForFunction('xs:integer', C_DOC_TYPE, False, 0, 0, 0, 'Номер виправного документа', False)),
+      ArrayOf('C_DOC_CNT', GetValueForFunction('xs:integer', C_DOC_CNT, False, 0, 0, 0, 'Номер однотипного документа в періоді', False)),
+      ArrayOf('C_REG', GetValueForFunction('DGsti', C_REG, False, 0, 0, 0, 'Код області', False)),
+      ArrayOf('C_RAJ', GetValueForFunction('DGsti', C_RAJ, False, 0, 0, 0, 'Код району', False)),
+      ArrayOf('PERIOD_MONTH', GetValueForFunction('DGMonth', PERIOD_MONTH, False, 0, 0, 0, 'Звітний місяць', False)),
+      ArrayOf('PERIOD_TYPE', GetValueForFunction('DGPType', PERIOD_TYPE, False, 0, 0, 0, 'Тип періоду', False)),
+      ArrayOf('PERIOD_YEAR', GetValueForFunction('DGYear', PERIOD_YEAR, False, 0, 0, 0, 'Звітний рік', False)),
+      ArrayOf('C_DOC_STAN', GetValueForFunction('DGSTAN', C_DOC_STAN, False, 0, 0, 0, 'Стан документу', False)),
+      ArrayOf('D_FILL', GetValueForFunction('DGDate', D_FILL, False, 0, 0, 0, 'Дата заповнення', False)),
+      ArrayOf('SOFTWARE', GetValueForFunction('xs:string', SOFTWARE, False, 0, 0, 0, 'Програмне забезпечення'))))
+  else
+    CreateXMLElements(Doc, Node,
+      ArrayOf(
+      ArrayOf('TIN', GetValueForFunction('DGLong', TIN, False, 0, 0, 0, 'Код ЄДРПОУ платника', False)),
+      ArrayOf('C_DOC', GetValueForFunction('xs:string', C_DOC, False, 0, 0, 0, 'Код документа', False)),
+      ArrayOf('C_DOC_SUB', GetValueForFunction('xs:string', C_DOC_SUB, False, 0, 0, 0, 'Підтип документа', False)),
+      ArrayOf('C_DOC_VER', GetValueForFunction('xs:string', C_DOC_VER, False, 0, 0, 0, 'Номер версії документа', False)),
+      ArrayOf('C_DOC_TYPE', GetValueForFunction('xs:integer', C_DOC_TYPE, False, 0, 0, 0, 'Номер виправного документа', False)),
+      ArrayOf('C_DOC_CNT', GetValueForFunction('xs:integer', C_DOC_CNT, False, 0, 0, 0, 'Номер однотипного документа в періоді', False)),
+      ArrayOf('C_REG', GetValueForFunction('DGsti', C_REG, False, 0, 0, 0, 'Код області', False)),
+      ArrayOf('C_RAJ', GetValueForFunction('DGsti', C_RAJ, False, 0, 0, 0, 'Код району', False)),
+      ArrayOf('PERIOD_MONTH', GetValueForFunction('DGMonth', PERIOD_MONTH, False, 0, 0, 0, 'Звітний місяць', False)),
+      ArrayOf('PERIOD_TYPE', GetValueForFunction('DGPType', PERIOD_TYPE, False, 0, 0, 0, 'Тип періоду', False)),
+      ArrayOf('PERIOD_YEAR', GetValueForFunction('DGYear', PERIOD_YEAR, False, 0, 0, 0, 'Звітний рік', False)),
+      ArrayOf('C_STI_ORIG', GetValueForFunction('DGc_dpi', C_STI_ORIG, False, 0, 0, 0, 'Код області для ДПІ', False)),
+      ArrayOf('C_DOC_STAN', GetValueForFunction('DGSTAN', C_DOC_STAN, False, 0, 0, 0, 'Стан документу', False)),
+      ArrayOf('LINKED_DOCS', GetValueForFunction('xs:string', '', False, 0, 0, 0, 'LINKED_DOCS')),
+      ArrayOf('D_FILL', GetValueForFunction('DGDate', D_FILL, False, 0, 0, 0, 'Дата заповнення', False)),
+      ArrayOf('SOFTWARE', GetValueForFunction('xs:string', SOFTWARE, False, 0, 0, 0, 'Програмне забезпечення'))))
+end;
+
+function SaveDeclarDoc(Doc : OLEVariant; C_REG, C_RAJ, TIN, C_DOC, C_DOC_SUB, C_DOC_VER_Full,
+  PERIOD_MONTH, PERIOD_YEAR : string; C_DOC_CNT, C_DOC_STAN, C_DOC_TYPE : Integer; PERIOD_TYPE : String = '') : string;
+var
+  XmlFileName, XsdFileName, StrC_DOC_CNT, StrC_DOC_TYPE, StrC_DOC_STAN, Reason, Line : string;
+begin
+  StrC_DOC_CNT := IntToStr(C_DOC_CNT);
+  StrC_DOC_STAN := IntToStr(C_DOC_STAN);
+  StrC_DOC_TYPE := IntToStr(C_DOC_TYPE);
+  AddLeadingSymbols(LeadingNumberSymbol, 10, TIN);
+  AddLeadingSymbols(LeadingNumberSymbol, 2, C_REG);
+  AddLeadingSymbols(LeadingNumberSymbol, 2, C_RAJ);
+  AddLeadingSymbols(LeadingNumberSymbol, 7, StrC_DOC_CNT);
+  AddLeadingSymbols(LeadingNumberSymbol, 2, StrC_DOC_TYPE);
+  AddLeadingSymbols(LeadingNumberSymbol, 2, PERIOD_MONTH);
+  XmlFileName := MyFirm.ПутьКПрограмме + DirName + C_REG + C_RAJ + TIN + C_DOC +
+                 C_DOC_SUB + C_DOC_VER_Full + StrC_DOC_STAN + StrC_DOC_TYPE + StrC_DOC_CNT +
+                 PERIOD_TYPE + PERIOD_MONTH + PERIOD_YEAR + C_REG + C_RAJ + XmlFileExt;
+  XsdFileName := MyFirm.ПутьКПрограмме + ShemaDirName + C_DOC + C_DOC_SUB + C_DOC_VER_Full + XsdFileExt;
+  Doc.save(XmlFileName);
+  if not ValidateXMLFile(XmlFileName, XsdFileName, Reason, Line) then
+    begin
+      AddTextToLog(Trans(msgHeadErrorSchemaCheck) + XmlFileName + #13#10 +
+        Trans(msgTextErrorSchemaCheck) + Reason + #13#10 +
+        Trans(msgLineNumberErrorSchemaCheck) + Line + #13#10);
+      HasErrors := True;
+    end;
+  Result := XmlFileName;
+end;
+
+procedure SaveLogFile(FileName, TIN, C_DOC, C_DOC_SUB, C_DOC_VER, C_DOC_VER_Full, C_REG, C_RAJ,
+  PERIOD_MONTH, PERIOD_YEAR, PERIOD_TYPE, NAME : string;
+  D_FILL : DateTime; C_DOC_TYPE, C_DOC_CNT, C_DOC_STAN : Integer);
+var
+  Doc, pi, Node_DocList, Node_DocSet, Nodes_Doc, Nodes_PERIOD, Node_DOC, Node_C_DOC, Node_C_DOC_SUB,
+    Node_C_DOC_VER, Node_C_DOC_TYPE, Node_C_DOC_CNT, Node_C_DOC_STAN,
+    Node_PERIOD, Node_PERIOD_MONTH, Node_PERIOD_YEAR, Node_PERIOD_TYPE, Node_D_FILL, Node_FILENAME : OLEVariant;
+  Nodes_Doc_Length, Nodes_PERIOD_Length, i, j : Integer;
+  FindRecord : Boolean;
+  LogFileName : string;
+begin
+  LogFileName := MyFirm.ПутьКПрограмме + LogFileDirName + MyFirm.ЗКПО + '.log';
+  if FileExists(LogFileName) then
+    Doc := LoadXMLFromFile(LogFileName)
+  else
+    begin
+      Doc := CreateDOMDocument;
+      pi := Doc.createProcessingInstruction(XmlWord, XmlVersionCode1251);
+      Doc.AppendChild(pi);
+      Node_DocList := Doc.CreateElement('DocList');
+      Doc.AppendChild(Node_DocList);
+      Node_DocSet := Doc.CreateElement('DocSet');
+      Node_DocList.AppendChild(Node_DocSet);
+      Doc.save(LogFileName);
+      Doc := LoadXMLFromFile(LogFileName)
+    end;
+  Node_DocList := Doc.SelectSingleNode('DocList');
+  Node_DocSet := Node_DocList.SelectSingleNode('DocSet');
+  Nodes_Doc := Node_DocSet.SelectNodes('*');
+  Nodes_Doc_Length := Nodes_Doc.Length;
+  FindRecord := False;
+  for i := 0 to Nodes_Doc_Length - 1 do
+    begin
+      Node_DOC := Nodes_Doc.Item[i];
+      Node_C_DOC := Node_DOC.SelectSingleNode('C_DOC');
+      Node_C_DOC_SUB := Node_DOC.SelectSingleNode('C_DOC_SUB');
+      if (Node_C_DOC.Text = C_DOC) and (Node_C_DOC_SUB.Text = C_DOC_SUB) then
+        begin
+          Nodes_PERIOD := Node_DOC.SelectNodes('PERIOD');
+          Nodes_PERIOD_Length := Nodes_PERIOD.Length;
+          for j := 0 to Nodes_PERIOD_Length - 1 do
+            begin
+              Node_PERIOD := Nodes_PERIOD.Item[j];
+              Node_PERIOD_MONTH := Node_PERIOD.SelectSingleNode('PERIOD_MONTH');
+              Node_PERIOD_YEAR := Node_PERIOD.SelectSingleNode('PERIOD_YEAR');
+              Node_PERIOD_TYPE := Node_PERIOD.SelectSingleNode('PERIOD_TYPE');
+              if (Node_PERIOD_MONTH.Text = PERIOD_MONTH) and (Node_PERIOD_YEAR.Text = PERIOD_YEAR) and
+                (Node_PERIOD_TYPE.Text = PERIOD_TYPE) then
+                begin
+                  FindRecord := True;
+                  break;
+                end
+            end;
+          if not FindRecord then
+            begin
+              Node_PERIOD := Doc.CreateElement('PERIOD');
+              Node_DOC.AppendChild(Node_PERIOD);
+              CreateXMLElements(Doc, Node_PERIOD,
+                ArrayOf(
+                ArrayOf('PERIOD_MONTH', PERIOD_MONTH),
+                ArrayOf('PERIOD_YEAR', PERIOD_YEAR),
+                ArrayOf('PERIOD_TYPE', PERIOD_TYPE)));
+              FindRecord := True;
+              break;
+            end;
+        end
+      else
+        continue;
+      if FindRecord then
+        break;
+    end;
+  if not FindRecord then
+    begin
+      Node_DOC := Doc.CreateElement('DOC');
+      Node_DocSet.AppendChild(Node_DOC);
+      CreateXMLElements(Doc, Node_DOC,
+        ArrayOf(
+        ArrayOf('C_DOC', C_DOC), //Код документа
+        ArrayOf('C_DOC_SUB', C_DOC_SUB), //Подтип документа
+        ArrayOf('NAME', NAME)));
+      Node_PERIOD := Doc.CreateElement('PERIOD');
+      Node_DOC.AppendChild(Node_PERIOD);
+      CreateXMLElements(Doc, Node_PERIOD,
+        ArrayOf(
+        ArrayOf('PERIOD_MONTH', PERIOD_MONTH), //Отчетный месяц
+        ArrayOf('PERIOD_YEAR', PERIOD_YEAR), //Отчетный год
+        ArrayOf('PERIOD_TYPE', PERIOD_TYPE))); //Тип периода
+    end;
+
+  Nodes_Doc := Node_DocList.SelectNodes('DOC');
+  Nodes_Doc_Length := Nodes_Doc.Length;
+  FindRecord := False;
+  for i := 0 to Nodes_Doc_Length - 1 do
+    begin
+      Node_DOC := Nodes_Doc.Item[i];
+      Node_C_DOC := Node_DOC.SelectSingleNode('C_DOC');
+      Node_C_DOC_SUB := Node_DOC.SelectSingleNode('C_DOC_SUB');
+      Node_C_DOC_VER := Node_DOC.SelectSingleNode('C_DOC_VER');
+      Node_C_DOC_TYPE := Node_DOC.SelectSingleNode('C_DOC_TYPE');
+      Node_C_DOC_CNT := Node_DOC.SelectSingleNode('C_DOC_CNT');
+      Node_C_DOC_STAN := Node_DOC.SelectSingleNode('C_DOC_STAN');
+      Node_PERIOD_MONTH := Node_DOC.SelectSingleNode('PERIOD_MONTH');
+      Node_PERIOD_YEAR := Node_DOC.SelectSingleNode('PERIOD_YEAR');
+      Node_PERIOD_TYPE := Node_DOC.SelectSingleNode('PERIOD_TYPE');
+      if (Node_C_DOC.Text = C_DOC) and (Node_C_DOC_SUB.Text = C_DOC_SUB) and
+        (Node_C_DOC_VER.Text = C_DOC_VER) and (Node_C_DOC_TYPE.Text = C_DOC_TYPE) and
+        (Node_C_DOC_CNT.Text = C_DOC_CNT) and (Node_PERIOD_MONTH.Text = PERIOD_MONTH) and
+        (Node_PERIOD_YEAR.Text = PERIOD_YEAR) and (Node_PERIOD_TYPE.Text = PERIOD_TYPE) and
+        (Node_C_DOC_STAN.Text = C_DOC_STAN) then
+        begin
+          Node_D_FILL := Node_DOC.SelectSingleNode('D_FILL');
+          Node_D_FILL.Text := FormatDateTime('ddmmyyyy', D_FILL);
+          Node_FILENAME := Node_DOC.SelectSingleNode('FILENAME');
+          Node_FILENAME.Text := FileName;
+          FindRecord := True;
+          break;
+        end
+    end;
+  if not FindRecord then
+    begin
+      Node_DOC := Doc.CreateElement('DOC');
+      Node_DocList.AppendChild(Node_DOC);
+      CreateXMLElements(Doc, Node_DOC,
+        ArrayOf(
+        ArrayOf('C_DOC', C_DOC), //Код документа
+        ArrayOf('C_DOC_SUB', C_DOC_SUB), //Подтип документа
+        ArrayOf('C_DOC_VER', C_DOC_VER), //Номер версии документа
+        ArrayOf('C_DOC_TYPE', C_DOC_TYPE), //Номер исправляющего документа
+        ArrayOf('C_DOC_CNT', C_DOC_CNT), //Номер однотипного документа в периоде
+        ArrayOf('C_DOC_STAN', C_DOC_CNT), //Состояние документа
+        ArrayOf('PERIOD_MONTH', PERIOD_MONTH), //Отчетный месяц
+        ArrayOf('PERIOD_YEAR', PERIOD_YEAR), //Отчетный год
+        ArrayOf('PERIOD_TYPE', PERIOD_TYPE), //Тип периода
+        ArrayOf('D_FILL', FormatDateTime('ddmmyyyy', D_FILL)), //Дата заполнения
+        ArrayOf('FILENAME', FileName)));
+    end;
+  Doc.save(LogFileName)
+end;
+
+procedure SaveXGridTableToXML(xgCurrent : TO4Xgrid; FirstLine : Integer;
+  TablePrefix, TotalText, ExclusionText : string;
+  Doc, Node_DECLARBODY : OLEVariant;
+  Columns : Variant; UseCalcCell : Boolean;
+  var RowCount : Integer; DoTotal : Boolean = True;
+  FirstColumnsCount : Integer = 2; TotalRowNumber : integer = 1);
+var
+  i, j, k, ColNumber, ColXGridNumber, RowCounter : Integer;
+  FieldName, TotalRowText, TmpText : string;
+  ParametersArray, FieldValue, TmpColumn : Variant;
+begin
+  i := FirstLine;
+  RowCount := 0;
+  if UseCalcCell then
+    TotalRowText := xgCurrent.CalcCell(i + 1, 1).Value
+  else
+    TotalRowText := xgCurrent.Cell(i + 1, 1).Value;
+  while StrTrim(TotalRowText) <> StrTrim(TotalText) do
+    begin
+      inc(RowCount);
+      if UseCalcCell then
+        TotalRowText := xgCurrent.CalcCell(i + RowCount + 1, 1).Value
+      else
+        TotalRowText := xgCurrent.Cell(i + RowCount + 1, 1).Value
+    end;
+  for k := 0 to ArrayHigh(Columns) do
+    begin
+      TmpColumn := Columns[k];
+      ColNumber := k + FirstColumnsCount;
+      if ArrayHigh(TmpColumn) > 0 then
+        FieldName := TablePrefix + 'RXXXX' + TmpColumn[1];
+      if ArrayHigh(TmpColumn) > 2 then
+        ColXGridNumber := TmpColumn[3]
+      else
+        ColXGridNumber := ColNumber;
+      RowCounter := 0;
+      for j := 1 to RowCount do
+        begin
+          if UseCalcCell then
+            TmpText := VarAsStr(xgCurrent.CalcCell(i + j, 1).Value)
+          else
+            TmpText := VarAsStr(xgCurrent.Cell(i + j, 1).Value);
+          if TmpText <> ExclusionText then
+            begin
+              inc(RowCounter);
+              FieldValue := '';
+              if UseCalcCell then
+                TmpText := VarAsStr(xgCurrent.CalcCell(i + j, ColXGridNumber).Value)
+              else
+                TmpText := VarAsStr(xgCurrent.Cell(i + j, ColXGridNumber).Value);
+              //if TmpText = '' then
+              //  continue;
+              if UseCalcCell then
+                FieldValue := GetValueForFunction(TmpColumn[0], xgCurrent.CalcCell(i + j, ColXGridNumber).Value,
+                  False, i + j, ColXGridNumber)
+              else
+                FieldValue := GetValueForFunction(TmpColumn[0], xgCurrent.Cell(i + j, ColXGridNumber).Value,
+                  False, i + j, ColXGridNumber);
+              ParametersArray := ArrayOf(ArrayOf('ROWNUM', GetValueForFunction('rowInt', RowCounter,
+                False, i + j, 1)));
+              CreateXMLElements(Doc, Node_DECLARBODY,
+                ArrayOf(
+                ArrayOf(FieldName, FieldValue, ParametersArray)));
+            end;
+        end;
+    end;
+  if DoTotal then
+    for k := 0 to ArrayHigh(Columns) do
+      begin
+        TmpColumn := Columns[k];
+        ColNumber := k + FirstColumnsCount;
+        if ArrayHigh(TmpColumn) > 0 then
+          FieldName := TablePrefix + 'R0' + VarAsStr(TotalRowNumber) + TmpColumn[1];
+        if ArrayHigh(TmpColumn) > 2 then
+          ColXGridNumber := TmpColumn[3]
+        else
+          ColXGridNumber := ColNumber;
+        if VarAsBool(TmpColumn[2]) then
+          begin
+            FieldValue := '';
+            if UseCalcCell then
+              FieldValue := GetValueForFunction(TmpColumn[0], xgCurrent.CalcCell(i + j, ColXGridNumber).Value,
+                False, i + j, ColXGridNumber)
+            else
+              FieldValue := GetValueForFunction(TmpColumn[0], xgCurrent.Cell(i + j, ColXGridNumber).Value,
+                False, i + j, ColXGridNumber);
+            CreateXMLElements(Doc, Node_DECLARBODY, ArrayOf(
+              ArrayOf(FieldName, FieldValue)));
+          end;
+      end;
+end;
+
+procedure SaveDocTableToXML(TblContents : ICValueTable; Doc, Node_DECLARBODY : OLEVariant;
+  Columns : Variant; var RowCount : Integer; DoTotal : Boolean = True);
+var
+  k, RowCounter : Integer;
+  FieldName : string;
+  ParametersArray, FieldValue, TmpColumn : Variant;
+begin
+  RowCount := TblContents.LineCount;
+
+  for k := 0 to ArrayHigh(Columns) do
+    begin
+      TmpColumn := Columns[k];
+
+      FieldName := 'RXXXXG' + TmpColumn[2];
+      RowCounter := 0;
+      TblContents.Select;
+      while TblContents.SelectNext do
+        begin
+          inc(RowCounter);
+          FieldValue := '';
+          FieldValue := GetValueForFunction(TmpColumn[0], TblContents.DefValue[TmpColumn[1]],
+            False, RowCounter, 0, 0, TmpColumn[5]);
+          ParametersArray := ArrayOf(ArrayOf('ROWNUM', GetValueForFunction('rowInt', RowCounter,
+            False, RowCounter, 0, 0, TmpColumn[5])));
+          CreateXMLElements(Doc, Node_DECLARBODY,
+            ArrayOf(ArrayOf(FieldName, FieldValue, ParametersArray)));
+        end;
+    end;
+  if DoTotal then
+    for k := 0 to ArrayHigh(Columns) do
+      begin
+        TmpColumn := Columns[k];
+        if VarAsBool(TmpColumn[3]) then
+          begin
+            FieldName := 'R01G' + TmpColumn[2];
+            FieldValue := '';
+            FieldValue := GetValueForFunction(TmpColumn[4], TblContents.Total(TmpColumn[1]),
+              False, 0, 0, 0, Trans(AllCaption) + ' ' + TmpColumn[5]);
+            CreateXMLElements(Doc, Node_DECLARBODY, ArrayOf(
+              ArrayOf(FieldName, FieldValue)));
+          end;
+      end;
+end;
+
+function CalcGroupSellValue(xgMain : TO4XGrid; Line, FirstColumn, CellCount, Increment : Integer) : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 0 to CellCount - 1 do
+    Result := Result + VarAsStr(xgMain.CalcCell(Line, FirstColumn + i * Increment).Value)
+end;
+
+function GroupSellValue(xgMain : TO4XGrid; Line, FirstColumn, CellCount, Increment : Integer) : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 0 to CellCount - 1 do
+    Result := Result + VarAsStr(xgMain.Cell(Line, FirstColumn + i * Increment).Value)
+end;
+
+function GetMyFirmTypeChar(TIN : string) : string;
+begin
+  if StrLength(TIN) > 8 then
+    Result := 'F'
+  else
+    Result := 'J'
+end;
+
+end.

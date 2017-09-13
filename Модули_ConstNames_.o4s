@@ -1,0 +1,160 @@
+interface
+
+uses System;
+
+const
+  //значения параметров пользователя
+  ShowCaptions = 'ShowCaptions';
+  CaptionsList = 'CaptionsList';
+  Flat = 'Flat';
+  Transparent = 'Transparent';
+  GridReadOnly = 'GridReadOnly';
+  CountAck = 'CountAck';
+  FixAck = 'FixAck';
+  AOSet = 'AOSet';
+  EnabledOut = 'EnabledOut';
+  DelayTime = 'DelayTime';
+  RefreshOnEnter = 'RefreshOnEnter';
+  NoFirstStart = 'NoFirstStart';
+  ImportEnabled = 'ImportEnabled';
+  DirectPrint = 'DirectPrint';
+  DelAck = 'DelAck';
+  ShowCodeUnitName = 'ShowCodeUnitName';
+  DatesForReport = 'DatesForReport';
+  StateOnOpen = 'StateOnOpen';
+  StateOnOpenInplace = 'StateOnOpenInplace';
+  FixPays = 'FixPays';
+  CheckZero = 'CheckZero';
+
+  NoPayNormOpt = 'NoPayNorm';
+  NoPaySelOpt = 'NoPaySel';
+  BlZeroOpt = 'BlZero';
+  BlFZeroOpt = 'BlFZero';
+  BlZeroSelOpt = 'BlZeroSel';
+  BlFZeroSelOpt = 'BlFZeroSel';
+
+  RefreshOpt = 'Refresh';
+  RefCountOpt = 'RefCount';
+  FixPaysOnCliBankOpt = 'FixPaysOnCliBankOpt'; //фиксировать платежки в системе клиент-банк при создании
+  OnlyUridOnCliBankOpt = 'OnlyUridOnCliBankOpt'; //автоматически заносить нового партнера в справ. ЮрПартнеры в системе клиент-банк при создании
+  Cli_Bank_Parthers_SelectFromDictsOpt = 'Cli_Bank_Parthers_SelectFromDictsOpt'; //выбирать партнера в системе клиент-банк из справочников
+  Cli_Bank_Parthers_SelectFromDictsForNewOpt = 'Cli_Bank_Parthers_SelectFromDictsForNewOpt'; //выбирать партнера в системе клиент-банк из справочников только в случае нового
+  // Идентификаторы операций движения товаров MotionID
+  midIncome = 1; // Приход
+  midOutcome = 2; // Расход
+  midInternalIncome = 3; // Внутренний приход
+  midInternalOutcome = 4; // Внутренний расход
+  midRetBuyer = 5; // Возврат от покупателя
+  midRetSupplier = 6; // Возврат поставщику
+  midRetRealBuyer = 7; // Возврат от реализатора
+  midRetRealSupplier = 8; // Возврат поставщику на реализацию
+  midInputRest = 9; // Ввод остатков
+  midDiscard = 10; // Списание
+  midRevision = 11; // Ревизия
+
+  midComIncome = 13; // Приход на комиссию
+  midComOutcome = 14; // Отпуск на комиссию
+  midRetComBuyer = 15; // Возврат от комиссионера
+  midRetComSupplier = 16; // Возврат комитенту
+  midDsdComSupplier = 17; // Списание с комитента
+  midDsdComBuyer = 18; // Списание с комиссионера
+  midComInputRest = 19; // Ввод остатков по комиссии
+  midComRevision = 21; // Инвентаризация по комиссии
+
+  midRealPriceChange = 22; // Изменение цен на реализаторе
+  midComPriceChange = 24; // Изменение цен на комиссионере
+  midPriceChange = 25; // Изменение цен
+
+  midOutcomeFactory = 30; // Отпуск в производство
+  midRetFactory = 31; // Возврат из производства
+  midBrakFactory = 32; // Брак в производстве
+  midReadyFactory = 33; // Прием готовой продукции
+  midDiscardFactory = 34; // Списание из производства
+  midRevisionFactory = 40; // Ревизия в производстве
+  midBreakFactory = 35; // Разборка
+  midInputRestFactory = 36; // Ввод остатков
+
+  midDogovor = 37; // Договор бартера
+  midInOutBarter = 38; // Получено/Отгружено по договору
+  midAddDogovor = 39; // Дополнение к договору;
+
+  midDiscardB = 40; // Списание бой
+  midDiscardN = 41; // Списание на собственные нужды
+  midDiscardD = 42; // Списание на непредвиденные расходы
+  midRetBuyerToReal = 43; // Возврат от покупателей реализатору
+  midDiscardBank = 44; // Списание оплата по банку
+
+  //первое событие 
+  UseFirstEvent = 'UseFirstEvent';
+  TaxDocRule = 'TaxDocRule';
+  AutoCreateTaxDoc = 'AutoCreateTaxDoc';
+  AskAutoCreateTaxDoc = 'AskAutoCreateTaxDoc';
+  AutoFixTaxDoc = 'AutoFixTaxDoc';
+  //первое событие
+  //метод расчета суммы по документу (от цены без НДС или от цены с НДС)
+  CalcSumRule = 'CalcSumRule';
+
+function msgProceed : string;
+function lblTotal : string;
+function CheckAboutOrder : string;
+function CheckAboutOverflow : string;
+function CheckAboutOverSumZeroLess : string;
+function RestsView : string;
+function DocsView : string;
+function DocsGroup : string;
+function CardsView : string;
+function GoodsView : string;
+
+implementation
+
+function msgProceed : string;
+begin
+  Result := Trans('Обработано ');
+end;
+
+function lblTotal : string;
+begin
+  Result := Trans('Всего');
+end;
+
+function CheckAboutOrder : string;
+begin
+  Result := Trans('Проверка минимального количества по счету');
+end;
+
+function CheckAboutOverflow : string;
+begin
+  Result := Trans('Проверка на превышение наличия товаров на складах');
+end;
+
+function CheckAboutOverSumZeroLess : string;
+begin
+  Result := Trans('Проверка на отрицательную наценку');
+end;
+
+function RestsView : string;
+begin
+  Result := Trans('Просмотр остатков');
+end;
+
+function DocsView : string;
+begin
+  Result := Trans('Просмотр документов ');
+end;
+
+function DocsGroup : string;
+begin
+  Result := Trans('Группировка документов по типу');
+end;
+
+function CardsView : string;
+begin
+  Result := Trans('Просмотр аналитических карточек');
+end;
+
+function GoodsView : string;
+begin
+  Result := Trans('Выбор товаров');
+end;
+
+end.

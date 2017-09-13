@@ -1,0 +1,379 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, –абота—ѕеременными,
+  –абота—“аблицами«наченийCL, ѕользователи, Ќумераци€ƒокументов;
+
+implementation
+ 
+Var
+ CourseTbl, GoodsTbl, TblGoods, PriceTbl : ISValueTable;
+ DocDate : DateTime;
+ AllowRoundPrice : Boolean;
+
+procedure SetFldToTblPartGood(TblPartGood : ISValueTable);
+begin
+  TblPartGood.Close;
+  TblPartGood.AddColumn(' од',vtcString,20);
+  TblPartGood.AddColumn('≈д»зм',vtcLink,0);
+  TblPartGood.AddColumn('“овар', lftLink, 0);
+  TblPartGood.AddColumn('—клад', lftLink, 0);
+  TblPartGood.AddColumn('ѕартнер', lftLink, 0);
+  TblPartGood.AddColumn('ѕарти€', lftFloat, 0);
+  TblPartGood.AddColumn('¬алюта', lftLink, 0);
+  TblPartGood.AddColumn(' омисси€', lftInteger, 0);
+  TblPartGood.AddColumn('ƒатаѕр', lftDate, 0);
+  TblPartGood.AddColumn('Document',vtcLink,0);
+  TblPartGood.AddColumn('ƒатаƒокумента',lftDate,0);
+  TblPartGood.AddColumn('Ќомерƒокумента',vtcString,20); 
+  TblPartGood.AddColumn('Ќазваниеƒокумента',vtcString,64);
+  TblPartGood.AddColumn('¬алютаќтп',vtcLink,0);
+  TblPartGood.AddColumn('“ип', lftInteger, 0);
+  AddFFtColumnsList(TblPartGood, ' олќбщ;¬х÷енаЅезЌƒ—;¬х÷ена¬ал;—ум¬х;—ум¬ал¬х; олќбщѕартии');
+  AddFFtColumnsList(TblPartGood, '÷ена;—умќтп;÷ена¬¬алюте;—ум¬алќтп');
+  TblPartGood.Open;
+end;
+
+procedure GetGoodWithPart(TblPartGood:ISValueTable; Source: ISDictionary); server;
+var
+  AccsGoods, AccsPartGood : ISAccs;
+begin
+  SetFldToTblPartGood(TblPartGood);
+  AccsGoods := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccsGoods.ClearFieldFilters();
+  AccsGoods.ClearFieldBuffers();
+  AccsGoods.SetFieldFilter('“овар',Source);
+  AccsGoods.SetFieldFilter('“ип',midOutcome);
+  AccsGoods.AppendMotionToValueTable(0,400000,amtOutcome,'“овар;—клад;ѕарти€;—умќтп;—ум¬алќтп; олќбщ;¬алюта=¬алютаќтп;Document;“ип', -1,TblPartGood);
+  TblPartGood.DoCalculation('÷ена','—умќтп/ олќбщ');
+  TblPartGood.DoCalculation('÷ена¬¬алюте','—ум¬алќтп/ олќбщ');
+  AccsPartGood.AssignFieldsByDimIDTo('ѕарти€', 'ѕартнер;¬х÷енаЅезЌƒ—;¬алюта;¬х÷ена¬ал;ƒатаѕр',TblPartGood);
+  TblPartGood.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм;ѕартнер=Document.ѕартнер;ƒатаƒокумента=Document.ƒатаƒокумента;Ќомерƒокумента=Document.Ќомерƒокумента');
+end;  
+
+procedure GetGoodRetPart(TblPartGood, PartionStoreRestTbl:ISValueTable; Source: ISDictionary; OnDate:DateTime); server;
+var
+  AccsGoods, AccsPartGood : ISAccs;
+begin
+  SetFldToTblPartGood(TblPartGood);
+  AccsGoods := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccsGoods.ClearFieldFilters();
+  AccsGoods.ClearFieldBuffers();
+  AccsGoods.SetFieldFilter('“овар',Source);
+  AccsGoods.SaveGroupRestToValueTable(OnDate,'ѕарти€;—клад; олќбщ',PartionStoreRestTbl);
+  AccsGoods.SetFieldFilter('“ип',midIncome);
+  AccsGoods.AppendMotionToValueTable(0,OnDate,amtIncome,'“овар;—клад;ѕарти€; олќбщ;Document;“ип', -1,TblPartGood);
+  AccsPartGood.AssignFieldsByDimIDTo('ѕарти€', 'ѕартнер;¬х÷енаЅезЌƒ—=÷ена;¬алюта;¬х÷ена¬ал',TblPartGood);
+  TblPartGood.Select;
+  While TblPartGood.SelectNext do
+    begin
+      AccsPartGood.CalcRestByDimID(OnDate,TblPartGood.ѕарти€);
+      TblPartGood.Edit;
+      TblPartGood. олќбщѕартии := AccsPartGood. олќбщ;
+      TblPartGood.Post;
+    end;
+  TblPartGood.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм;ƒатаƒокумента=Document.ƒатаƒокумента;Ќомерƒокумента=Document.Ќомерƒокумента');
+  TblPartGood.DoGetMeanNames('Document','Ќазваниеƒокумента');
+end;
+
+function —формироватьѕлатежѕоƒокументу(DocOwner : Variant) : Decimal; server;
+var
+  Pays, Nakls, Orders : ISJournal;
+  V : Variant;
+  “амѕроц—уммаƒекл, ѕошл—уммаƒекл, —уммаЌƒ—ƒекл, ќпл“ам : Decimal;
+  AccsPartRealiz : ISAccs;
+begin
+  if (DocOwner.ќтпуск = 1) then
+    Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп')
+  else
+    Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+  Pays.UseMaster(DocOwner);
+  Pays.SetDocMultiStateRange('1;2');
+  Result := DocOwner.—умма¬¬алюте - Pays.Total('—умма¬¬алюте');
+end;
+          
+
+procedure GetPriceTbl(Doc : ISDocuments; var Accept:boolean);
+var 
+    Count, Total, RndPrice : integer;
+    Constants: IS4VPAConst;
+    PricesType: String;
+    UsePrice1, UsePrice2, UsePrice3 : boolean;        
+    NatCurrency, Currency, GoodDic : ISDictionary;
+begin
+  Accept := false;
+  Currency := CreateObject('—правочники.¬алюты');
+  CourseTbl := CreateObject('“аблица«начений');
+  GoodDic := CreateObject('—правочники.“овары');
+  NatCurrency := CreateObject('—правочники.¬алюты');
+  NatCurrency := GetNatCurrency(NatCurrency);
+
+
+ Constants := GetConstants;
+  PricesType := Constants.“ипы÷ен;
+  if StrPos('0',PricesType)>0 then
+    UsePrice1 := True
+  else
+    UsePrice1 := False;
+
+  if StrPos('1',PricesType)>0 then
+    UsePrice2 := True
+  else
+    UsePrice2 := False;
+
+  if StrPos('2',PricesType)>0 then
+    UsePrice3 := True
+  else
+    UsePrice3 := False;
+
+
+ RndPrice := VarAsInt(Constants.ќкругление÷ен√рн);
+ FillCurrencyCoursesTbl(Currency, CourseTbl, DocDate);
+ GoodsTbl.Select;
+ Count := 0;
+ Total := GoodsTbl.LineCount;
+ CourseTbl.SortBy('¬алюта');
+
+ TblGoods.SortBy('“овар');
+ While GoodsTbl.SelectNext do
+   if GoodDic.Find(GoodsTbl.@“овар) then
+     begin
+       if UsePrice1 then
+         begin
+           if not TblGoods.Find(GoodDic) then
+             begin
+               TblGoods.Append;
+               TblGoods.Ќом—троки := IntToStr(GoodsTbl.Ќом—троки);
+               TblGoods.ƒл€»мейдж := False;
+               TblGoods.“овар := GoodDic;
+               TblGoods.Post;
+             end;
+
+           PriceTbl.Append;
+           PriceTbl.AssignFields('¬алюта—трокиƒок=¬алюта“овара;¬х÷ена—трокиƒок=÷ена¬¬алюте',GoodsTbl);
+           PriceTbl.“овар := GoodDic;
+           PriceTbl.“ип÷ены := '÷ена';
+           if VarAsBool(GoodDic.@¬алюта÷ена.IsFocused) then
+             PriceTbl.¬алюта := GoodDic.@¬алюта÷ена
+           else
+             begin
+               if IsObjFocused(Constants.¬алюта÷ена”молч) then
+                 PriceTbl.¬алюта := Constants.¬алюта÷ена”молч
+               else
+               if Currency.FindByField('јктивность', true, false) then
+                 PriceTbl.¬алюта := Currency;
+             end;
+           PriceTbl.AssignFields('÷ена—пр=÷ена;ѕрЌац=ѕрЌац÷ена',GoodDic);
+           if CourseTbl.Locate('¬алюта',PriceTbl.@¬алюта) then
+             begin
+               PriceTbl. урс := CourseTbl. урс;
+               if IsObjEQ(PriceTbl.@¬алюта—трокиƒок, PriceTbl.@¬алюта, false)  then
+                 PriceTbl.¬х÷ена := GoodsTbl.÷ена¬¬алюте
+               else
+               if CourseTbl. урс>0 then
+                 PriceTbl.¬х÷ена := GoodsTbl.÷ена / CourseTbl. урс
+               else
+                PriceTbl.¬х÷ена := 0;
+             end
+           else
+             PriceTbl. урс := 0;
+
+           if not IsNull(PriceTbl.ѕрЌац) then
+             begin
+               if IsObjEQ(NatCurrency,PriceTbl.@¬алюта) and AllowRoundPrice then
+                 begin
+                   if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+                     PriceTbl.÷ена–еком := RoundTo5Cop(PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100))
+                   else
+                     PriceTbl.÷ена–еком := RoundDec(PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100),RndPrice);
+                 end
+               else
+                 PriceTbl.÷ена–еком := PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100);
+             end
+           else
+             PriceTbl.÷ена–еком := PriceTbl.¬х÷ена;
+
+           if (VarAsDec(PriceTbl.÷ена—пр)<>VarAsDec(PriceTbl.÷ена–еком)) or (PriceTbl.ѕрЌац<=0) then
+             begin
+               TblGoods.Edit;
+               TblGoods.ƒл€»мейдж := true;
+               TblGoods.Post;
+             end;
+
+           PriceTbl.Post;
+
+
+         end;
+       if UsePrice2 then
+         begin
+           if not TblGoods.Find(GoodDic) then
+             begin
+               TblGoods.Append;
+               TblGoods.Ќом—троки := IntToStr(GoodsTbl.Ќом—троки);
+               TblGoods.ƒл€»мейдж := False;
+               TblGoods.“овар := GoodDic;
+               TblGoods.Post;
+             end;
+
+           PriceTbl.Append;
+           PriceTbl.AssignFields('¬алюта—трокиƒок=¬алюта“овара;¬х÷ена—трокиƒок=÷ена¬¬алюте',GoodsTbl);
+           PriceTbl.“овар := GoodDic;
+           PriceTbl.“ип÷ены := 'ќпт÷ена';
+           if VarAsBool(GoodDic.@¬алютаќпт÷ена.IsFocused) then
+             PriceTbl.¬алюта := GoodDic.@¬алютаќпт÷ена
+           else
+             begin
+               if IsObjFocused(Constants.¬алютаќпт÷ена”молч) then
+                 PriceTbl.¬алюта := Constants.¬алютаќпт÷ена”молч
+               else
+               if Currency.FindByField('јктивность', true, false) then
+                 PriceTbl.¬алюта := Currency;
+             end;
+           PriceTbl.AssignFields('÷ена—пр=ќпт÷ена;ѕрЌац=ѕрЌацќпт÷ена',GoodDic);
+           if CourseTbl.Locate('¬алюта',PriceTbl.@¬алюта) then
+             begin
+               PriceTbl. урс := CourseTbl. урс;
+               if IsObjEQ(PriceTbl.@¬алюта—трокиƒок, PriceTbl.@¬алюта, false)  then
+                 PriceTbl.¬х÷ена := GoodsTbl.÷ена¬¬алюте
+               else
+               if CourseTbl. урс>0 then
+                 PriceTbl.¬х÷ена := GoodsTbl.÷ена / CourseTbl. урс
+               else
+                PriceTbl.¬х÷ена := 0;
+             end
+           else
+             PriceTbl. урс := 0;
+
+           if not IsNull(PriceTbl.ѕрЌац) then
+             begin
+               if IsObjEQ(NatCurrency,PriceTbl.¬алюта) and AllowRoundPrice then
+                 begin
+                   if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+                     PriceTbl.÷ена–еком := RoundTo5Cop(PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100))
+                   else
+                     PriceTbl.÷ена–еком := RoundDec(PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100),RndPrice);
+                 end
+               else
+                 PriceTbl.÷ена–еком := PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100);
+             end
+           else
+             PriceTbl.÷ена–еком := PriceTbl.¬х÷ена;
+           if (VarAsDec(PriceTbl.÷ена—пр)<>VarAsDec(PriceTbl.÷ена–еком)) or (PriceTbl.ѕрЌац<=0) then
+             begin
+               TblGoods.Edit;
+               TblGoods.ƒл€»мейдж := true;
+               TblGoods.Post;
+             end;
+
+           PriceTbl.Post;
+         end;
+       if UsePrice3 then
+         begin
+           if not TblGoods.Find(GoodDic) then
+             begin
+               TblGoods.Append;
+               TblGoods.Ќом—троки := IntToStr(GoodsTbl.Ќом—троки);
+               TblGoods.ƒл€»мейдж := False;
+               TblGoods.“овар := GoodDic;
+               TblGoods.Post;
+             end;
+
+           PriceTbl.Append;
+           PriceTbl.AssignFields('¬алюта—трокиƒок=¬алюта“овара;¬х÷ена—трокиƒок=÷ена¬¬алюте',GoodsTbl);
+           PriceTbl.“овар := GoodDic;
+           PriceTbl.“ип÷ены := ' рќпт÷ена';
+           if VarAsBool(GoodDic.@¬алюта рќпт÷ена.IsFocused) then
+             PriceTbl.¬алюта := GoodDic.@¬алюта рќпт÷ена
+           else
+             begin
+               if IsObjFocused(Constants.¬алюта рќпт÷ена”молч) then
+                 PriceTbl.¬алюта := Constants.¬алюта рќпт÷ена”молч
+               else
+               if Currency.FindByField('јктивность', true, false) then
+                 PriceTbl.¬алюта := Currency;
+             end;
+           PriceTbl.AssignFields('÷ена—пр= рќпт÷ена;ѕрЌац=ѕрЌац рќпт÷ена',GoodDic);
+           if CourseTbl.Locate('¬алюта',PriceTbl.@¬алюта) then
+             begin
+               PriceTbl. урс := CourseTbl. урс;
+               if IsObjEQ(PriceTbl.@¬алюта—трокиƒок, PriceTbl.@¬алюта, false)  then
+                 PriceTbl.¬х÷ена := GoodsTbl.÷ена¬¬алюте
+               else
+               if CourseTbl. урс>0 then
+                 PriceTbl.¬х÷ена := GoodsTbl.÷ена / CourseTbl. урс
+               else
+                PriceTbl.¬х÷ена := 0;
+             end
+           else
+             PriceTbl. урс := 0;
+
+           if not IsNull(PriceTbl.ѕрЌац) then
+             begin
+               if IsObjEQ(NatCurrency,PriceTbl.¬алюта) and AllowRoundPrice then
+                 begin
+                   if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+                     PriceTbl.÷ена–еком := RoundTo5Cop(PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100))
+                   else
+                     PriceTbl.÷ена–еком := RoundDec(PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100),RndPrice);
+                 end
+               else
+                 PriceTbl.÷ена–еком := PriceTbl.¬х÷ена*(1+PriceTbl.ѕрЌац/100);
+             end
+           else
+             PriceTbl.÷ена–еком := PriceTbl.¬х÷ена;
+           if (VarAsDec(PriceTbl.÷ена—пр)<>VarAsDec(PriceTbl.÷ена–еком)) or (PriceTbl.ѕрЌац<=0) then
+             begin
+               TblGoods.Edit;
+               TblGoods.ƒл€»мейдж := true;
+               TblGoods.Post;
+             end;
+
+           PriceTbl.Post;
+         end;
+       inc(Count);
+       Doc.NotifyClient('‘ормирование таблицы переоценки',Count,Total);
+       if Doc.Terminated then exit;
+     end;
+
+// PriceTbl.DoCalculation('÷ена–еком','¬х÷ена*(1+ѕрЌац/100)');
+ PriceTbl.DoCalculation('÷ена–еком√рн','÷ена–еком* урс');
+ PriceTbl.DoCalculation('÷ена—пр√рн','÷ена—пр* урс');
+ PriceTbl.DoCalculation('¬х÷ена√рн','¬х÷ена* урс');
+ TblGoods.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм');
+ PriceTbl.UpdateObjNames;
+{ if VarAsBool(Constants.ќкругл€ть÷ены√рн) then
+   begin
+     RndPrice := VarAsInt(Constants.ќкругление÷ен√рн);
+     PriceTbl.Select;
+     While PriceTbl.SelectNext do
+       begin
+         PriceTbl.Edit;
+         PriceTbl.÷ена–еком√рн := RoundDec(PriceTbl.÷ена–еком√рн, RndPrice);
+         PriceTbl.÷ена—пр√рн := RoundDec(PriceTbl.÷ена—пр√рн, RndPrice);
+         PriceTbl.Post;
+       end;
+     PriceTbl.DoCalculation('÷ена–еком','÷ена–еком√рн/ урс');
+     //PriceTbl.DoCalculation('÷ена—пр','÷ена—пр√рн/ урс');
+   end;
+}
+ Accept := not Doc.Terminated;
+end;
+
+
+
+function GetPriceTblEP(GoodsTblS, TblGoodsS, PriceTblS:ISValueTable; DocDateS:DateTime; AllowRoundPriceS:Boolean) : Variant; server;
+begin
+  TblGoods := TblGoodsS;
+  GoodsTbl := GoodsTblS;
+  PriceTbl := PriceTblS;
+  DocDate := DocDateS;
+  AllowRoundPrice := AllowRoundPriceS;
+
+
+  Result := EntryPoint(GetPriceTbl);
+end;
+
+
+end.

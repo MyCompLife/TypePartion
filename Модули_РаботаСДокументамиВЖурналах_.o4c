@@ -1,0 +1,660 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными;
+
+const
+  TemplateVariant = 'TemplateVariant'; //рабочая константа для пользователя в журналах
+  TemplDocName = 'OldDoc';
+  DocEditResult = 'FormModalResult';
+  // обработчики при добавлении шаблона
+  GetTemplateDocNames = 'GetTemplateDocNames';
+  BeforeDoDocTemplate = 'BeforeDoDocTemplate';
+  AfterDoneDocTemplate = 'AfterDoneDocTemplate';
+  // обработчики создания общего документа
+  procnmAggregateDocBefore = 'AggregateDocBefore';
+  procnmAggregateDocAfter = 'AggregateDocAfter';
+  // обработчики привязки-отвязки
+  FillMasterInDocBefore = 'FillMasterInDocBefore';
+  FillMasterInDocAfter = 'FillMasterInDocAfter';
+  RemoveMasterInDocBefore = 'RemoveMasterInDocBefore';
+  RemoveMasterInDocAfter = 'RemoveMasterInDocAfter';
+  FillMasterInSubordDoc = 'FillMasterInSubordDoc';
+  ReadFieldNameAtSetMaster = 'ReadFieldNameAtSetMaster';
+  RemoveMasterInSubordDoc = 'RemoveMasterInSubordDoc';
+  // результаты получения информации про шаблон документа - document template
+  dtSameDoc = 0; //простой шаблон
+  dtOtherDoc = 1; // другой документ на основании данного
+  dtCancelTemplate = 2; // отмена создания по шаблону
+  //
+  errOwnerObjectNotFocused = 'Ведущий обьект не сфокусирован';
+  wrnCheckObjectsMismatch = 'Не совпадают важные поля объектов. Поля:';
+  Itself = 'сам';
+  msgand = 'и';
+  msgField = 'поле';
+  DoAttachAnyway = 'Выполнить привязку всё равно?';
+  infWaitPls = 'Подождите, пожалуйста';
+  // эмулятор фиксации
+  BeforeEmFixationBegins = 'BeforeEmFixationBegins';
+  AfterEmFixationEnds = 'AfterEmFixationEnds';
+  // для поиска
+  fnDocSelected = 'fnDocSelected';
+  errCannotDoSecondaryDoc = 'Создание документа '#39'%s'#39'%s' +
+    'на основании документа '#39'%s'#39'%s' +
+    'в данном режиме не предусмотрено';
+  errCannotAppendDocInThisMode = 'Невозможно добавить документ '#39'%s'#39' в данном режиме';
+  errNoAdmissibleDocsSelected = 'Не выделено ни одного допустимого для объединения документа';
+  errNotAdmissibleDocSelected = 'Отмечен недопустимый для объединения тип документа "%s"';
+  // номер объединенного документа
+  docnUnion = 'Temp';
+
+procedure AddDocsToJournal(DocSignsList : string; JrnTarget : ICJournal; FilterDescr : Variant = '');
+procedure AddDocByTemplate(JrnMainDocData : ICJournal);
+procedure ChangeDocFieldByJournalField(JrnMainDocData : ICJournal;
+  FieldName : string = 'Заметки');
+function RemoveMasterInDoc(JrnCurrent : ICJournal) : Boolean;
+function SetMasterForDoc(JrnCurrent : ICJournal; DocType, FormSelectName : string;
+  InParams : Variant = ''; OwnerCheckFieldName,
+  CheckFieldName : string = 'Партнер') : Boolean;
+procedure PrepareEmulatedFixation(Sender : TObject);
+procedure EmulatedFixation(Sender : TObject; JrnCurrent : ICJournal);
+function GetPrevSelectedDocumentForJournal(ObjMean : IObject) : ICDocuments;
+procedure CreateUnionDocBySelected(JrnCurrent : ICJournal; dsCurrent : TO4DataSource; AdmissibleDocSigns, DocUnionSign,
+  DocUnionEditFormName : string; GroupColumns, SumColumns : string;
+  BySelected : Boolean = True;
+  LinksStr : string = ''; CalculationArray,
+  ConditionArray : Variant = '';
+  DeleteOldDocs : Boolean = False;
+  StateDownOldDocs : Boolean = True);
+procedure UnFixedDocFromState(Doc : ICDocuments; var OldDocState : Integer);
+procedure FixedDocToState(Doc : ICDocuments; OldDocState : Integer);
+
+implementation
+
+// создание документа по шаблону а также одного на основании другого
+
+procedure AddDocByTemplate(JrnMainDocData : ICJournal);
+var
+  DocNew, DocOld : ICDocuments;
+  OutParams : Variant;
+  FormName : string;
+begin
+  if not JrnMainDocData.IsFocused then
+    exit;
+  DocOld := JrnMainDocData.GetDoc;
+  JrnMainDocData.ExecProc(Null, GetTemplateDocNames, DocOld, OutParams);
+  FormName := '';
+  if IsArray(OutParams) then
+    case VarAsInt(OutParams[0]) of
+      dtSameDoc :
+        DocNew := CreateObject('Документы.' + DocOld.GetSign);
+      dtOtherDoc :
+        begin
+          DocNew := CreateObject('Документы.' + OutParams[1]);
+          if ArrayHigh(OutParams) >= 2 then
+            FormName := OutParams[2];
+        end
+      else //пока только dtCancelTemplate = 2
+        exit;
+    end
+  else // = 0dtSameDoc
+    DocNew := CreateObject('Документы.' + DocOld.GetSign);
+  DocNew.Params[TemplDocName] := DocOld;
+  OutParams := Null;
+  JrnMainDocData.ExecProc(Null, BeforeDoDocTemplate, DocNew, OutParams); //передача дополнительных параметров
+  if VarAsBool(OutParams) then // добавление по шаблону отменено; если процедуры
+    exit; // нет, то сюда записывается False
+  try
+    DocNew.EditInForm(FormName, 0);
+    if not DocNew.HasParam('DocEditResult') or (VarAsInt(DocNew.Params['DocEditResult']) = mrOk) then
+      JrnMainDocData.FindDoc(DocNew); //Refresh выполняется автоматически
+  finally
+    OutParams := Null;
+    JrnMainDocData.ExecProc(Null, AfterDoneDocTemplate, DocNew, OutParams);
+    DocNew.Params['DocEditResult'] := Unassigned;
+  end;
+end;
+
+// сохраннение полей в документе по изменениям в журнале
+
+procedure ChangeDocFieldByJournalField(JrnMainDocData : ICJournal;
+  FieldName : string = 'Заметки');
+var
+  DocCurrent : ICDocuments;
+begin
+ if JrnMainDocData.IsFocused then
+   begin
+     DocCurrent := JrnMainDocData.GetDoc;
+     if DocCurrent.HasField(FieldName) and (CompareStr(DocCurrent._Default[FieldName], JrnMainDocData._Default[FieldName]) <> 0) then
+       begin
+         DocCurrent.Edit;
+         DocCurrent._Default[FieldName] := JrnMainDocData._Default[FieldName];
+         DocCurrent.Post;
+         DocCurrent.ApplyUpdates;
+       end;
+   end;
+end;
+
+// добавление в журнал (как правило, новых) уже существующих документов
+
+procedure AddDocsToJournal(DocSignsList : string; JrnTarget : ICJournal; FilterDescr : Variant = '');
+var
+  i, j : Integer;
+  JrnAnotherTarget : ICJournal;
+  DocTemp : ICDocuments;
+  Cursor : TCursor;
+begin
+  JrnAnotherTarget := CreateObject('Журналы.' + JrnTarget.GetSign);
+  StatusText(Trans(infWaitPls));
+  Cursor := WaitCursorStart;
+  try
+    for i := 1 to WordCount(DocSignsList, ';') do
+      begin
+        DocTemp := CreateObject('Документы.' + ExtractWord(i, DocSignsList, ';'));
+        if IsArray(FilterDescr) then
+          for j := ArrayLow(FilterDescr) to ArrayHigh(FilterDescr) do
+            DocTemp.SetFieldFilter(FilterDescr[j][0], FilterDescr[j][1], FilterDescr[j][2], '', '', '');
+        DocTemp.Select;
+        while DocTemp.SelectNext do
+          JrnAnotherTarget.AddDoc(DocTemp);
+      end;
+  finally
+    JrnTarget.Refresh;
+    WaitCursorFinish(Cursor);
+    StatusText('');
+  end;
+end;
+
+// отвязка документа от ведущего обьекта
+
+function RemoveMasterInDoc(JrnCurrent : ICJournal) : Boolean;
+var
+  DocCurrent : ICDocuments;
+  JrnOwner : Variant;
+  OutParams : Variant;  
+  AccsDocs : ISAccs;
+begin
+  Result := False;
+  DocCurrent := JrnCurrent.GetDoc;
+  if DocCurrent.IsFocused then
+    begin
+//      StartTransaction('');
+      try
+        //первое событие
+        JrnCurrent.ExecProc(Null, RemoveMasterInDocBefore, DocCurrent, OutParams);
+        //JrnCurrent.RemoveDoc(DocCurrent);
+        DocCurrent.Edit;
+        DocCurrent.SetMaster(Null);
+        DocCurrent.Post;
+        DocCurrent.ApplyUpdates;
+        //
+        JrnCurrent.RemoveDoc(DocCurrent); //
+        //
+        JrnOwner := JrnCurrent.GetOwnerJournal;
+        JrnCurrent.ExecProc(Null, RemoveMasterInDocAfter, DocCurrent, OutParams);
+        // обработка дополнительных событий при отвязке
+        if VarAsBool(JrnOwner.IsFocused) then
+          JrnOwner.ExecProc(Null, RemoveMasterInSubordDoc, DocCurrent, Result); // вызывать raise в случае непроведения документа
+        
+        AccsDocs := CreateObject('Аккумуляторы.РасчетыПоДокументам');
+        AccsDocs.RemoveDoc(DocCurrent,1,true);
+
+        //первое событие
+        Result := True;
+      finally
+//        EndTransaction('', Result);
+      end;
+    end;
+  if Result then
+    JrnCurrent.Refresh;
+end;
+
+function IsObjFocusedWorkWithObj(objCurrent : Variant) : Boolean;
+begin
+  if IsObject(objCurrent) then
+    Result := VarAsBool(objCurrent.IsFocused)
+  else
+    Result := False;
+end;
+
+// получить обобщенное значение поля, допускается Self-значение (Self) и цикл через точку, модуль РаботаСОбьектами
+
+function GetExtendedFieldValue(ObjSource : IObject; ValueDescr : string) : Variant;
+var
+  i : Byte;
+  FieldName : string;
+begin
+  if ValueDescr = 'Self' then
+    begin
+      if IsObjFocusedWorkWithObj(ObjSource) then
+        Result := ObjSource
+      else
+        Result := Null;
+      exit;
+    end;
+  for i := 1 to WordCount(ValueDescr, '.') do
+    begin
+      FieldName := ExtractWord(i, ValueDescr, '.');
+      if IsObjFocusedWorkWithObj(ObjSource) and VarAsBool(ObjSource.HasField(FieldName)) then
+        ObjSource := ObjSource._Default[FieldName]
+      else
+        break;
+    end;
+  if i > WordCount(ValueDescr, '.') then
+    Result := ObjSource
+  else
+    Result := Null;
+end;
+
+function GetExtendedFieldValueWithExtRead(ObjForRead, ObjFieldOwner : IObject;
+  var ExtFieldName : string) : Variant;
+var
+  OutParams : Variant;
+begin
+  ObjForRead.ExecProc(Null, ReadFieldNameAtSetMaster, ObjFieldOwner, OutParams);
+  if VarAsStr(OutParams) <> '' then
+    ExtFieldName := OutParams; // для справочников, скорее всего, Self
+  if ExtFieldName <> '' then
+    Result := GetExtendedFieldValue(ObjFieldOwner, ExtFieldName)
+  else
+    Result := Null;
+end;
+
+var
+  TblDefValue : ICValueTable;
+
+  // должно быть в модуле РаботаСОбьектами
+
+function GetDefValue(ObjForDefValue : IObject) : string;
+begin
+  if IsNil(TblDefValue) then
+    begin
+      TblDefValue := CreateObject('ValueTable');
+      TblDefValue.AddColumn('Link', vtcLink, 0);
+      TblDefValue.Open;
+      TblDefValue.Append;
+      TblDefValue.Post;
+    end;
+  TblDefValue.Edit;
+  try
+    TblDefValue.Link := ObjForDefValue;
+    Result := TblDefValue.DefValue['Link'];
+  finally
+    TblDefValue.Cancel;
+  end;
+end;
+
+function TransformFieldNameToMessage(FieldName : string; ObjFieldOwner : IObject) : string;
+var
+  MeanName : string;
+begin
+  MeanName := StrLowerCase(ExtractWord(2, ObjFieldOwner.GetType, ';'));
+  StrDelete(MeanName, StrLength(MeanName), 1);
+  if StrLowerCase(FieldName) = 'self' then
+    Result := Trans(Itself) + ' ' + Trans(MeanName) + ' '#39 + GetDefValue(ObjFieldOwner) + #39
+  else
+    Result := Trans(msgField) + ' '#39 + FieldName + #39' ' + Trans(MeanName + 'а') + ' '#39 +
+      GetDefValue(ObjFieldOwner) + #39;
+end;
+
+// привязка документа к ведущему обьекту
+
+function SetMasterForDoc(JrnCurrent : ICJournal; DocType, FormSelectName : string;
+  InParams : Variant = ''; OwnerCheckFieldName,
+  CheckFieldName : string = 'Партнер') : Boolean;
+var
+  DocForSelect : ICDocuments;
+  ObjOwner, ObjForCheck, ObjOwnerForCheck : IObject;
+  OutParams : Variant;
+begin
+  DocForSelect := CreateObject('Документы.' + DocType);
+  DocForSelect.Params['OwnerMean'] := InParams;
+  DocForSelect.Params['DocType'] := 'Документы.' + DocType;
+  if DocForSelect.SelectInForm(FormSelectName, DocType, InParams) then
+    begin
+      ObjOwner := JrnCurrent.GetOwnerJournal;
+      if VarAsBool(ObjOwner.IsFocused) then
+        begin
+          Result := False;
+          if VarAsBool(ObjOwner.IsType('Журналы')) then
+            ObjOwner := ObjOwner.GetDoc;
+          ObjOwnerForCheck := GetExtendedFieldValueWithExtRead(JrnCurrent.GetOwnerJournal, ObjOwner, OwnerCheckFieldName);
+          ObjForCheck := GetExtendedFieldValueWithExtRead(JrnCurrent, DocForSelect, CheckFieldName);
+          if IsObjFocusedWorkWithObj(ObjOwnerForCheck) and IsObjFocusedWorkWithObj(ObjForCheck) then
+            begin
+              OwnerCheckFieldName := TransformFieldNameToMessage(OwnerCheckFieldName, ObjOwner);
+              CheckFieldName := TransformFieldNameToMessage(CheckFieldName, DocForSelect);
+              if not IsObjEQ(ObjForCheck, ObjOwnerForCheck) and
+                (MessageDlg(Trans(wrnCheckObjectsMismatch) + #13 +
+                OwnerCheckFieldName + ' ' + Trans(msgAnd) + ' ' + CheckFieldName + #13 +
+                Trans(DoAttachAnyway), mtWarning, ArrayOf(mbYes, mbNo)) = mrNo) then
+                exit; // привязка отменена пользователем
+            end;
+          //StartTransaction('');
+          try
+            //первое событие
+            JrnCurrent.ExecProc(Null, FillMasterInDocBefore, DocForSelect, OutParams);
+            DocForSelect.Edit;
+            DocForSelect.SetMaster(ObjOwner);
+            DocForSelect.Post;
+            DocForSelect.ApplyUpdates;
+            // добавление в подчиненный журнал. Возможно, некоторые другие подчиненые журналы останутся без данного документа
+            JrnCurrent.AddDoc(DocForSelect);
+            // обработка дополнительных событий при привязке
+            JrnCurrent.ExecProc(Null, FillMasterInDocAfter, DocForSelect, OutParams);
+            JrnCurrent.GetOwnerJournal.ExecProc(Null, FillMasterInSubordDoc, DocForSelect, Result);
+            //первое событие
+            Result := True;
+          finally
+            //EndTransaction('', Result);
+          end;
+        end
+      else
+        raise(Trans(errOwnerObjectNotFocused));
+    end;
+  if Result then
+    JrnCurrent.Refresh;
+end;
+
+// эмуляция фиксации - для организации транзакции - использовать только в случае
+// необходимости при фиксации проводить нетиповые действия
+// предполагается, что компоненты, что вызывают фиксацию - элемент меню или кнопка
+var
+  LstSelectedDocs : ICValueList;
+  CurrAction : Integer; // действие, которое необходимо выплнить при эмуляции
+
+  // делать подготовку на BeforeActionClick, само действие Action гасится
+
+procedure PrepareEmulatedFixation(Sender : TObject);
+begin
+  case Sender.ClassName of
+    'TO4MenuItem' :
+      begin
+        CurrAction := (Sender as TO4MenuItem).O4Action;
+        (Sender as TO4MenuItem).O4Action := actNone;
+      end;
+    'TO4ToolButton' :
+      begin
+        CurrAction := (Sender as TO4ToolButton).O4Action;
+        (Sender as TO4ToolButton).O4Action := actNone;
+      end;
+  end;
+end;
+
+// сам эмулятор, CurrAction должен быть инициализирован
+
+procedure EmulatedFixation(Sender : TObject; JrnCurrent : ICJournal);
+var
+  i, Count : Integer;
+  TrCommit, YesToAllInGroupAction : Boolean;
+  DocCurrent, TmpDoc : ICDocuments;
+  OutParams : Variant;
+begin
+  case Sender.ClassName of
+    'TO4MenuItem' :
+      (Sender as TO4MenuItem).O4Action := CurrAction;
+    'TO4ToolButton' :
+      (Sender as TO4ToolButton).O4Action := CurrAction;
+  end;
+  if IsNil(LstSelectedDocs) then
+    LstSelectedDocs := CreateObject('ValueList');
+  JrnCurrent.GetSelectedDocsAsValueList(LstSelectedDocs);
+  Count := LstSelectedDocs.Count; // <= FrameSize, так что с памятью проблем не должно быть
+  try
+    for i := 0 to Count - 1 do
+      begin
+        DocCurrent := LstSelectedDocs.GetValue(i); // получаем полный интерфейс
+        TrCommit := False;
+        OutParams := Null;
+        JrnCurrent.ExecProc(Null, BeforeEmFixationBegins,
+          ArrayOf(CurrAction, DocCurrent), OutParams);
+        //StartTransaction('');
+        try
+          DocCurrent.IsGroupAction := Count > 1;
+          DocCurrent.FirstInGroupAction := i = 0;
+          DocCurrent.YesToAllInGroupAction := YesToAllInGroupAction;
+          case CurrAction of
+            actStateUp :
+              DocCurrent.StateUp;
+            actStateDown :
+              DocCurrent.StateDown;
+            actDel :
+              DocCurrent.Delete;
+          end;
+          TrCommit := True;
+        finally
+          //EndTransaction('', TrCommit);
+        end;
+        OutParams := Null;
+        JrnCurrent.ExecProc(Null, AfterEmFixationEnds, ArrayOf(CurrAction, DocCurrent), OutParams);
+        YesToAllInGroupAction := DocCurrent.YesToAllInGroupAction;
+      end;
+  finally
+    LstSelectedDocs.Clear;
+    if (CurrAction <> actDel) and JrnCurrent.IsFocused then
+      begin
+        TmpDoc := JrnCurrent.GetDoc;
+        TmpDoc.Find(TmpDoc); // корректное обновление документа
+      end;
+  end;
+  JrnCurrent.Refresh; // обновление журнала
+end;
+
+// определение прошлого выбранного документа для журнала выбора
+
+function GetPrevSelectedDocumentForJournal(ObjMean : IObject) : ICDocuments;
+begin
+  if IsObject(ObjMean) and VarAsBool(ObjMean.IsFocused) and
+    VarAsBool(ObjMean.HasParam(fnDocSelected)) and
+    (VarAsBool(ObjMean.HasField(ObjMean.Params[fnDocSelected])) or
+    VarAsBool(ObjMean.HasTableField(ObjMean.Params[fnDocSelected]))) then
+    Result := ObjMean._Default[ObjMean.Params[fnDocSelected]]
+  else
+    Result := Null;
+end;
+
+procedure DoDeleteOldDocs(DocsTable : ICValueTable);
+begin
+  DocsTable.CopyDataToServer;
+  try
+    server.DeleteAllDocs(DocsTable.SrvMean); //удаление документов
+  finally
+    DocsTable.SrvMean.Clear;
+  end;
+end;
+
+procedure DoStateDownOldDocs(DocsTable : ICValueTable);
+begin
+  DocsTable.CopyDataToServer;
+  try
+    server.StateDownAllDocs(DocsTable.SrvMean); //расфиксация документов
+  finally
+    DocsTable.SrvMean.Clear;
+  end;
+end;
+
+procedure CreateUnionTables(JrnCurrent : ICJournal; TblSelectedDocContents, TblSelectedDocHead,
+  TblUnionPreparedContents, TblUnionHead, DocsTable : ICValueTable;
+  AdmissibleDocSigns, GroupColumns, SumColumns : string;
+  var WasFirstDoc : Boolean);
+var
+  DocSelected : ICDocuments;
+begin
+  DocSelected := JrnCurrent.GetDoc;
+  if StrPos(';' + DocSelected.GetSign + ';', ';' + AdmissibleDocSigns + ';') > 0 then
+    begin
+      DocSelected.SaveContents('', TblSelectedDocContents);
+      DocSelected.SaveHead('', TblSelectedDocHead);
+      if not WasFirstDoc then
+        begin
+          TblSelectedDocContents.CopyColumnsTo(TblUnionPreparedContents);
+          TblUnionPreparedContents.Open;
+          TblSelectedDocHead.CopyColumnsTo(TblUnionHead);
+          TblUnionHead.Open;
+          WasFirstDoc := True;
+          DocSelected.SaveHead('', TblUnionHead);
+        end;
+      TblSelectedDocContents.AppendTo(GroupColumns + ';' + SumColumns, TblUnionPreparedContents);
+      DocsTable.Append;
+      DocsTable.Doc := DocSelected;
+      DocsTable.DocNumber := DocSelected.GetNumber;
+      DocsTable.Post;
+    end
+  else
+    raise(GetTranslation(errNotAdmissibleDocSelected, ArrayOf(Trans(DocSelected.GetName))));
+end;
+
+procedure CreateUnionDocBySelected(JrnCurrent : ICJournal; dsCurrent : TO4DataSource; AdmissibleDocSigns, DocUnionSign,
+  DocUnionEditFormName : string; GroupColumns, SumColumns : string;
+  BySelected : Boolean = True;
+  LinksStr : string = ''; CalculationArray,
+  ConditionArray : Variant = '';
+  DeleteOldDocs : Boolean = False;
+  StateDownOldDocs : Boolean = True);
+var
+  TblSelectedDocContents, TblSelectedDocHead, TblUnionPreparedContents,
+    TblUnionHead, TblUnionRealContents, DocsTable : ICValueTable;
+  DocUnion, DocUnionForEdit : ICDocuments;
+  WasFirstDoc, Condition, DocUnionSaved : Boolean;
+  Cursor : TCursor;
+  i : Integer;
+  Number : string;
+  OutParams, OneArrayEl : Variant;
+begin
+  // подчитка отмеченных
+  Cursor := WaitCursorStart;
+  try
+    WasFirstDoc := False;
+    TblSelectedDocContents := CreateObject('ТаблицаЗначений');
+    TblSelectedDocHead := CreateObject('ТаблицаЗначений');
+    TblUnionPreparedContents := CreateObject('ТаблицаЗначений');
+    TblUnionHead := CreateObject('ТаблицаЗначений');
+    DocsTable := CreateObject('ValueTable');
+    DocsTable.AddColumn('Doc', vtcLink, 0);
+    DocsTable.AddColumn('DocNumber', vtcString, 20);
+    DocsTable.Open;
+    JrnCurrent.DisableControls;
+    try
+      dsCurrent.AfterScrollLock := True;
+      try
+        if BySelected then
+          begin
+            JrnCurrent.SelectBookmarks;
+            while JrnCurrent.SelectNextBookmark do
+              CreateUnionTables(JrnCurrent, TblSelectedDocContents, TblSelectedDocHead,
+                TblUnionPreparedContents, TblUnionHead,
+                DocsTable, AdmissibleDocSigns, GroupColumns,
+                SumColumns, WasFirstDoc);
+          end
+        else
+          begin
+            JrnCurrent.Select;
+            while JrnCurrent.SelectNext do
+              CreateUnionTables(JrnCurrent, TblSelectedDocContents, TblSelectedDocHead,
+                TblUnionPreparedContents, TblUnionHead,
+                DocsTable, AdmissibleDocSigns, GroupColumns,
+                SumColumns, WasFirstDoc);
+          end;
+      finally
+        dsCurrent.AfterScrollLock := False;
+      end;
+    finally
+      JrnCurrent.EnableControls;
+    end;
+    if StateDownOldDocs then
+      DoStateDownOldDocs(DocsTable);
+    if DeleteOldDocs then
+      DoDeleteOldDocs(DocsTable);
+    DocsTable.Clear;
+    TblUnionPreparedContents.GroupBy(GroupColumns, SumColumns);
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+  if not WasFirstDoc then
+    raise(Trans(errNoAdmissibleDocsSelected));
+  // само объединение
+  DocUnion := CreateObject('Документы.' + DocUnionSign);
+  DocUnionForEdit := CreateObject('Документы.' + DocUnionSign);
+  DocUnion.Select; // иначе последующее добавление документа не сработает
+  TblUnionPreparedContents.DoNumbering('НомСтроки', 1, 1);
+  DocUnionSaved := False;
+  try
+    DocUnion.Append;
+    DocUnion.LoadHead('', TblUnionHead);
+    DocUnion.ExecProc('', procnmAggregateDocBefore, ArrayOf(DocUnion, TblUnionHead), OutParams);
+    TblUnionRealContents := CreateObject('ТаблицаЗначений');
+    DocUnion.SaveTableStructure('', TblUnionRealContents);
+    TblUnionPreparedContents.AppendTo(GroupColumns + ';' + SumColumns, TblUnionRealContents);
+    if LinksStr <> '' then
+      TblUnionRealContents.DoGetLinks(LinksStr);
+    if IsArray(CalculationArray) then
+      TblUnionRealContents.DoCalculation(CalculationArray[0], CalculationArray[1]);
+    //
+    DocUnion.LoadContents('', TblUnionRealContents);
+    //
+    if IsArray(ConditionArray) then
+      for i := ArrayLow(ConditionArray) to ArrayHigh(ConditionArray) do
+        begin
+          OneArrayEl := ConditionArray[i];
+          DocUnion.SelectLines;
+          while DocUnion.SelectNextLine do
+            begin
+              DocUnion.EditLine;
+              case VarAsStr(OneArrayEl[1]) of
+                '>' :
+                  Condition := VarAsDec(DocUnion._Default[OneArrayEl[0]]) > VarAsDec(OneArrayEl[2]);
+                '<' :
+                  Condition := VarAsDec(DocUnion._Default[OneArrayEl[0]]) < VarAsDec(OneArrayEl[2]);
+                '=' :
+                  Condition := DocUnion._Default[OneArrayEl[0]] = OneArrayEl[2];
+                '<>' :
+                  Condition := DocUnion._Default[OneArrayEl[0]] <> OneArrayEl[2];
+                '>=' :
+                  Condition := VarAsDec(DocUnion._Default[OneArrayEl[0]]) >= VarAsDec(OneArrayEl[2]);
+                '<=' :
+                  Condition := VarAsDec(DocUnion._Default[OneArrayEl[0]]) <= VarAsDec(OneArrayEl[2]);
+                else
+                  Condition := True
+              end;
+              if Condition then
+                DocUnion._Default[OneArrayEl[3]] := OneArrayEl[4]
+              else
+                DocUnion._Default[OneArrayEl[3]] := OneArrayEl[5];
+            end;
+        end;
+    DocUnion.ExecProc('', procnmAggregateDocAfter, Null, OutParams);
+    DocUnion.НомерДокумента := docnUnion;
+    DocUnion.Post;
+    DocUnion.ApplyUpdates;
+    //
+    DocUnionSaved := True;
+    //
+    DocUnionForEdit.Params[TemplDocName] := DocUnion;
+    DocUnionForEdit.EditInForm(DocUnionEditFormName, 0);
+  finally
+    if DocUnionSaved and DocUnion.SetSrvToClientPos then
+      DocUnion.SrvMean.Delete; // во избежание сообщения про необходимость удалить документ
+  end;
+end;
+
+//первое событие
+
+procedure UnFixedDocFromState(Doc : ICDocuments; var OldDocState : Integer);
+var
+  i : Integer;
+begin
+  OldDocState := Doc.GetDocState; 
+  Doc.SetSrvToClientPos;
+  for i := OldDocState downto 1 do
+    Doc.SrvMean.StateDown;
+end;
+
+procedure FixedDocToState(Doc : ICDocuments; OldDocState : Integer);
+begin         
+  Doc.SetSrvToClientPos;
+  while Doc.SrvMean.GetDocState < OldDocState do
+    Doc.SrvMean.StateUp;
+end;
+//первое событие
+
+end.

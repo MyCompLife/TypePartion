@@ -1,0 +1,32 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+implementation
+
+var
+  PrcCurrent : ICProcessing;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  PrcCurrent := Mean;
+  mmLog.Lines.Text := Params[0];
+  odSaveLogFile.FileName := Params[1];
+end;
+
+procedure btSaveToFile_Click(Sender : TObject);
+begin
+  if odSaveLogFile.Execute then  
+    mmLog.Lines.SaveToFile(odSaveLogFile.FileName);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnBottom:TO4Panel
+pnButton:TO4Panel
+btCancel:TO4Button
+btSaveToFile:TO4Button
+pnMain:TO4Panel
+mmLog:TO4Memo
+odSaveLogFile:TO4SaveDialog

@@ -1,0 +1,82 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  PrcCurrent : ICProcessing;
+  XMLLogText : String;
+
+procedure FillXMLReportAttributes(DateFrom, DateTo : DateTime; XMLDocNumber : Integer = 1; DocStatus : Integer = 0);
+var
+  MonthFrom, MonthTo : integer;
+begin
+  edCDocCnt.Text := IntToStr(XMLDocNumber);
+  MonthFrom := GetMonth(DateFrom);
+  MonthTo := GetMonth(DateTo);
+  edPeriodMonth.Text := VarAsStr(GetMonth(DateTo));
+  edPeriodYear.Text := VarAsStr(GetYear(DateTo));
+  if (MonthTo = 12) and (MonthFrom = 1) then
+    edPeriodType.ItemIndex := 4
+  else
+    if (MonthTo = 9) and (MonthFrom = 1) then
+      edPeriodType.ItemIndex := 3
+    else
+      if ((MonthTo = 12) and (MonthFrom = 7)) or ((MonthTo = 6) and (MonthFrom = 1)) then
+        edPeriodType.ItemIndex := 2
+      else
+        if ((MonthTo = 12) and (MonthFrom = 10)) or ((MonthTo = 9) and (MonthFrom = 7)) or
+           ((MonthTo = 6) and (MonthFrom = 4)) or ((MonthTo = 3) and (MonthFrom = 1)) then
+          edPeriodType.ItemIndex := 1
+        else
+          edPeriodType.ItemIndex := 0;
+  edDFill.Text := FormatDateTime('dd.mm.yyyy', CurrentDate);
+  edDocStatus.ItemIndex := DocStatus;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case ProcID of
+    'GetXMLReportParams' :
+      OutParams := ArrayOf(edCDocType.Text, edCDocCnt.Text, edPeriodMonth.Text, VarAsStr(edPeriodType.ItemIndex + 1),
+                           edPeriodYear.Text, edDocStatus.ItemIndex + 1, edDFill.Text);
+    'SetXMLReportParams' :
+      FillXMLReportAttributes(InParams[0], InParams[1], InParams[2], InParams[3]);
+    'SetXMLLogText' :
+      XMLLogText := InParams;
+  end;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  PrcCurrent := Mean;
+end;
+
+procedure btProtocol_Click(Sender : TObject);
+var
+  PrcXMLReportParamsInterface : ICProcessing;
+begin
+  PrcXMLReportParamsInterface := CreateObject('ќбработки.—тандартные‘ормы»нтерфейса');
+  PrcXMLReportParamsInterface.Execute('ѕросмотрЋога', ArrayOf(XMLLogText, 'XML.log'))
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+GroupBox2:TO4GroupBox
+Label1:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+Label2:TO4Label
+Label5:TO4Label
+Label6:TO4Label
+Label7:TO4Label
+edCDocType:TO4Edit
+edPeriodMonth:TO4Edit
+edPeriodType:TO4Edit
+edCDocCnt:TO4Edit
+edPeriodYear:TO4Edit
+edDFill:TO4Edit
+btProtocol:TO4Button
+edDocStatus:TO4Edit

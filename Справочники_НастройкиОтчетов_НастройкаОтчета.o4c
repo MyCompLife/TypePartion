@@ -1,0 +1,33 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+implementation
+var MasterData : ICDictionary;
+
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+
+procedure MDS_Append(Sender: TObject);
+begin
+ if MasterData.HasParam('Отчет') then
+   MasterData.Отчет := VarAsStr(MasterData.Params['Отчет']);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label3:TO4Label
+Label1:TO4Label
+eName:TO4DBEdit
+dbeType:TO4DBEdit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource

@@ -1,0 +1,1167 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений;
+
+type
+  TDicExportTable = ICValueTable;
+  TSubordDicActionExportTable = ICValueTable;
+  TDicExportUsedMeansTable = ICValueTable;
+  TDicExportFilterTable = ICValueTable;
+  TDicExportFilterValueTable = ICValueTable; // структуру таблицы представляет поле Значение, тип которого в DesignTime неизвестен
+
+const
+  // Order types
+  otUp = 1;
+  otDown = 2;
+  // используемые доп. аттрибуты полей при экспорте/импорте справочников - field attributes
+  faUsed = 0; // используемо (в варианте неизвесного использования поля)
+  faKey = 1; // используется как ключевое
+  faLinkMustExist = 2; // для Link-полей - запись должна существовать
+
+function GetRootParent(DicCurrent : ICDictionary) : ICDictionary;
+function FindElemInDictTree(SubordMaster, Elem : Variant; SubordDictSign,
+  MasterFieldName : string; FieldNameToSearch,
+  MasterVariants : Variant = '') : Boolean;
+procedure ChangeOrder(DicCurrent : ICDictionary; LstCurrRecord : ICValueList;
+  OrderType, Bound : Integer; OrderFieldName : string; DoRefresh : Boolean = True);
+procedure ReorderDicItems(DicCurrent : ICDictionary; OrderFieldName : string;
+  DoAssignSelectParams : Boolean = True);
+procedure CheckForUnique(FieldNames, FieldComms : string; DicCurrent, DicAnotherSuch : ICDictionary;
+  IsCtg : Boolean = False; UseAssignSelectParams : Boolean = False);
+procedure AdjustBlobFieldsAfterPost(DicMeanWithBlobs : ICDictionary; BlobFieldsList : string);
+procedure AddRecordByTemplate(ObjCurrent : IObject; FormName : string);
+function ReadFieldsFromTemplate(DicTarget : ICDictionary) : Boolean;
+//******************************************************************************
+// экспорт записей из справочников в файл
+// таблица удаляемых элементов, что подчинены редактируемому+согласно собственного фильтра
+function CreateSubordDicsDeletedTable(TblCreated : ICValueTable) : TSubordDicActionExportTable;
+// таблица-описание импортируемых/экспортируемых записей из справрочников
+function CreateDicExportTable(TblCreated : ICValueTable) : TDicExportTable;
+// таблица используемых при экспорте справочников. Содержит как сами эксортируемые справочники
+// так и задействованные link-поля в них
+function CreateDicExportUsedMeansTable(TblCreated : ICValueTable) : TDicExportUsedMeansTable;
+// таблица фильтра при импорте/экспорте. Упаковывается в другие таблицы
+function CreateDicExportFilterTable(TblCreated : ICValueTable) : TDicExportFilterTable;
+// таблица для хранения значения фильтра. Тип определяется в RunTime
+function CreateDicExportFilterValueTable(ValueType : TValueTableColumnType;
+  ValueSize : Integer; TblCreated : ICValueTable) : TDicExportFilterValueTable;
+procedure ExportDictionariesToFile(TblUsedMeans : TDicExportUsedMeansTable;
+  TblDicExport : TDicExportTable;
+  TblSubordDicActionExport : TSubordDicActionExportTable;
+  FileName : string);
+//******************************************************************************
+// импорт записей из файла в справочники
+procedure ImportDictionariesFromFile(FileName : string);
+//******************************************************************************
+// получить структуру справочника в таблицу значений
+function FillDictStructure(DicSource : ICDictionary; TblTarget : ICValueTable) : Boolean;
+//******************************************************************************
+function GetNextNumberForField(MeanName, FieldName : string; OnlyLevels : Boolean = False;
+  UnitedMeans : string = '') : Integer;
+function SetTitleCaption(ComponentsTextArray : Variant; Delimeter : String) : String;
+function SetDetailDict(Master : ICDictionary; DictName, FormName : String;
+                       Place : Variant; ShowToolBar : boolean = True) : ICDictionary;
+
+var
+  LstCachedDicImpExpObj : ICValueList;
+
+implementation
+
+const
+  errNotUniqueFieldValue = 'Значение поля '#39'%s'#39' не уникально. Измените значение';
+  errNotUniqueFieldsValues = 'Значения набора полей:%sне уникальны в совокупности. Измените одно из значений';
+  //******************************************************************************
+  // импорт/экспорт записей из справочников
+  errDescrForDicNotFound = 'Не найдено описание для справочника "%s"';
+  // используемые теги : dictionaries import/export tag names
+  dietnDictionary = 'Справочник';
+  dietnSubordDeletedEls = 'ПодчУдаляемыеЭлементы';
+  dietnSubordDeletedElsFilterList = 'СписокФильтраНаПодчЭлементы';
+  dietnSubordDeletedElsFilter = 'ФильтрНаПодчЭлементы';
+  dietnOneDicRecords = 'ЗаписиСправочника';
+  dietnOneDicRecord = 'ЗаписьСправочника';
+  dietnOneDicRecFields = 'ПоляЗаписи';
+  dietnOneDicRecKeyFields = 'КлючевыеПоляЗаписи';
+  dietnOneDicRecChangableFields = 'ИзменяемыеПоляЗаписи'; // поля, значения по которым будут изменяться даже в случае существования записи согласно фильтру по ключевым полям
+  dietnOneDicRecNonchangableFields = 'ДобавляемыеПоляЗаписи'; // поля, значения по которым будут изменяться в случае существования записи согласно фильтру по ключевым полям
+  dietnOneDicRecFieldValue = 'ЗначениеПоляЗаписи';
+  dietnOneDicRecCat = 'КатегорияЗаписи';
+  dietnOneDicRecSubord = 'ПодчинениеЗаписи';
+  // дополнительные свойства
+  adfRecTypeSign = 'ТипЗаписи';
+  adfRecIsCategory = 'ЗаписьЕстьКатегория';
+  adfFieldIsKey = 'ПолеКлючевое';
+
+var
+  TblGUsedImpExpDicts : TDicExportUsedMeansTable;
+  //******************************************************************************
+
+function FindElemInDictTree(SubordMaster, Elem : Variant; SubordDictSign,
+  MasterFieldName : string; FieldNameToSearch,
+  MasterVariants : Variant = '') : Boolean;
+begin
+  Result := server.FindElemInDictTree(SubordMaster, Elem, SubordDictSign, MasterFieldName,
+    FieldNameToSearch, MasterVariants);
+end;
+
+function GetRootParent(DicCurrent : ICDictionary) : ICDictionary;
+begin
+  Result := server.GetRootParent(DicCurrent);
+end;
+
+// изменение порядка в упорядоченном справочнике
+
+procedure ChangeOrder(DicCurrent : ICDictionary; LstCurrRecord : ICValueList;
+  OrderType, Bound : Integer; OrderFieldName : string; DoRefresh : Boolean = True);
+begin
+  DicCurrent.AssignSelectParamsOnSrv(Null);
+  if DicCurrent.SetSrvToClientPos then
+    begin
+      server.ChangeOrder(DicCurrent.SrvMean, LstCurrRecord.SrvMean, OrderType, Bound, OrderFieldName);
+      if DoRefresh then
+        DicCurrent.Refresh;
+    end;
+end;
+
+procedure ReorderDicItems(DicCurrent : ICDictionary; OrderFieldName : string;
+  DoAssignSelectParams : Boolean = True);
+begin
+  if DoAssignSelectParams then
+    DicCurrent.AssignSelectParamsOnSrv(Null);
+  server.ReorderDicItems(DicCurrent.SrvMean, OrderFieldName);
+end;
+
+// проверка на уникальность
+
+procedure CheckForUnique(FieldNames, FieldComms : string; DicCurrent, DicAnotherSuch : ICDictionary;
+  IsCtg : Boolean = False; UseAssignSelectParams : Boolean = False);
+var
+  i : Integer;
+  OneFieldName, MessageParam : string;
+  OneValue : Variant;
+begin
+  if IsNil(DicAnotherSuch) then
+    begin
+      DicAnotherSuch := CreateObject('Справочники.' + DicCurrent.GetSign);
+      if IsCtg then
+        DicAnotherSuch.IncludeOnlyLevels(True)
+      else    
+        if UseAssignSelectParams then
+          DicAnotherSuch.AssignSelectParams(DicCurrent); // как правило, передается владелец
+    end;
+  i := WordCount(FieldNames, ';');
+  if i = 1 then
+    begin
+      OneValue := DicCurrent._Default['@' + FieldNames];
+      if DicCurrent.FieldIsNull(FieldNames) or (IsObject(OneValue) and not VarAsBool(OneValue.IsFocused)) then
+        exit; // все незаполненные значения различны между собой - принцип SQL
+      DicAnotherSuch.SetFieldFilter(FieldNames, '=', OneValue, '', '', '');
+      MessageParam := Trans(FieldComms);
+    end
+  else
+    begin
+      for i := 1 to WordCount(FieldNames, ';') do
+        begin
+          OneFieldName := ExtractWord(i, FieldNames, ';');
+          OneValue := DicCurrent._Default['@' + OneFieldName];
+          if DicCurrent.FieldIsNull(OneFieldName) or (IsObject(OneValue) and not VarAsBool(OneValue.IsFocused)) then
+            exit; // все незаполненные значения различны между собой - принцип SQL
+          DicAnotherSuch.SetFieldFilter(OneFieldName, '=', OneValue, '', '', '');
+          MessageParam := MessageParam + #13#10 + Trans(ExtractWord(i, FieldComms, ';'));
+        end;
+      MessageParam := MessageParam + #13#10;
+    end;
+  //
+  DicAnotherSuch.Select;
+  while DicAnotherSuch.SelectNext do
+    if not IsObjEQ(DicAnotherSuch, DicCurrent) then
+      if i = 1 then
+        begin
+          if not DicAnotherSuch.FieldIsNull(FieldNames) then // SetFieldFilter "подминает" Null-значения
+            raise(GetTranslation(Trans(errNotUniqueFieldValue), ArrayOf(MessageParam)));
+        end
+      else
+        begin
+          OneValue := True; // нужно ли вызывать raise
+          for i := 1 to WordCount(FieldNames, ';') do
+            begin
+              OneValue := OneValue and not DicAnotherSuch.FieldIsNull(ExtractWord(i, FieldNames, ';'));
+              if not VarAsBool(OneValue) then
+                break;
+            end;
+          if VarAsBool(OneValue) then
+            raise(GetTranslation(Trans(errNotUniqueFieldsValues), ArrayOf(MessageParam)));
+        end;
+end;
+
+procedure AdjustBlobFieldsAfterPost(DicMeanWithBlobs : ICDictionary; BlobFieldsList : string);
+var
+  DoAdjust : Boolean;
+  i : Integer;
+  OneField : string;
+begin
+  DoAdjust := False;
+  if not DicMeanWithBlobs.SetSrvToClientPos then // кроме прочего, и без того не надо обновлять для новой записи
+    exit;
+  for i := 1 to WordCount(BlobFieldsList, ';') do
+    begin
+      OneField := ExtractWord(i, BlobFieldsList, ';');
+      DoAdjust := VarAsStr(DicMeanWithBlobs.SrvMean._Default[OneField]) <>
+        VarAsStr(DicMeanWithBlobs._Default[OneField]);
+      if DoAdjust then
+        break;
+    end;
+  if DoAdjust then // корректировка - на сервере
+    begin
+      DicMeanWithBlobs.SrvMean.Edit;
+      for i := 1 to WordCount(BlobFieldsList, ';') do
+        DicMeanWithBlobs.SrvMean._Default[OneField] := DicMeanWithBlobs._Default[OneField];
+      DicMeanWithBlobs.SrvMean.Post;
+      DicMeanWithBlobs.SrvMean.ApplyUpdates;
+    end;
+end;
+
+procedure AddRecordByTemplate(ObjCurrent : IObject; FormName : string);
+var
+  ObjTemplate : IObject;
+begin
+  ObjTemplate := CreateObject(ExtractWord(1, ObjCurrent.GetType, ';') + '.' + ObjCurrent.GetSign);
+  ObjTemplate.Params[prmnAppendRecVariant] := arvTemplate;
+  ObjTemplate.Params[prmnAppendTemplateObjects] := ObjCurrent;
+  ObjTemplate.Select;
+  ObjTemplate.EditInForm(FormName, dmAppend);
+  if VarAsBool(ObjTemplate.Params[prmnRecSaved]) then
+    ObjCurrent.Find(ObjTemplate);
+end;
+
+function ReadFieldsFromTemplate(DicTarget : ICDictionary) : Boolean;
+var
+  TblSource : ICValueTable;
+  FieldsList : string;
+  DicSource : ICDictionary;
+begin
+  Result := VarAsInt(DicTarget.Params[prmnAppendRecVariant]) = arvTemplate;
+  if not Result then
+    exit;
+  DicSource := DicTarget.Params[prmnAppendTemplateObjects];
+  DicSource.SrvMean.Select;
+  if not DicSource.SetSrvToClientPos then
+    exit;
+  // понадобиться таблица значений для метаданных
+  TblSource := CreateObject('ValueTable');
+  TblSource.SrvMean.Open;
+  DicSource.SrvMean.SaveToValueTable('', TblSource.SrvMean, 0, 1); // начиная с текущей взять одну запись
+  TblSource.Close;
+  TblSource.CopyDataFromServer;
+  TblSource.SelectFirst;
+  FieldsList := GetColumnsList(TblSource);
+  if StrLowerCase(ExtractWord(1, FieldsList, ';')) = 'self' then // нужно выкинуть
+    StrDelete(FieldsList, 1, 1 + StrLength('self'));
+  DicTarget.AssignFields(FieldsList, TblSource);
+end;
+
+//******************************************************************************
+// экспорт записей из справочников в файл
+
+function CheckForCreatedTable(TblCreated : ICValueTable) : ICValueTable;
+begin
+  Result := TblCreated;
+  if IsNil(Result) then
+    Result := CreateObject('ValueTable')
+  else
+    Result.Close;
+end;
+
+// таблица удаляемых элементов, что подчинены редактируемому+согласно собственного фильтра
+
+function CreateSubordDicsDeletedTable(TblCreated : ICValueTable) : TSubordDicActionExportTable;
+begin
+  Result := CheckForCreatedTable(TblCreated);
+  Result.AddColumn('IDСправочника', vtcString, 50);
+  Result.AddColumn('IDПодчСправочника', vtcString, 50);
+  Result.AddColumn('ФильтрПодчСправочника', vtcBlob, 0); // упакованный TDicExportFilterTable
+  Result.Open;
+  Result.SortBy('IDСправочника');
+end;
+
+// таблица-описание импортируемых/экспортируемых записей из справрочников
+
+function CreateDicExportTable(TblCreated : ICValueTable) : TDicExportTable;
+begin
+  Result := CheckForCreatedTable(TblCreated);
+  Result.AddColumn('IDСправочника', vtcString, 50);
+  Result.AddColumn('Фильтр', vtcBlob, 0); // упакованный TDicExportFilterTable
+  Result.Open;
+end;
+
+// таблица используемых при экспорте справочников. Содержит как сами эксортируемые справочники
+// так и задействованные link-поля в них
+
+function CreateDicExportUsedMeansTable(TblCreated : ICValueTable) : TDicExportUsedMeansTable;
+begin
+  Result := CheckForCreatedTable(TblCreated);
+  Result.AddColumn('IDСправочника', vtcString, 50);
+  Result.AddColumn('КлючевыеПоля', vtcMemo, 0); //список ключевых для справочника полей через ;
+  Result.AddColumn('ИзменяемыеПоля', vtcMemo, 0); //список изменяемых полей через ;
+  Result.AddColumn('Подчинение', vtcInteger, 0); // информация про подчинение: есть оно или нет; является ли подчинение ключевым
+  Result.AddColumn('Категория', vtcInteger, 0); // информация про категорию: есть она или нет; является ли подчинение ключевым
+  Result.Open;
+  Result.SortBy('IDСправочника');
+end;
+
+// таблица фильтра при импорте/экспорте. Упаковывается в другие таблицы
+
+function CreateDicExportFilterTable(TblCreated : ICValueTable) : TDicExportFilterTable;
+begin
+  Result := CheckForCreatedTable(TblCreated);
+  Result.AddColumn('НазвПоля', vtcString, 100);
+  Result.AddColumn('Предикат', vtcString, 3);
+  Result.AddColumn('ТипПоля', vtcInteger, 0);
+  Result.AddColumn('ДлинаПоля', vtcInteger, 0);
+  Result.AddColumn('Значение', vtcBlob, 0); // упакованный TDicExportFilterValueTable
+  Result.Open;
+end;
+
+// таблица для хранения значения фильтра. Тип определяется в RunTime
+
+function CreateDicExportFilterValueTable(ValueType : TValueTableColumnType;
+  ValueSize : Integer; TblCreated : ICValueTable) : TDicExportFilterValueTable;
+begin
+  Result := CheckForCreatedTable(TblCreated);
+  Result.AddColumn('Значение', ValueType, ValueSize);
+  Result.Open;
+end;
+
+procedure GetFilterTables(var TblForFilter : TDicExportFilterTable;
+  var TblForFilterValue : TDicExportFilterValueTable);
+begin
+  TblForFilterValue := GetCachedObject(LstCachedDicImpExpObj, 'ValueTable', 1, 'FilterValueTable');
+  TblForFilter := GetCachedObject(LstCachedDicImpExpObj, 'ValueTable', 1, 'FilterTable');
+  if not TblForFilter.Active then
+    TblForFilter := CreateDicExportFilterTable(TblForFilter);
+end;
+
+function GetFilterValue(TblForFilter : TDicExportFilterTable;
+  TblForFilterValue : TDicExportFilterValueTable) : Variant;
+begin
+  TblForFilterValue.Close;
+  TblForFilterValue := CreateDicExportFilterValueTable(TblForFilter._Default['ТипПоля'],
+    VarAsInt(TblForFilter._Default['ДлинаПоля']), TblForFilterValue);
+  TblForFilterValue.PackedData := TblForFilter._Default['Значение'];
+  if TblForFilterValue.SelectFirst then
+    Result := TblForFilterValue._Default['Значение']
+  else
+    Result := Null;
+end;
+
+procedure SetFilterToExportedDic(DicExported : ICDictionary; Filter : Variant);
+var
+  TblForFilter : TDicExportFilterTable;
+  TblForFilterValue : TDicExportFilterValueTable;
+begin
+  GetFilterTables(TblForFilter, TblForFilterValue);
+  TblForFilter.PackedData := Filter;
+  TblForFilter.Select;
+  while TblForFilter.SelectNext do
+    DicExported.SetFieldFilter(TblForFilter._Default['НазвПоля'],
+      TblForFilter._Default['Предикат'], VarAsStr(GetFilterValue(TblForFilter, TblForFilterValue)), '', '', '');
+end;
+
+function AddTextToRes(Text : string; AdditLeftShiftCount : Integer = 0) : string;
+begin
+  Result := #13#10 + FillStrByChar(' ', AdditLeftShiftCount) + Text;
+end;
+
+function AddTag(TagName : string; OpenTag : Boolean) : string;
+begin
+  if OpenTag then
+    Result := '<' + TagName + '>'
+  else
+    Result := '</' + TagName + '>';
+end;
+
+function ExportOneDicRecord(DicExported : ICDictionary; AdditLeftShiftCount : Integer) : string; forward;
+
+function GetStrValueOfField(FieldType : TValueTableColumnType; Value : Variant;
+  AdditLeftShiftCount : Integer = 0) : string;
+begin
+  case FieldType of
+    vtcFft, vtcFloat :
+      Result := ReplaceDecDelim2(VarAsStr(Value), '.', #0);
+    vtcDate :
+      Result := FormatDateTime('dd.mm.yyyy', Value);
+    vtcDateTime :
+      Result := FormatDateTime('dd.mm.yyyy hh:mm:sss', Value);
+    vtcTime :
+      Result := FormatDateTime('hh:mm:sss', Value);
+    vtcLink :
+      case GetObjectType(Value) of
+        'Коллекции' :
+          Result := VarAsStr(Value);
+        'Справочники' :
+          Result := ExportOneDicRecord(Value, AdditLeftShiftCount);
+      end;
+    vtcBoolean :
+      if VarAsBool(Value) then
+        Result := 'TRUE'
+      else
+        Result := 'FALSE';
+    else
+      Result := VarAsStr(Value);
+  end;
+end;
+
+function FillDictStructure(DicSource : ICDictionary; TblTarget : ICValueTable) : Boolean;
+begin
+  TblTarget.SrvMean.Close;
+  Result := server.FillDictStructure(DicSource.SrvMean, TblTarget.SrvMean); // должно вернуть запись со структурой
+  TblTarget.Close;
+  TblTarget.CopyDataFromServer;
+  TblTarget.SrvMean.Clear;
+  if not Result then
+    TblTarget.Self.Delete; // удаление штучно добавленной записи
+  TblTarget.Clear;
+end;
+
+function GetCachedDicStructure(DicForStructute : ICDictionary; AdditLeftShiftCount : Integer = 1) : ICValueTable;
+begin
+  Result := GetCachedObject(LstCachedDicImpExpObj, 'ValueTable', AdditLeftShiftCount,
+    'DicStructure_' + GetObjTypeSign(DicForStructute));
+  if not Result.Active then
+    FillDictStructure(DicForStructute, Result);
+end;
+
+{ закоментарено ввиду ненадобности экспортировать метаданные справочника
+function ExportDicFieldsList(DicExported : ICDictionary; TblDicExport : TDicExportTable) : String;
+var
+  FieldsCounter : Integer;
+  TblDicStructure : ICValueTable;
+  OneFieldName : String;
+begin
+  TblDicStructure := GetCachedDicStructure(DicExported);
+  Result := AddTextToRes(AddTag(dietnOneDicFieldsList, True));
+  if not TblGUsedImpExpDicts.Find(TblDicExport._Default['IDСправочника']) then
+    raise(GetTranslation(errDescrForDicNotFound, ArrayOf(Trans(DicExported.GetName))));
+  for FieldsCounter := 1 to TblDicStructure.GetColumnCount - 1 do // без SELF
+    begin
+      OneFieldName := TblDicStructure.GetColumnName(FieldsCounter);
+      Result := Result + AddTextToRes(OneFieldName + '=' +
+                IntToStr(TblDicStructure.GetColumnDataType(FieldsCounter)) + ',' +
+                IntToStr(TblDicStructure.GetColumnDataSize(FieldsCounter)), 2);
+      if StrPos(';' + OneFieldName + ';', ';' + TblGUsedImpExpDicts._Default['КлючевыеПоля'] + ';') > 0 then
+        Result := Result + ',ключ';
+    end;
+  Result := Result + AddTextToRes(AddTag(dietnOneDicFieldsList, False));
+end;
+}
+
+function ExportDicOneFieldValue(DicExported : ICDictionary; TblDicStructure : ICValueTable;
+  FieldIndex, AdditLeftShiftCount : Integer) : string;
+var
+  OneFieldName : string;
+  OneValue : Variant;
+  FieldDataType : TValueTableColumnType;
+begin
+  FieldDataType := TblDicStructure.GetColumnDataType(FieldIndex);
+  if FieldDataType = vtcBlob then
+    exit; // blob-тип пока не экспортируется
+  Result := '';
+  OneFieldName := TblDicStructure.GetColumnName(FieldIndex);
+  OneValue := DicExported._Default[OneFieldName]; // подчитка полного интерфейса в случае link-поля происходит сразу ввиду проблем с коллекциями
+  if DicExported.FieldIsNull(OneFieldName) or IsObjNotFocused(OneValue) then
+    Result := Result + AddTextToRes(OneFieldName + '=NULL', AdditLeftShiftCount + 2)
+  else
+    begin
+      Result := Result + AddTextToRes(OneFieldName + '=NOT NULL', AdditLeftShiftCount + 2);
+      if IsObject(OneValue) then
+        Result := Result + ',' + GetObjTypeSign(OneValue);
+      Result := Result + AddTextToRes(AddTag(dietnOneDicRecFieldValue, True), AdditLeftShiftCount + 2) +
+        AddTextToRes(GetStrValueOfField(TblDicStructure.GetColumnDataType(FieldIndex),
+        OneValue, AdditLeftShiftCount + 4), AdditLeftShiftCount + 4) +
+        AddTextToRes(AddTag(dietnOneDicRecFieldValue, False), AdditLeftShiftCount + 2);
+    end;
+end;
+
+procedure PositUsedMeansToDicUsed(DicUsed : IObject);
+begin
+  if (GetObjectType(DicUsed) = 'Справочники') and not TblGUsedImpExpDicts.Find(DicUsed.GetSign) then
+    raise(GetTranslation(errDescrForDicNotFound, ArrayOf(Trans(DicUsed.GetName))));
+end;
+
+function ExportFieldsByList(FieldsList, TagName : string; DicExported : ICDictionary;
+  TblDicStructure : ICValueTable; AdditLeftShiftCount : Integer) : string;
+var
+  FieldsCounter : Integer;
+begin
+  if FieldsList = '' then
+    begin
+      Result := '';
+      exit;
+    end
+  else
+    Result := AddTextToRes(AddTag(TagName, True), AdditLeftShiftCount);
+  for FieldsCounter := 1 to WordCount(FieldsList, ';') do
+    Result := Result + ExportDicOneFieldValue(DicExported, TblDicStructure,
+      GetColumnIndexByName(TblDicStructure, ExtractWord(FieldsCounter, FieldsList, ';')),
+      AdditLeftShiftCount);
+  Result := Result + AddTextToRes(AddTag(TagName, False), AdditLeftShiftCount);
+end;
+
+function ExportDicFieldValuesList(DicExported : ICDictionary; AdditLeftShiftCount : Integer) : string;
+var
+  FieldsCounter : Integer;
+  TblDicStructure : ICValueTable;
+  KeyFields, ChangableFields : string;
+begin
+  PositUsedMeansToDicUsed(DicExported);
+  KeyFields := TblGUsedImpExpDicts._Default['КлючевыеПоля'];
+  ChangableFields := TblGUsedImpExpDicts._Default['ИзменяемыеПоля'];
+  TblDicStructure := GetCachedDicStructure(DicExported);
+  // открывание тэга экспорта значений полей
+  Result := AddTextToRes(AddTag(dietnOneDicRecFields, True), AdditLeftShiftCount);
+  // экспорт ключевых полей
+  Result := Result + ExportFieldsByList(KeyFields, dietnOneDicRecKeyFields, DicExported,
+    TblDicStructure, AdditLeftShiftCount + 2);
+  // экспорт изменяемых полей
+  Result := Result + ExportFieldsByList(ChangableFields, dietnOneDicRecChangableFields, DicExported,
+    TblDicStructure, AdditLeftShiftCount + 2);
+  // подсчет экспортированных полей - результат в KeyFields, чтобы переменные не плодить
+  KeyFields := ';' + MakeDelimitedValue(ArrayOf(KeyFields, ChangableFields)) + ';';
+  // экспорт остальных полей
+  Result := Result + AddTextToRes(AddTag(dietnOneDicRecNonchangableFields, True), AdditLeftShiftCount + 2);
+  for FieldsCounter := 1 to TblDicStructure.GetColumnCount - 1 do // без нулевого поля "self"
+    if StrPos(';' + TblDicStructure.GetColumnName(FieldsCounter) + ';', KeyFields) = 0 then
+      Result := Result + ExportDicOneFieldValue(DicExported, TblDicStructure,
+        FieldsCounter, AdditLeftShiftCount + 2);
+  Result := Result + AddTextToRes(AddTag(dietnOneDicRecNonchangableFields, False), AdditLeftShiftCount + 2);
+  // закрывание тэга экспорта значений полей
+  Result := Result + AddTextToRes(AddTag(dietnOneDicRecFields, False), AdditLeftShiftCount);
+end;
+
+function ExportAdditLinkField(AdditFieldProps : Integer; DicExported, DicLinkValue : ICDictionary;
+  FieldName, TagName : string; AdditLeftShiftCount : Integer) : string;
+begin
+  if IsObjFocused(DicLinkValue) then
+    Result := AddTextToRes(AddTag(TagName, True), AdditLeftShiftCount) +
+      AddTextToRes(adfRecTypeSign + '=' + GetObjTypeSign(DicLinkValue), AdditLeftShiftCount + 2)
+  else
+    begin
+      Result := '';
+      exit;
+    end;
+  // предполагается, что значением link-поля будет справочник
+  Result := Result + AddTextToRes(adfFieldIsKey + '=' + VarAsStr(AdditFieldProps and Bits(faKey) <> 0),
+    AdditLeftShiftCount + 2) +
+    AddTextToRes(ExportOneDicRecord(DicLinkValue, AdditLeftShiftCount + 2), AdditLeftShiftCount + 2) +
+    AddTextToRes(AddTag(TagName, False), AdditLeftShiftCount);
+end;
+
+function ExportOneDicRecord(DicExported : ICDictionary; AdditLeftShiftCount : Integer) : string;
+begin
+  // открытие тега
+  Result := AddTag(dietnOneDicRecord, True); // без форматирования
+  // категория
+  PositUsedMeansToDicUsed(DicExported);
+  if VarAsInt(TblGUsedImpExpDicts._Default['Категория']) and Bits(faUsed) <> 0 then
+    begin
+      // отдельно идет проверка того, чем является запись - уровнем или простой записью
+      Result := Result + AddTextToRes(adfRecIsCategory + '=' + VarAsStr(DicExported.IsParent), AdditLeftShiftCount);
+      //
+      Result := Result + ExportAdditLinkField(VarAsInt(TblGUsedImpExpDicts._Default['Категория']),
+        DicExported, DicExported.GetParent, 'Parent', dietnOneDicRecCat, AdditLeftShiftCount + 2);
+    end;
+  // подчинение
+  PositUsedMeansToDicUsed(DicExported);
+  if VarAsInt(TblGUsedImpExpDicts._Default['Подчинение']) and Bits(faUsed) <> 0 then // предполагается, что владельцем будет справочник
+    Result := Result + ExportAdditLinkField(VarAsInt(TblGUsedImpExpDicts._Default['Подчинение']),
+      DicExported, DicExported._GetOwner, 'Owner', dietnOneDicRecSubord, AdditLeftShiftCount + 2);
+  // экспорт списка полей со значениями
+  Result := Result + ExportDicFieldValuesList(DicExported, AdditLeftShiftCount + 2);
+  // закрытие тега
+  Result := Result + AddTextToRes(AddTag(dietnOneDicRecord, False), AdditLeftShiftCount);
+end;
+
+function ExportOneDic(DicExported : ICDictionary; TblDicExport : TDicExportTable) : string;
+begin
+  // ID справочника
+  Result := AddTextToRes(AddTag(dietnDictionary, True));
+  Result := Result + AddTextToRes(TblDicExport._Default['IDСправочника']);
+  // метаданные про справочник
+  // Result := Result + ExportDicFieldsList(DicExported, TblDicExport);
+  // записи
+  Result := Result + AddTextToRes(AddTag(dietnOneDicRecords, True));
+  DicExported.Select;
+  while DicExported.SelectNext do
+    Result := Result + AddTextToRes(ExportOneDicRecord(DicExported, 2), 2);
+  Result := Result + AddTextToRes(AddTag(dietnOneDicRecords, False));
+  Result := Result + AddTextToRes(AddTag(dietnDictionary, False));
+end;
+
+function ExportDicsList(TblDicExport : TDicExportTable) : string;
+var
+  DicExported : ICDictionary;
+  Count, Total : Integer;
+begin
+  Result := '';
+  TblDicExport.Select;
+  while TblDicExport.SelectNext do
+    begin
+      DicExported := GetCachedObject(LstCachedDicImpExpObj, 'Справочники.' +
+        TblDicExport._Default['IDСправочника']);
+      if not IsNull(TblDicExport._Default['Фильтр']) then
+        SetFilterToExportedDic(DicExported, TblDicExport._Default['Фильтр']);
+      if DicExported.Select then
+        Result := Result + ExportOneDic(DicExported, TblDicExport);
+    end;
+end;
+
+function ExportOneSubordDicFilterTable(TblSubordDicActionExport : TSubordDicActionExportTable;
+  AdditLeftShiftCount : Integer = 0) : string;
+var
+  TblForFilter : TDicExportFilterTable;
+  TblForFilterValue : TDicExportFilterValueTable;
+  FilterValue : Variant;
+begin
+  GetFilterTables(TblForFilter, TblForFilterValue);
+  TblForFilter.PackedData := TblSubordDicActionExport._Default['ФильтрПодчСправочника'];
+  Result := AddTextToRes(AddTag(dietnSubordDeletedElsFilterList, True), AdditLeftShiftCount);
+  TblForFilter.Select;
+  while TblForFilter.SelectNext do
+    begin
+      FilterValue := GetFilterValue(TblForFilter, TblForFilterValue);
+      if IsNull(FilterValue) or IsObjNotFocused(FilterValue) then
+        continue;
+      Result := Result + AddTextToRes(AddTag(dietnSubordDeletedElsFilter, True), AdditLeftShiftCount + 2);
+      Result := Result + AddTextToRes(TblForFilter._Default['НазвПоля'] + ',' + TblForFilter._Default['Предикат']);
+      if IsObject(FilterValue) then
+        Result := Result + ',' + GetObjTypeSign(FilterValue);
+      Result := Result + AddTextToRes(GetStrValueOfField(TblForFilter._Default['ТипПоля'], FilterValue, AdditLeftShiftCount + 2));
+      Result := Result + AddTextToRes(AddTag(dietnSubordDeletedElsFilter, False), AdditLeftShiftCount + 2);
+    end;
+  Result := Result + AddTextToRes(AddTag(dietnSubordDeletedElsFilterList, False), AdditLeftShiftCount);
+end;
+
+function ExportSubordDicFilterTables(TblSubordDicActionExport : TSubordDicActionExportTable) : string;
+begin
+  Result := '';
+  if TblSubordDicActionExport.LineCount = 0 then
+    exit;
+  Result := Result + AddTextToRes(AddTag(dietnSubordDeletedEls, True));
+  TblSubordDicActionExport.Select;
+  while TblSubordDicActionExport.SelectNext do
+    begin
+      Result := Result + AddTextToRes(TblSubordDicActionExport._Default['IDСправочника'] +
+        ', ' + TblSubordDicActionExport._Default['IDСправочника'], 2);
+      if not IsNull(TblSubordDicActionExport._Default['ФильтрПодчСправочника']) then
+        ExportOneSubordDicFilterTable(TblSubordDicActionExport, 4);
+    end;
+  Result := Result + AddTextToRes(AddTag(dietnSubordDeletedEls, False));
+end;
+
+procedure ExportDictionariesToFile(TblUsedMeans : TDicExportUsedMeansTable;
+  TblDicExport : TDicExportTable;
+  TblSubordDicActionExport : TSubordDicActionExportTable;
+  FileName : string);
+var
+  slSaver : TStringList;
+  Text : string;
+  Cursor : TCursor;
+begin
+  TblGUsedImpExpDicts := TblUsedMeans;
+  Cursor := WaitCursorStart;
+  try
+    slSaver := CreateStringList;
+    try
+      try
+        if not IsNil(TblSubordDicActionExport) then
+          Text := ExportSubordDicFilterTables(TblSubordDicActionExport);
+        Text := Text + ExportDicsList(TblDicExport);
+        if Text <> '' then
+          StrDelete(Text, 1, 2);
+        slSaver.Text := Text;
+      finally
+        LstCachedDicImpExpObj := Null;
+      end;
+      slSaver.SaveToFile(FileName);
+    finally
+      slSaver.Free;
+    end;
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+end;
+
+//******************************************************************************
+// импорт записей из файла в справочники
+
+//******************************************************************************
+
+function DeleteUnusedSpaces(Str : string; Count : Integer) : string;
+begin
+  Result := Str;
+  if Count > 0 then
+    StrDelete(Result, 1, Count);
+end;
+
+function IsTag(Source : string; OpenedTag : Boolean; var TagName : string) : Boolean;
+begin
+  if OpenedTag then
+    Result := (Source[1] = '<') and (Source[StrLength(Source)] = '>')
+  else
+    Result := (StrCopy(Source, 1, 2) = '</') and (Source[StrLength(Source)] = '>');
+  if Result then
+    if OpenedTag then
+      TagName := StrCopy(Source, 2, StrLength(Source) - 2)
+    else
+      TagName := StrCopy(Source, 3, StrLength(Source) - 3)
+  else
+    TagName := '';
+end;
+
+function IsPointedTag(Source, TagName : string; OpenedTag : Boolean) : Boolean;
+begin
+  if OpenedTag then
+    Result := (Source = '<' + TagName + '>')
+  else
+    Result := (Source = '</' + TagName + '>')
+end;
+
+function ReadTag(slFileContents : TStringList; var TagName : string;
+  AdditLeftShiftCount : Integer = 0; InParams : Variant = '') : Variant; forward; // не является реккурсивной
+
+procedure ReadDictionary(slFileContents : TStringList; AdditLeftShiftCount : Integer);
+var
+  DicToReadRecords : ICDictionary;
+  TagName : string;
+begin
+  DicToReadRecords := GetCachedObject(LstCachedDicImpExpObj, 'Справочники.' +
+    DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount), AdditLeftShiftCount);
+  slFileContents.Delete(0); // удаление информации о справочнике - его ID
+  //
+  while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount),
+    dietnDictionary, False) do
+    ReadTag(slFileContents, TagName, AdditLeftShiftCount, DicToReadRecords); // чтение других (= подчиненных) тэгов, находятся, правда, на том же уровне - смещение не добавляется
+end;
+
+procedure ReadDictionaryRecords(DicToReadRecords : ICDictionary;
+  slFileContents : TStringList; AdditLeftShiftCount : Integer);
+var
+  TagName : string;
+begin
+  while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount),
+    dietnOneDicRecords, False) do
+    ReadTag(slFileContents, TagName, AdditLeftShiftCount + 2, DicToReadRecords); // чтение записей
+end;
+
+function FieldIsNull(Obj : IObject; FieldName : string) : Boolean;
+begin
+  case GetObjectType(Obj) of
+    'Справочники' :
+      Result := Obj.FieldIsNull(FieldName);
+    else
+      Result := IsNull(Obj._Default[FieldName]);
+  end;
+end;
+
+function IsEQFieldValues(Obj1, Obj2 : IObject; FieldName : string;
+  FieldType : TValueTableColumnType) : Boolean;
+begin
+  case FieldType of
+    vtcLink :
+      Result := (IsObjFocused(Obj1._Default['@' + FieldName]) and
+        IsObjFocused(Obj2._Default['@' + FieldName]) and
+        IsObjEQ(Obj1._Default['@' + FieldName], Obj2._Default['@' + FieldName])) or
+        (IsObjNotFocused(Obj1._Default['@' + FieldName]) and
+        IsObjNotFocused(Obj2._Default['@' + FieldName]));
+    else
+      Result := (FieldIsNull(Obj1, FieldName) and FieldIsNull(Obj2, FieldName)) or
+        (Obj1._Default[FieldName] = Obj2._Default[FieldName]);
+  end;
+end;
+
+function ReadDictionaryRecord(DicToReadRecords : ICDictionary;
+  slFileContents : TStringList; AdditLeftShiftCount : Integer) : IObject;
+var
+  TagName, KeyFields, ChangableFields, NonchangableFields : string;
+  ReadTagResult : Variant;
+  ObjMaster, ObjParent : IObject;
+  FieldsCounter : Integer;
+  ChangeRecord : Boolean;
+  TblDicStructure : ICValueTable;
+begin
+  TblDicStructure := GetCachedDicStructure(DicToReadRecords, AdditLeftShiftCount);
+  TblDicStructure.Append;
+  try
+    while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount),
+      dietnOneDicRecord, False) do
+      begin
+        ReadTagResult := ReadTag(slFileContents, TagName, AdditLeftShiftCount + 2,
+          ArrayOf(DicToReadRecords, TblDicStructure)); // чтение тэгов, что подчинены к записи
+        if TagName <> '' then
+          case TagName of
+            dietnOneDicRecFields : // поля записи
+              begin
+                KeyFields := ReadTagResult[0];
+                ChangableFields := ReadTagResult[1];
+                NonchangableFields := ReadTagResult[2];
+              end;
+            dietnOneDicRecCat :
+              ObjParent := ReadTagResult;
+            dietnOneDicRecSubord :
+              ObjMaster := ReadTagResult;
+          end;
+      end;
+    // после считывания тэгов на справочник уже поставлены необходимые фильтры
+    if DicToReadRecords.Select and DicToReadRecords.SelectNext then // запись уже существует
+      begin
+        if (ChangableFields <> '') then
+          begin
+            for FieldsCounter := 1 to WordCount(ChangableFields, ';') do
+              begin
+                TagName := ExtractWord(FieldsCounter, ChangableFields, ';');
+                ChangeRecord := not IsEQFieldValues(DicToReadRecords, TblDicStructure, TagName,
+                  TblDicStructure.GetColumnDataType(GetColumnIndexByName(TblDicStructure, TagName)));
+                if ChangeRecord then
+                  break;
+              end;
+            if ChangeRecord then
+              begin
+                DicToReadRecords.Edit;
+                DicToReadRecords.AssignFields(ChangableFields, TblDicStructure);
+                DicToReadRecords.Post;
+                DicToReadRecords.ApplyUpdates;
+              end;
+          end;
+      end
+    else
+      begin
+        DicToReadRecords.Append;
+        DicToReadRecords.AssignFields(MakeDelimitedValue(ArrayOf(KeyFields, ChangableFields, NonchangableFields)), TblDicStructure);
+        if IsObjFocused(ObjMaster) then
+          DicToReadRecords.SetMaster(ObjMaster);
+        if IsObjFocused(ObjParent) then
+          DicToReadRecords.SetParent(ObjParent);
+        DicToReadRecords.Post;
+        DicToReadRecords.ApplyUpdates;
+      end;
+  finally
+    TblDicStructure.Cancel;
+  end;
+  Result := DicToReadRecords;
+end;
+
+function DoMissNonchangableFields(DicToReadRecords : ICDictionary) : Boolean;
+begin
+  Result := DicToReadRecords.Select and DicToReadRecords.SelectNext;
+end;
+
+function ReadDicRecordFieldsList(DicToReadRecords : ICDictionary; TblDicStructure : ICValueTable;
+  slFileContents : TStringList; AdditLeftShiftCount : Integer) : Variant;
+var
+  ReadTagResult : Variant;
+  TagName, KeyFields, ChangableFields, NonchangableFields : string;
+begin
+  while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount),
+    dietnOneDicRecFields, False) do
+    begin
+      ReadTagResult := ReadTag(slFileContents, TagName, AdditLeftShiftCount + 2,
+        ArrayOf(DicToReadRecords, TblDicStructure)); // чтение тэгов, что подчинены к записи
+      if TagName <> '' then
+        case TagName of
+          dietnOneDicRecKeyFields :
+            KeyFields := ReadTagResult;
+          dietnOneDicRecChangableFields :
+            ChangableFields := ReadTagResult;
+          dietnOneDicRecNonchangableFields : // этот оператор выполнится после того, как будут установлены фильтры
+            if not DoMissNonchangableFields(DicToReadRecords) then
+              NonchangableFields := ReadTagResult;
+        end;
+    end;
+  Result := ArrayOf(KeyFields, ChangableFields, NonchangableFields);
+end;
+
+// считывание содержимого тэга dietnOneDicRecFieldValue
+
+function ReadFieldValueFromString(slFileContents : TStringList; ValueType : TValueTableColumnType;
+  AdditLeftShiftCount : Integer; LinkMeanTypeSign : string = '') : Variant;
+var
+  i : Integer;
+  StringValue : string;
+begin
+  if (ValueType <> vtcLink) or (ExtractWord(1, LinkMeanTypeSign, '.') <> 'Справочники') then
+    begin
+      StringValue := DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount + 2); // по крайней мере одна строка должна присутствовать
+      slFileContents.Delete(0);
+      while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount),
+        dietnOneDicRecFieldValue, False) do
+        begin
+          StringValue := StringValue + #13#10 + slFileContents.Strings[0];
+          slFileContents.Delete(0);
+        end;
+    end;
+  case ValueType of
+    vtcFft :
+      Result := StrToDec(ReplaceDecDelim2(StringValue, #0, '.'));
+    vtcFloat :
+      Result := StrToFloat(ReplaceDecDelim2(StringValue, #0, '.'));
+    vtcDate :
+      Result := EncodeDate(StrToInt(StrCopy(StringValue, 7, 4)),
+        StrToInt(StrCopy(StringValue, 4, 2)),
+        StrToInt(StrCopy(StringValue, 1, 2))); //'dd.mm.yyyy'
+    vtcDateTime :
+      Result := EncodeDate(StrToInt(StrCopy(StringValue, 7, 4)),
+        StrToInt(StrCopy(StringValue, 4, 2)),
+        StrToInt(StrCopy(StringValue, 1, 2))) +
+        EncodeTime(StrToInt(StrCopy(StringValue, 12, 2)),
+        StrToInt(StrCopy(StringValue, 15, 2)),
+        StrToInt(StrCopy(StringValue, 18, 2))); //'dd.mm.yyyy hh:mm:sss'
+    vtcTime :
+      Result := EncodeTime(StrToInt(StrCopy(StringValue, 12, 2)),
+        StrToInt(StrCopy(StringValue, 15, 2)),
+        StrToInt(StrCopy(StringValue, 18, 2))); //'hh:mm:sss'
+    vtcLink :
+      begin
+        Result := GetCachedObject(LstCachedDicImpExpObj, LinkMeanTypeSign);
+        case ExtractWord(1, LinkMeanTypeSign, '.') of
+          'Коллекции' :
+            Result := Null; // пока что не импортируется
+          'Справочники' :
+            Result := ReadTag(slFileContents, StringValue, AdditLeftShiftCount + 2,
+              GetCachedObject(LstCachedDicImpExpObj, LinkMeanTypeSign, AdditLeftShiftCount));
+        end;
+      end;
+    vtcBoolean :
+      case StringValue of
+        'TRUE' :
+          Result := True;
+        'FALSE' :
+          Result := False;
+      end;
+    else {vtcString, vtcMemo, vtcInteger}
+      Result := StringValue;
+  end;
+end;
+
+function ReadDictionaryOneField(DicToReadRecords : ICDictionary;
+  TblDicStructure : ICValueTable; slFileContents : TStringList;
+  AdditLeftShiftCount : Integer) : string;
+var
+  FieldProps : string;
+begin
+  FieldProps := DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount);
+  slFileContents.Delete(0);
+  Result := ExtractWord(1, FieldProps, '=');
+  FieldProps := ExtractWord(2, FieldProps, '=');
+  if ExtractWord(1, FieldProps, ',') = 'NULL' then
+    TblDicStructure._Default[Result] := Null
+  else // иначе следующей строкой должен быть тэг со значением поля
+    TblDicStructure._Default[Result] := ReadTag(slFileContents, FieldProps, AdditLeftShiftCount,
+      ArrayOf(TblDicStructure.GetColumnDataType(GetColumnIndexByName(TblDicStructure, Result)),
+      ExtractWord(2, FieldProps, ',')));
+end;
+
+function ReadDictionaryKeyFieldsList(DicToReadRecords : ICDictionary;
+  TblDicStructure : ICValueTable; slFileContents : TStringList;
+  AdditLeftShiftCount : Integer) : string;
+var
+  OneField : string;
+begin
+  Result := '';
+  while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount),
+    dietnOneDicRecKeyFields, False) do
+    begin
+      // подчитка следующего поля
+      OneField := ReadDictionaryOneField(DicToReadRecords, TblDicStructure,
+        slFileContents, AdditLeftShiftCount + 2);
+      DicToReadRecords.SetFieldFilter(OneField, '=', TblDicStructure._Default['@' + OneField], '', '', '');
+      Result := Result + ';' + OneField;
+    end;
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+function ReadDictionaryChangableFieldsList(DicToReadRecords : ICDictionary;
+  TblDicStructure : ICValueTable; slFileContents : TStringList;
+  AdditLeftShiftCount : Integer) : string;
+var
+  OneField : string;
+begin
+  Result := '';
+  while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount),
+    dietnOneDicRecChangableFields, False) do
+    begin
+      OneField := ReadDictionaryOneField(DicToReadRecords, TblDicStructure,
+        slFileContents, AdditLeftShiftCount + 2);
+      Result := Result + ';' + OneField;
+    end;
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+function ReadDictionaryNonchangableFieldsList(DicToReadRecords : ICDictionary;
+  TblDicStructure : ICValueTable; slFileContents : TStringList;
+  AdditLeftShiftCount : Integer) : string;
+var
+  OneField : string;
+  vblDoMissNonchangableFields : Boolean;
+begin
+  Result := '';
+  vblDoMissNonchangableFields := DoMissNonchangableFields(DicToReadRecords);
+  while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount),
+    dietnOneDicRecNonchangableFields, False) do
+    begin
+      if vblDoMissNonchangableFields then
+        begin
+          slFileContents.Delete(0); // прокрутка впустую, значения не важны
+          continue;
+        end;
+      OneField := ReadDictionaryOneField(DicToReadRecords, TblDicStructure,
+        slFileContents, AdditLeftShiftCount + 2);
+      Result := Result + ';' + OneField;
+    end;
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+// считывание доп. линк-поля : категории и подчинение; поскольку тэг присутствует, то значение поля не может быть пустым
+
+function ReadAddLinkValueFromString(DicToReadRecords : ICDictionary; TagName : string;
+  slFileContents : TStringList; AdditLeftShiftCount : Integer) : Variant;
+var
+  LinkMeanTypeSign, TmpTag : string;
+  IsKey : Boolean;
+begin
+  Result := Null;
+  // следующая строка
+  while not IsPointedTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount), TagName, False) do
+    begin
+      if IsTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount + 2), True, TmpTag) then
+        Result := ReadTag(slFileContents, TmpTag, AdditLeftShiftCount + 2,
+          GetCachedObject(LstCachedDicImpExpObj, LinkMeanTypeSign, AdditLeftShiftCount))
+      else
+        begin
+          TmpTag := DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount + 2);
+          case ExtractWord(1, TmpTag, '=') of
+            adfRecTypeSign :
+              LinkMeanTypeSign := ExtractWord(2, TmpTag, '=');
+            adfFieldIsKey :
+              IsKey := VarAsBool(StrToInt(ExtractWord(2, TmpTag, '=')));
+          end;
+          slFileContents.Delete(0);
+        end;
+    end;
+  if IsObjFocused(Result) then
+    begin
+      if IsKey then // фильтр на понятие
+        case TagName of
+          dietnOneDicRecCat :
+            DicToReadRecords.UseParent(Result);
+          dietnOneDicRecSubord :
+            DicToReadRecords.UseMaster(Result);
+        end;
+    end
+  else
+    raise('');
+end;
+
+function ReadTag(slFileContents : TStringList; var TagName : string;
+  AdditLeftShiftCount : Integer = 0; InParams : Variant = '') : Variant;
+var
+  TagNameEnd : string;
+begin
+  if not IsTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount), True, TagName) then
+    exit;
+  slFileContents.Delete(0); // удалена строка с тэгом
+  case TagName of
+    dietnDictionary :
+      ReadDictionary(slFileContents, AdditLeftShiftCount);
+    dietnOneDicRecords :
+      ReadDictionaryRecords(InParams, slFileContents, AdditLeftShiftCount);
+    dietnOneDicRecord :
+      Result := ReadDictionaryRecord(InParams, slFileContents, AdditLeftShiftCount);
+    dietnOneDicRecFields :
+      Result := ReadDicRecordFieldsList(InParams[0], InParams[1],
+        slFileContents, AdditLeftShiftCount);
+    dietnOneDicRecKeyFields :
+      Result := ReadDictionaryKeyFieldsList(InParams[0], InParams[1],
+        slFileContents, AdditLeftShiftCount);
+    dietnOneDicRecChangableFields :
+      Result := ReadDictionaryChangableFieldsList(InParams[0], InParams[1],
+        slFileContents, AdditLeftShiftCount);
+    dietnOneDicRecNonchangableFields :
+      Result := ReadDictionaryNonchangableFieldsList(InParams[0], InParams[1],
+        slFileContents, AdditLeftShiftCount);
+    dietnOneDicRecFieldValue :
+      Result := ReadFieldValueFromString(slFileContents, InParams[0], AdditLeftShiftCount, InParams[1]);
+    dietnOneDicRecCat, dietnOneDicRecSubord :
+      Result := ReadAddLinkValueFromString(InParams[0], TagName, slFileContents, AdditLeftShiftCount);
+    {
+    dietnSubordDeletedEls
+    dietnSubordDeletedElsFilter
+    dietnSubordDeletedElsFilterList
+    }
+  end;
+  if IsTag(DeleteUnusedSpaces(slFileContents.Strings[0], AdditLeftShiftCount), False, TagNameEnd) and
+    (TagNameEnd = TagName) then
+    slFileContents.Delete(0)
+  else
+    raise(slFileContents.Strings[0]) // удалена строка с окончанием тэга - каждая процедура из case-оператора должна обработать и удалить все строки, что предшествуют данной
+end;
+
+procedure ImportDictionariesFromFile(FileName : string);
+var
+  slFileContents : TStringList;
+  TagName : string;
+  Cursor : TCursor;
+begin
+  Cursor := WaitCursorStart;
+  try
+    slFileContents := CreateStringList;
+    try
+      slFileContents.LoadFromFile(FileName);
+      // первая строка должна быть тэгом
+      try
+        while (slFileContents.Count > 0) and
+          IsPointedTag(slFileContents.Strings[0], dietnDictionary, True) do
+          ReadTag(slFileContents, TagName);
+      finally
+        LstCachedDicImpExpObj := Null;
+      end;
+    finally
+      slFileContents.Free;
+    end;
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+end;
+
+function GetNextNumberForField(MeanName, FieldName : string; OnlyLevels : Boolean = False;
+  UnitedMeans : string = '') : Integer;
+begin
+  Result := server.GetNextNumberForField(MeanName, FieldName, OnlyLevels, UnitedMeans);
+end;
+
+function SetTitleCaption(ComponentsTextArray : Variant; Delimeter : String) : String;
+var
+  i, Count : Integer;
+begin
+  Count := ArrayHigh(ComponentsTextArray);
+  for i := 0 to Count - 1 do
+    if ComponentsTextArray[i] <> '' then
+      Result := Result + ComponentsTextArray[i] + Delimeter + ' ';
+  Result := Result + ComponentsTextArray[Count];
+end;     
+
+function SetDetailDict(Master : ICDictionary; DictName, FormName : String;
+                       Place : Variant; ShowToolBar : boolean = True) : ICDictionary;
+begin
+  Result := CreateObject('Dictionaries.' + DictName);
+  Result.UseMasterAndSelect(Master);
+  Result.Params['ShowToolBar'] := ShowToolBar;
+  Result.Params['OpenInPlace'] := True;
+  Result.OpenFormInplace(FormName, Place);
+end;
+
+end.

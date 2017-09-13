@@ -1,0 +1,110 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+
+procedure AssignPeopleTbl(PeopleTbl: ISValueTable; DateFrom, DateTo: DateTime); Server;
+Var
+  PartTbl, PartEmplTbl : ISValueTable;
+  yy,mm,dd, CurYear: Integer;
+  CurYearIsLeap : Boolean;
+  TLF, ResponsDic, PartDic, PartEmplDic : ISDictionary;
+begin
+  PartTbl := CreateObject('ТаблицаЗначений');
+  PartEmplTbl := CreateObject('ТаблицаЗначений');
+
+  TLF := CreateObject('Справочники.Телефоны');
+  PartDic := CreateObject('Справочники.ЮрПартнеры');
+  PartEmplDic := CreateObject('Справочники.Служащие');
+
+  CurYear := GetYear(CurrentDate);
+  CurYearIsLeap := IsLeapYear(CurYear);
+  PartTbl := CreateObject('ТаблицаЗначений');
+  PartDic.Select;
+  PartDic.SaveToValueTable('Self;ПолноеНазвание;ДатаРождения;ДатаДоговора;Код',PartTbl,0,PartDic.RecordCount);
+  PartEmplDic.Select;
+  PartEmplDic.SaveToValueTable('Self;ПолноеНазвание;ДатаРождения;ДатаУвольнения;Код',PartEmplTbl,0,PartEmplDic.RecordCount);
+  PartEmplTbl.AppendTo('Self;ПолноеНазвание;ДатаРождения',PartTbl);  
+  PartEmplTbl.Close;
+  PartTbl.Select;
+  While PartTbl.SelectNext do
+    begin
+      PartTbl.Edit;
+      DecodeDate(PartTbl.ДатаРождения,yy,mm,dd);
+      if (mm=2) and (dd=29) and not CurYearIsLeap then
+       PartTbl.ДатаДоговора := EncodeDate(CurYear,3,1)
+      else
+       PartTbl.ДатаДоговора := EncodeDate(CurYear,mm,dd);
+      PartTbl.Код := CurYear - yy;
+      PartTbl.Post;
+    end;
+  PartTbl.SortBy('ДатаДоговора');
+  PartTbl.SetRange(DateFrom,DateTo);
+  PartTbl.AppendTo('ДатаДоговора=ДатаВыборки;ДатаРождения=Дата;ПолноеНазвание;Self=Партнер;Код=Годовщина',PeopleTbl);
+  PartTbl.Close;
+  PeopleTbl.Select;
+  While PeopleTbl.SelectNext do
+    begin  
+      PeopleTbl.Edit;
+      PeopleTbl.Телефон := GetActiv(TLF, 'Номер', PeopleTbl.Партнер);
+      PeopleTbl.Post;
+    end;
+
+end;
+
+{procedure AssignPeopleTbl(PeopleTblS: ISValueTable; DateFromS, DateToS: DateTime); Server;
+Var
+  PartTbl, PartEmplTbl : ISValueTable;
+  Year: Integer;
+begin
+  PeopleTbl := PeopleTblS;
+  DateFrom := DateFromS;
+  DateTo := DateToS;
+  PartTbl := CreateObject('ТаблицаЗначений');
+  PartEmplTbl := CreateObject('ТаблицаЗначений');
+  PartDic.Select;
+  PartDic.SaveToValueTable('',PartTbl,0,PartDic.RecordCount);
+    PartEmplDic.Select;
+    PartEmplDic.SaveToValueTable('',PartEmplTbl,0,PartEmplDic.RecordCount);
+  PartTbl.AppendTo('ДатаРождения=Дата;ПолноеНазвание',PeopleTbl);
+  PartEmplTbl.AppendTo('ДатаРождения=Дата;ПолноеНазвание',PeopleTbl);
+  PeopleTbl.Select;
+  while PeopleTbl.SelectNext do
+    begin
+      PeopleTbl.Edit;
+      if GetMonth(PeopleTbl.Дата) > GetMonth(DateTo) then
+        PeopleTbl.ДатаВыборки := StrToDate(VarAsStr(GetDay(PeopleTbl.Дата))+ '.' + VarAsStr(GetMonth(PeopleTbl.Дата))+ '.' + VarAsStr(GetYear(DateTo -1)))
+      else
+        PeopleTbl.ДатаВыборки := StrToDate(VarAsStr(GetDay(PeopleTbl.Дата))+ '.' + VarAsStr(GetMonth(PeopleTbl.Дата))+ '.' + VarAsStr(GetYear(DateTo)));
+      PeopleTbl.Post;
+    end;
+  PeopleTbl.SortBy('ДатаВыборки');
+  PeopleTbl.SetRange(DateFrom,DateTo);
+  PeopleTbl.Select;
+  while PeopleTbl.SelectNext do
+    begin
+      PeopleTbl.Edit;
+      PeopleTbl.Годовщина := GetYear(PeopleTbl.ДатаВыборки) - GetYear(PeopleTbl.Дата);;
+      if PartDic.FindByField('ПолноеНазвание', PeopleTbl.ПолноеНазвание, false) then
+        PeopleTbl.Телефон := GetActiv(TLF, 'Номер', PartDic);
+      if PartEmplDic.FindByField('ПолноеНазвание', PeopleTbl.ПолноеНазвание, false) then
+        PeopleTbl.Телефон := GetActiv(TLF, 'Номер', PartEmplDic);
+      PeopleTbl.Post;
+    end;
+  PeopleTbl.CopyTo('',PartTbl);
+  PartTbl.CopyTo('',PeopleTbl);
+  PeopleTbl.Select;
+  while PeopleTbl.SelectNext do
+    begin
+      if PeopleTbl.Дата = null then
+        begin
+          PeopleTbl.Delete;
+          PeopleTbl.Select;
+        end;
+    end;
+end;   }
+
+end.

@@ -1,0 +1,423 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Интерфейс, Расчеты, РаботаСПеременными, РаботаСОбъектами, Reports,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначенийCL, Пользователи, НумерацияДокументов, РаботаСДокументамиCL;
+
+implementation
+
+var MasterProc : ICProcessing;
+    RegionTbl : ICValueTable;
+    RegionDic, Users, GoodsDic : ICDictionary;
+    DocsJournal, KassaJournal, BankJournal, EquaringJournal, InSideMoveJournal : ICJournal;
+    OutParams : Variant;
+    DateFrom, DateTo : DateTime;
+    Options : ICOptions;
+    FirstShow : boolean;       
+
+procedure SetDateFilterForAllJrn;
+begin
+  DocsJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+  KassaJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+  BankJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+  InSideMoveJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+end;  
+
+procedure TVS_VPATimedAfterScroll(Sender: TObject);
+begin
+ if RegionTbl.IsFocused then
+   begin
+      DocsJournal.ExecProc(MasterProc, 'changeregion', RegionTbl.Регион, OutParams);
+      KassaJournal.ExecProc(MasterProc, 'changeregion', RegionTbl.Регион, OutParams);
+      BankJournal.ExecProc(MasterProc, 'changeregion', RegionTbl.Регион, OutParams);
+      EquaringJournal.ExecProc(MasterProc, 'changeregion', RegionTbl.Регион, OutParams);
+      GoodsDic.ExecProc(MasterProc, 'changeregion', RegionTbl.Регион, OutParams);
+      InSideMoveJournal.ExecProc(MasterProc, 'changeregion', RegionTbl.Регион, OutParams);
+   end
+ else
+   begin
+     DocsJournal.ExecProc(MasterProc, 'changeregion', Null, OutParams);
+     KassaJournal.ExecProc(MasterProc, 'changeregion', Null, OutParams);
+     BankJournal.ExecProc(MasterProc, 'changeregion', Null, OutParams);
+     EquaringJournal.ExecProc(MasterProc, 'changeregion', Null, OutParams);
+     GoodsDic.ExecProc(MasterProc, 'changeregion', Null, OutParams);
+     InSideMoveJournal.ExecProc(MasterProc, 'changeregion', Null, OutParams);
+   end
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);       
+begin
+ MasterProc :=  Mean;
+ Options := GetOptions;  
+ FirstShow := true;
+ Users := CreateObject('Справочники.Пользователи');
+ Users.FindByField('UniID',GetUserID, False);
+  if Users.IsFocused and (VarAsStr(Users.РаботаСРегионамиТипыДокументов)='') then
+    raise('У пользователя не указаны типы документов для работы с регионами!');
+
+ RegionDic := CreateObject('Справочники.Регионы');
+ RegionTbl := CreateObject('ТаблицаЗначений'); 
+ RegionTbl.AddColumn('Регион',vtcLink,0);
+ RegionTbl.AddColumn('Код',vtcString,2);
+ RegionTbl.AddColumn('Название',vtcString,70);
+ RegionTbl.AddColumn('Sort',vtcInteger,0);  
+ RegionTbl.Open;
+
+ if Users.IsFocused and VarAsBool(Users.@Регион.IsFocused) and
+    VarAsBool(Users.ОтборПоРегиону) and RegionDic.Find(Users.@Регион) then
+   begin
+     RegionTbl.Append;
+     RegionTbl.AssignFields('Код;Название',RegionDic);
+     RegionTbl.Регион := RegionDic;
+     RegionTbl.Sort := 1;
+     RegionTbl.Post;   
+     tbRegion.Visible := false;
+   end
+ else
+   begin
+     RegionTbl.CopyDataToServer;
+     server.FillRegionTbl(RegionTbl.SrvMean);
+     RegionTbl.CopyDataFromServer;
+   end;
+ RegionTbl.SortBy('Sort;Название');
+ RegionTbl.SelectFirst;
+ RegionTbl.UseDataSource(CtrlToVar(TVS));
+
+  // Установка периода
+  try
+    eDateFrom.VPAOnChange.EventName := '';
+    eDateTo.VPAOnChange.EventName := '';
+    SetDatesByPeriodType(DateFrom, DateTo, eDateFrom, eDateTo, 'DatesPeriodTypeForJournal');
+    if (DateFrom=0) or (DateTo=0) then
+      begin
+       DateFrom := RoundDate(CurrentDate, rdMonth, False);
+       DateTo := RoundDate(CurrentDate, rdMonth, True)-1;
+      end;
+    Options.SetServerPrm('StartDateFromForReg',DateFrom);
+    Options.SetServerPrm('StartDateToForReg',DateTo);
+  finally
+    eDateFrom.Text := DateToStr(DateFrom);
+    eDateTo.Text := DateToStr(DateTo);
+    eDateFrom.VPAOnChange.EventName := 'eDateFrom_Change';
+    eDateTo.VPAOnChange.EventName := 'eDateFrom_Change';
+  end;
+
+
+
+
+ KassaJournal := CreateObject('Журналы.ЖурналКассовыхПлатежей');
+ KassaJournal.Params['OwnerProc'] := MasterProc;
+ KassaJournal.OpenFormInplace('СписокКассовыхПлатежейРегионов',CtrlToVar(Notebook.PageClass[1]));
+ 
+ BankJournal := CreateObject('Журналы.ЖурналБанковскихПлатежей');
+ BankJournal.Params['OwnerProc'] := MasterProc;
+ BankJournal.OpenFormInplace('СписокБанковскихПлатежейРегионов',CtrlToVar(Notebook.PageClass[2]));
+
+ EquaringJournal := CreateObject('Журналы.ЖурналПлатежейЭквайринга');
+ EquaringJournal.Params['OwnerProc'] := MasterProc;
+ EquaringJournal.OpenFormInplace('СписокПлатежейЭквайрингаРегоинов',CtrlToVar(Notebook.PageClass[3]));
+
+ InSideMoveJournal  := CreateObject('Журналы.ЖурналПеремещенияТовара');
+ InSideMoveJournal.Params['OwnerProc'] := MasterProc;
+ InSideMoveJournal.OpenFormInplace('СписокПеремещенияТовараРегионов',CtrlToVar(Notebook.PageClass[4]));
+
+ // Остатки товаров на складах 
+ GoodsDic := CreateObject('Справочники.Товары');
+ GoodsDic.Params['cardType'] := 0;
+ GoodsDic.OpenFormInplace('ТоварыНаСкладах0', CtrlToVar(tsStore) );
+
+
+end;     
+
+{$D-}
+procedure dbgRegion_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if RegionTbl.IsFocused and (not VarAsBool(RegionTbl.@Регион.IsFocused)) then
+     BackColor := clSilver;
+end;
+{$D+}   
+
+
+
+procedure tbAddRegion_Click(Sender: TObject);
+var RecId:Double;
+begin
+ try
+   if RegionTbl.IsFocused then
+     RecId := RegionTbl.RecID;
+   RegionTbl.DisableControls;
+   TVS.AfterScrollLock := true;
+   RegionDic.Select;
+   RegionDic.EditInForm('',0);
+   if RegionDic.IsFocused and not RegionTbl.Locate('Код',VarAsStr(RegionDic.Код)) then
+     begin
+       RegionTbl.Append;
+       RegionTbl.Регион :=  RegionDic;
+       RegionTbl.AssignFields('Код;Название',RegionDic);
+       RegionTbl.Sort := 1;
+       RegionTbl.Post;
+     end
+   else
+     RegionTbl.FindByRecID(RecId);
+ finally
+   RegionTbl.EnableControls;
+  RegionTbl.SortBy('Sort;Название');
+  RegionTbl.SelectFirst;
+  RegionTbl.UseDataSource(CtrlToVar(TVS));
+   TVS.AfterScrollLock := false;
+   TVS_VPATimedAfterScroll(Form);
+ end;
+
+end;
+
+procedure tbEditRegion_Click(Sender: TObject);
+begin
+  if RegionTbl.IsFocused and RegionDic.Find(RegionTbl.@Регион) then
+    begin
+      RegionDic.EditInForm('',1);
+      RegionTbl.Edit;
+      RegionTbl.AssignFields('Код;Название',RegionDic);
+      RegionTbl.Post;
+    end;
+end;
+
+procedure tbDelRegion_Click(Sender: TObject); 
+var Accept : boolean;
+begin
+ if RegionTbl.IsFocused and RegionDic.Find(RegionTbl.@Регион) and
+   (MessageDlg('Удалить регион '+VarAsStr(RegionTbl.Название)+'?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) and RegionDic.SetSrvToClientPos then
+    try
+      Accept := false;
+      RegionDic.SrvMean.Delete;
+      RegionDic.SrvMean.ApplyUpdates; 
+      Accept := true;
+    finally;
+      if Accept then
+        RegionTbl.Delete
+      else
+        ShowMessage('Регион '+VarAsStr(RegionDic.NameField)+' удалять нельзя!');
+    end;
+end;
+
+procedure PageControlDocsType_Change(Sender: TObject);
+begin
+  case PageControlDocsType.ActivePage.Hint of
+    'Касса' : Notebook.PageIndex := 1;
+    'Банк' : Notebook.PageIndex := 2;
+    'Эквайринг' : Notebook.PageIndex := 3;
+    'НакладнаяВнутрПеремещ' : Notebook.PageIndex := 4;
+    else
+      begin
+        DocsJournal.ExecProc(MasterProc,'changedoctype',PageControlDocsType.ActivePage.Hint,OutParams); 
+        Notebook.PageIndex := 0;
+      end;
+  end;
+end;
+
+procedure eDateFrom_Change(Sender: TObject);
+begin
+ if StrToDateDef((Sender as TO4Edit).Text,400000)<>400000 then
+   begin
+     (Sender as TO4Edit).Color := clWindow;
+     SetOneDates(Sender, DateFrom, DateTo);
+     SetDateFilterForAllJrn;
+   end
+ else
+   (Sender as TO4Edit).Color := $00A0A0FF;
+end;
+
+procedure tbSelectDates_Click(Sender: TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+
+procedure miFirstHalfYear_Click(Sender: TObject);
+begin
+ try
+   eDateFrom.VPAOnChange.EventName := '';
+   eDateTo.VPAOnChange.EventName := '';
+   SetMenuDatesCL(Sender, DateFrom, DateTo, eDateFrom, eDateTo);
+   (Sender as TO4MenuItem).Checked := True;
+    SetDateFilterForAllJrn;
+ finally
+   eDateFrom.VPAOnChange.EventName := 'eDateFrom_Change';
+   eDateTo.VPAOnChange.EventName := 'eDateFrom_Change';
+ end;
+end;
+
+
+procedure Form_Close(Sender: TObject);
+begin
+ SaveDatesPeriodType(DateFrom, DateTo, 'DatesPeriodTypeForJournal');
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+var CallerSign : string;
+begin
+  case ProcID of
+    'ChJrnDatePeriod' :
+      if IsArray(InParams) then
+      begin
+        try
+          cbPeriodRange.VPAOnClick.EventName := '';
+          eDateFrom.VPAOnChange.EventName := '';
+          eDateTo.VPAOnChange.EventName := '';
+          DateFrom := InParams[0];
+          DateTo := InParams[1];
+          eDateFrom.Text := DateToStr(DateFrom);
+          cbPeriodRange.checked := VarAsBool(InParams[2]);
+          eDateTo.Text := DateToStr(DateTo);
+        finally
+          eDateFrom.VPAOnChange.EventName := 'eDateFrom_Change';
+          eDateTo.VPAOnChange.EventName := 'eDateFrom_Change';
+          cbPeriodRange.VPAOnClick.EventName := 'cbPeriodRange_Click';
+        end;
+        CallerSign := VarAsStr(Caller.GetSign);
+        if CallerSign<>'ЖурналКассовыхПлатежей' then
+          KassaJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+        if CallerSign<>'ЖурналБанковскихПлатежей' then
+          BankJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+        if CallerSign<>'ЖурналДокументовРегионов' then
+          DocsJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+        if CallerSign<>'ЖурналПлатежейЭквайринга' then
+          EquaringJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+        if CallerSign<>'ЖурналПеремещенияТовара' then
+          InSideMoveJournal.ExecProc(MasterProc, 'ChJrnDatePeriod',ArrayOf(DateFrom, Dateto, cbPeriodRange.Checked),OutParams);
+
+      end;
+  end;
+end;
+
+procedure cbPeriodRange_Click(Sender: TObject);
+begin
+  eDateFrom.Enabled := cbPeriodRange.Checked;
+  eDateTo.Enabled := cbPeriodRange.Checked;
+  tbSelectDates.Enabled := cbPeriodRange.Checked;
+  SetDateFilterForAllJrn
+end;
+
+procedure Form_Show(Sender: TObject); 
+var i, count:integer;
+    s:string;
+    CurTabSheet : TComponent;
+begin  
+ if FirstShow then
+   begin  
+     FirstShow := false;
+     if Users.IsFocused then
+       begin
+         s:= VarAsStr(Users.РаботаСРегионамиТипыДокументов);
+         if s<>'' then
+           begin
+              s := ';'+s+';';
+              for i:=1 to 14 do
+                begin
+                  CurTabSheet := Form.FindComponent('TabSheet'+IntToStr(i));
+                  if not IsNil(CurTabSheet) and (StrPos(';'+IntToStr(i)+';',s)=0) then
+                    (CurTabSheet as TTabSheet).TabVisible := false;
+                end;
+           end
+       end;
+     if PageControlDocsType.PageCount>0 then
+       for i:=0 to PageControlDocsType.PageCount-1 do
+         if PageControlDocsType.Pages[i].TabVisible then
+           begin
+             PageControlDocsType.ActivePage := PageControlDocsType.Pages[i];
+             break;
+           end;
+
+     DocsJournal := CreateObject('Журналы.ЖурналДокументовРегионов');
+     DocsJournal.Params['OwnerProc'] := MasterProc;
+     DocsJournal.Params['DefDocTypeRange'] :=  VarAsStr(PageControlDocsType.ActivePage.Hint);
+     DocsJournal.OpenFormInplace('СписокДокументовРегионов',CtrlToVar(Notebook.PageClass[0]));
+   end;  
+ if RegionTbl.IsFocused and VarAsBool(RegionTbl.@Регион.IsFocused) then
+   TVS_VPATimedAfterScroll(Form);
+
+
+end;
+
+procedure PageControl1_Change(Sender: TObject);
+begin
+ if PageControl1.ActivePage.Name='tsStore' then
+   GoodsDic.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+pnLeft:TO4Panel
+Label1:TO4Label
+tbRegion:TO4ToolBar
+tbAddRegion:TO4ToolButton
+tbEditRegion:TO4ToolButton
+tbDelRegion:TO4ToolButton
+dbgRegion:TO4DBGrid
+Panel1:TO4Panel
+PageControl1:TO4PageControl
+tsJrn:TTabSheet
+PageControlDocsType:TO4PageControl
+TabSheet1:TTabSheet
+TabSheet2:TTabSheet
+TabSheet3:TTabSheet
+TabSheet4:TTabSheet
+TabSheet5:TTabSheet
+TabSheet13:TTabSheet
+TabSheet14:TTabSheet
+TabSheet6:TTabSheet
+TabSheet7:TTabSheet
+TabSheet8:TTabSheet
+TabSheet9:TTabSheet
+TabSheet10:TTabSheet
+TabSheet11:TTabSheet
+TabSheet12:TTabSheet
+pDatePeriod:TO4Panel
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbDates:TO4ToolBar
+tbSelectDates:TO4ToolButton
+cbPeriodRange:TO4CheckBox
+Notebook:TO4Notebook
+tsStore:TTabSheet
+TVS:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastDay:TO4MenuItem
+miLastWeek:TO4MenuItem
+miLastMonth:TO4MenuItem
+miLastQuartal:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisDay:TO4MenuItem
+miThisweek:TO4MenuItem
+miThisMonth:TO4MenuItem
+miThisQuartal:TO4MenuItem
+miThisYear:TO4MenuItem

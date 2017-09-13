@@ -1,0 +1,20 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+var
+  PaysIn, PaysOut : ISJournal;
+
+implementation
+
+function CalcPaySum(Order : ISDocuments): Decimal; Server;
+begin
+  PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysOut.UseMaster(Order);
+  Result := PaysOut.Total('—умма¬¬алюте');
+end;
+
+
+end.

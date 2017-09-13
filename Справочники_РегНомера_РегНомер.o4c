@@ -1,0 +1,210 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData, RegOwner : ICDictionary;
+  AttribTable : ICValueTable;
+  WasValidate : Boolean;
+
+function HasActive(DetRec : ICDictionary; DocType : Integer) : Boolean;
+var
+  DetOwner, DetList : ICDictionary;
+begin
+  DetOwner := DetRec._GetOwner;
+  Result := False;
+  if not IsNil(DetOwner) then
+    begin
+      DetList := CreateObject('Справочники.' + DetRec.GetSign);
+      DetList.UseMaster(DetOwner);
+      DetList.SetRangeByField('Тип', DocType, DocType);
+      if DetList.Select then
+        while DetList.SelectNext do
+          if not IsObjEQ(DetList, DetRec, False) and VarAsBool(DetList.Активность) then
+            begin
+              Result := True;
+              break;
+            end;
+    end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  AttribTable := CreateObject('ValueTable');
+  CreateAttributesTable(AttribTable);
+end;
+
+procedure edRegNumberType_ComboClick(Sender : TObject);
+begin
+  tsAlco_Tabak.TabVisible := False;
+  SetPropertyForComponentList(ptVisible , Form, 'dbeLicenceNo;lbLicenceNo;dbeSymbol;lbSymbol', False);
+  case edRegNumberType.ItemIndex of
+    0 :
+      SetPropertyForComponentList(ptVisible , Form, 'dbeLicenceNo;lbLicenceNo', True);
+    5, 6 :
+      tsAlco_Tabak.TabVisible := True; 
+    8, 9, 10, 11, 12, 13, 14 :
+      SetPropertyForComponentList(ptVisible , Form, 'dbeSymbol;lbSymbol', True);
+    15 :
+      MasterData.РегНомер := 'X';
+  end;
+  edRegNumberType.Text := Trans(edRegNumberType.Text);
+  MasterData.Активность := not HasActive(MasterData, edRegNumberType.ItemIndex);
+  cbActive.Checked := MasterData.Активность;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  edRegNumberType.ItemIndex := MasterData.Тип;
+  case edRegNumberType.ItemIndex of
+    0, 5, 6 :
+      begin
+        try
+          CreateAttributesTable(AttribTable);
+          AttribTable.PackedData := MasterData.Аттрибуты;
+        except
+          CreateAttributesTable(AttribTable);
+        end;
+        AttribTable.Select;
+        if AttribTable.SelectNext then
+          if edRegNumberType.ItemIndex = 0 then
+            dbeLicenceNo.Text := AttribTable.StringField
+          else
+            begin
+              edAlco_TabakLizKind.ItemIndex := AttribTable.IntegerField;
+              edExpiryDate.Text := DateToStr(AttribTable.DateField);
+            end;
+        AttribTable.Clear;
+      end;
+  end;
+  edRegNumberType_ComboClick(Sender);
+  cbActive.Checked := MasterData.Активность;
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeRegNumber.Text), '');
+end;
+
+procedure MDS_Validate(Sender : TObject);
+begin
+  case edRegNumberType.ItemIndex of
+    0, 5, 6 :
+      begin
+        AttribTable.Append;
+        if edRegNumberType.ItemIndex = 0 then
+          AttribTable.StringField := dbeLicenceNo.Text
+        else
+          begin
+            AttribTable.IntegerField := edAlco_TabakLizKind.ItemIndex;
+            try
+              AttribTable.DateField := StrToDate(edExpiryDate.Text);
+            except
+              raise(Trans('Укажите срок действия лицензии'));
+            end;
+          end;
+        AttribTable.Post;
+        MasterData.Аттрибуты := AttribTable.PackedData;
+      end;
+  end;
+  MasterData.Назначение := edRegNumberType.Text;
+  WasValidate := True;
+end;
+
+procedure btOK_VPABeforeActionClick(Sender : TObject);
+begin
+  MasterData.Тип := edRegNumberType.ItemIndex;
+end;
+
+procedure cbActive_Click(Sender : TObject);
+begin
+  MasterData.Активность := cbActive.Checked;
+end;
+
+procedure ResetActive(DetRec : ICDictionary);
+var
+  DetOwner, DetList : ICDictionary;
+  Changed : Boolean;
+begin
+  if IsObjFocused(DetRec) and VarAsBool(DetRec.Активность) then
+    begin
+      DetOwner := DetRec._GetOwner;
+      if DetOwner.IsFocused then
+        begin
+          DetList := CreateObject('Справочники.' + DetRec.GetSign);
+          DetList.UseMaster(DetOwner);
+          DetList.SetRangeByField('Тип', DetRec.Тип, DetRec.Тип);
+          Changed := False;
+          if DetList.Select then
+            while DetList.SelectNext do
+              if not IsObjEQ(DetList, DetRec, False) then
+                begin
+                  DetList.Edit;
+                  DetList.Активность := False;
+                  DetList.Post;
+                  Changed := True;
+                end;
+          if Changed then
+            DetList.ApplyUpdates;
+        end;
+    end;
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  ResetActive(MasterData);
+  MasterData.ApplyUpdates;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure dbeRegNumber_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeRegNumber.Text), '');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+pnBottom:TO4Panel
+pnButton:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnMain:TO4Panel
+pgcLists:TO4PageControl
+tsMain:TTabSheet
+Label7:TO4Label
+Label1:TO4Label
+Label5:TO4Label
+lbLicenceNo:TO4Label
+Label4:TO4Label
+Label6:TO4Label
+Label8:TO4Label
+lbSymbol:TO4Label
+dbeRegNumber:TO4DBEdit
+edRegNumberType:TO4Edit
+dbeOrganization:TO4DBEdit
+dbeLicenceNo:TO4Edit
+cbActive:TO4CheckBox
+dbeMemo:TO4DBEdit
+dbeBornDate:TO4DBEdit
+dbeAccount:TO4DBEdit
+dbeSymbol:TO4DBEdit
+tsAlco_Tabak:TTabSheet
+Label2:TO4Label
+Label3:TO4Label
+edAlco_TabakLizKind:TO4Edit
+edExpiryDate:TO4Edit
+pnTitle:TO4Panel
+lbTitle:TO4Label
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

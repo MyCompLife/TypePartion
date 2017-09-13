@@ -1,0 +1,455 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, СтруктураТаблицДляDBFДилер;
+
+procedure AppendLinkRecords(Tbl : ICValueTable; TypeTbl, TblName : String; ObjName : TO4Panel; Var Log: TStringList);
+procedure AddInfoDocsToLog(TypeOper: String; DocType: String; Doc: Variant; DocPartType: String; Var Log: TStringList);    //Doc: ICValueTable;
+function IsDicExists(DicName: String; DicTbl :ICValueTable; Var ThisRec : ICDictionary) : Boolean;
+function StringColumnsWithoutDelIndex(DocsTbl: ICValueTable): String;
+function FindTypeJournalByDocument(DocName: String): String;
+function GetIndexTypeDoc(DocName: String): Integer;
+Function FindRegionByCode(Code : String): String;
+
+implementation
+
+function StringColumnsWithoutDelIndex(DocsTbl: ICValueTable): String;
+Var
+  ColumnCnt, NumBegColumn : Integer;
+begin
+  NumBegColumn := 0;
+  Result := '';
+  for ColumnCnt := NumBegColumn to DocsTbl.GetColumnCount-1 Do
+    begin
+      if StrPos('_D', DocsTbl.GetColumnName(ColumnCnt)) = 0 then
+        begin
+          if Result = '' then
+            Result := DocsTbl.GetColumnName(ColumnCnt)
+          else
+            Result := Result + ';' + DocsTbl.GetColumnName(ColumnCnt);
+        end;
+    end;
+end;
+
+function IsDicExists(DicName: String; DicTbl :ICValueTable; Var ThisRec : ICDictionary) : Boolean;
+Var
+  OneDic : ICDictionary;
+Begin
+  Result := False;
+  OneDic := CreateObject('Справочники.' + DicName);
+  Case DicName of
+  'Товары':
+    begin
+      if VarAsStr(DicTbl.Код) <> '' then
+        OneDic.SetFieldFilter('Код', '=', DicTbl.Код, '', '', Null)
+    end;
+  'ЮрПартнеры','ФизЛица','Служащие','Банки','ОбъектыПроизводства':
+    begin
+      if VarAsStr(DicTbl.Артикул) <> '' then
+        OneDic.SetFieldFilter('Артикул', '=', DicTbl.Артикул, '', '', Null)
+      else
+        OneDic.SetFieldFilter('ПолноеНазвание', '=', DicTbl.ПолноеНазвание, '', '', Null);
+    end;
+  'ВашеПредприятие':
+    begin
+      if VarAsStr(DicTbl.Артикул) <> '' then
+        OneDic.SetFieldFilter('Артикул', '=', DicTbl.Артикул, '', '', Null)
+      else
+        OneDic.SetFieldFilter('Название', '=', DicTbl.Название, '', '', Null);
+    end;
+  end;
+  if OneDic.Select then
+    while OneDic.SelectNext do
+      begin
+        ThisRec := OneDic;
+        Result := True;
+        Break;
+      end;
+End;
+
+procedure AddInfoDocsToLog(TypeOper: String; DocType: String; Doc: Variant; DocPartType: String; Var Log: TStringList);   //Doc: ICValueTable
+Var
+  TOper, TDoc: String;
+  DocDate, DocNumber, DocPartner, HeadInfo: String;
+  Num, Code, Name, Price, Store, ListInfo: String;
+  PartDict : String;
+begin
+  Case TypeOper of
+    'Add'    : TOper := 'Запись добавлена';
+    'Edit'   : TOper := 'Запись изменена';
+    'Analiz' : TOper := 'Запись проанализирована';
+    'SetMaster' : TOper := 'Запись привязана';
+    'NotFindPart' : TOper := 'Не найдена партия';
+  end;
+  if VarAsBool(Doc.HasField('ДатаДокумента')) then DocDate := DateToStr(Doc.ДатаДокумента);
+  if VarAsBool(Doc.HasField('НомерДокумента')) then DocNumber := Doc.НомерДокумента;
+  if VarAsBool(Doc.HasField('Партнер')) and VarAsBool(Doc.Партнер.IsFocused) then
+    begin
+      PartDict := Doc.Партнер.GetSign;
+      case PartDict of
+        'ВашеПредприятие':
+          DocPartner := Doc.Партнер.Название;
+        'Банки','Служащие','ФизЛица','ФизЛица','ОбъектыПроизводства':
+          DocPartner := Doc.Партнер.ПолноеНазвание;
+        'НомерСчета':
+          DocPartner := Doc.Партнер.НомерСчета;
+      end;
+    end;
+//  DocPartner := Doc.DefValue['Партнер'];
+  HeadInfo := DocDate + '-' + DocNumber + '-' + DocPartner;
+  Case DocPartType of
+   'Head' :
+     begin
+       TDoc := 'Шапка документа'
+     end;
+   'List' :
+     begin
+       TDoc := 'Содержимое документа';
+       if VarAsBool(Doc.HasField('НомСтроки')) then Num := IntToStr(Doc.НомСтроки);
+       if VarAsBool(Doc.HasField('Код')) and VarAsBool(Doc.Товар.IsFocused) then Code := Doc.Товар.Код;
+       if VarAsBool(Doc.HasField('Товар')) and VarAsBool(Doc.Товар.IsFocused) then Name := Doc.DefValue['Товар'];
+       ListInfo := Num + '-' + Code + '-' + Name;
+     end;
+   'Dic' :
+     begin
+       TDoc := 'Справочник';
+       if VarAsBool(Doc.HasField('ПолноеНазвание')) then
+         Name := Doc.ПолноеНазвание
+       else
+         if VarAsBool(Doc.HasField('Название')) then
+           Name := Doc.Название;
+       ListInfo := Name;
+     end;
+   'FindMaster' :
+     begin
+       if VarAsBool(Doc.HasField('ДокументОснования')) then
+         ListInfo := ' (' + Doc.ДокументОснования + ')';
+     end;
+   'Partion' :
+     begin
+       TDoc := 'Содержимое документа';
+       if VarAsBool(Doc.HasField('НомСтроки')) then Num := IntToStr(Doc.НомСтроки);
+       if VarAsBool(Doc.HasField('Код')) and VarAsBool(Doc.Товар.IsFocused) then Code := Doc.Товар.Код;
+       if VarAsBool(Doc.HasField('Товар')) and VarAsBool(Doc.Товар.IsFocused) then Name := Doc.Товар.НазвТовара;//Doc.DefValue['Товар'];
+       if VarAsBool(Doc.HasField('ВхЦенаБезНДС')) then Price := FloatToStr(Doc.ВхЦенаБезНДС);
+       if VarAsBool(Doc.HasField('Склад')) and VarAsBool(Doc.Склад.IsFocused) then Store := Doc.Склад.Название;//Doc.DefValue['Склад'];
+       ListInfo := Num + '-' + Code + '-' + Name + '-' + Price + '-' + Store;
+     end;
+   end;
+  Log.Add(TOper + '|' + DocType + '|' + HeadInfo + ' - ' +ListInfo + '|' + TDoc);
+end;
+
+Function IfNotFoundDic(Tbl: ICValueTable; LinkField, DicTypeSign: String; Var Log: TStringList): Variant;
+Var
+  Dic, BankDic, DicFind : ICDictionary;
+  DicTbl : ICValueTable;
+  StructurTbl : String;
+Begin
+  Result := null;
+  Dic := CreateObject('Справочники.' + DicTypeSign);
+  DicTbl := CreateObject('ТаблицаЗначений');
+  CreateStructureDic(DicTbl, DicTypeSign);
+  if Tbl.HasField(LinkField + 'DB_D') then
+    begin
+      DicTbl.PackedData := Tbl._Default[LinkField + 'DB_D'];
+      StructurTbl := StringColumnsWithoutDelIndex(DicTbl);//Создание структуры физической таблицы для перекидки из таб.знач в физ.табл
+      Dic.Append;
+      Dic.AssignFields(StructurTbl,DicTbl);
+      // Заполняем обязательные поля
+      Case Dic.GetSign of
+        'ЮрПартнеры':
+          begin
+            if DicTbl.HasField('РегионКод_D') and DicTbl.HasField('Регион') then
+              begin
+                DicFind := CreateObject('Справочники.Регионы');
+                if DicFind.FindByCode(DicTbl.РегионКод_D, false) then
+                  Dic.Регион := DicFind
+                else
+                  Dic.Регион := null
+              end;
+            if DicTbl.HasField('ГруппаСкидки_D') and DicTbl.HasField('ГруппаСкидки') then
+              begin
+                DicFind := CreateObject('Справочники.ГруппыСкидок');
+                if DicFind.FindByCode(DicTbl.ГруппаСкидки_D, false) then
+                  Dic.ГруппаСкидки := DicFind
+                else
+                  Dic.ГруппаСкидки := null
+              end;
+          end;
+        'Служащие':
+          begin
+            if DicTbl.HasField('РегионКод_D') and DicTbl.HasField('Регион') then
+              begin
+                DicFind := CreateObject('Справочники.Регионы');
+                if DicFind.FindByCode(DicTbl.РегионКод_D, false) then
+                  Dic.Регион := DicFind
+                else
+                  Dic.Регион := null
+              end;
+          end;
+        'Товары':
+          begin
+            if DicTbl.HasField('ВалютаКод_D') then
+              begin
+                DicFind := CreateObject('Справочники.Валюты');
+                if DicFind.FindByCode(DicTbl.ВалютаКод_D, false) then
+                  Dic.Валюта := DicFind;
+              end;
+            if DicTbl.HasField('КатегорияКод_D') then
+              begin
+                DicFind := CreateObject('Справочники.Товары');
+                DicFind.IncludeOnlyLevels(true);
+                if DicFind.FindByCode(DicTbl.КатегорияКод_D, false) then
+                  Dic.SetParent(DicFind);
+              end;
+          end;
+      end;
+      Dic.Post;
+      Dic.ApplyUpdates;
+      AddInfoDocsToLog('Add', Dic.GetSign, Dic, 'Dic', Log);
+      Result := Dic;
+    end;
+End;
+
+Procedure FindDic(Tbl : ICValueTable; LinkField, FieldFind, FieldForFind: String; Var Log: TStringList);
+Var
+  Dic: ICDictionary;
+  TypeDic : String;
+begin
+  try
+    if (VarAsStr(Tbl._Default[FieldForFind]) <> '') then //проверяем что поле по значению которого проводится поиск - не пустое
+      begin
+        Dic := CreateObject('Справочники.' + Tbl._Default[LinkField].GetSign); //создаем справочник
+        if Dic.FindByField(FieldFind, Tbl._Default[FieldForFind], null) then
+          begin
+            Tbl._Default[LinkField] := Dic;
+            exit;
+          end;
+      end;
+  //-------------------------- в случаи если поле "Link" - незаполнено создаем новую запись по вх. параметрам -----------------
+    if (VarAsStr(Tbl._Default[FieldForFind]) <> '') then //проверяем что вх. параметры не пустые и первое поле по значению которого проводится поиск - не пустое
+      Tbl._Default[LinkField] := IfNotFoundDic(Tbl, LinkField, Tbl._Default[LinkField].GetSign, Log);
+  //---------------------------------------------------------------------------------------------------------------------------
+    if not VarAsBool(Tbl._Default[LinkField].IsFocused) then
+      Tbl._Default[LinkField] := null;// Очищаем для уверености;
+  except
+    Tbl._Default[LinkField] := null;
+  end;
+end;
+
+Procedure FindCollect(Tbl: ICValueTable; LinkField, FieldForFind: String);
+Var
+  Coll : ICCollection;
+begin
+  if VarAsStr(Tbl._Default[FieldForFind]) <> '' then     //хранит ли в себе "Линк"-поле любое значение (возможно что оно вообще пустое и по нему поиск не нужен)
+    begin
+      Coll := CreateObject('Коллекции.' + Tbl._Default[LinkField].GetSign); //создаем коллекцию
+      Tbl._Default[LinkField] := null;
+// --------------------------------------поиск по полю;-------------------------------------------------------------
+      if Coll.FindByComment(Tbl._Default[FieldForFind], True) then
+        Tbl._Default[LinkField] := Coll
+      else
+        ChangeCollectionField(Coll, Tbl, LinkField, Tbl._Default[FieldForFind]);
+    end
+  else
+    Tbl._Default[LinkField] := null;// Очищаем для уверености;
+end;
+
+
+procedure AppendLinkRecords(Tbl : ICValueTable; TypeTbl, TblName : String; ObjName : TO4Panel; Var Log: TStringList);
+Var
+  Results : Boolean;
+  AllRecCnt, RecCurrent : Integer;
+begin
+// Поля Шапки : Партнер, Ответственный, Валюта, ЧерезКого, Посредник, ВашеПредприятие, СчетПартнера, Категория (платежа)
+// Поля Таб.Части : Товар, Валюта, Склад
+// Окончание поля на "_D" - используется как признака удаления при формировании структуры для физической таблицы
+  Case TypeTbl of
+   'Head' :
+     begin
+       AllRecCnt := Tbl.LineCount;
+       Tbl.Select;
+       While Tbl.SelectNext Do
+         begin
+           Tbl.Edit;
+           Inc(RecCurrent);
+           ObjName.Caption := VarAsStr(RecCurrent) + ' : ' + VarAsStr(AllRecCnt);
+           ObjName.Refresh;
+{1}           if Tbl.HasField('Партнер') then
+                FindDic(Tbl,'Партнер','Код','ПартнерКод_D',Log);
+{2}           if Tbl.HasField('Ответственный') and (VarAsStr(Tbl.ОтветственныйКод_D) <> '') then
+                FindDic(Tbl,'Ответственный','Код','ОтветственныйКод_D',Log);
+{3}           if Tbl.HasField('Валюта') and (VarAsStr(Tbl.ВалютаКод_D) <> '') then
+                FindDic(Tbl,'Валюта','Код','ВалютаКод_D',Log);
+{4}           if Tbl.HasField('ЧерезКого') and (VarAsStr(Tbl.ЧерезКогоКод_D) <> '') then
+                FindDic(Tbl,'ЧерезКого','Код','ЧерезКод_D',Log);
+{5}           if Tbl.HasField('Посредник') and (VarAsStr(Tbl.ПосредникКод_D) <> '') then
+                FindDic(Tbl,'Посредник','Код','ПосредникКод_D',Log);
+{6}           if Tbl.HasField('ВашеПредприятие') and (VarAsStr(Tbl.КодВашеПредприятие) <> '') then
+                FindDic(Tbl,'ВашеПредприятие','Код','КодВашеПредприятие',Log);
+{7}           if Tbl.HasField('СчетПартнера') and (VarAsStr(Tbl.СчетПартнераНазвание_D) <> '') then
+                FindDic(Tbl,'СчетПартнера','НомерСчета','СчетПартнераНазвание_D',Log);
+{8}           if Tbl.HasField('СчетПредприятия') and (VarAsStr(Tbl.СчетПредприятияНазвание_D) <> '') then
+                FindDic(Tbl,'СчетПредприятия','НомерСчета','СчетПредприятияНазвание_D',Log);
+{9}           if Tbl.HasField('Категория') and (VarAsStr(Tbl.КатегорияАртикул_D) <> '') then
+                FindDic(Tbl,'Категория','Артикул','КатегорияАртикул_D',Log);
+{10}          if Tbl.HasField('СкладОтп') and (VarAsStr(Tbl.СкладОтпКод_D) <> '') then
+                FindDic(Tbl,'СкладОтп','Код','СкладОтпКод_D',Log);
+{11}          if Tbl.HasField('СкладПр') and (VarAsStr(Tbl.СкладПрКод_D) <> '') then
+                FindDic(Tbl,'СкладПр','Код','СкладПрКод_D',Log);
+{12}          if Tbl.HasField('СкладПоУмолч') and (VarAsStr(Tbl.СкладПоУмолчКод_D) <> '') then // документ Чек
+                FindDic(Tbl,'СкладПоУмолч','Код','СкладПоУмолчКод_D',Log);
+{13}          if Tbl.HasField('Касса') and (VarAsStr(Tbl.КассаКод_D) <> '') then // документ Чек
+                FindDic(Tbl,'Касса','Код','КассаКод_D',Log);
+{14}          if Tbl.HasField('КассаОтп') and (VarAsStr(Tbl.КассаОтпКод_D) <> '') then // документ Чек
+                FindDic(Tbl,'КассаОтп','Код','КассаОтпКод_D',Log);
+{15}          if Tbl.HasField('КассаПол') and (VarAsStr(Tbl.КассаПолКод_D) <> '') then // документ Чек
+                FindDic(Tbl,'КассаПол','Код','КассаПолКод_D',Log);
+{16}          if Tbl.HasField('Регион') and (VarAsStr(Tbl.РегионКод_D) <> '') then
+                FindDic(Tbl,'Регион','Код','РегионКод_D',Log);
+{16}          if Tbl.HasField('Статья') and (VarAsStr(Tbl.СтатьяКод_D) <> '') then
+                FindDic(Tbl,'Статья','Код','СтатьяКод_D',Log);
+           Tbl.Post;
+         end;
+     end;
+   'List' :
+     begin
+       AllRecCnt := Tbl.LineCount;
+       Tbl.Select;
+       While Tbl.SelectNext Do
+         begin
+           Inc(RecCurrent);
+           ObjName.Caption := VarAsStr(RecCurrent) + ' : ' + VarAsStr(AllRecCnt);
+           ObjName.Refresh;
+           Tbl.Edit;
+{1}           if Tbl.HasField('Товар') then FindDic(Tbl,'Товар','Код','ТоварКод_D',Log);
+{2}           if Tbl.HasField('ВалютаТовара') then FindDic(Tbl,'ВалютаТовара','Код','ВалютаТовараКод_D',Log);
+{3}           if Tbl.HasField('Склад') then FindDic(Tbl,'Склад','Код','СкладКод_D',Log);
+           Tbl.Post;
+         end;
+     end;
+   'Dic' :
+     begin
+       AllRecCnt := Tbl.LineCount;
+       Tbl.Select;
+       While Tbl.SelectNext Do
+         begin
+           Inc(RecCurrent);
+           ObjName.Caption := VarAsStr(RecCurrent) + ' : ' + VarAsStr(AllRecCnt);
+           ObjName.Refresh;
+           Tbl.Edit;
+{1}           if Tbl.HasField('Валюта') then FindDic(Tbl,'Валюта','Код','ВалютаКод_D',Log);
+{2}           if Tbl.HasField('ЕдИзм') then FindCollect(Tbl,'ЕдИзм','ЕдИзмНазвание_D');
+{3}           if Tbl.HasField('ОПФ') then FindCollect(Tbl,'ОПФ','ОПФНазвание_D');
+{4}           if Tbl.HasField('Партнер') then FindDic(Tbl,'Партнер','Код','ПартнерКод_D',Log);
+{5}           if Tbl.HasField('Ответственный') then FindDic(Tbl,'Ответственный','Код','ОтветственныйКод_D',Log);
+{6}           if Tbl.HasField('Регион') then FindDic(Tbl,'Регион','Код','РегионКод_D',Log);
+           Tbl.Post;
+
+         end;
+     end;
+  end;
+end;
+
+function FindTypeJournalByDocument(DocName: String): String;
+begin
+  Case DocName of
+    'ИзмЦенОптЦены'          : Result := 'ЖурналИзмЦенОптЦены';
+ //-------------------------Финансовые документы--------------------------------
+    'ПриходНаРасчСчет'       : Result := 'ЖурналБанковскихПлатежей';
+    'РасходСРасчСчета'       : Result := 'ЖурналБанковскихПлатежей';
+    'ПриходВКассу'           : Result := 'ЖурналКассовыхПлатежей';
+    'РасходИзКассы'          : Result := 'ЖурналКассовыхПлатежей';
+    'ПеремещениеМеждуКассами': Result := 'ЖурналКассовыхПлатежей';
+    'ТрансферНаРасчСчет'     : Result := 'ЖурналБанковскихПлатежей';
+    'ТрансферСРасчСчета'     : Result := 'ЖурналБанковскихПлатежей';
+ //-------------------------Складские документы---------------------------------
+    'Чек'                     : Result := 'ЖурналЧеков';
+    'НакладнаяПрихода'        : Result := 'ЖурналНакладныхПрихода';
+    'НакладнаяОтпуска'        : Result := 'ЖурналНакладных';
+    'ВозвратОтПокупателей'    : Result := 'ЖурналВозвратовОтПокупателя';
+    'ВозвратПоставщикам'      : Result := 'ЖурналВозвратовПоставщикам';
+    'СчетНаЗакупку'           : Result := 'ЖурналСчетовНаЗакупку';
+    'НакладнаяПриходаПоСчету' : Result := 'ЖурналНакладных';
+    'СчетНаПродажу'           : Result := 'ЖурналСчетовНаПродажу';
+    'НакладнаяОтпускаПоСчету' : Result := 'ЖурналНакладных';
+ //------------------------Внутрение документы----------------------------------
+    'НакладнаяВнутрПеремещ' : Result := 'ЖурналПеремещенияТовара';
+    'СписаниеТовара'        : Result := 'ЖурналСписанийТоваров';
+    'РевизияТовара'         : Result := 'ЖурналРевизийТовара';
+    'ВводОстатков'          : Result := 'ЖурналВводовОстатков';
+ //-----------------------------------Услуги------------------------------------
+    'СчетНаОказаниеУслуг'  : Result := 'ЖурналСчетовНаОказаниеУслуг';
+    'АктНаОказаниеУслуг'   : Result := 'ЖурналАктов';
+    'СчетНаПолучениеУслуг' : Result := 'ЖурналСчетовНаПолучениеУслуг';
+    'АктНаПолучениеУслуг'  : Result := 'ЖурналАктов';
+ //---------------------------------Производство--------------------------------
+    'КалкЛист'                    : Result := 'ЖурналКалкЛистов';
+    'НакладнаяОтпускаНаОбъект'    : Result := 'ЖурналОбъектаПроизводства';
+    'ВозвратОтОбъекта'            : Result := 'ЖурналОбъектаПроизводства';
+    'НакладнаяПриемаГотПродукции' : Result := 'ЖурналОбъектаПроизводства';
+    'СписаниеСОбъекта'            : Result := 'ЖурналОбъектаПроизводства';
+    'ИнвентНаПроизводстве'        : Result := 'ЖурналОбъектаПроизводства';
+    'СписаниеБрака'               : Result := 'ЖурналОбъектаПроизводства';
+    'ВводОстНаОбъект'             : Result := 'ЖурналОбъектаПроизводства';
+  end;
+end;
+
+function GetIndexTypeDoc(DocName: String): Integer;
+begin
+  Case ExtractWord(2,DocName,'.') of   
+    'ЖурналИзмЦенОптЦены': Result := 0;
+ //-------------------------Финансовые документы--------------------------------
+    'ПриходНаРасчСчет'   : Result := 1;
+    'РасходСРасчСчета'   : Result := 2;
+    'ПриходВКассу'       : Result := 3;
+    'РасходИзКассы'      : Result := 4;
+    'ТрансферНаРасчСчет' : Result := 5;
+    'ТрансферСРасчСчета' : Result := 6;
+    'ПеремещениеМеждуКассами' : Result := 7;
+
+ //-------------------------Складские документы---------------------------------
+    'Чек'                     : Result := 9;
+    'НакладнаяПрихода'        : Result := 10;
+    'НакладнаяОтпуска'        : Result := 11;
+    'ВозвратОтПокупателей'    : Result := 12;
+    'ВозвратПоставщикам'      : Result := 13;
+    'СчетНаЗакупку'           : Result  := 14;
+    'НакладнаяПриходаПоСчету' : Result := 15;
+    'СчетНаПродажу'           : Result  := 16;
+    'НакладнаяОтпускаПоСчету' : Result := 17;
+ //------------------------Внутрение документы----------------------------------
+    'НакладнаяВнутрПеремещ' : Result := 18;
+    'СписаниеТовара'        : Result := 19;
+    'РевизияТовара'         : Result := 20;
+    'ВводОстатков'          : Result := 21;
+ //-----------------------------------Услуги------------------------------------
+    'СчетНаОказаниеУслуг'  : Result := 30;
+    'АктНаОказаниеУслуг'   : Result := 31;
+    'СчетНаПолучениеУслуг' : Result := 32;
+    'АктНаПолучениеУслуг'  : Result := 33;
+ //---------------------------------Производство--------------------------------
+    'КалкЛист'                    : Result := 40;
+    'НакладнаяОтпускаНаОбъект'    : Result := 41;
+    'ВозвратОтОбъекта'            : Result := 42;
+    'НакладнаяПриемаГотПродукции' : Result := 43;
+    'СписаниеСОбъекта'            : Result := 44;
+    'ИнвентНаПроизводстве'        : Result := 45;
+    'СписаниеБрака'               : Result := 46;
+    'ВводОстНаОбъект'             : Result := 47;
+  end;
+end;
+
+Function FindRegionByCode(Code : String): String;
+Var
+  Region : ICDictionary;
+begin
+ if not(IsObjFocused(Region)) then
+   Region := CreateObject('Справочники.Регионы');
+ if Region.FindByField('Код',Code,null) then
+   Result := Region.Название
+ else
+   Result := 'Владелец не найден';
+end;
+
+end.

@@ -1,0 +1,124 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСОбъектами, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  Dic: ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin 
+  if MasterData.Событие <> '' then
+    rgAction.ItemIndex := VarAsInt(MasterData.Событие);
+end;
+
+procedure MDS_Validate(Sender: TObject);
+var
+  Article, prevArticle, nextArticle: Integer;
+  timeFrom, timeTo: DateTime;
+  Accept: Boolean;
+  dicTab, dicReg: ICDictionary;
+  prev: Boolean;
+begin
+  Accept := true;
+  MasterData.Событие := IntToStr(rgAction.ItemIndex);
+  Article := MasterData.Артикул;
+
+  dicTab := MasterData._GetOwner;
+  dicReg := CreateObject('Справочники.РегистрРабочегоВремени');
+  dicReg.UseMaster(dicTab);
+
+  dicReg.SortByField('Артикул');
+  prevArticle := Article - 1;
+  while 1 <> 0 do
+    begin
+      if prevArticle = 0 then
+        break;
+      if dicReg.FindByField('Артикул',prevArticle,false) then
+        break;
+      Dec(prevArticle);
+    end;
+
+  dicReg.Select;
+  while dicReg.SelectPrior do
+    begin
+      if dicReg.Артикул < Article then
+        break;
+      if dicReg.Артикул = Article then
+        if dicReg.SelectNext then
+          begin
+            nextArticle := dicReg.Артикул;
+            break;
+          end;
+    end;
+
+  if IsNil(Dic) then
+    begin
+      Dic := CreateObject('Справочники.РегистрРабочегоВремени');
+      Dic.UseMaster(MasterData._GetOwner);
+    end;
+  if Dic.FindByField('Артикул',prevArticle, false) then
+    begin
+      if MasterData.Время <= Dic.Время then
+        begin
+          timeFrom := Dic.Время;
+          Accept := false;
+        end
+      else
+        timeFrom := Dic.Время;
+    end
+  else
+    timeFrom := StrToTime('00:00:00');
+  if Dic.FindByField('Артикул',nextArticle, false) then
+    begin
+      if MasterData.Время >= Dic.Время then
+        begin
+          timeTo := Dic.Время;
+          Accept := false;
+        end
+      else
+        timeTo := Dic.Время;
+    end
+  else
+    timeTo := StrToTime('23:59:59');
+   
+  if not Accept then
+    Raise('Время события должно быть в интервале с ' + timeToStr(timeFrom) + ' по ' + timeToStr(timeTo));
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin  
+  MasterData.Артикул := GetNextNumberForField('Справочники.РегистрРабочегоВремени','Артикул');
+  Dic := CreateObject('Справочники.РегистрРабочегоВремени');
+  Dic.UseMaster(MasterData._GetOwner);
+  Dic.ClearDefineSelectParams; 
+  Dic.SortByField('Артикул');
+  Dic.Select;
+  if Dic.SelectPrior then
+    begin
+      if Dic.Событие = '0' then
+        rgAction.ItemIndex := 1
+      else
+        rgAction.ItemIndex := 0;
+    end
+  else
+    rgAction.ItemIndex := 1;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Label1:TO4Label
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+rgAction:TO4RadioGroup
+edTime:TO4DBEdit
+MDS:TO4DataSource

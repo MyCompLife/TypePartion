@@ -1,0 +1,79 @@
+interface
+
+uses
+
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Select(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  GroupType : Integer;
+begin
+  if VarAsBool(Params.HasParam('ParentObjName')) then
+    begin
+      case VarAsStr(Params.Params['ParentObjName']) of
+        'Товары' :
+          GroupType := 1;
+        'Партнеры' :
+          GroupType := 2;
+      end;
+      MasterData.SetFieldFilter('Тип', '=', GroupType, '', '', '');
+      MasterData.Select;
+    end
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    case VarAsInt(MasterData.Тип) of
+      0 :
+        Index1 := 106;
+      1 :
+        Index1 := 81;
+      2 :
+        Index1 := 210;
+    end;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itSelectForm;
+  MakeStandartInterface(MasterData, Form, '', '');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+pmiSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

@@ -1,0 +1,119 @@
+interface
+
+uses System,DispIntf, Расчеты;
+
+implementation
+var
+    GoodsTbl : ICValueTable;
+    Partner, SelAnalitDic : ICDictionary;
+    Error : Boolean;
+
+procedure Form_BeginPrint(PrintForm: TO4PrintForm);
+begin
+ try  
+   Error := false;
+   GoodsTbl := Form.GetParams[0];
+   Partner := Form.GetParams[1];
+   LabelDateFrom.Caption := DateToStr(Form.GetParams[2]);
+   LabelDateTo.Caption := DateToStr(Form.GetParams[3]);  
+   SelAnalitDic := Form.GetParams[4];
+ except
+  ShowMessage('Данная форма отчета предназначена только для отчета "Отчет по партнеру"!');
+  Error := true;
+ end;
+end;
+
+procedure Structure1_Part_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+ if Error then
+   begin
+     Accept := false;
+     exit;
+   end;
+
+   with Table do
+    begin 
+     if IsObjFocused(SelAnalitDic) then
+       Value['PartName'] := VarAsStr(Partner.ПолноеНазвание)+' ('+VarAsStr(SelAnalitDic.NameField)+')'
+     else
+       Value['PartName'] := VarAsStr(Partner.ПолноеНазвание);
+    end;
+end;
+
+procedure Structure1_Part_Goods_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin   
+ if Error then
+   begin
+     Accept := false;
+     exit;
+   end;
+ if Index=0 then Accept := GoodsTbl.SelectFirst()
+            else Accept := GoodsTbl.SelectNext();
+ if not Accept then Exit;
+ with Table do
+  begin
+   Value['GoodName'] := GoodsTbl.Товар.NameField;
+   Value['GoodCode'] := GoodsTbl.Товар.CodeField;
+   if VarAsBool(GoodsTbl.ЕдИзм.Isfocused,false) then
+    Value['GoodDim'] := GoodsTbl.ЕдИзм.Value
+   else
+    Value['GoodDim'] := '';
+   Value['OutComeCount'] := GoodsTbl.КолОтпуск;
+   Value['OutComeSum'] := GoodsTbl.СумОтпуск;
+   Value['InComeCount'] := GoodsTbl.КолВозврат;
+   Value['InComeSum'] := GoodsTbl.СумВозврат;
+  end;
+
+end;
+
+procedure Structure1_All_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin 
+ if Error then
+   begin
+     Accept := false;
+     exit;
+   end;
+ with Table do
+  begin
+   Value['OutComeCountAll'] := GoodsTbl.Total('КолОтпуск');
+   Value['OutComeSumAll'] := GoodsTbl.Total('СумОтпуск');
+   Value['InComeCountAll'] := GoodsTbl.Total('КолВозврат');
+   Value['InComeSumAll'] := GoodsTbl.Total('СумВозврат');
+  end;
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label15:TRBLabel
+LabelDateFrom:TRBLabel
+Label17:TRBLabel
+LabelDateTo:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label24:TRBLabel
+DetailBand1:TRBDetailBand
+Label11:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+Label16:TRBLabel
+Label18:TRBLabel
+Label25:TRBLabel
+Band2:TRBBand
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+Label23:TRBLabel
+Structure1:TRBStructure

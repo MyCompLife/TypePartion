@@ -1,0 +1,45 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСоСправочниками;
+
+implementation
+
+const
+  errZeroCode = 'Код категории не может быть пустой или равен 0';
+
+var
+  MasterData : ICDictionary;
+
+
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Append(Sender : TObject); 
+begin
+    MasterData.Code := GetNextNumberForField('Справочники.SMSШаблоныСообщений', 'Code', True);
+end;
+
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label5:TO4Label
+lbCode:TO4Label
+deCtgName:TO4DBEdit
+dbeCode:TO4DBEdit
+pnCommercialAgentsGroups:TO4Panel
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem

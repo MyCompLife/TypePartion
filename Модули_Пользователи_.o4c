@@ -1,0 +1,317 @@
+interface
+
+uses
+  System, DispIntf;
+
+function GetDictUser: ICDictionary;
+function GetUsersField(Field: String): Variant;
+function GetUsersBlockedField(Field: String): Boolean;
+function GetRegionDocTable: ICDictionary;
+function GetRegionEn: Boolean;
+function GetUserStore: ICDictionary;
+function GetStoreDoc(deStore: TO4Edit): ICDictionary;
+function GetUserPrintPreview: Boolean;
+procedure MakeUserInterface(ObjName: String; var pPrint: TO4Panel; var PreView: boolean; var UserPrintFormsTbl: ICValueTable);
+procedure MakeCnfgInterface(MasterData: ICDictionary; Form: TO4CustomForm; var ManufacturerTbl, GroupTbl: ICValueTable );
+procedure MakeCnfgInterfaceSpl(MasterData: ICDictionary; Form: TO4CustomForm; var ManufacturerTbl, GroupTbl: ICValueTable );
+
+var
+  Users: ICDictionary;
+
+implementation
+
+function GetDictUser: ICDictionary;
+begin
+if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    Result := Users;
+end;
+
+function GetUsersField(Field: String): Variant;
+begin
+if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    Result := Users._Default[Field]
+  else
+    Result := null
+end;
+
+function GetUsersBlockedField(Field: String): Boolean;
+begin
+if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    Result := VarAsBool(Users._Default[Field])
+  else
+    Result := false;
+end;
+
+function GetRegionDocTable: ICDictionary;
+begin
+if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    begin
+      if VarAsBool(Users.ОтборПоПользователю) then
+        Result := Users.Регион
+      else
+        Result := Users.Регион;
+    end;
+end;
+
+function GetRegionEn: Boolean;
+var
+  Users: ICDictionary;
+begin
+if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    begin
+      if VarAsBool(Users.ОтборПоПользователю) then
+        Result := false
+      else
+        Result := true;
+    end;
+end;
+
+function GetUserStore: ICDictionary;
+var
+  Users: ICDictionary;
+begin
+  Result := CreateObject('Справочники.Склады');
+  if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    if VarAsBool(Users.КонтрСклад) then
+      Result := Users.Склад
+end;
+
+function GetStoreDoc(deStore: TO4Edit): ICDictionary;
+var
+  Users: ICDictionary;
+begin
+  Result := CreateObject('Справочники.Склады');
+  if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    if VarAsBool(Users.КонтрСклад) then
+      begin
+        Result := Users.Склад;
+        deStore.Enabled := false;
+      end
+end;
+
+function GetUserPrintPreview: Boolean;
+begin
+  if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    Result := Users.ПечатьСПредварительнымПросмотром
+  else
+    Result := true
+end;
+     
+function CreateTableForBLOB : ICValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Structure', vtcBlob, 0);
+  Result.AddColumn('Data', vtcBlob, 0);
+  Result.Open;
+end;
+
+function CreateTableForBLOBStructure : ICValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Name', vtcString, 100);
+  Result.AddColumn('Type', vtcInteger, 0);
+  Result.AddColumn('Size', vtcInteger, 0);
+  Result.AddColumn('ColFormat', vtcString, 20);
+  Result.Open;
+end;
+
+// создание таблицы значений из BLOB-поля
+function CreateTblFromBLOB(OldData : Variant): ICValueTable;
+var
+  TblOldProps, TblStructure, TblAll : ICValueTable;
+  CommonFields : string;
+  DoExit : Boolean;
+begin
+  TblAll := CreateTableForBLOB;
+  try
+    TblAll.PackedData := OldData;
+  except // данные полностью несовместимы
+    DoExit := true;
+  end;
+  if DoExit then
+    begin
+      Result := Null;
+      exit;
+    end;
+  if not TblAll.SelectFirst then
+    begin
+      Result := Null;
+      exit;
+    end;
+  //
+  TblStructure := CreateTableForBLOBStructure;
+  TblStructure.PackedData := TblAll.Structure;
+  //
+  TblOldProps := CreateObject('ValueTable');
+  TblStructure.Select;
+  while TblStructure.SelectNext do
+    TblOldProps.AddColumn(TblStructure.Name, TblStructure.Type, TblStructure.Size);
+  TblOldProps.Open;
+  TblStructure.Select;
+  while TblStructure.SelectNext do
+    TblOldProps.SetColumnFormat(TblStructure.Name, VarAsStr(TblStructure.ColFormat));
+  TblOldProps.PackedData := TblAll.Data;
+  Result := TblOldProps;
+end;
+
+procedure MakeUserInterface(ObjName: String; var pPrint: TO4Panel; var PreView: boolean; var UserPrintFormsTbl: ICValueTable);
+var
+  Options : ICOptions;
+  JournalPrmTbl: ICValueTable;
+  i: Integer;
+begin
+  pPrint.Visible := false;
+  PreView := false;
+  UserPrintFormsTbl := CreateObject('ТаблицаЗначений');
+  UserPrintFormsTbl.AddColumn('НомСтроки',vtcInteger,0);
+  UserPrintFormsTbl.AddColumn('ПечФорма',vtcString,200);
+  UserPrintFormsTbl.Open;
+  GetDictUser;
+  if not Users.IsFocused then
+    exit;
+  JournalPrmTbl := CreateTblFromBLOB(Users.НастройкиЖурналов);
+  if IsNil(JournalPrmTbl) then
+    exit;
+  JournalPrmTbl.SortBy('НазвЖурнала');
+  if not JournalPrmTbl.Find(ObjName) then
+    exit;
+  pPrint.Visible := JournalPrmTbl.ПанельВыбораПринтера;
+  PreView := JournalPrmTbl.ПредвПросмотр;
+  if JournalPrmTbl.ПечатнаяФорма <> '' then
+    for i := 1 to WordCount(JournalPrmTbl.ПечатнаяФорма, #13) do
+      begin
+        if ExtractWord(i, JournalPrmTbl.ПечатнаяФорма, #13) = '' then
+          continue;
+        UserPrintFormsTbl.Append;
+        UserPrintFormsTbl.ПечФорма := ExtractWord(i,JournalPrmTbl.ПечатнаяФорма,#13);
+        UserPrintFormsTbl.Post;
+       end;
+end;
+
+
+procedure CreateFilter(DicName, FieldName: String ; var Tbl: ICValueTable; TVS: TO4TableValueSource);
+begin
+  Tbl := CreateObject('ValueTable');
+  Tbl.AddColumn(FieldName + 'Товара',vtcLink, 0);
+  Tbl.AddColumn(FieldName,vtcString, 100);
+  Tbl.AddColumn('Order',vtcInteger, 0);
+  Tbl.Open;
+  Tbl.CopyDataToServer;
+  Server.GetTbl(DicName, FieldName, Tbl.SrvMean);
+  Tbl.CopyDataFromServer;
+  Tbl.SortBy('Order;' + FieldName);
+  Tbl.SelectFirst;
+  Tbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+procedure MakeCnfgInterface(MasterData: ICDictionary; Form: TO4CustomForm; var ManufacturerTbl, GroupTbl: ICValueTable );
+var
+  tmpDbg: TComponent;
+  TVS : TO4TableValueSource;
+  Constants: IC4VPAConst;
+begin
+  Constants := CreateObject('Константы');
+//*****************************************************
+//                  Фильтр по производителям
+//*****************************************************
+  if VarAsBool(Constants.ХарактеристикаПроизводитель) then
+    begin
+      tmpDbg := Form.FindComponent('dbgManufacturer');
+      TVS := Form.FindComponent('TVSManufacturer') as TO4TableValueSource;
+      if not IsNil(tmpDbg) then
+        begin
+          (tmpDbg as TO4DBGrid).Visible := true;
+
+          CreateFilter('Производители','Производитель',ManufacturerTbl, TVS)
+        end;
+    end
+  else
+    begin
+      tmpDbg := Form.FindComponent('dbgManufacturer');
+      (tmpDbg as TO4DBGrid).Visible := false;
+
+    end;
+//*****************************************************
+//                  Фильтр по группам
+//*****************************************************
+  if VarAsBool(Constants.ХарактеристикаГруппа) then
+    begin
+      tmpDbg := Form.FindComponent('dbgGroup');
+      TVS := Form.FindComponent('TVSGroup') as TO4TableValueSource;
+      if not IsNil(tmpDbg) then
+        begin
+          (tmpDbg as TO4DBGrid).Visible := true;
+          CreateFilter('ГруппыТоваров','Группа',GroupTbl, TVS)
+        end;
+    end
+  else
+    begin
+      tmpDbg := Form.FindComponent('dbgGroup');
+      (tmpDbg as TO4DBGrid).Visible := false;
+    end;
+end;
+
+
+procedure MakeCnfgInterfaceSpl(MasterData: ICDictionary; Form: TO4CustomForm; var ManufacturerTbl, GroupTbl: ICValueTable );
+var
+  tmpDbg, tmpSp: TComponent;
+  TVS : TO4TableValueSource;
+  Constants: IC4VPAConst;
+begin
+  Constants := CreateObject('Константы');
+//*****************************************************
+//                  Фильтр по производителям
+//*****************************************************
+  if VarAsBool(Constants.ХарактеристикаПроизводитель) then
+    begin
+      tmpDbg := Form.FindComponent('dbgManufacturer');
+      TVS := Form.FindComponent('TVSManufacturer') as TO4TableValueSource;
+      tmpSp := Form.FindComponent('SpManufacturer');
+      if not IsNil(tmpDbg) then
+        begin
+          (tmpDbg as TO4DBGrid).Visible := true;
+          (tmpSp as TO4Splitter).Visible := true;
+
+          CreateFilter('Производители','Производитель',ManufacturerTbl, TVS)
+        end;
+    end
+  else
+    begin
+      tmpDbg := Form.FindComponent('dbgManufacturer');
+      tmpSp := Form.FindComponent('SpManufacturer');
+      (tmpDbg as TO4DBGrid).Visible := false;
+      (tmpSp as TO4Splitter).Visible := false;
+
+    end;
+//*****************************************************
+//                  Фильтр по группам
+//*****************************************************
+  if VarAsBool(Constants.ХарактеристикаГруппа) then
+    begin
+      tmpDbg := Form.FindComponent('dbgGroup');
+      TVS := Form.FindComponent('TVSGroup') as TO4TableValueSource;
+      tmpSp := Form.FindComponent('SpGroup');
+      if not IsNil(tmpDbg) then
+        begin
+          (tmpDbg as TO4DBGrid).Visible := true;
+          (tmpSp as TO4Splitter).Visible := true;
+          CreateFilter('ГруппыТоваров','Группа',GroupTbl, TVS)
+        end;
+    end
+  else
+    begin
+      tmpDbg := Form.FindComponent('dbgGroup');
+      tmpSp := Form.FindComponent('SpGroup');
+      (tmpDbg as TO4DBGrid).Visible := false;
+      (tmpSp as TO4Splitter).Visible := false;
+    end;
+end;
+end.

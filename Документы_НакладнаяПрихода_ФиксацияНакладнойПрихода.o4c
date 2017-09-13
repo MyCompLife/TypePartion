@@ -1,0 +1,208 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€,  ‘иксаци€CL,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений,  –абота—“аблицами«наченийCL,
+  ѕользователи, Ќумераци€ƒокументов, –абота—о—правочникамиCL, –абота—ƒокументамиCL, –абота—∆урналом»зменений;
+
+implementation
+
+var
+  FullName : string;
+  Tbl : ICValueTable;
+  Constants : IC4VPAConst;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+var P : ICProcessing; 
+    CurrencyDic : ICDictionary;
+    tmpContentsTbl, ContentsTbl : ICValueTable;
+    Course : Decimal;
+    Constants : IC4VPAConst;
+    PriceTbl, TblGoods : ICValueTable;
+
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniFix, FixAck);
+  if Accept and GetUsersBlockedField('»зм¬х÷ен‘иксЌаклѕрих') then
+    begin
+      Constants := GetConstants;
+      ContentsTbl := CreateObject('“аблица«начений');
+      ContentsTbl.AddColumn('Ќом—троки',vtcInteger,0);
+      ContentsTbl.AddColumn('“овар',vtcLink,0);
+      ContentsTbl.AddColumn(' од',vtcString,20);
+      ContentsTbl.AddColumn('≈д»зм',vtcLink,0);
+      ContentsTbl.AddColumn(' оличество',vtcFFT,5);
+      ContentsTbl.AddColumn('÷ена',vtcFFT,7);
+      ContentsTbl.AddColumn('÷ена¬¬алюте',vtcFFT,7);
+      ContentsTbl.AddColumn('÷ена¬¬алюте—пр',vtcFFT,7);
+      ContentsTbl.AddColumn('¬алюта“овара',vtcLink,0);
+      ContentsTbl.AddColumn(' урс“овара',vtcFFT,7);
+      ContentsTbl.AddColumn('¬алюта¬х÷ена',vtcLink,0);
+      ContentsTbl.AddColumn(' урс¬х÷ена',vtcFFT,7);
+      ContentsTbl.AddColumn('¬х÷ена',vtcFFT,7);
+      ContentsTbl.AddColumn('IsCange',vtcInteger,0);
+      ContentsTbl.AddColumn('OnDate',vtcDateTime,0);
+      ContentsTbl.Open;
+      tmpContentsTbl := CreateObject('“аблица«начений');
+      ContentsTbl.CopyColumnsTo(tmpContentsTbl);
+      Doc.AppendLinesTo('Ќом—троки;“овар; оличество;÷ена;÷ена¬¬алюте;¬алюта“овара; урс“овара',tmpContentsTbl);
+      tmpContentsTbl.DoGetLinks('¬х÷ена=“овар.¬х÷ена;¬алюта¬х÷ена=“овар.¬алюта¬х÷ена'); 
+      tmpContentsTbl.DoCalculation('OnDate',FloatToStr(VarAsFloat(Doc.ƒатаƒокумента)));
+      tmpContentsTbl.SortBy('¬алюта¬х÷ена');
+      CurrencyDic := CreateObject('—правочники.¬алюты');
+      CurrencyDic.Select;
+      While CurrencyDic.SelectNext do
+        begin
+          tmpContentsTbl.SetRange(CurrencyDic,CurrencyDic);
+          Course := CurrencyDic.GetTimedValue(Constants.UsedCurs, Doc.ƒатаƒокумента);
+          if Course<=0 then Course := 1;
+          tmpContentsTbl.DoCalculation(' урс¬х÷ена',FormatFloat('0.######',Course));
+        end;
+      tmpContentsTbl.CancelRange;
+      tmpContentsTbl.SortBy('');
+      tmpContentsTbl.DoCalculation('÷ена¬¬алюте—пр','÷ена/ урс¬х÷ена');
+      tmpContentsTbl.DoCalculation('IsCange','÷ена¬¬алюте—пр<>¬х÷ена');
+      tmpContentsTbl.SortBy('IsCange');
+      tmpContentsTbl.SetRange(-1,-1);
+      if tmpContentsTbl.LineCount>0 then
+        begin
+         tmpContentsTbl.AppendTo('',ContentsTbl);
+         tmpContentsTbl.Close;    
+         ContentsTbl.DoCalculation('IsCange','0');
+         ContentsTbl.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм');
+         ContentsTbl.SetColumnFormat('÷ена;÷ена¬¬алюте;÷ена¬¬алюте—пр;¬х÷ена','0.00#####');
+         ContentsTbl.SetColumnFormat(' оличество','0.#####');
+         ContentsTbl.SortBy('Ќом—троки');
+         P := CreateObject('ќбработки.»зменение÷ены“овара');
+         P.Execute('»зменение¬х÷енѕоЌаклѕрих',ContentsTbl);
+        end;
+    end;
+  if Accept and Doc.HasParam('FromWorkPlace') and VarAsBool(Doc.Params['FromWorkPlace'])
+     and Doc.HasParam('AutoChangePrice') and VarAsBool(Doc.Params['AutoChangePrice']) and not VarAsBool(Doc.¬ыполнениеѕереоценки) then
+    begin
+      TblGoods := CreateObject('“аблица«начений');
+      TblGoods.AddColumn('Ќом—троки', vtcString, 20);
+      TblGoods.AddColumn(' од', vtcInteger, 0);
+      TblGoods.AddColumn('“овар', vtcLink, 0);
+      TblGoods.AddColumn('≈д»зм', vtcLink, 0);
+      TblGoods.AddColumn('—прав÷ены»зм', vtcInteger, 0);
+      TblGoods.AddColumn('ƒл€»мейдж', vtcInteger, 0);
+      TblGoods.Open;
+
+      PriceTbl := CreateObject('“аблица«начений');
+      PriceTbl.AddColumn('“овар', vtcLink, 0);
+      PriceTbl.AddColumn('¬х÷ена', vtcFFT, 7);
+      PriceTbl.AddColumn('¬х÷ена√рн', vtcFFT, 7);
+      PriceTbl.AddColumn('¬х÷ена—трокиƒок', vtcFFT, 7);
+      PriceTbl.AddColumn('“ип÷ены', vtcString, 20);
+      PriceTbl.AddColumn('¬алюта', vtcLink, 0);
+      PriceTbl.AddColumn('¬алюта—трокиƒок', vtcLink, 0);
+      PriceTbl.AddColumn(' урс', vtcFFT, 6);
+      PriceTbl.AddColumn('÷ена—пр', vtcFFT, 2);
+      PriceTbl.AddColumn('÷ена—пр√рн', vtcFFT, 2);
+      PriceTbl.AddColumn('ѕрЌац', vtcFFT, 2);
+      PriceTbl.AddColumn('÷ена–еком', vtcFFT, 2);
+      PriceTbl.AddColumn('÷ена–еком√рн', vtcFFT, 2);
+      PriceTbl.AddColumn('—прав÷ены»зм', vtcInteger, 0);
+      PriceTbl.AddColumn('IsCange',vtcInteger,0);
+      PriceTbl.SetColumnFormat('¬х÷ена','0.00#####');
+      PriceTbl.SetColumnFormat('¬х÷ена√рн;÷ена—пр√рн;÷ена–еком√рн;÷ена—пр;÷ена–еком','0.00');
+      PriceTbl.SetColumnFormat(' урс','0.######');
+      PriceTbl.Open;
+
+      GetPricesTblByNaklIn(Doc,TblGoods, PriceTbl,true);
+      PriceTbl.DoCalculation('IsCange','(¬х÷ена—трокиƒок<¬х÷ена) OR (÷ена—пр<÷ена–еком)');
+      PriceTbl.CopyDataToServer;
+      TblGoods.CopyDataToServer;
+      Doc.RunThreadProcess(Server.ChangeDicPricesAllEP(PriceTbl.SrvMean,TblGoods.SrvMean),'»зменение справочных цен');
+      PriceTbl.CopyDataFromServer;
+      TblGoods.CopyDataFromServer;
+      PriceTbl.SrvMean.Clear;
+      TblGoods.SrvMean.Clear;
+      PriceTbl.SortBy('IsCange');
+      PriceTbl.SetRange(-1,-1);
+      PriceTbl.select;
+      Doc.edit;
+      if PriceTbl.LineCount>0 then
+        begin
+          Doc.ѕереоценка÷ены := WritePropsToBlob(PriceTbl);
+          Doc.ѕереоценка“овары := WritePropsToBlob(TblGoods);
+          P := CreateObject('ќбработки.»зменение÷ены“овара');
+          P.Execute('ѕечать»змененых÷ен',PriceTbl);
+        end;
+      Doc.¬ыполнениеѕереоценки := true;
+      Doc.Post;
+      Doc.ApplyUpdates;
+    end;
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+var
+  StrError, DocName : string;
+  dlgError : ICProcessing;
+  TblOwnerDoc : ICValueTable;
+  i: Integer;
+begin
+  case Doc.GetDocState of
+    1 :
+      begin
+        if not Doc.RunThreadProcess(server.GetChangeStateUpEP, UniFixProgress + FullName) then
+          raise(emsgFixFail); 
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.SendEvent(evCount, Unassigned, False);
+        Doc.SendEvent(evNakladn, Unassigned, False);
+        Constants := GetConstants;
+{        if VarAsInt(Constants. од»Ѕ) < 2 then
+          if MessageDlg('»зменить отпускные цены в справочнике товаров? ', mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes then
+            begin
+              Doc.SelectLines;
+              while Doc.SelectNextLine do
+                begin
+                  DocName := Doc.GetName + ' ' + VarAsStr(Doc.ƒатаƒокумента) + ' є' + Doc.Ќомерƒокумента;
+                  ChangePrice(Doc.“овар, Doc.“овар.¬алюта, Doc.÷ена–озн, '÷ена', DocName, 'EditInDoc');
+                  ChangePrice(Doc.“овар, Doc.“овар.¬алюта, Doc.ќпт÷ена, 'ќпт÷ена', DocName, 'EditInDoc');
+                  ChangePrice(Doc.“овар, Doc.“овар.¬алюта, Doc. рќпт÷ена, ' рќпт÷ена', DocName, 'EditInDoc');   
+                end;
+            end;
+}
+      end;
+    2 :
+      ;
+  end;
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniUnFix, FixAck);
+  if Accept then
+    case Doc.GetDocState of
+      1 : Accept := CheckOverGoodStore(Doc, FullName, actStateDown);
+      2 :
+        ;
+    end;
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin   
+  ChangeDoc(clmtStateDown, Doc);
+  Doc.SendEvent(evCount, Unassigned, False);
+  Doc.SendEvent(evNakladn, Unassigned, False);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin  
+  FullName := CanFixDel(Doc, Accept, DecGood, UniDel, DelAck, CheckChildPayDoc);
+  if Accept then
+    case Doc.GetDocState of
+      1, 2 : Accept := CheckOverGoodStore(Doc, FullName, actDel);
+    end; 
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoDelete(Doc : ICDocuments);
+begin    
+  Doc.SendEvent(evCount, Unassigned, False);
+  Doc.SendEvent(evNakladn, Unassigned, False);
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

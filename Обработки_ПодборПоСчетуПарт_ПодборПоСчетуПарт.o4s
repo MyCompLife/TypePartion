@@ -1,0 +1,17 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsPart : ISAccs;
+
+procedure GetAllPart(TblPartFromInvoice : ISValueTable); server;
+begin
+  AccsPart := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsPart.AssignFieldsByDimIDTo('Партия', 'ДатаПр;Партнер;ВхЦенаБезНДС;ВхЦенаВал;Валюта', TblPartFromInvoice);
+end;
+
+end.

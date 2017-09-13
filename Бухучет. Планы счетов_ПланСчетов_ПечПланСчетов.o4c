@@ -1,0 +1,50 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICPlan;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    MasterData.Select;
+  Accept := MasterData.SelectNext(True);
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := MasterData.Code;
+      Value['Name'] := MasterData.Name;
+      Value['AOKIND1'] := TransLCID(MasterData.AOType[1], 1058);
+      Value['AOKIND2'] := TransLCID(MasterData.AOType[2], 1058);
+      Value['AOKIND3'] := TransLCID(MasterData.AOType[3], 1058);
+    end;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band2:TRBBand
+hdAn3:TRBLabel
+hdCode:TRBLabel
+hdName:TRBLabel
+hdAn1:TRBLabel
+hdAn2:TRBLabel
+DetailBand1:TRBDetailBand
+lbAOKIND1:TRBLabel
+lbCode:TRBLabel
+lbName:TRBLabel
+lbAOKIND3:TRBLabel
+lbAOKIND2:TRBLabel
+Band1:TRBBand
+Label4:TRBLabel
+Structure1:TRBStructure

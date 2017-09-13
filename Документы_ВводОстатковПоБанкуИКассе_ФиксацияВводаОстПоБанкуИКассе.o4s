@@ -1,0 +1,103 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация;
+
+implementation
+
+var
+  AccPart, AccBank, AccKassa : ISAccs;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  Count, Total : Integer;
+  Sum : Decimal;
+begin
+  DocDate := Doc.GetDate;
+  AccBank.ClearFieldBuffers();
+  AccKassa.ClearFieldBuffers();
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  while Doc.SelectNextLine do
+    begin
+      case VarAsInt(Doc.Тип) of
+        0 :
+          begin
+            //остаток по банку на расчетном счету
+            AccBank.CalcGroupRestDirect(DocDate, ArrayOf(Doc.@Счет, Doc.@Валюта));
+            Sum := Doc.СуммаВВалюте - AccBank.СумОбщ;
+            AccBank.ClearFieldBuffers;
+            AccBank.AssignFields('РасчСчет=Счет;Валюта;Дата=ДатаДокумента', Doc);
+            AccBank.СумПрих := Sum;
+            AccBank.СумОбщ := Sum;
+            AccBank.Income(Doc, DocDate, 0);
+          end;
+        1 :
+          begin
+            //остаток по кассе в валюте
+            AccKassa.CalcGroupRestDirect(DocDate,  ArrayOf(Doc.@Валюта, Doc.@Касса));
+            Sum := Doc.СуммаВВалюте - AccKassa.СумОбщ;
+            AccKassa.ClearFieldBuffers;
+            AccKassa.AssignFields('Касса;Валюта;Дата=ДатаДокумента', Doc);
+            AccKassa.СумПрих := Sum;
+            AccKassa.СумОбщ := Sum;
+            AccKassa.Income(Doc, DocDate, 0);
+          end;
+      end;
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+  Accept := not Doc.Terminated;
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccBank := CreateObject('Аккумуляторы.ОстаткиНаРасчСчет');
+  AccKassa := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+  Result := EntryPoint(ChangeStateUp);
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccBank := CreateObject('Аккумуляторы.ОстаткиНаРасчСчет');
+        AccKassa := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  //
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+begin
+  case StrLowerCase(Synonym) of
+    'банк' :
+      if Doc.Тип = 0 then
+        Value := True;
+    'касса' :
+      if Doc.Тип = 1 then
+        Value := True;
+  end;
+end;
+
+end.

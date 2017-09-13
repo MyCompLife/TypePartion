@@ -1,0 +1,47 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL;
+
+implementation
+
+var MasterData: ICDictionary;
+
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure miEdit_VPABeforeActionClick(Sender: TObject);
+begin
+  if (MasterData.Артикул = 1) or (MasterData.Артикул = 2) or (MasterData.Артикул = 3) then
+    Raise('Статьи 1-3 являются служебными.'+#13+'Нельзя изменять служебные статьи!');
+end;
+
+procedure miDelete_VPABeforeActionClick(Sender: TObject);
+begin
+  if (MasterData.Артикул = 1) or (MasterData.Артикул = 2) or (MasterData.Артикул = 3) then
+    Raise('Статьи 1-3 являются служебными.'+#13+'Нельзя удалять служебные статьи!');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimeter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimeter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimeter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

@@ -1,0 +1,283 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, –асчеты, –абота—ƒокументами¬∆урналах,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений;
+
+implementation
+
+const
+  miNames = 'miBankIn;miCashIn;miCashInBlack;miBankOut;miCashOut;miCashOutBlack';
+
+var
+  MasterData : ICJournal;
+  Options : ICOptions;
+  DoRefreshOwner : Boolean;
+  OldDocState : Integer;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  i : Integer;
+begin
+  Options := GetOptions;
+  miDocMove.Visible := GetUDASet('viewdocmove');  
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  if VarAsBool(MasterData.HasParam('DefaultTag')) then
+    begin
+      tbAdd.Tag := VarAsInt(MasterData.Params['DefaultTag']);
+      (Form.FindComponent(ExtractWord(tbAdd.Tag, miNames, ';')) as To4MenuItem).Default := True;
+    end;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(NewTab - 1);
+  MasterData.Select;
+end;
+
+procedure ToolButton4_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      case StrLowerCase(MasterData.GetDocSign) of
+        'приходвкассу' :
+          Index1 := 15;
+        'приходнарасчсчет', 'приходпоэквайрингу' :
+          Index1 := 13;
+        'расходизкассы' :
+          Index1 := 16;
+        'расходсрасчсчета', 'расходпоэквайрингу' :
+          Index1 := 14;
+        'трансферсрасчсчета' :
+          Index1 := 17;
+        'трансфернарасчсчет' :
+          Index1 := 18;
+        'приходличфинансов' :
+          Index1 := 19;
+        'расходличфинансов' :
+          Index1 := 20;
+      end;
+      if MasterData.GetDocState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9;
+    end;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  DoRefreshOwner := True;
+  MasterData.Refresh;
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+  MasterDoc : ICDocuments;
+begin
+  if MasterData.IsFocused then
+    begin
+      MasterDoc := MasterData.GetDoc();
+      if MasterDoc.IsFocused then
+        case StrLowerCase(MasterData.GetDocSign) of
+          'приходвкассу', 'приходличфинансов', 'расходизкассы', 'расходличфинансов' :
+            MasterDoc.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc());
+          'приходнарасчсчет' :
+            MasterDoc.PrintForm('ѕлатежное“ребование', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc());
+          'расходсрасчсчета' :
+            begin
+              dialog := CreateObject('ќбработки.ѕечатьѕлатежки');
+              dialog.Execute('ѕечатьѕлатежки', MasterData.GetDoc);
+            end;
+        end;
+    end;
+end;
+
+procedure tbRemoveDoc_Click(Sender : TObject);
+begin
+  DoRefreshOwner := True;
+  try
+    RemoveMasterInDoc(MasterData);
+  finally
+    DoRefreshOwner := False;
+  end;
+end;
+
+function GetNameByTag(Tag : Integer) : string;
+begin
+  case Tag of
+    1 : Result := 'ѕриход¬ ассу';
+    2 : Result := 'ѕриходЌа–асч—чет';
+    3 : Result := 'приходпоэквайрингу';
+    4 : Result := '–асход»з ассы';
+    5 : Result := '–асход—–асч—чета';
+    6 : Result := '–асходѕоЁквайрингу';
+  end;
+end;
+
+procedure tbLink_Click(Sender : TObject);
+var
+  DocRange : string;
+  AccsDocs : ICAccs;
+  Doc : ICDocuments;
+  Partner : ICDictionary;
+begin
+  DocRange := GetNameByTag((Sender as TComponent).Tag);
+  DoRefreshOwner := True; // дл€ Refresh всередине след. процедуры
+  try
+    // –асчеты по документу
+    if SetMasterForDoc(MasterData, DocRange, '¬ыборѕлатежа', MasterData.GetOwnerJournal) and
+      (MasterData.GetOwnerJournal.GetSign = '∆урнал„еков') and
+      (MasterData.GetDocState > 0) and ((Sender as TComponent).Tag <= 3) then
+    begin
+      Doc := MasterData.GetDoc;
+      AccsDocs := CreateObject('јккумул€торы.–асчетыѕоƒокументам');
+      Partner := Doc.ѕартнер;
+      AccsDocs.ѕартнер := Partner;
+      AccsDocs.—ум–асх¬ал := Doc.—умма¬¬алюте;
+      AccsDocs.—умќбщ¬ал := Doc.—умма¬¬алюте;
+      AccsDocs.¬алюта := Doc.¬алюта;
+      AccsDocs.ƒок := Doc.Owner;
+      AccsDocs.Outcome(Doc, Doc.GetDate, 0);
+    end;
+
+  finally
+    DoRefreshOwner := False;
+  end;
+end;
+
+procedure miBankIn_VPABeforeActionClick(Sender : TObject);
+begin
+  DoRefreshOwner := True;
+  MasterData.UserTypesToAdd := GetNameByTag((Sender as TComponent).Tag);
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  if DoRefreshOwner then
+    try
+      if VarAsBool(MasterData.GetOwnerJournal.IsFocused) then
+        MasterData.GetOwnerJournal.Refresh;
+    finally
+      DoRefreshOwner := False;
+    end;
+end;
+
+procedure tbEdit_VPABeforeActionClick(Sender : TObject);
+begin
+  DoRefreshOwner := True;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin  
+{
+  //первое событие
+  case ProcID of
+    FillMasterInDocAfter :
+      if InParams.GetDocState > 0 then
+        CreateTaxDoc(InParams);
+    RemoveMasterInDocBefore :
+      begin
+        if InParams.GetDocState > 0 then
+          DeleteTaxDoc(InParams, actStateDown, True);
+        UnFixedDocFromState(InParams, OldDocState);
+      end;
+    RemoveMasterInDocAfter :
+      FixedDocToState(InParams, OldDocState);
+  end;
+  //первое событие  
+}
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender: TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('ќбработки.ƒвижениеѕоƒокументу');
+      P.Execute('ƒвижениеѕоƒокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.»нфо»зменений');
+  V.Execute('»нфо»зменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+ToolButton4:TO4ToolButton
+ToolButton6:TO4ToolButton
+ToolButton7:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+tsState:TO4TabSet
+MDS:TO4DataSource
+pmAddDoc:TO4PopupMenu
+miCashIn:TO4MenuItem
+miBankIn:TO4MenuItem
+miBankCardIn:TO4MenuItem
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+MenuItem9:TO4MenuItem
+MenuItem11:TO4MenuItem
+MenuItem13:TO4MenuItem
+pmiEdit:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem4:TO4MenuItem
+miLinkPay:TO4MenuItem
+miLinkCashIn:TO4MenuItem
+minAccInCome:TO4MenuItem
+miBankCardIncome:TO4MenuItem
+MenuItem8:TO4MenuItem
+miLinkCashOut:TO4MenuItem
+miAccOutCome:TO4MenuItem
+miBankCardOutcome:TO4MenuItem
+miRemovePay:TO4MenuItem
+MenuItem10:TO4MenuItem
+miPrintOne:TO4MenuItem
+MenuItem2:TO4MenuItem
+miSort:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem5:TO4MenuItem
+miRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem

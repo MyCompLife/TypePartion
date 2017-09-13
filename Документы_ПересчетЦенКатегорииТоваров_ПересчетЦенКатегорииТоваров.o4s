@@ -1,0 +1,170 @@
+interface
+
+uses
+ System, DispIntf, ConstNames, InitColors, –асчеты;
+
+implementation
+var ContentsTbl : ISValueTable;   
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находитс€ в модуле –асчЄты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure FillCtgContents(ContentsTbl:ISValueTable; CtgDic:ISDictionary;
+                          UsePrice0,UsePrice1,UsePrice2:Boolean; Margin0, Margin1,Margin2:Decimal); server;
+var GoodsDic, CurrencyDic :ISDictionary;
+    tmpTbl, CourseTbl : ISValueTable;
+begin   
+ CourseTbl := CreateObject('“аблица«начений');
+ CurrencyDic := CreateObject('—правочники.¬алюты');
+ FillCurrencyCoursesTbl(CurrencyDic, CourseTbl, CurrentDateTime);
+ tmpTbl := CreateObject('“аблица«начений');
+ GoodsDic := CreateObject('—правочники.“овары');
+ GoodsDic.UseParent(CtgDic);
+ GoodsDic.Select;
+ GoodsDic.SaveToValueTable('Self;÷ена;¬алюта÷ена;ѕрЌац÷ена;÷ена√рн;Ўтрих од;¬х÷ена;¬алюта¬х÷ена;¬х÷ена√рн',tmpTbl,1,GoodsDic.RecordCount);
+ tmpTbl.UpdateObjNames;
+ tmpTbl.DoCalculation('¬х÷ена√рн','1');
+ tmpTbl.SortBy('¬алюта¬х÷ена');
+ CourseTbl.Select;
+ While CourseTbl.SelectNext do
+   begin
+     tmpTbl.SetRange(CourseTbl.@¬алюта, CourseTbl.@¬алюта);
+     tmpTbl.DoCalculation('¬х÷ена√рн',VarAsStr(CourseTbl. урс));
+   end;
+ tmpTbl.CancelRange;  
+
+ if UsePrice0 then
+   begin   
+     tmpTbl.SortBy('');
+     tmpTbl.DoCalculation('Ўтрих од','''÷ена''');
+     tmpTbl.DoCalculation('÷ена√рн','1');
+     tmpTbl.SortBy('¬алюта÷ена');
+     CourseTbl.Select;
+     While CourseTbl.SelectNext do
+       begin
+         tmpTbl.SetRange(CourseTbl.@¬алюта, CourseTbl.@¬алюта);
+         tmpTbl.DoCalculation('÷ена√рн',VarAsStr(CourseTbl. урс));
+       end;
+     tmpTbl.CancelRange;
+     tmpTbl.DoCalculation('ѕрЌац÷ена',DecToStr(Margin0));
+     tmpTbl.AppendTo('Self=“овар;÷ена;¬алюта÷ена=¬алюта;ѕрЌац÷ена=Ќаценка;÷ена√рн= урс÷ена;Ўтрих од=“ип÷ены;¬х÷ена;¬алюта¬х÷ена;¬х÷ена√рн= урс¬х÷ена',ContentsTbl);
+   end;
+ if UsePrice1 then
+   begin
+     tmpTbl.SortBy('');
+     tmpTbl.DoCalculation('Ўтрих од','''ќпт÷ена''');   
+     tmpTbl.DoGetLinks('÷ена=Self.ќпт÷ена;¬алюта÷ена=Self.¬алютаќпт÷ена;ѕрЌац÷ена=Self.ѕрЌацќпт÷ена');
+     tmpTbl.DoCalculation('÷ена√рн','1');
+     tmpTbl.SortBy('¬алюта÷ена');
+     CourseTbl.Select;
+     While CourseTbl.SelectNext do
+       begin
+         tmpTbl.SetRange(CourseTbl.@¬алюта, CourseTbl.@¬алюта);
+         tmpTbl.DoCalculation('÷ена√рн',VarAsStr(CourseTbl. урс));
+       end;
+     tmpTbl.CancelRange; 
+     tmpTbl.DoCalculation('ѕрЌац÷ена',DecToStr(Margin1));
+     tmpTbl.AppendTo('Self=“овар;÷ена;¬алюта÷ена=¬алюта;ѕрЌац÷ена=Ќаценка;÷ена√рн= урс÷ена;Ўтрих од=“ип÷ены;¬х÷ена;¬алюта¬х÷ена;¬х÷ена√рн= урс¬х÷ена',ContentsTbl);
+   end;
+ if UsePrice2 then
+   begin
+     tmpTbl.SortBy('');
+     tmpTbl.DoCalculation('Ўтрих од',''' рќпт÷ена''');
+     tmpTbl.DoGetLinks('÷ена=Self. рќпт÷ена;¬алюта÷ена=Self.¬алюта рќпт÷ена;ѕрЌац÷ена=Self.ѕрЌац рќпт÷ена');
+     tmpTbl.DoCalculation('÷ена√рн','1');
+     tmpTbl.SortBy('¬алюта÷ена');
+     CourseTbl.Select;
+     While CourseTbl.SelectNext do
+       begin
+         tmpTbl.SetRange(CourseTbl.@¬алюта, CourseTbl.@¬алюта);
+         tmpTbl.DoCalculation('÷ена√рн',VarAsStr(CourseTbl. урс));
+       end;
+     tmpTbl.CancelRange;  
+     tmpTbl.DoCalculation('ѕрЌац÷ена',DecToStr(Margin2));
+     tmpTbl.AppendTo('Self=“овар;÷ена;¬алюта÷ена=¬алюта;ѕрЌац÷ена=Ќаценка;÷ена√рн= урс÷ена;Ўтрих од=“ип÷ены;¬х÷ена;¬алюта¬х÷ена;¬х÷ена√рн= урс¬х÷ена',ContentsTbl);
+   end;
+ ContentsTbl.DoCalculation('÷ена–еком','¬х÷ена* урс¬х÷ена/ урс÷ена*(1+Ќаценка/100)');
+ ContentsTbl.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм');
+
+ if CurrencyDic.FindByField('Ќац¬алюта',true,false) then
+   begin
+     ContentsTbl.SortBy('¬алюта');
+     ContentsTbl.SetRange(CurrencyDic,CurrencyDic);
+     ContentsTbl.Select;
+     While ContentsTbl.SelectNext do
+       begin
+         ContentsTbl.Edit;
+         ContentsTbl.÷ена–еком := RoundTo5Cop(VarAsDec(ContentsTbl.÷ена–еком));
+         ContentsTbl.Post;
+       end;
+     ContentsTbl.CancelRange;
+   end;
+ ContentsTbl.SortBy('“овар');
+ ContentsTbl.DoNumbering('Ќом—троки',1,1);
+end;
+
+procedure UpdateAllPrices(Doc : ISDocuments; var Accept : Boolean);  
+const Comment = '»зменение цены в пересчет цен категории товаров';
+var Count, Total : integer;
+    GoodsDic : ISDictionary;    
+    GoodsTbl : ISValueTable;  
+    AccsChangePrice: ISAccs; 
+    UserName : string;
+begin
+  Accept := false;  
+  UserName := GetUserName + '('+GetUserLogin+')';
+  AccsChangePrice := CreateObject('јккумул€торы.»змќтп÷ен—пр“овара');
+  GoodsDic := CreateObject('—правочники.“овары');   
+  GoodsTbl := CreateObject('“аблица«начений');
+  ContentsTbl.GroupTo('“овар','—прав÷ены»зм',GoodsTbl);
+  Count := 0;
+  Total := GoodsTbl.LineCount;
+  ContentsTbl.SortBy('“овар');
+  GoodsTbl.Select;
+  While GoodsTbl.SelectNext do
+   if GoodsDic.Find(GoodsTbl.@“овар) then
+    begin  
+      GoodsDic.Edit;
+      ContentsTbl.SetRange(GoodsDic,GoodsDic); 
+      ContentsTbl.Select;
+      While ContentsTbl.SelectNext do
+       if (VarAsDec(GoodsDic._Default[VarAsStr(ContentsTbl.“ип÷ены)]) <> VarAsDec(ContentsTbl.÷ена–еком)) or 
+          not IsObjEQ(GoodsDic._Default['¬алюта'+VarAsStr(ContentsTbl.“ип÷ены)], ContentsTbl.@¬алюта) then
+        begin
+          ContentsTbl.Edit;
+          GoodsDic._Default[VarAsStr(ContentsTbl.“ип÷ены)] := VarAsDec(ContentsTbl.÷ена–еком);
+          GoodsDic._Default['¬алюта'+VarAsStr(ContentsTbl.“ип÷ены)] := ContentsTbl.@¬алюта;
+          ContentsTbl.—прав÷ены»зм := -1;
+          ContentsTbl.÷ена := VarAsDec(ContentsTbl.÷ена–еком);
+          ContentsTbl.Post; 
+          AccsChangePrice.IncomeDirect(Null,CurrentDateTime,0,
+            ArrayOf(GoodsDic,GoodsDic._Default['¬алюта'+VarAsStr(ContentsTbl.“ип÷ены)],VarAsStr(ContentsTbl.“ип÷ены)),
+            VarAsDec(ContentsTbl.÷ена–еком), ArrayOf(Comment,UserName) );
+        end;
+      GoodsDic.Post;
+      GoodsDic.ApplyUpdates;
+      inc(Count);
+      if Count mod 10 = 0 then
+        begin
+          Doc.NotifyClient('ќбновление цен',Count,Total);
+          if Doc.Terminated then exit;
+        end;
+    end;
+  ContentsTbl.CancelRange;
+  Accept := not Doc.Terminated;
+end;
+
+function UpdateAllPricesEP(ContentsTblS : ISValueTable) : Variant; server;
+begin
+  ContentsTbl := ContentsTblS;
+  Result := EntryPoint(UpdateAllPrices);
+end;
+
+end.

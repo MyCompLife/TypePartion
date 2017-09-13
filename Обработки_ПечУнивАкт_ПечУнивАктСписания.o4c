@@ -1,0 +1,101 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  CNV : ICWriNums;
+  Tbl : ICValueTable;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetParams; //Form.GetMean;
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if VarAsBool(MasterData.Партнер.IsFocused) then
+        Value['PARTNAME'] := GetShortPartName(MasterData.Партнер);
+      Value['Summa'] := MasterData.Сумма;
+      Value['SumNT'] := MasterData.СуммаБезНДС;
+      Value['Tax'] := MasterData.СуммаНДС;
+      if MasterData.HasField('Причина') then
+        Value['DOVEROSN'] := MasterData.Причина;
+    end;
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар;ВхЦенаБезНДС', 'Количество');
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*ВхЦенаБезНДС');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Код');
+  //для сортировки по названию товара
+//  Tbl.SortBy('Товар');
+  Tbl.Select;
+  lbSumInWord.Caption := CNV.MoneyToStr(MasterData.СуммаБезНДС, 'ГРН', 1058);
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+      Value['PriceNT'] := Tbl.ВхЦенаБезНДС;
+      Value['SummaStr'] := Tbl.СуммаСтроки;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label32:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label40:TRBLabel
+SysData1:TRBSysData
+bndFtHd:TRBBand
+Label33:TRBLabel
+Label42:TRBLabel
+Label43:TRBLabel
+Label6:TRBLabel
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label79:TRBLabel
+Label81:TRBLabel
+Label7:TRBLabel
+bndROOT:TRBDetailBand
+Label5:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label11:TRBLabel
+bndFtDET:TRBBand
+Label47:TRBLabel
+lbSumInWord:TRBLabel
+Label49:TRBLabel
+Label83:TRBLabel
+Structure1:TRBStructure

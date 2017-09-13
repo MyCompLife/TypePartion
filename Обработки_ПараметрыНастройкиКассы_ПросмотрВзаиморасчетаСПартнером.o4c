@@ -1,0 +1,232 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  Part, DetPhone : ICDictionary;
+  PaysTbl, RestTbl: ICValueTable;
+  CursorVis : TCursor;
+  Options : ICOptions;
+  AnalitField : string;
+  LockRun : Boolean;  
+
+procedure ReBuildGridColumnns(dbgData:TO4DBGrid);
+const ReqColumns='Валюта;СумОбщВал;Просрочка';
+      ReqColumnsTitle='Валюта;Сумма;Просрочка';
+      ReqColumnsWidth='50;100;90';
+var s:string;
+    i: integer;
+    ColumnTbl : ICValueTable;
+begin
+ ColumnTbl := CreateObject('ТаблицаЗначений');
+ ColumnTbl.AddColumn('Num',vtcInteger,0);
+ ColumnTbl.AddColumn('O4FieldName',vtcString,30);
+ ColumnTbl.AddColumn('Caption',vtcString,30);
+ ColumnTbl.AddColumn('Width',vtcInteger,0);
+ ColumnTbl.Open;
+ if dbgData.PosColumns.Count>0 then
+   for i:=0 to dbgData.PosColumns.Count-1 do
+     begin
+       ColumnTbl.Append;
+       ColumnTbl.Num := i*2;
+       ColumnTbl.O4FieldName := (dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName;
+       ColumnTbl.Caption := (dbgData.PosColumns.Items[i] as TO4GridColumn).Title.Caption;
+       ColumnTbl.Width := (dbgData.PosColumns.Items[i] as TO4GridColumn).Width;
+       ColumnTbl.Post;
+     end;
+ ColumnTbl.SortBy('O4FieldName');
+ for i:=1 to WordCount(ReqColumns,';') do
+   if not ColumnTbl.Find(ExtractWord(i,ReqColumns,';')) then
+     begin
+       ColumnTbl.Append;
+       ColumnTbl.Num := ColumnTbl.LineCount*2;
+       ColumnTbl.O4FieldName := ExtractWord(i,ReqColumns,';');
+       ColumnTbl.Caption := ExtractWord(i,ReqColumnsTitle,';');
+       ColumnTbl.Width := StrToDecDef(ExtractWord(i,ReqColumnsWidth,';'),50);
+       ColumnTbl.Post;
+     end;
+ if cbUseAnalit.Checked then
+   begin
+     if not ColumnTbl.Find('АналитикаВзаиморасчета') then
+       begin
+         if ColumnTbl.Find('Валюта') then
+           i := VarAsInt(ColumnTbl.Num)+1
+         else
+           i := ColumnTbl.LineCount*2+1;
+         ColumnTbl.Append;
+         ColumnTbl.Num := i;
+         ColumnTbl.O4FieldName := 'АналитикаВзаиморасчета';
+         ColumnTbl.Caption := 'Аналитика';
+         ColumnTbl.Width := 80;
+         ColumnTbl.Post;
+       end;
+   end
+ else
+   begin
+     if ColumnTbl.Find('АналитикаВзаиморасчета') then
+       ColumnTbl.Delete;
+   end;
+  ColumnTbl.SortBy('Num');
+ try
+   dbgData.AutoAlign := false;
+   dbgData.PosColumns.Clear;
+   ColumnTbl.Select;
+   i := 0;
+   While ColumnTbl.SelectNext do
+     begin
+       dbgData.PosColumns.Add;
+      (dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName := VarAsStr(ColumnTbl.O4FieldName);
+      (dbgData.PosColumns.Items[i] as TO4GridColumn).Title.Caption := VarAsStr(ColumnTbl.Caption);
+      (dbgData.PosColumns.Items[i] as TO4GridColumn).Width := VarAsInt(ColumnTbl.Width);
+      inc(i);
+     end;
+ finally
+   dbgData.AutoAlign := true;
+ end;
+end;
+
+procedure TVSRest_VPATimedAfterScroll(Sender: TObject);
+begin
+  if not RestTbl.IsFocused then
+    lbPayTitle.Caption := ''
+  else
+  if RestTbl.СумОбщВал < 0 then
+    begin
+      lbPayTitle.Caption := 'Мы должны';
+      lbPayTitle.Font.Color := ClRed;
+    end
+  else   
+  if RestTbl.СумОбщВал > 0 then
+    begin
+      lbPayTitle.Caption := 'Нам должны';
+      lbPayTitle.Font.Color := ClNavy;
+    end
+  else
+    lbPayTitle.Caption := ''; 
+    if AnalitField<>'' then 
+      PaysTbl.SetRange(ArrayOf(RestTbl.@Валюта,RestTbl.@АналитикаВзаиморасчета),
+                       ArrayOf(RestTbl.@Валюта,RestTbl.@АналитикаВзаиморасчета))
+    else
+      PaysTbl.SetRange(RestTbl.@Валюта,RestTbl.@Валюта);
+    PaysTbl.Select;
+end;
+
+procedure GetPartInfo(Part: ICDictionary);
+var
+  Doc: ICDocuments;
+begin     
+  try 
+    CursorVis := WaitCursorStart;
+    if cbUseAnalit.Checked then
+      AnalitField := ';АналитикаВзаиморасчета'
+    else
+      AnalitField := '';
+    PaysTbl.UseDataSource(0);
+    PaysTbl.Clear;
+    PaysTbl.CopyDataToServer;
+    RestTbl.UseDataSource(0);
+    RestTbl.Clear;
+    RestTbl.CopyDataToServer;
+    Server.GetPaysTbl(PaysTbl.SrvMean, RestTbl.SrvMean, Part, cbUseAnalit.Checked);
+    RestTbl.CopyDataFromServer;
+    PaysTbl.CopyDataFromServer; 
+    RestTbl.SortBy('Валюта'+AnalitField);
+    PaysTbl.SortBy('Валюта'+AnalitField+';Дата');  
+    ReBuildGridColumnns(dbgRest);
+  finally
+    PaysTbl.UseDataSource(CtrlToVar(TVSPays));
+    RestTbl.UseDataSource(CtrlToVar(TVSRest));
+    TVSRest_VPATimedAfterScroll(form);
+    SetCursor(CursorVis);
+  end;
+
+  if Part.КредитныйЛимит > 0 then
+    begin
+      pCreditLimit.Visible := true;
+      lCreditLimit.Caption := FormatFloat('0.00', Part.КредитныйЛимит);
+    end;  
+
+  Options.SetServerPrm('ПросмотрВзаиморасчетаСПартнеромcbUseAnalit',cbUseAnalit.Checked);
+end;
+
+procedure ActionExecute(edMean : TO4Edit; MeanName, FormName : String; var Mean : ICDictionary);
+var
+  s : string;
+begin
+  if IsNil(Mean) then
+    Mean := CreateObject(MeanName);
+  if Mean.SelectInForm(FormName, s, Null) then
+    edMean.Text := s;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Options := GetOptions; 
+  Constants := GetConstants; 
+  LockRun := true;
+  cbUseAnalit.Checked := VarAsBool(Options.GetServerPrm('ПросмотрВзаиморасчетаСПартнеромcbUseAnalit')); 
+  LockRun := false;
+  if VarAsBool(Mean.HasParam('Part')) then
+    Part := Mean.Params['Part'];
+  if IsObjFocused(Part) then
+    begin
+      PaysTbl := CreateObject('ValueTable');
+      PaysTbl.AddColumn('Документ',vtcLink,0);
+      PaysTbl.AddColumn('Валюта',vtcLink,0);
+      PaysTbl.AddColumn('АналитикаВзаиморасчета', vtcLink,0);
+      PaysTbl.AddColumn('Дата',vtcDateTime,0);
+      PaysTbl.AddColumn('СуммаДок',vtcFFT,2);
+      PaysTbl.AddColumn('Сумма',vtcFFT,2);
+      PaysTbl.AddColumn('Calc',vtcInteger,0);
+      PaysTbl.Open; 
+      RestTbl := CreateObject('ValueTable');
+      RestTbl.AddColumn('АналитикаВзаиморасчета', vtcLink,0);
+      RestTbl.AddColumn('Валюта',vtcLink,0);
+      RestTbl.AddColumn('СумОбщВал',vtcFFT,2);
+      RestTbl.AddColumn('Просрочка',vtcInteger,0);
+      RestTbl.Open;
+      RestTbl.SetColumnFormat('СумОбщВал','0.00');
+      PaysTbl.SetColumnFormat('СуммаДок','0.00');
+      PaysTbl.SetColumnFormat('Сумма','0.00');
+      server.InitSrvDate;
+      GetPartInfo(Part)
+    end;
+  DetPhone := SetDetailDict(Part, 'Телефоны', 'ПросмотрТелефонов', CtrlToVar(ntbLists.PageClass[0]));
+end;
+
+
+
+
+
+procedure cbUseAnalit_Click(Sender: TObject);
+begin
+ if not LockRun then
+   GetPartInfo(Part);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel6:TO4Panel
+Panel7:TO4Panel
+lbPayTitle:TO4Label
+lbCurr:TO4Label
+cbUseAnalit:TO4CheckBox
+dbgPayDoc:TO4DBGrid
+pRest:TO4Panel
+dbgRest:TO4DBGrid
+pCreditLimit:TO4Panel
+lCreditLimitTitle:TO4Label
+Panel2:TO4Panel
+lCreditLimit:TO4Label
+ListsPanel:TO4Panel
+tstLists:TO4TabSet
+ntbLists:TO4Notebook
+dbgOwners:TO4DBGrid
+dmNotes:TO4DBMemo
+TVSPays:TO4TableValueSource
+TVSRest:TO4TableValueSource

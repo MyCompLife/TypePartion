@@ -1,0 +1,60 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  s1 : Variant;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := CreateObject('Журналы.ЖурналПереоценки');
+  s1 := 0;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    begin
+      //if Form.GetPrintKind = pkWindow then
+      MasterData.AssignSelectParams(Form.GetMean);
+      MasterData.Select;
+    end;
+  Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  s1 := s1 + MasterData.СуммаБезНДС;
+  with Table do
+    begin
+      Value['Number'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if VarAsBool(MasterData.@Ответственный.IsFocused) then
+        Value['Partner'] := MasterData.Ответственный.ПолноеНазвание;
+      Value['SumNT'] := MasterData.СуммаБезНДС;
+    end;
+end;
+
+procedure Band3_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  lbAllSumNT.Caption := FormatFloat('0.00', s1);
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band3:TRBBand
+lbAllSumNT:TRBLabel
+DetailBand1:TRBDetailBand
+lbPartner:TRBLabel
+lbSumNT:TRBLabel
+lbDate:TRBLabel
+lbNumber:TRBLabel
+Band2:TRBBand
+hdPartner:TRBLabel
+hdSumNT:TRBLabel
+hdDate:TRBLabel
+hdNumber:TRBLabel
+Band1:TRBBand
+Label4:TRBLabel
+Structure1:TRBStructure

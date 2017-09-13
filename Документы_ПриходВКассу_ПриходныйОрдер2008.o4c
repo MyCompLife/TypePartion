@@ -1,0 +1,121 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  Partner : ICDictionary;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      Partner := GetPartner(MasterData.Партнер);
+      if (not IsNil(Partner)) and (VarAsBool(Partner.IsFocused)) then
+        begin
+          Value['PARTADDR'] := GetActiv(ADR, 'Адрес', Partner);
+          Value['PARTPHONE'] := GetActiv(TLF, 'Номер', Partner);
+          Value['PARTNAME'] := GetPartName(MasterData.Партнер);
+        end;
+      Value['Summa'] := MasterData.Сумма;
+      Value['AccHiLo'] := MasterData.Счет;
+      Value['AOCode'] := MasterData.ШифрУчета;
+      Value['GoalCode'] := MasterData.ШифрНазначения;
+      Value['Discript'] := MasterData.Комментарий;
+    end;
+  lbSumW.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058);
+  lbSumW1.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058);
+  lbD.Caption := FormatFloat('00', GetDay(MasterData.ДатаДокумента));
+  lbM.Caption := StrLowerCase(CNV.MonthToStr(GetMonth(MasterData.ДатаДокумента), 1, 1058));
+  lbY.Caption := IntToStr(GetYear(MasterData.ДатаДокумента)) + ' р.';
+  lbDMY.Caption := StrLowerCase(CNV.FormatDateTime('dd mmmm yyyy р.', MasterData.ДатаДокумента, 1, 1058));
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  Accept := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+Shape1:TRBShape
+Label51:TRBLabel
+lbSumW1:TRBLabel
+Label52:TRBLabel
+lbSumW:TRBLabel
+Label24:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+lbM:TRBLabel
+lbD:TRBLabel
+Label8:TRBLabel
+lbY:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+lbPart:TRBLabel
+Label22:TRBLabel
+Label25:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label32:TRBLabel
+Label33:TRBLabel
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label38:TRBLabel
+Label37:TRBLabel
+lbDMY:TRBLabel
+Label40:TRBLabel
+Label41:TRBLabel
+Label42:TRBLabel
+Label43:TRBLabel
+Label44:TRBLabel
+Label45:TRBLabel
+Label46:TRBLabel
+Label47:TRBLabel
+Label48:TRBLabel
+Label49:TRBLabel
+Label50:TRBLabel
+Label57:TRBLabel
+Label58:TRBLabel
+Label54:TRBLabel
+Label56:TRBLabel
+Label60:TRBLabel
+Label61:TRBLabel
+Label62:TRBLabel
+Label63:TRBLabel
+Structure1:TRBStructure

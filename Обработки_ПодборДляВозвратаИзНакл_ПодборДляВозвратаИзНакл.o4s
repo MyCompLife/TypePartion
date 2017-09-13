@@ -1,0 +1,68 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  //  AccsGood, AccsPartGood,
+  AccsPartGood, AccGood : ISAccs;
+  SLstOrder : ISValueList;
+  Partner : Variant;
+  SDateBeg, SDateEnd : DateTime;
+  JMD : ISJournal;
+  DMD : ISDocuments;
+
+procedure InitSrvData(PostReal : Variant; DateBeg, DateEnd : DateTime; TblGoods : ISValueTable; LstOrder : ISValueList); server;
+var
+  Tmp : ISValueTable;
+begin
+  SDateBeg := RoundDate(DateBeg, rdDay, False);
+  SDateEnd := RoundDate(DateEnd, rdDay, True);
+  Partner := PostReal;
+  //  LstOrder := CreateObject('СписокЗначений');
+  LstOrder.Clear();
+  Tmp := CreateObject('ValueTable');
+  //  DMD := CreateObject('Документы.НакладнаяОтпуска');
+  //  DMDB:= CreateObject('Документы.НакладнаяОтпускаПоСчету');
+  JMD := CreateObject('Журналы.ЖурналНакладных');
+  JMD.SetDocStateRange(1);
+  JMD.SetDateRange(SDateBeg, SDateEnd);
+  JMD.SetRangeByField('Партнер', Partner);
+  JMD.Select();
+  while JMD.SelectNext() do
+    if (JMD.GetDocSign = 'НакладнаяОтпуска') or (JMD.GetDocSign = 'НакладнаяОтпускаПоСчету') then
+      begin
+        DMD := JMD.GetDoc();
+        if VarAsBool(DMD.IsFocused) then
+          begin
+            LstOrder.AddValue(JMD.Документ + ' ' + JMD.Номер + trans(' от ') + DateToStr(JMD.Дата), DMD);
+            if VarAsBool(DMD.IsFocused) then
+              begin
+                DMD.SaveContents('Товар;Цена;Количество', Tmp);
+                Tmp.AppendTo('Товар;Цена;Количество', TblGoods);
+              end;
+          end;
+      end;
+  TblGoods.GroupBy('Товар;Цена', 'Количество');
+  TblGoods.SortBy('Товар;Цена');
+  TblGoods.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  SLstOrder := LstOrder;
+  //  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+end;
+
+procedure GetGoodWithPart(TblPartGood : ISValueTable; CurInd : Integer); server;
+begin
+  if SLstOrder.ValidIndex(CurInd) then
+    begin
+      DMD := SLstOrder.GetValue(CurInd);
+      AccGood.AppendDocMotionToValueTable(DMD, amtOutcome, 'Товар;Партия;СумРасх;КолРасх', TblPartGood);
+      TblPartGood.DoCalculation('Цена', 'СумРасх/КолРасх');
+      AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ДатаПр;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', TblPartGood);
+    end
+end;
+
+end.

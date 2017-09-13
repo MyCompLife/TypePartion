@@ -1,0 +1,441 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, Пользователи;
+
+implementation
+
+var
+  MasterData: ICProcessing;
+  Options: ICOptions;
+  TblRest,  TblBankKassa,  TblPart: ICValueTable;
+  TempTbl,DocTbl : ICValueTable;
+  AccsGood,  AccsPartGood, AccsBank, AccsKassa, AccsPart : ICAccs;
+  Object: Variant;
+  Date: DateTime;
+  CursorVis : TCursor;
+  Currency, Respons : ICDictionary;
+  Log : TStringList;
+
+procedure CreateObjects;
+begin   
+  if edBaseName.Text<>'' then
+    begin
+      Currency := CreateObjectOnDBID('Справочники.Валюты',edBaseName.Text);
+      AccsPartGood := CreateObjectOnDBID('Аккумуляторы.ПартииТоваров',edBaseName.Text);
+    end
+  else
+    begin
+      Currency := CreateObject('Справочники.Валюты');
+      AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+    end;
+
+  if cb1.Checked then
+    begin
+      if edBaseName.Text<>'' then
+        AccsGood := CreateObjectOnDBID('Аккумуляторы.ОстаткиТоваров',edBaseName.Text)
+      else
+        AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+      TblRest := CreateObject('ValueTable');
+      TblRest.AddColumn('Товар',vtcLink,0);
+      TblRest.AddColumn('Склад',vtcLink,0);
+      TblRest.AddColumn('Партия',vtcFloat,0);
+      TblRest.AddColumn('Партнер',lftLink,0);
+      TblRest.AddColumn('ДатаПр',lftDate,0);
+      TblRest.AddColumn('ВалютаТовара',lftLink,0);
+      TblRest.AddColumn('КурсТовара',vtcFFt,6);
+      TblRest.AddColumn('СтавкаНДС',vtcFFt,2);
+      AddFFtColumnsList(TblRest, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал');  
+      TblRest.Open;
+    end;
+
+  if cb4.Checked then
+    begin
+      if edBaseName.Text<>'' then
+        begin
+          AccsBank   := CreateObjectOnDBID('Аккумуляторы.ОстаткиНаРасчСчет',edBaseName.Text);
+          AccsKassa  := CreateObjectOnDBID('Аккумуляторы.ОстаткиПоКассе',edBaseName.Text);
+        end
+      else
+        begin
+          AccsBank   := CreateObject('Аккумуляторы.ОстаткиНаРасчСчет');
+          AccsKassa  := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+        end;
+      TblBankKassa := CreateObject('ValueTable');
+      TblBankKassa.AddColumn('РасчСчет',vtcLink,0);
+      TblBankKassa.AddColumn('Касса', lftLink, 0);
+      TblBankKassa.AddColumn('Валюта',vtcLink,0);
+      TblBankKassa.AddColumn('СумОбщ',vtcFFt,2);
+      TblBankKassa.AddColumn('Тип',vtcInteger,0);
+      TblBankKassa.Open;
+    end;
+  if cb5.Checked then
+    begin   
+      if edBaseName.Text<>'' then
+        AccsPart := CreateObjectOnDBID('Аккумуляторы.РасчетыСПартнерами',edBaseName.Text)
+      else                                                                               
+        AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+      TblPart := CreateObject('ValueTable');
+      TblPart.AddColumn('Партнер',vtcLink,0);
+      TblPart.AddColumn('АналитикаВзаиморасчета',vtcLink,0);
+      TblPart.AddColumn('Валюта',vtcLink,0);
+      TblPart.AddColumn('СумОбщВал',vtcFFt,2);
+      TblPart.Open;
+    end;
+
+
+
+end;
+
+procedure CalcDocSimplSumma(Doc: ICDocuments; Tbl: ICValueTable);
+begin
+  //сумма по товару
+  Doc.Сумма := VarAsDec(Tbl.Total('СуммаСтроки'));
+  Doc.СуммаТовара := Doc.Сумма;
+  Doc.СуммаНДС := VarAsDec(Tbl.Total('НДССтроки'));
+  Doc.СуммаНДСТовара := Doc.СуммаНДС;
+  Doc.СуммаБезНДС := VarAsDec(Doc.Сумма) - VarAsDec(Doc.СуммаНДС);
+  Doc.СуммаБезНДСТовара := Doc.СуммаБезНДС;
+  // масса, площадь
+  if Doc.HasField('ОбщаяМасса') then
+    Doc.ОбщаяМасса := Tbl.Total('МассаСтроки') ;
+  if Doc.HasField('ОбщаяПлощадь') then
+    Doc.ОбщаяПлощадь := Tbl.Total('ПлощадьСтроки') ;
+  // наценка
+  if Doc.HasField('Наценка') then
+    Doc.Наценка := VarAsDec(Tbl.Total('НаценкаСтроки'));
+  SetCurSumma(Doc);
+end;
+
+procedure CreateDocS(DocName: String; DocTbl : ICValueTable);
+Var
+  Doc : ICDocuments;
+  AllRecCnt, AddRec, ColumnCnt : Integer;
+  Options: ICOptions;
+  Constants: IC4VPAConst;
+  Units, Store, Rule, Partner: ICDictionary;
+  TblContents: ICValueTable;
+begin
+  Options := GetOptions;
+  Constants := GetConstants;
+  TblContents := CreateObject('ValueTable');
+  if (DocTbl.LineCount <> 0) then
+    begin
+      Case DocName of
+        'ВводОстатков':
+           begin   
+             Rule := CheckRule(Null,Options);
+             Doc := CreateObject('Документы.'+DocName);
+             Doc.Select;
+             Doc.Append;
+             Doc.ДатаДокумента := Date;
+             if Currency.FindByField('Активность',True, False) or Currency.FindByField('НацВалюта',True, False) then
+               begin
+                 Doc.Курс := Currency.GetTimedValue(Constants.UsedCurs, Doc.ДатаДокумента);
+                 Doc.Валюта := Currency;
+               end;
+             Doc.Партнер := Respons;
+             Doc.Отпуск := 0;
+             if Doc.HasField('МетодРасчета') then
+               Doc.МетодРасчета := 0;
+             Doc.SaveContents('',TblContents);
+             DocTbl.CopyDataToServer;
+             TblContents.CopyDataToServer;
+             Rule.SetSrvToClientPos;
+             MasterData.RunThreadProcess(Server.FillContentsS(DocTbl.SrvMean, TblContents.SrvMean, DocName, Null, Doc.GetDate),'Заполнение табличной части:');
+
+             Doc.Регион := GetUsersField('Регион');
+             Doc.СкладПр := GetUsersField('Склад');
+             Doc.BaseID := VarAsInt(Constants.КодИБ);
+             DocTbl.CopyDataFromServer;
+             TblContents.CopyDataFromServer;
+             Doc.LoadContents('',TblContents);
+             CalcDocSimplSumma(Doc, TblContents);
+             Doc.Post;
+             Doc.ApplyUpdates;
+             if cbFix.Checked then
+               Doc.StateUp;
+             Log.Add('Документ добавлен ' + '| ' + Doc.GetView + ' | ' +'№ '+ VarAsStr(Doc.GetNumber) + ' |' +' от '+ VarAsStr(Doc.GetDate));
+             TempTbl.Append;
+             TempTbl.Doc := Doc;
+             TempTbl.Post;
+        end;
+
+        'ВводОстатковПоБанкуИКассе':
+           begin
+             Doc := CreateObject('Документы.'+DocName);
+             Doc.Select;
+             Doc.Append;
+             Doc.ДатаДокумента := Date;
+             Doc.Ответственный := Respons;
+             Doc.Партнер := Doc.Ответственный;
+             Doc.SaveContents('',TblContents);
+             DocTbl.CopyDataToServer;
+             TblContents.CopyDataToServer;
+             //Rule.SetSrvToClientPos;
+             MasterData.RunThreadProcess(Server.FillContentsS(DocTbl.SrvMean, TblContents.SrvMean, DocName, Null, Doc.GetDate),'Заполнение табличной части:');
+             DocTbl.CopyDataFromServer;
+             TblContents.CopyDataFromServer;
+             Doc.LoadContents('',TblContents);
+             Doc.Post;
+             Doc.ApplyUpdates;
+             if cbFix.Checked then
+               Doc.StateUp;
+             Log.Add('Документ добавлен ' + '| ' + Doc.GetView + ' | ' +'№ '+ VarAsStr(Doc.GetNumber) + ' |' +' от '+ VarAsStr(Doc.GetDate));
+             TempTbl.Append;
+             TempTbl.Doc := Doc;
+             TempTbl.Post;
+
+        end;
+        'ВводОстатковПоВзаиморасчетам':
+           begin
+             Doc := CreateObject('Документы.'+DocName);
+             Doc.Select;
+             Doc.Append;
+             Doc.ДатаДокумента := Date;
+             if Currency.FindByField('Активность',True, False) or Currency.FindByField('НацВалюта',True, False) then
+               begin
+                 Doc.КурсДок := Currency.GetTimedValue(Constants.UsedCurs, Doc.ДатаДокумента);
+                 Doc.ВалютаДок := Currency;
+               end;
+             Doc.Ответственный := Respons;
+             Doc.SaveContents('',TblContents);
+             DocTbl.CopyDataToServer;
+             TblContents.CopyDataToServer;
+             //Rule.SetSrvToClientPos;
+             MasterData.RunThreadProcess(Server.FillContentsS(DocTbl.SrvMean, TblContents.SrvMean, DocName, Null, Doc.GetDate),'Заполнение табличной части:');
+             DocTbl.CopyDataFromServer;
+             TblContents.CopyDataFromServer;
+             Doc.LoadContents('',TblContents);
+             Doc.SelectLines;
+             While Doc.SelectNextLine do
+               begin
+                 Doc.СуммаДок := Doc.СуммаДок + (1 + VarAsInt(Doc.Долг) * 2) * VarAsDec(Doc.Сумма);
+               end;
+             if Doc.КурсДок <> 0 then
+               Doc.СуммаДокВал := Doc.СуммаДок / Doc.КурсДок;
+             Doc.Post;
+             Doc.ApplyUpdates;
+             if cbFix.Checked then
+               Doc.StateUp;
+             Log.Add('Документ добавлен ' + '| ' + Doc.GetView + ' | ' +'№ '+ VarAsStr(Doc.GetNumber) + ' |' +' от '+ VarAsStr(Doc.GetDate));
+             TempTbl.Append;
+             TempTbl.Doc := Doc;
+             TempTbl.Post;
+
+        end;
+      end;
+    end;
+end;
+
+
+
+
+procedure ExportRest;
+begin
+    Log := CreateStringList;
+    if cb1.Checked then
+      begin
+        AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Склад;Партия;КолОбщ', TblRest);
+        AccsPartGood.AssignFieldsByDimIDTo('Партия','Партнер;ДатаПр;СтавкаНДС;ВхЦенаБезНДС;ВхЦенаВал;Валюта=ВалютаТовара', TblRest);
+        TblRest.DoCalculation('КурсТовара','(ВхЦенаБезНДС + ВхЦенаБезНДС*СтавкаНДС/100)/ВхЦенаВал');
+        CreateDocS('ВводОстатков', TblRest);
+      end;
+    if cb4.Checked then
+      begin
+        AccsBank.AppendGroupRestToValueTable(Date, 'РасчСчет;Валюта;СумОбщ', TblBankKassa);
+        TblBankKassa.DoCalculation('Тип','0');
+        AccsKassa.AppendGroupRestToValueTable(Date, 'Касса;Валюта;СумОбщ', TblBankKassa);
+        TblBankKassa.Select;
+        While TblBankKassa.SelectNext do
+          if not VarAsBool(TblBankKassa.@РасчСчет.IsFocused) then
+            begin
+              TblBankKassa.Edit;
+              TblBankKassa.Тип := 1;
+              TblBankKassa.Post;
+            end;
+        TblBankKassa.CancelRange;
+        CreateDocS('ВводОстатковПоБанкуИКассе', TblBankKassa);
+      end;
+    if cb5.Checked then
+      begin
+        AccsPart.AppendGroupRestToValueTable(Date,'Партнер;АналитикаВзаиморасчета;Валюта;СумОбщВал',TblPart);
+        CreateDocS('ВводОстатковПоВзаиморасчетам', TblPart);
+      end;
+    Log.SaveToFile('c:\ImportLogFile.log');
+    ShowMessage('Экспорт завершен!');
+end;
+
+procedure btImportRest_Click(Sender: TObject);
+begin
+  Date := trunc(StrToDateTimeDef(edDate.Text,0));
+  if Date=0 then
+    ShowMessage('Укажите дату!')
+  else
+  if (edBaseName.Text='') and (MessageDlg('Не указана база! Брать данные из текущей базы?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+    ShowMessage('Укажите базу')
+  else
+  if not IsObjFocused(Respons) then
+    ShowMessage('Выберите ответственного!')
+  else
+    begin
+      CreateObjects;
+      ExportRest;
+    end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+
+  MasterData := Mean;
+  Options := GetOptions;
+  edBaseName.Text := Options.GetServerPrm('NameForBaseExpRests');
+  edDate.Text := DateToStr(CurrentDate);
+  DatePeriod.DateFrom := RoundDate(CurrentDate,rdYear,false);
+  DatePeriod.DateTo := CurrentDate;
+  Respons := CreateObject('Справочники.Служащие');
+  if Respons.FindByField('ПолноеНазвание',GetUserName,false) then
+    edRespons.Text := Respons.ПолноеНазвание;
+  TempTbl := CreateObject('ТаблицаЗначений');
+  TempTbl.AddColumn('Doc',vtcLink,0);
+  TempTbl.Open;
+end;
+
+procedure btnBrowse_Click(Sender: TObject);
+begin
+  edBaseName.Text := SelectDBID;
+end;
+
+procedure edRespons_ActionClear(Sender: TObject);
+begin
+  Respons := Null;
+  edRespons.Text := '';
+end;
+
+procedure edRespons_ActionExecute(Sender: TObject);
+var
+DefName: String;
+begin
+  if IsNil(Respons) then Respons := CreateObject('Справочники.Служащие');
+  if Respons.SelectInForm('ВыборСлужащего',DefName,Null) then
+    edRespons.Text := Respons.ПолноеНазвание
+end;
+
+procedure btOpenLog_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  if FileExists('c:\ImportLogFile.log') then
+    begin
+      V := CreateObject('Обработки.ЭкспортОстатков');
+      V.Execute('ФильтрТекстФайл','c:\ImportLogFile.log');
+    end;
+end;
+
+procedure btImportDoc_Click(Sender: TObject);
+begin
+  if edBaseName.Text='' then
+    ShowMessage('Укажите базу')
+  else
+    begin
+      if MasterData.RunThreadProcess(Server.ImportAllDocsEP(DatePeriod.DateFrom, DatePeriod.DateTo, edBaseName.Text),'Импорт всех документов') then
+        ShowMessage('Импорт документов завершен')
+      else
+        ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+    end;
+end;
+
+procedure btImportLinkPayDocs_Click(Sender: TObject);
+begin
+  if edBaseName.Text='' then
+    ShowMessage('Укажите базу')
+  else
+    begin
+      if MasterData.RunThreadProcess(Server.ImportLinkPayDocsEP(DatePeriod.DateFrom, DatePeriod.DateTo, edBaseName.Text),'Импорт связей подчиненных документов') then
+        ShowMessage('Импорт связей подчиненных документов оплат завершен')
+      else
+        ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+    end;
+end;
+
+
+procedure Form_Close(Sender: TObject);
+begin
+  Options.SetServerPrm('NameForBaseExpRests',edBaseName.Text);
+end;
+
+procedure mtImportPriceHistory_Click(Sender: TObject);
+begin
+  if edBaseName.Text='' then
+    ShowMessage('Укажите базу')
+  else
+    begin
+      if MasterData.RunThreadProcess(Server.ImportPriceHistoryEP(DatePeriod.DateFrom, DatePeriod.DateTo, edBaseName.Text),'Импорт истории изменения цен') then
+        ShowMessage('Импорт истории изменения цен завершен')
+      else
+        ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+    end;
+end;
+
+procedure btUpdateDic_Click(Sender: TObject);
+begin
+  if edBaseName.Text='' then
+    ShowMessage('Укажите базу')
+  else
+    begin
+      if MasterData.RunThreadProcess(Server.UpdateDicEP(DatePeriod.DateFrom, DatePeriod.DateTo, edBaseName.Text),'Обновление полей справочников') then
+        ShowMessage('Обновление полей справочников завершен')
+      else
+        ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+    end;
+end;
+
+procedure btImportChangeJrn_Click(Sender: TObject);
+begin
+  if edBaseName.Text='' then
+    ShowMessage('Укажите базу')
+  else
+    begin
+      if MasterData.RunThreadProcess(Server.ImportChangeJrnEP(DatePeriod.DateFrom, DatePeriod.DateTo, edBaseName.Text),'Импорт истории журнала изменений') then
+        ShowMessage('Импорт истории журнала изменений завершен')
+      else
+        ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+    end;
+end;
+
+procedure btRefreshChangeDocs_Click(Sender: TObject);
+begin
+      if MasterData.RunThreadProcess(Server.RefreshChangeDocsEP(DatePeriod.DateFrom, DatePeriod.DateTo),'Обновление смен') then
+        ShowMessage('Обновление смен завершен')
+      else
+        ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+btCancel:TO4Button
+Panel1:TO4Panel
+Label2:TO4Label
+edBaseName:TO4Edit
+btnBrowse:TO4Button
+PageControl1:TO4PageControl
+tsExportRest:TTabSheet
+Label3:TO4Label
+Label1:TO4Label
+edRespons:TO4Edit
+edDate:TO4Edit
+GroupBox1:TO4GroupBox
+cb1:TO4CheckBox
+cb4:TO4CheckBox
+cb5:TO4CheckBox
+cbFix:TO4CheckBox
+btImportRest:TO4Button
+tsExportAllDocs:TTabSheet
+btImportDoc:TO4Button
+DatePeriod:TO4DatePeriod
+btImportLinkPayDocs:TO4Button
+mtImportPriceHistory:TO4Button
+btUpdateDic:TO4Button
+btImportChangeJrn:TO4Button
+btRefreshChangeDocs:TO4Button

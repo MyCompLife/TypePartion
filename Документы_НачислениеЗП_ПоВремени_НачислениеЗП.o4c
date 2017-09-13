@@ -1,0 +1,170 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, Пользователи, НумерацияДокументов, 
+  Reports, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MasterData : ICDocuments;
+  ParamsSt, Currency: ICDictionary;
+  ChangeLock, isSave, AddDoc : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  Options := GetOptions;
+  Constants := GetConstants;
+  ParamsSt := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');
+  Currency := CreateObject('Справочники.Валюты');
+end;
+
+procedure MDS_Append(Sender: TObject);
+var
+  Date, DateFrom, DateTo : DateTime;
+begin  
+  AddDoc := true;
+  Date := CurrentDate;
+  DateFrom := RoundDate(Date, rdWeek, False);
+  DateTo := RoundDate(Date, rdWeek, True) - 1;
+  MasterData.ДатаС := DateFrom;
+  MasterData.ДатаПо := DateTo;
+  MasterData.Регион := GetUsersField('Регион');
+  MasterData.BaseID := VarAsInt(Constants.КодИБ);
+  MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);  
+  MasterData.Отпуск := 0;
+  ParamsSt.Select;
+  if VarAsBool(ParamsSt.@НачислениеЗП.IsFocused) then
+    MasterData.Статья := ParamsSt.НачислениеЗП;    
+  if not Currency.FindByField('Активность', VarAsInt(True), True) then
+    Currency := GetNatCurrency(Currency);
+  if Currency.IsFocused then
+    begin
+      MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+      MasterData.Валюта := Currency;
+    end;
+  if MasterData.BaseID = 0 then
+    raise('Заполните код информационной базы в значениях важных констант');
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if MasterData.NumID = 0 then
+    MasterData.NumID := УстановитьНомерДокумента(MasterData, '');
+end;
+
+procedure tbRun_Click(Sender: TObject);
+var
+  Cursor: TCursor;
+  tblContents: ICValueTable;
+  dicRegions: ICDictionary;
+begin
+  if not VarAsBool(MasterData.Регион.IsFocused) then
+    begin
+      ShowMessage('Выберите регион!');
+      exit;
+    end; 
+  MasterData.ClearContents;
+  Cursor := WaitCursorStart;
+  tblContents := CreateObject('ValueTable');
+  MasterData.SaveContents('',tblContents);
+  dicRegions := MasterData.Регион;
+  dicRegions.SetSrvToClientPos;
+  tblContents.CopyDataToServer;
+  Server.FillDoc(tblContents.SrvMean, MasterData.ДатаС, MasterData.ДатаПо, dicRegions.SrvMean);
+  tblContents.CopyDataFromServer;
+  tblContents.UpdateObjNames;
+  MasterData.LoadContents('',tblContents);
+  MasterData.Сумма := MasterData.Total('СуммаСтроки');
+  MasterData.СуммаВВалюте := MasterData.Сумма/MasterData.Курс;
+  edRegion.Enabled := false;
+  WaitCursorFinish(Cursor);
+end;
+
+procedure tbClear_Click(Sender: TObject);
+begin
+  if MessageDlg('Очистить документ?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrYes then
+    begin
+      MasterData.ClearContents;
+      MasterData.Сумма := 0;
+       MasterData.СуммаВВалюте := 0;
+      edRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+    end;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    begin
+      eData.Enabled := GetUDASet('ChangeDate');
+      eRespons.Enabled := GetUDASet('changeresp');
+      edRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+      if edRegion.Enabled then
+        if MasterData.LinesCount > 0 then
+          edRegion.Enabled := false;
+    end;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+  GoodMDSFieldChange(MasterData, FieldName, Value, ChangeLock);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label6:TO4Label
+Label35:TO4Label
+Label4:TO4Label
+Label5:TO4Label
+Label7:TO4Label
+Label10:TO4Label
+Label11:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+edRegion:TO4DBEdit
+eDateFrom:TO4DBEdit
+eDateTo:TO4DBEdit
+eCostItem:TO4DBEdit
+eCurrency:TO4DBEdit
+eCourse:TO4DBEdit
+Panel2:TO4Panel
+Label8:TO4Label
+Label3:TO4Label
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+eSum:TO4DBEdit
+eCurSum:TO4DBEdit
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+tbClear:TO4ToolButton
+tbParam:TO4ToolButton
+dbgListData:TO4DBGrid
+MDS:TO4DataSource
+TDS:TO4DocContentsSource

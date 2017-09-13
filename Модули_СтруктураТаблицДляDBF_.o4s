@@ -1,0 +1,31 @@
+interface
+uses
+  System, DispIntf, ConstNames, InitColors;
+
+procedure CreateStructureBLOBField(TblContents: ISValueTable; FieldName : String);
+
+implementation
+
+procedure CreateStructureBLOBField(TblContents: ISValueTable; FieldName : String);
+begin
+ case StrLowerCase(FieldName) of
+   'таб_товарыпочекам':
+     begin
+       TblContents.AddColumn('NumID',vtcString,20);
+       TblContents.AddColumn('НомСтроки',vtcInteger,0);
+       TblContents.AddColumn('Код',vtcString,20);
+       TblContents.AddColumn('Товар',vtcLink,0);
+       TblContents.AddColumn('ТоварКод_D',lftInteger,0);
+       TblContents.AddColumn('Количество',vtcFFT,5);
+       TblContents.AddColumn('Цена',vtcFFT,7);
+       TblContents.AddColumn('ПроцентСкидкиНадбавки',vtcFFT,7);
+       TblContents.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,7);
+       TblContents.AddColumn('Сумма',vtcFFT,7);
+       TblContents.AddColumn('ТипДокумента',vtcFFT,7);
+       TblContents.AddColumn('Комментарий',vtcString,200);
+     end;
+ end;
+ TblContents.Open;
+end;
+
+end.

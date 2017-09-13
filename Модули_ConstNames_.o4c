@@ -1,0 +1,486 @@
+interface
+
+uses System;
+
+const
+  //значения параметров пользователя
+  ShowCaptions = 'ShowCaptions';
+  CaptionsList = 'CaptionsList';
+  Flat = 'Flat';
+  Transparent = 'Transparent';
+  GridReadOnly = 'GridReadOnly';
+  CountAck = 'CountAck';
+  FixAck = 'FixAck';
+  AOSet = 'AOSet';
+  EnabledOut = 'EnabledOut';
+  DelayTime = 'DelayTime';
+  RefreshOnEnter = 'RefreshOnEnter';
+  NoFirstStart = 'NoFirstStart';
+  ImportEnabled = 'ImportEnabled';
+  DirectPrint = 'DirectPrint';
+  DelAck = 'DelAck';
+  ShowCodeUnitName = 'ShowCodeUnitName';
+  DatesForReport = 'DatesForReport';
+  StateOnOpen = 'StateOnOpen';
+  StateOnOpenInplace = 'StateOnOpenInplace';
+  FixPays = 'FixPays';
+  CheckZero = 'CheckZero';  
+
+  NoPayNormOpt = 'NoPayNorm';
+  NoPaySelOpt = 'NoPaySel';
+  BlZeroOpt = 'BlZero';
+  BlFZeroOpt = 'BlFZero';
+  BlZeroSelOpt = 'BlZeroSel';
+  BlFZeroSelOpt = 'BlFZeroSel';
+
+  RefreshOpt = 'Refresh';
+  RefCountOpt = 'RefCount';
+  FixPaysOnCliBankOpt = 'FixPaysOnCliBankOpt'; //фиксировать платежки в системе клиент-банк при создании
+  OnlyUridOnCliBankOpt = 'OnlyUridOnCliBankOpt'; //автоматически заносить нового партнера в справ. ЮрПартнеры в системе клиент-банк при создании
+  Cli_Bank_Parthers_SelectFromDictsOpt = 'Cli_Bank_Parthers_SelectFromDictsOpt'; //выбирать партнера в системе клиент-банк из справочников
+  Cli_Bank_Parthers_SelectFromDictsForNewOpt = 'Cli_Bank_Parthers_SelectFromDictsForNewOpt'; //выбирать партнера в системе клиент-банк из справочников только в случае нового
+  //названия семафоров
+  DecGood = 'УменьшениеТовара';
+  IncGood = 'УвеличениеТовара';
+  IncResGood = 'УвеличРезТовара';
+  DecResGood = 'УменьшРезТовара';
+  IncCash = 'УвеличениеДенегВКассе';
+  DecCash = 'УменьшениеДенегВКассе';
+  IncBank = 'УвеличениеДенегНаРасчСчету';
+  DecBank = 'УменьшениеДенегНаРасчСчету';
+  DecGoodRIn = 'УменьшениеТовараПостНаРеал';
+  IncGoodRIn = 'УвеличениеТовараПостНаРеал';
+  DecGoodROut = 'УменьшениеТовараНаРеал';
+  IncGoodROut = 'УвеличениеТовараНаРеал';
+
+  //надписи в стринггридах
+  lOrderSum = 'Сумма документа';
+  lOrderPaid = 'Оплачено';
+  lOrderToPay = 'К оплате';
+  lOrderInReceivedGoods = 'Получено товара';
+  lOrderOutGoods = 'Отпущено товара';
+  lOrderPayAll = 'Взаиморасчеты';
+  lOrderCurrency = 'ГРН';
+  lOrderDiv = 'Разница';
+  lRealizOut = 'Отпущено';
+  lRealizIn = 'Получено';
+  lRealizRet = 'Возвращено';
+  lRealizDisc = 'Списано';
+  lRealizRev = 'Инвентаризация';
+  lRealizOverrate = 'Переоценка';
+  lRealizAll = 'На реализации';
+  lOrderServ = 'Выписано актов';
+  lFactoryRest = 'Остатки';
+  lFactoryReady = 'Готовая продукция';
+  lFactoryBreak = 'Отбраковано';
+  lNaklSum = 'Сумма';
+  lNaklDebt = 'Должны';
+  lSalIn = 'Начислено';
+  lSalOut = 'Выплачено';
+  lComplCurrency = 'USD';
+
+  //названия центров оповещений для журналов
+  evNakladn = 'ЖурналыНакладных';
+  evOrder = 'ЖурналыСчетов';
+
+  //названия центров оповещений
+  evCount = 'КоличествоТовара';
+  evCash = 'ДеньгиВКассе';
+  evBank = 'ДеньгинаРасчСчету';
+  evResCount = 'КоличествоЗарезТовара';
+
+  //рабочее место кассира
+  DefaultStoreOpt = 'DefaultStore';
+  DefaultRealizatorOpt = 'DefaultRealizator';
+  DefaultPartnerOpt = 'DefaultPartner';
+  CheckPrintOpt = 'CheckPrint';
+  DistributeDiscountOpt = 'DistributeDiscountOpt';
+  ShopTypeOpt = 'ShopTypeOpt';
+  ChangeCustomerOpt = 'ChangeCustomerOpt';
+  AutoCreateCashDocOpt = 'AutoCreateCashDocOpt';
+  DontChangeAutoCreateCashDocOpt = 'DontChangeAutoCreateCashDocOpt';
+  UseScalesOpt = 'UseScalesOpt';                             
+  sprmFPDelNotRegisterDoc = 'sprmFPDelNotRegisterDoc'; 
+  DefaultPrintFormNameOpt = 'DefaultPrintFormNameOpt';
+
+  // фискальный принтер
+  soptActiveEKKAModel = 'ActiveEKKAModel'; // аппарат, на который будет печатать пользователь
+  soptInitFPInModes = 'InitFPInModes'; // перечислены идентификаторы режимов, из которых следует проводить печать на ФП. Идентификаторы режимов задаются через ; как GetSign от интерфейса режима
+  // кассовый сервер
+  soptActiveCashServer = 'ActiveCashServer'; // активный кассовый сервер для данного пользователя
+  // весы
+  soptActiveScales = 'ActiveScales'; // активные весы для данного пользователя
+
+  romRead = 0; //читать значение
+  romWriteTrue = 1; // записать True - показывает только сообщение
+  romWriteFalse = 2; // записать False - дополнительно показывает место ошибки
+
+  xgtFloat = 0; //ResTypeForXGridFunc
+  xgtString = 1; //ResTypeForXGridFunc
+  xgtBool = 2; //ResTypeForXGridFunc
+  //
+  // сообщения
+  infCanDeleteDocument = 'Удалить документ %s?';
+  infCanFixDocument = 'Фиксировать документ %s?';
+  infCanUnFixDocument = 'Расфиксировать документ %s?';
+  infDeleteDocument = 'Удаление документа %s';
+  infFixDocument = 'Фиксация документа %s';
+  infUnFixDocument = 'Расфиксация документа %s';
+  //
+  infCanDeleteRecord = 'Удалить запись?';
+  infCanDeleteSelectedRecords = 'Удалить отмеченные записи?';
+  //первое событие
+  UseFirstEvent = 'UseFirstEvent';
+  TaxDocRule = 'TaxDocRule';
+  AutoCreateTaxDoc = 'AutoCreateTaxDoc';
+  AskAutoCreateTaxDoc = 'AskAutoCreateTaxDoc';
+  AutoFixTaxDoc = 'AutoFixTaxDoc';
+  //первое событие
+  //метод расчета суммы по документу (от цены без НДС или от цены с НДС)
+  CalcSumRule = 'CalcSumRule';
+  // Контроль наличия подчиненных документов оплаты при удалении документа
+  CheckChildPayDoc =true;
+  NotCheckChildPayDoc=false;
+
+function lblTotal : string;
+//запросы на ввод
+function inpGoodCount : string;
+function inpPackCount : string;
+function EnterAsk : string;
+
+//запросы на фиксацию документов
+function UniFix : string;
+function UniUnFix : string;
+function UniDel : string;
+//надписи в семафорах
+function UniFixProgress : string;
+function UniUnFixProgress : string;
+
+function SetCourseForAllGoodsAck : string;
+function CheckRuleMessage : string;
+function emsgFixFail : string;
+function TakeHimAway : string;
+function DontMoveThis : string;
+function DontMoveThat : string;
+function DontEditThisRealizator : string;
+function DontDelThisRealizator : string;
+function DontDelThisDoc : string;
+
+function ReportRunning : string;
+function DocsSelecting : string;
+function PaysRunning : string;
+function GoodsRunning : string;
+function CardsRunning : string;
+function SelectPartner : string;
+function SelectStore : string;
+function AddStore : string;
+function SingleDocum : string;
+function DontSingleDocum : string;
+function DontFindLinkDocum : string;
+function AboutConst : string;
+function DontMakeCopy : string;
+function BackCount : string;
+function ItsNotService : string;
+function DontMakeNakl : string;
+function DontMakeNaklOnChange : string;
+function NoPeriod : string;
+function DontUnFixThisDoc : string;
+
+implementation
+
+function lblTotal : string;
+begin
+  Result := Trans('Всего');
+end;
+
+//запросы на ввод
+
+function inpGoodCount : string;
+begin
+  Result := Trans('Введите количество товара ');
+end;
+
+function inpPackCount : string;
+begin
+  Result := Trans('Введите количество упаковок ');
+end;
+
+function EnterAsk : string;
+begin
+  Result := Trans('Вы желаете прекратить ввод данных?');
+end;
+
+//запросы на фиксацию документов
+
+function UniFix : string;
+begin
+  Result := Trans('Фиксировать документ: ');
+end;
+
+function UniUnFix : string;
+begin
+  Result := Trans('Расфиксировать документ: ');
+end;
+
+function UniDel : string;
+begin
+  Result := Trans('Удалить документ: ');
+end;
+
+//надписи в семафорах
+
+function UniFixProgress : string;
+begin
+  Result := Trans('Фиксация документа: ');
+end;
+
+function UniUnFixProgress : string;
+begin
+  Result := Trans('Расфиксация документа: ');
+end;
+
+function DelIncGood : string;
+begin
+  Result := Trans('Удаление накладной отпуска');
+end;
+
+function DelDecGood : string;
+begin
+  Result := Trans('Удаление накладной прихода');
+end;
+
+function DelDecRestGood : string;
+begin
+  Result := Trans('Удаление накладной ввода остатков');
+end;
+
+function DelDecRInGood : string;
+begin
+  Result := Trans('Удаление накладной приема на реализацию');
+end;
+
+function DelIncRInGood : string;
+begin
+  Result := Trans('Удаление накладной возврата поставщику на реализацию');
+end;
+
+function DelIncRInGoodDisc : string;
+begin
+  Result := Trans('Удаление накладной списания с поставщика на реализацию');
+end;
+
+function DelDecRInGoodRest : string;
+begin
+  Result := Trans('Удаление накладной ввода остатков по поставщику на реализацию');
+end;
+
+function DelIncRealizGood : string;
+begin
+  Result := Trans('Удаление накладной отпуска на реализацию');
+end;
+
+function DelDecROutGood : string;
+begin
+  Result := Trans('Удаление накладной возврата от реализатора');
+end;
+
+function DelIncROutGoodDisc : string;
+begin
+  Result := Trans('Удаление накладной списания с реализатора');
+end;
+
+function DelDecROutGoodRest : string;
+begin
+  Result := Trans('Удаление накладной ввода остатков на реализаторе');
+end;
+
+function DelIncROutGoodInv : string;
+begin
+  Result := Trans('Удаление накладной инвентаризации на реализаторе');
+end;
+
+function DelIncCash : string;
+begin
+  Result := Trans('Удаление прихода в кассу');
+end;
+
+function DelDecCash : string;
+begin
+  Result := Trans('Удаление платежа из кассы');
+end;
+
+function DelIncBank : string;
+begin
+  Result := Trans('Удаление прихода на расчетный счет');
+end;
+
+function DelDecBank : string;
+begin
+  Result := Trans('Удаление платежа с расчетного счета');
+end;
+
+function DelDecResGood : string;
+begin
+  Result := Trans('Удаление документа передачи в резерв');
+end;
+
+function DelIncResGood : string;
+begin
+  Result := Trans('Удаление документа снятия с резерва');
+end;
+
+function DelIncGoodRev : string;
+begin
+  Result := Trans('Удаление документа ревизии товара');
+end;
+
+function SetCourseForAllGoodsAck : string;
+begin
+  Result := Trans('Установить такой курс для всех товаров с подобной валютой?');
+end;
+
+function CheckRuleMessage : string;
+begin
+  Result := Trans('Отсутствует правило списания товара со склада! Или определите ' +
+    'правило в Параметрах пользователя, или выбирайте товар из партий');
+end;
+
+function emsgFixFail : string;
+begin
+  Result := Trans('Процесс фиксирования был остановлен пользователем или возникла ' +
+    'ошибка. Документ не зафиксирован.');
+end;
+
+function TakeHimAway : string;
+begin
+  Result := Trans('Вам запрещено отпускать товар с количеством, которого нет в наличии');
+end;
+
+function DontMoveThis : string;
+begin
+  Result := Trans('Записи в документ переносятся только из партий товара');
+end;
+
+function DontMoveThat : string;
+begin
+  Result := Trans('Отсюда нельзя переносить записи в документ');
+end;
+
+function DontEditThisRealizator : string;
+begin
+  Result := Trans('С данным партнером были проведены расчеты. Изменение данных ' +
+    'может привести к нарушению взаиморасчетов с этим партнером');
+end;
+
+function DontDelThisRealizator : string;
+begin
+  Result := Trans('С данным партнером были проведены расчеты. Сначала удалите ' +
+    'все связанные с карточкой документы.');
+end;
+
+function DontDelThisDoc : string;
+begin
+  Result := Trans('Не могу удалить запись. Существуют другие документы, связанные' +
+    ' с этой записью.'#10#13 +
+    'Сначала удалите эти документы, а затем удалите запись.');
+end;
+
+function ReportRunning : string;
+begin
+  Result := Trans('Формируется отчет');
+end;
+
+function DocsSelecting : string;
+begin
+  Result := Trans('Выбираются документы');
+end;
+
+function PaysRunning : string;
+begin
+  Result := Trans('Формируется список платежей');
+end;
+
+function GoodsRunning : string;
+begin
+  Result := Trans('Формируется детализация по товару');
+end;
+
+function CardsRunning : string;
+begin
+  Result := Trans('Формируется список аналитических карточек');
+end;
+
+function SelectPartner : string;
+begin
+  Result := Trans('Выберите партнера');
+end;
+
+function SelectStore : string;
+begin
+  Result := Trans('Выберите склад');
+end;
+
+function AddStore : string;
+begin
+  Result := Trans('Добавьте склад в справочник складов');
+end;
+
+function SingleDocum : string;
+begin
+  Result := Trans('Это отдельный документ. Он не связан ни с одним другим документом');
+end;
+
+function DontSingleDocum : string;
+begin
+  Result := Trans('Это не отдельный документ. Он связан с другим документом');
+end;
+
+function DontFindLinkDocum : string;
+begin
+  Result := Trans('Документ, к которому привязан этот платеж не найден');
+end;
+
+function AboutConst : string;
+begin
+  Result := Trans('Новые параметры вступят в силу после переподключения к серверу');
+end;
+
+function DontMakeCopy : string;
+begin
+  Result := Trans('В этом режиме создание копии выбранного документа не предусмотрено');
+end;
+
+//при возврате проверка количества
+
+function BackCount : string;
+begin
+  Result := Trans('Превышение количества!');
+end;
+
+function ItsNotService : string;
+begin
+  Result := Trans('В документ можно переносить только услуги');
+end;
+
+function DontMakeNakl : string;
+begin
+  Result := Trans('Создание налоговой накладной для служащего не предусмотрено');
+end;
+
+function DontMakeNaklOnChange : string;
+begin
+  Result := Trans('Договор товаро-обмена должен быть зафиксирован');
+end;
+
+function NoPeriod : string;
+begin
+  Result := Trans('Не выбран период');
+end;
+
+function DontUnFixThisDoc : string;
+begin
+  Result := Trans('Невозможно расфиксировать документ, пока другие документы ' +
+    'находятся в зафиксированном состоянии');
+end;
+
+end.

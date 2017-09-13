@@ -1,0 +1,70 @@
+interface
+
+uses
+  System, DispIntf, –асчеты, ConstNames;
+
+
+implementation
+
+
+procedure GetPartTbl(SumsTbl : ISValueTable; DateTo : DateTime); server;
+var Currency : ISDictionary;    
+    AccsGood, AccsPartGood : ISAccs;  
+    StoreDic : ISDictionary;     
+    //SumsTbl : ISValueTable;
+    Course : Decimal;
+begin    
+ {SumsTbl := CreateObject('“аблица«начений');
+ SumsTbl.AddColumn('GroupField', vtcInteger, 0);
+ SumsTbl.AddColumn('“ипƒок', vtcString, 100);
+ SumsTbl.AddColumn('¬алюта', vtcLink,0);
+ SumsTbl.AddColumn('—клад', vtcLink, 0);
+ SumsTbl.AddColumn('ѕартнер', vtcLink, 0);
+ SumsTbl.AddColumn('—ум¬х', vtcFFt, 2);
+ SumsTbl.AddColumn('—ум¬ал¬х', vtcFFt, 2);
+ SumsTbl.AddColumn('—умќтп', vtcFFt, 2);
+ SumsTbl.AddColumn('—умЌац', vtcFFt, 2);
+ SumsTbl.AddColumn('—ум—кидки', vtcFFt, 2);
+ SumsTbl.AddColumn('ѕарти€', lftFloat, 0);
+ SumsTbl.AddColumn(' урс', vtcFft, 2);
+ SumsTbl.Open();}
+ StoreDic := CreateObject('—правочники.—клады');
+ DateTo := RoundDate(DateTo, rdDay, True);
+  AccsGood := CreateObject('јккумул€торы.ќстатки“оваров'); 
+  AccsGood.IncludeZeroRest := false;
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  StoreDic.Select;
+  while StoreDic.SelectNext do
+    begin
+      AccsGood.ClearFieldBuffers;
+      AccsGood.ClearFieldFilters;
+      AccsGood.SetFieldFilter('—клад', StoreDic);
+      AccsGood.AppendRestToValueTable(DateTo, '—клад;—ум¬х;—ум¬ал¬х;ѕарти€', SumsTbl);
+      AccsPartGood.AssignFieldsByDimIDTo('ѕарти€', '¬алюта', SumsTbl);
+    end;
+  SumsTbl.GroupBy('—клад;¬алюта','—ум¬х;—ум¬ал¬х');
+  SumsTbl.SortBy('¬алюта');                       
+  SumsTbl.DoCalculation(' урс','1');
+  Currency := CreateObject('—правочники.¬алюты');
+  Currency.Select;
+  While Currency.SelectNext do
+    begin
+      Course := Currency.GetTimedValue(' урсЌаличный', DateTo);
+      if Course<=0 then Course := 1;
+      SumsTbl.SetRange(Currency,Currency);
+      SumsTbl.DoCalculation(' урс',DecToStr(Course));
+    end;
+  SumsTbl.CancelRange;
+  SumsTbl.SortBy('');
+  SumsTbl.DoCalculation('—ум¬х','—ум¬ал¬х* урс');
+
+
+  SumsTbl.SelectFirst;
+  while not SumsTbl.EOF do begin
+    if (SumsTbl.—ум¬х <> 0)and(SumsTbl.—ум¬ал¬х <> 0) then SumsTbl.SelectNext
+      else SumsTbl.Delete;
+  end; 
+
+end;
+
+end.

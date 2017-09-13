@@ -1,0 +1,279 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+  Tbl : ICValueTable;
+  OutCome : Boolean;
+  Constants : IC4VPAConst;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+var
+  RootLeft, MeLeft : Integer;
+begin
+  MasterData := Form.GetParams; //Form.GetMean;
+  Constants := GetConstants;
+  OutCome := False;
+  if MasterData.HasField('Отпуск') then
+    OutCome := VarAsBool(MasterData.Отпуск);
+  if OutCome then
+    begin
+      RootLeft := lblPartName.Left;
+      MeLeft := lblMeName.Left;
+      //
+      lblPartName.Left := MeLeft;
+      lblPartAddr.Left := MeLeft;
+      lblPartPhone.Left := MeLeft;
+      lblPartAcc.Left := MeLeft;
+      lblPartMFO.Left := MeLeft;
+      lblPartZKPO.Left := MeLeft;
+      //
+      lblMeName.Left := RootLeft;
+      lblMeAddr.Left := RootLeft;
+      lblMePhone.Left := RootLeft;
+      lblMePayAccNum.Left := RootLeft;
+      lblMeMFO.Left := RootLeft;
+      lblMeZKPO.Left := RootLeft;
+    end;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  TmpPartner : ICDictionary;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      TmpPartner := MasterData.Партнер;
+      while TmpPartner.HasField('Партнер') do
+        TmpPartner := TmpPartner.Партнер;
+      if TmpPartner.IsFocused then
+        begin
+          Value['PARTADDR'] := GetActiv(ADR, 'ПочтИндекс', TmpPartner) + ', ' +
+            GetActiv(ADR, 'Город.Название', TmpPartner) + ', ' +
+            GetActiv(ADR, 'Адрес', TmpPartner);
+          Value['PARTPHONE'] := '(' + GetActiv(TLF, 'КодГорода', TmpPartner) + ') ' +
+            GetActiv(TLF, 'Номер', TmpPartner);
+          Value['PARTNAME'] := GetPartName(TmpPartner);
+          Value['PARTACC'] := 'р/р ' + GetActiv(RRR, 'НомерСчета', TmpPartner) +
+            ' в ' + GetActiv(RRR, 'Банк.Название', TmpPartner);
+          Value['PARTMFO'] := GetActiv(RRR, 'Банк.МФО', TmpPartner);
+          case TmpPartner.GetSign of
+           'ЮрПартнеры' :
+             Value['PARTZKPO'] := TmpPartner.ЗКПО;
+           'ФизЛица', 'Служащие' :
+             begin
+               lblPartZKPO.Caption := 'Код ДРФО  ';
+               Value['PARTZKPO'] := TmpPartner.НалогНом;
+             end
+          end;
+        end;
+      Value['Summa'] := MasterData.Сумма;
+      Value['SumNT'] := MasterData.СуммаБезНДС;
+      Value['Tax'] := MasterData.СуммаНДС;
+      if MasterData.HasField('СуммаВозврТары') then
+        Value['SUMREVTARE'] := MasterData.СуммаВозврТары;
+      if MasterData.HasField('СуммаТары') then
+        begin
+          Value['SUMNTTARE'] := MasterData.СуммаБезНДСТары;
+          Value['TAXTARE'] := MasterData.СуммаНДСТары;
+          Value['SUMTARE'] := MasterData.СуммаТары;
+        end;
+      Value['TRANSNT'] := MasterData.СуммаБезНДСТрансп;
+      Value['TRANSTAX'] := MasterData.СуммаНДСТрансп;
+      Value['TRANSSUM'] := MasterData.СуммаТрансп;
+      if MasterData.СуммаСкидкиНадбавки < 0 then
+        begin
+          Value['LOWHIGHNT'] := -MasterData.СуммаБезНДССкидкиНадбавки;
+          Value['LOWHIGHTAX'] := -MasterData.СуммаНДССкидкиНадбавки;
+          Value['LOWHIGHSUM'] := -MasterData.СуммаСкидкиНадбавки;
+          Label44.Caption := Label44.Caption + ' ' + VarAsStr(MasterData.ПроцентОбщий) + '% ';
+        end
+      else
+        begin
+          Value['LOWHIGHNT'] := MasterData.СуммаБезНДССкидкиНадбавки;
+          Value['LOWHIGHTAX'] := MasterData.СуммаНДССкидкиНадбавки;
+          Value['LOWHIGHSUM'] := MasterData.СуммаСкидкиНадбавки;
+          Label70.Caption := Label70.Caption + ' ' + VarAsStr(MasterData.ПроцентОбщий) + '% ';
+        end;
+    end;
+  MasterData.SaveContents('', Tbl);
+  if OutCome then
+    Tbl.GroupBy('Товар;ЦенаБезНДС;Цена', 'Количество');
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*Цена');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Код');
+  //для сортировки по названию товара
+//  Tbl.SortBy('Товар');
+  Tbl.Select;
+  lbSumInWord.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058); //C_GRN,C_KOP,True);
+  if MasterData.HasField('Заметки') then
+    lNotes.Caption := MasterData.Заметки;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  with Table do
+    begin
+      Value['PAYACCNUM'] := 'р/р ' + GetActiv(RRR, 'НомерСчета', MYF) +
+            ' в ' + GetActiv(RRR, 'Банк.Название', MYF);
+      Value['BANKMFO'] := GetActiv(RRR, 'Банк.МФО', MYF);
+      Value['BANKNAME'] := GetActiv(RRR, 'Банк.Название', MYF);
+      Value['BANKTOWN'] := ' м.' + GetActiv(RRR, 'Банк.Город', MYF);
+    end;
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+      Value['PriceNT'] := Tbl.ЦенаБезНДС;
+      Value['Price'] := Tbl.Цена;
+      Value['SummaStr'] := Tbl.СуммаСтроки;
+    end;
+end;
+
+procedure bndFtMinus_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Accept := (MasterData.СуммаСкидкиНадбавки < 0);
+end;
+
+procedure bndFtPlus_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Accept := (MasterData.СуммаСкидкиНадбавки > 0);
+end;
+
+procedure bndFtTTV_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Accept := (MasterData.СуммаТрансп <> 0);
+end;
+
+procedure bndFtRetTara_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  lblTaxRevTara.Caption := FormatFloat('0.00', 0);
+  if MasterData.HasField('СуммаВозврТары') then
+    Accept := MasterData.СуммаВозврТары <> 0
+  else
+    Accept := False;
+end;
+
+procedure bndFtTara_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  if MasterData.HasField('СуммаТары') then
+    Accept := MasterData.СуммаТары <> 0
+  else
+    Accept := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndFtHd:TRBBand
+Label33:TRBLabel
+Label41:TRBLabel
+Label42:TRBLabel
+Label43:TRBLabel
+bndFtRetTara:TRBBand
+Label62:TRBLabel
+Label63:TRBLabel
+lblTaxRevTara:TRBLabel
+Label65:TRBLabel
+bndFtTara:TRBBand
+Label66:TRBLabel
+Label67:TRBLabel
+Label68:TRBLabel
+Label69:TRBLabel
+bndFtMinus:TRBBand
+Label44:TRBLabel
+Label46:TRBLabel
+Label6:TRBLabel
+Label61:TRBLabel
+bndFtPlus:TRBBand
+Label70:TRBLabel
+Label71:TRBLabel
+Label72:TRBLabel
+Label73:TRBLabel
+bndFtTTV:TRBBand
+Label74:TRBLabel
+Label75:TRBLabel
+Label76:TRBLabel
+Label77:TRBLabel
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label79:TRBLabel
+Label80:TRBLabel
+Label81:TRBLabel
+bndHdDovDET:TRBBand
+Label8:TRBLabel
+Label1:TRBLabel
+Label84:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label31:TRBLabel
+Label32:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label39:TRBLabel
+Label40:TRBLabel
+SysData1:TRBSysData
+bndFtDET:TRBBand
+Label56:TRBLabel
+lbSumInWord:TRBLabel
+Label57:TRBLabel
+Label58:TRBLabel
+lNotes:TRBLabel
+bndNames:TRBBand
+lblRoot:TRBLabel
+lblMe:TRBLabel
+lblPartName:TRBLabel
+lblMeName:TRBLabel
+bndAdr:TRBBand
+lblPartAddr:TRBLabel
+lblMeAddr:TRBLabel
+bndReq1:TRBBand
+lblPartPhone:TRBLabel
+lblMePhone:TRBLabel
+lblPartAcc:TRBLabel
+lblMePayAccNum:TRBLabel
+lblMeZKPO:TRBLabel
+Label53:TRBLabel
+Label60:TRBLabel
+lblPartZKPO:TRBLabel
+bndReq2:TRBBand
+lblPartMFO:TRBLabel
+Label5:TRBLabel
+lblMeMFO:TRBLabel
+Label55:TRBLabel
+Structure1:TRBStructure

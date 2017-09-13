@@ -1,0 +1,93 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСДокументами;
+
+implementation
+
+var
+  PrcCurrent : ICProcessing;
+  TblDefaultValidList : ICValueTable;
+  DocCurrent : ICDocuments;
+
+function GetDocAvailableStatesList : String;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 0 to chlbStatesList.Items.Count - 1 do
+    if chlbStatesList.Checked[i] then
+      Result := Result + ';' + IntToStr(i);
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  i : Integer;
+begin
+  PrcCurrent := Mean;
+  DocCurrent := CreateObject(PrcCurrent.Params['MeanID']);
+  //
+  TblDefaultValidList := CreateObject('ValueTable');
+  TblDefaultValidList.AddColumn('State', vtcInteger, 0);
+  TblDefaultValidList.AddColumn('Result', vtcInteger, 0);
+  TblDefaultValidList.Open;
+  //
+  chlbStatesList.Items.Text := GetDocStatesList(DocCurrent);
+  for i := 0 to chlbStatesList.Items.Count - 1 do
+    begin
+      chlbStatesList.Checked[i] := True;
+      TblDefaultValidList.Append;
+      TblDefaultValidList.State := IntToStr(i);
+      TblDefaultValidList.Post;
+    end;
+  //
+  if VarAsStr(PrcCurrent.Params['DefaultList']) = '' then
+    exit;
+  TblDefaultValidList.DoCalculation('Result', ReplaceOneStrWithAnother(VarAsStr(PrcCurrent.Params['DefaultList']), '%s', 'State'));
+  TblDefaultValidList.SortBy('Result');
+  TblDefaultValidList.SetRange(0, 0);
+  TblDefaultValidList.Select;
+  while TblDefaultValidList.SelectNext do
+    chlbStatesList.Checked[TblDefaultValidList.State] := False;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case ProcID of
+    'GetSelectedStates' :
+      OutParams := GetDocAvailableStatesList;
+  end;
+end;
+
+procedure Form_Show(Sender : TObject);
+begin
+  lbStatesList.Caption := GetTranslation(lbStatesList.Caption, ArrayOf(Trans(DocCurrent.GetName)));
+  Form.Parent.Parent.Width := Form.Width;
+end;
+
+procedure miSelectAll_Click(Sender : TObject);
+var
+  i : Integer;
+begin
+  for i := 0 to chlbStatesList.Items.Count - 1 do
+    chlbStatesList.Checked[i] := True;
+end;
+
+procedure miUnselectAll_Click(Sender : TObject);
+var
+  i : Integer;
+begin
+  for i := 0 to chlbStatesList.Items.Count - 1 do
+    chlbStatesList.Checked[i] := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbStatesList:TO4Label
+chlbStatesList:TO4CheckListBox
+pmSelection:TO4PopupMenu
+miSelectAll:TO4MenuItem
+miUnselectAll:TO4MenuItem

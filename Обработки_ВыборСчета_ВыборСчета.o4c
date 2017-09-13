@@ -1,0 +1,46 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+var
+  RRR, MYF : ICDictionary;
+  Constants : IC4VPAConst;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  RRR := CreateObject('Справочники.РасчСчета');
+  Constants := GetConstants;
+  MYF.Select;
+  RRR.UseMasterAndSelect(MYF);
+  if RRR.FindByField('Активность', VarAsInt(True), False) then
+    dbAccount.Text := RRR.НомерСчета
+  else
+    dbAccount.Text := Null;
+end;
+
+procedure dbAccount_ActionExecute(Sender : TObject);
+var
+  Account : string;
+begin
+  if RRR.SelectInForm('ВыборРасчСчетаПредприятия', Account, Null) then
+    dbAccount.Text := Account;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  Constants.PrintAcc := dbAccount.Text
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+LinkImage1:TO4LinkImage
+Panel4:TO4Panel
+lDateFrom:TO4Label
+dbAccount:TO4Edit
+Panel2:TO4Panel
+Panel3:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button

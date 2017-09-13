@@ -1,0 +1,401 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+ var GoodsTbl, Group1Tbl, Group2Tbl, Group3Tbl, Group4Tbl, ReportDatesTbl : ISValueTable;
+     GoodList, RegionList : ISValueList;
+     GoodDict  : ISDictionary;
+     Empl, Agent, Partner : Variant;
+     GroupFieldsStr, SumFieldsStr : string;
+     UseLevel, UseSaleDoc, UseRetDoc, UseCount, UseSum : Boolean;   
+
+function StrWithoutDisableChars(s,DisableChars:string):string;
+var i : integer;
+begin
+ Result := '';
+ if StrLength(s)>0 then
+   for i := 1 to StrLength(s) do
+     if StrPos(s[i],DisableChars)=0 then
+       Result := Result + s[i];
+end;
+
+procedure RunReport(MasterRep:ISReport; var Accept : boolean);
+const Total = 10;
+var GoodsAccs : ISAccs;
+    tmpTbl : ISValueTable;
+    NumStr, AppendFieldsStr, FilterSortFields, tmpGroupFieldsStr, CurField, FullCtgName,
+    SumExprSaleCnt, SumExprRetCnt, SumExprSaleSum, SumExprRetSum : string;
+    DateFrom, DateTo : DateTime;
+    FilterCount, GroupLevelCount, i, Count, CtgCount, CtgTotal : integer;
+    FilterArray : Variant;
+    CtgDic, GoodsDic : ISDictionary;
+    GrByRegion, GrByEmpl, GrByAgent, GrByPartner : Boolean;
+begin
+ Accept := false;   
+ tmpTbl := CreateObject('ТаблицаЗначений');
+ GoodsTbl.CopyColumnsTo(tmpTbl);
+ GoodsAccs := CreateObject('Аккумуляторы.ОстаткиТоваров');  
+ GoodsAccs.OutcomeMotionWithMinus := false;
+ //категории
+ if not SetCtgFilter(UseLevel, GoodList, GoodDict, GoodsAccs, 'Товар') then
+   begin
+     Accept := True;
+     exit;
+   end;  
+ Count := 1;
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ ReportDatesTbl.Select;
+ While ReportDatesTbl.SelectNext do
+   begin
+     NumStr := VarAsStr(ReportDatesTbl.Num);
+     DateFrom := RoundDate(ReportDatesTbl.ДатаС,rdDay,false);
+     DateTo := RoundDate(ReportDatesTbl.ДатаПо,rdDay,true);
+     if UseSaleDoc then
+       begin
+         AppendFieldsStr := '';
+         if UseCount then
+           AppendFieldsStr := AppendFieldsStr+';КолОбщ=ПродажаКол'+NumStr;
+         if UseSum then
+           AppendFieldsStr := AppendFieldsStr+';СумОтп=ПродажаСум'+NumStr;
+         GoodsAccs.SetFieldFilter('Тип',midOutcome);
+         GoodsAccs.AppendGroupMotionToValueTable(DateFrom,DateTo,amtOutCome,'Document;Товар'+AppendFieldsStr,-1,tmpTbl);
+       end;
+     if UseRetDoc then
+       begin
+         AppendFieldsStr := '';
+         if UseCount then
+           AppendFieldsStr := AppendFieldsStr+';КолОбщ=ВозвратКол'+NumStr;
+         if UseSum then
+           AppendFieldsStr := AppendFieldsStr+';СумОтп=ВозвратСум'+NumStr;
+         GoodsAccs.SetFieldFilter('Тип',midRetBuyer);
+         GoodsAccs.AppendGroupMotionToValueTable(DateFrom,DateTo,amtInCome,'Document;Товар'+AppendFieldsStr,-1,tmpTbl);
+       end;
+   end;                            
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ // Фильтр по регионам, Отвественному и Посреднику
+ tmpTbl.DoGetLinks('Регион=Document.Регион;Ответственный=Document.Ответственный;Посредник=Document.Посредник;Партнер=Document.Партнер');
+ tmpTbl.GroupBy('Товар;Регион;Ответственный;Посредник;Партнер',SumFieldsStr);
+ FilterSortFields := 'Регион';
+ FilterCount := 0;
+ if IsObjFocused(Empl) then
+   begin
+     inc(FilterCount);
+     FilterSortFields := 'Ответственный;'+FilterSortFields;
+   end;
+ if IsObjFocused(Agent) then
+   begin
+     inc(FilterCount);
+     FilterSortFields := 'Посредник;'+FilterSortFields;
+   end;   
+ if IsObjFocused(Partner) then
+   begin
+     inc(FilterCount);
+     FilterSortFields := 'Партнер;'+FilterSortFields;
+   end;
+ ArrayCreate(FilterArray,[0,FilterCount],Variant);
+ tmpTbl.SortBy(FilterSortFields);
+ FilterCount := 0;  
+ if IsObjFocused(Partner) then
+   begin
+     FilterArray[FilterCount] := Partner;
+     inc(FilterCount);
+   end;
+ if IsObjFocused(Agent) then
+   begin
+     FilterArray[FilterCount] := Agent;
+     inc(FilterCount);
+   end;
+ if IsObjFocused(Empl) then
+   begin
+     FilterArray[FilterCount] := Empl;
+     inc(FilterCount);
+   end;
+ for i:=0 to RegionList.Count-1 do
+   begin
+     FilterArray[FilterCount] := RegionList.GetValue(i);
+     tmpTbl.SetRange(FilterArray,FilterArray);
+     tmpTbl.AppendTo('',GoodsTbl);
+   end;
+ tmpTbl.CancelRange;
+ tmpTbl.Clear;
+
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ // Предварительная группировка     GrByRegion, GrByEmp, GrByAgent
+ tmpGroupFieldsStr := 'Товар';
+ GrByRegion := StrPos('Регион',GroupFieldsStr)<>0;
+ if GrByRegion then
+   tmpGroupFieldsStr := tmpGroupFieldsStr +';Регион';
+ GrByEmpl := StrPos('Ответственный',GroupFieldsStr)<>0;
+ if GrByEmpl then
+   tmpGroupFieldsStr := tmpGroupFieldsStr +';Ответственный';
+ GrByAgent := StrPos('Посредник',GroupFieldsStr)<>0;
+ if GrByAgent then
+   tmpGroupFieldsStr := tmpGroupFieldsStr +';Посредник';
+ GrByPartner  := StrPos('Партнер',GroupFieldsStr)<>0;
+ if GrByPartner then
+   tmpGroupFieldsStr := tmpGroupFieldsStr +';Партнер';
+ GoodsTbl.GroupBy(tmpGroupFieldsStr,SumFieldsStr);
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ // Проверка не заполненых полей
+ if GrByRegion or GrByEmpl or GrByAgent or GrByPartner then
+   begin
+     GoodsTbl.Select;
+     While GoodsTbl.SelectNext do
+       begin
+         GoodsTbl.Edit;
+         if GrByRegion and not VarAsBool(GoodsTbl.@Регион.IsFocused) then
+           GoodsTbl.Регион := Null;    
+         if GrByEmpl and not VarAsBool(GoodsTbl.@Ответственный.IsFocused) then
+           GoodsTbl.Ответственный := Null;
+         if GrByAgent and not VarAsBool(GoodsTbl.@Посредник.IsFocused) then
+           GoodsTbl.Посредник := Null;  
+         if GrByPartner and not VarAsBool(GoodsTbl.@Партнер.IsFocused) then
+           GoodsTbl.Партнер := Null;
+         GoodsTbl.Post;
+       end;
+   end;   
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ // Изменение знака всех сумм
+ for i := 1 to WordCount(SumFieldsStr,';') do
+   begin
+     CurField := ExtractWord(i,SumFieldsStr,';');
+     GoodsTbl.DoCalculation(CurField,'-'+CurField);
+   end;
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ // Расчет общих сумм
+ if UseSaleDoc and UseRetDoc then
+   begin
+     ReportDatesTbl.Select;
+     While ReportDatesTbl.SelectNext do
+       begin
+         NumStr := VarAsStr(ReportDatesTbl.Num);
+         if UseCount then
+           GoodsTbl.DoCalculation('ВсегоКол'+NumStr,'ПродажаКол'+NumStr+'+ВозвратКол'+NumStr);
+         if UseSum then
+           GoodsTbl.DoCalculation('ВсегоСум'+NumStr,'ПродажаСум'+NumStr+'+ВозвратСум'+NumStr);
+       end;
+   end;
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ SumExprSaleCnt := '';
+ SumExprRetCnt := '';  
+ SumExprSaleSum := '';
+ SumExprRetSum := '';
+ for i:=1 to WordCount(SumFieldsStr,';') do
+   begin
+     CurField := ExtractWord(i,SumFieldsStr,';');
+     if UseCount and (StrPos('Кол',CurField)<>0) and (StrPos('Total',CurField)=0) then
+       begin
+         if UseSaleDoc and (StrPos('Продажа',CurField)<>0) then
+           SumExprSaleCnt := SumExprSaleCnt + CurField+'+'
+         else
+         if UseRetDoc and (StrPos('Возврат',CurField)<>0) then
+           SumExprRetCnt := SumExprRetCnt + CurField+'+';
+       end
+     else
+     if UseSum and (StrPos('Сум',CurField)<>0) and (StrPos('Total',CurField)=0) then
+       begin
+         if UseSaleDoc and (StrPos('Продажа',CurField)<>0) then
+           SumExprSaleSum := SumExprSaleSum + CurField+'+'
+         else
+         if UseRetDoc and (StrPos('Возврат',CurField)<>0) then
+           SumExprRetSum := SumExprRetSum + CurField+'+';
+       end;
+   end;
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ if ReportDatesTbl.LineCount>1 then
+   begin
+     if UseSaleDoc  then
+       begin
+         if UseCount and (StrLength(SumExprSaleCnt)>0) then
+           begin
+             if SumExprSaleCnt[StrLength(SumExprSaleCnt)]='+' then
+               StrDelete(SumExprSaleCnt,StrLength(SumExprSaleCnt),1);
+             GoodsTbl.DoCalculation('ПродажаКолTotal',SumExprSaleCnt);
+           end;
+         if UseSum and (StrLength(SumExprSaleSum)>0) then
+           begin
+             if SumExprSaleSum[StrLength(SumExprSaleSum)]='+' then
+               StrDelete(SumExprSaleSum,StrLength(SumExprSaleSum),1);
+             GoodsTbl.DoCalculation('ПродажаСумTotal',SumExprSaleSum);
+           end;
+       end;
+     if UseRetDoc then
+       begin
+         if UseCount and (StrLength(SumExprRetCnt)>0) then
+           begin
+             if SumExprRetCnt[StrLength(SumExprRetCnt)]='+' then
+               StrDelete(SumExprRetCnt,StrLength(SumExprRetCnt),1);
+             GoodsTbl.DoCalculation('ВозвратКолTotal',SumExprRetCnt);
+           end;
+         if UseSum and (StrLength(SumExprRetSum)>0) then
+           begin
+             if SumExprRetSum[StrLength(SumExprRetSum)]='+' then
+               StrDelete(SumExprRetSum,StrLength(SumExprRetSum),1);
+             GoodsTbl.DoCalculation('ВозвратСумTotal',SumExprRetSum);
+           end;
+       end;
+
+     if UseSaleDoc and UseRetDoc then
+       begin
+         if UseCount then
+           GoodsTbl.DoCalculation('ВсегоКолTotal','ПродажаКолTotal+ВозвратКолTotal');
+         if UseSum then
+           GoodsTbl.DoCalculation('ВсегоСумTotal','ПродажаСумTotal+ВозвратСумTotal');
+       end;
+   end;
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ // Заполнение категорий товаров
+ if StrPos('Категория',GroupFieldsStr)<>0 then
+   begin
+     GoodsTbl.DoCalculation('Категория',''' ''');
+     GoodsTbl.SortBy('Товар');  
+     CtgDic := CreateObject('Справочники.Товары');
+     CtgDic.IncludeOnlyLevels(true);
+     GoodsDic := CreateObject('Справочники.Товары');
+     GoodsDic.IncludeLevels(false);   
+     CtgCount := 0;
+     if GoodList.Count>0 then
+       begin      
+         CtgTotal := GoodList.Count;
+         for i:=0 to  GoodList.Count-1 do 
+          if CtgDic.Find(GoodList.GetValue(i)) then
+           begin
+             GoodsDic.UseParent(CtgDic);
+             GoodsDic.Select;
+             GoodsDic.SaveToValueTable('Self',tmpTbl,0,GoodsDic.RecordCount);
+             if tmpTbl.LineCount>0 then
+               begin
+                 FullCtgName := StrWithoutDisableChars(CtgDic.GetCtgPath('\',true,true),'''');
+                 if (StrLength(FullCtgName)>0) and (FullCtgName[1]='\') then
+                   StrDelete(FullCtgName,1,1);
+                 tmpTbl.Select;
+                 While tmpTbl.SelectNext do
+                   begin
+                     GoodsTbl.SetRange(tmpTbl.@Self, tmpTbl.@Self);
+                     GoodsTbl.DoCalculation('Категория',''''+FullCtgName+'''');
+                   end;
+               end;
+             inc(CtgCount);
+             MasterRep.NotifyClientEx(2,'Обработка категорий',CtgCount,CtgTotal);
+             if MasterRep.Terminated then exit;
+           end;
+       end
+     else
+       begin
+         CtgDic.Select;     
+         CtgTotal := CtgDic.RecordCount;
+         While CtgDic.SelectNext do
+           begin
+             GoodsDic.UseParent(CtgDic);
+             GoodsDic.Select;
+             GoodsDic.SaveToValueTable('Self',tmpTbl,0,GoodsDic.RecordCount);
+             if tmpTbl.LineCount>0 then
+               begin
+                 FullCtgName := StrWithoutDisableChars(CtgDic.GetCtgPath('\',true,true),'''');  
+                 if (StrLength(FullCtgName)>0) and (FullCtgName[1]='\') then
+                   StrDelete(FullCtgName,1,1);
+                 tmpTbl.Select;
+                 While tmpTbl.SelectNext do
+                   begin
+                     GoodsTbl.SetRange(tmpTbl.@Self, tmpTbl.@Self);
+                     GoodsTbl.DoCalculation('Категория',''''+FullCtgName+'''');
+                   end;
+               end;  
+             inc(CtgCount);
+             MasterRep.NotifyClientEx(2,'Обработка категорий',CtgCount,CtgTotal);
+             if MasterRep.Terminated then exit;
+           end;
+       end;
+     tmpTbl.Close;
+     GoodsTbl.CancelRange;
+     GoodsTbl.SortBy('');
+   end;
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ // Группировка  
+ if GroupFieldsStr<>'' then
+   begin
+     tmpGroupFieldsStr := '';
+     GroupLevelCount := WordCount(GroupFieldsStr,';');
+     if GroupLevelCount>0 then
+       begin
+         tmpGroupFieldsStr := ExtractWord(1,GroupFieldsStr,';');
+         GoodsTbl.AppendTo('',Group1Tbl);
+         Group1Tbl.GroupBy(tmpGroupFieldsStr,SumFieldsStr);
+         if GroupLevelCount>1 then
+           begin
+             tmpGroupFieldsStr := tmpGroupFieldsStr + ';'+ ExtractWord(2,GroupFieldsStr,';');
+             GoodsTbl.AppendTo('',Group2Tbl);
+             Group2Tbl.GroupBy(tmpGroupFieldsStr,SumFieldsStr);
+             if GroupLevelCount>2 then
+               begin
+                 tmpGroupFieldsStr := tmpGroupFieldsStr + ';'+ ExtractWord(3,GroupFieldsStr,';');
+                 GoodsTbl.AppendTo('',Group3Tbl);
+                 Group3Tbl.GroupBy(tmpGroupFieldsStr,SumFieldsStr);
+                 if GroupLevelCount>3 then
+                   begin
+                     tmpGroupFieldsStr := tmpGroupFieldsStr + ';'+ ExtractWord(4,GroupFieldsStr,';');
+                     GoodsTbl.AppendTo('',Group4Tbl);
+                     Group4Tbl.GroupBy(tmpGroupFieldsStr,SumFieldsStr);
+                   end;
+               end;
+           end;
+       end;
+   end;
+ inc(Count);
+ MasterRep.NotifyClient('',Count,Total);
+ if MasterRep.Terminated then exit;
+ GoodsTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+ Accept := not MasterRep.Terminated;
+end;
+
+function GetRunReportEP(GoodsTblS, Group1TblS, Group2TblS, Group3TblS, Group4TblS, ReportDatesTblS : ISValueTable;
+                        GoodListS, RegionListS : ISValueList;
+                        GoodDictS  : ISDictionary;
+                        EmplS, AgentS, PartnerS : Variant;
+                        GroupFieldsStrS, SumFieldsStrS : string;
+                        UseLevelS, UseSaleDocS, UseRetDocS, UseCountS, UseSumS : Boolean) : Variant; server;
+begin
+ GoodsTbl := GoodsTblS;
+ Group1Tbl := Group1TblS;
+ Group2Tbl := Group2TblS;
+ Group3Tbl := Group3TblS;
+ Group4Tbl := Group4TblS;        
+ ReportDatesTbl := ReportDatesTblS;
+ GoodList := GoodListS;
+ RegionList := RegionListS;
+ GoodDict := GoodDicts;
+ Empl := EmplS;
+ Agent := AgentS;    
+ Partner := PartnerS;
+ GroupFieldsStr := GroupFieldsStrS; 
+ SumFieldsStr := SumFieldsStrS;
+ UseLevel := UseLevelS;
+ UseSaleDoc := UseSaleDocS;
+ UseRetDoc := UseRetDocS;
+ UseCount := UseCountS;
+ UseSum   := UseSumS;
+ Result := EntryPoint(RunReport);
+end;
+
+end.

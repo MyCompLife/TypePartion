@@ -1,0 +1,217 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData, TLF, ADR, EML, BNK, RRR : ICDictionary;
+  Pk : Integer;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  EML := CreateObject('Справочники.Email');
+  BNK := CreateObject('Справочники.Банки');
+  RRR := CreateObject('Справочники.РасчСчета');  
+  MasterData := CreateObject('Справочники.Служащие');
+  Pk := Form.GetPrintKind;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    if Pk = 0 then
+      begin
+        MasterData := Form.GetMean;
+        MasterData.SelectBookmarks;
+        MasterData.SortByName;
+      end
+    else
+      begin
+        if Pk = pkWindow then
+          MasterData.AssignSelectParams(Form.GetMean);
+        MasterData.SortByName;
+        MasterData.Select;
+      end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  ADR.UseMaster(MasterData);
+  TLF.UseMaster(MasterData);
+  EML.UseMaster(MasterData);
+  RRR.UseMaster(MasterData);
+  with Table do
+    begin
+      Value['Name'] := MasterData.ПолноеНазвание;
+      Value['TaxIndex'] := MasterData.НалогНом;
+      Value['DataNalNum'] := MasterData.ДатаНалНом;
+      if VarAsBool(MasterData.Должность.IsFocused) then
+        Value['State'] := MasterData.Должность.Value;
+      Value['Photo'] := MasterData.Фото;
+    end;
+end;
+
+procedure Structure1_Root_DetalAddress_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    begin
+      ADR.SortByName;
+      ADR.Select;
+    end;
+  Accept := ADR.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Index'] := ADR.ПочтИндекс;
+      if VarAsBool(ADR.@Город.IsFocused) then
+        Value['Town'] := ADR.Город.Название;
+      Value['Address'] := ADR.Адрес;
+      if ADR.Активность <> 0 then
+        Value['Act'] := '+'
+      else
+        Value['Act'] := '';
+    end;
+end;
+
+procedure Structure1_Root_DetalPhones_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  Town : ICDictionary;
+begin
+  if Index = 0 then
+    begin
+      TLF.SortByName;
+      TLF.Select;
+    end;
+  Accept := TLF.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      if VarAsBool(TLF.@Город.IsFocused) then
+        begin
+          Town := TLF.Город;
+          Value['TownCode'] := Town.ТелКод;
+          Value['Town'] := Town.Название;
+        end;
+      Value['Phone'] := TLF.Номер;
+      Value['Type'] := TLF.Тип;
+      if TLF.Активность <> 0 then
+        Value['Act'] := '+'
+      else
+        Value['Act'] := '';
+    end;
+end;
+
+procedure Structure1_Root_DetalEMail_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    begin
+      EML.SortByName;
+      EML.Select;
+    end;
+  Accept := EML.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Address'] := EML.Адрес;
+      Value['Descript'] := EML.Описание;
+    end;
+end;
+
+procedure Structure1_Root_DetalAcc_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  Bank : ICDictionary;
+begin
+  if Index = 0 then
+    begin
+      RRR.SortByName;
+      RRR.Select;
+    end;
+  Accept := RRR.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Name'] := RRR.НомерСчета;
+      if VarAsBool(RRR.@Банк.IsFocused) then
+        begin
+          Bank := RRR.Банк;
+          Value['MFO'] := Bank.МФО;
+          Value['BankName'] := Bank.Название;
+        end;
+      if RRR.Активность <> 0 then
+        Value['Act'] := '+'
+      else
+        Value['Act'] := '';
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndACC:TRBDetailBand
+lbAC:TRBLabel
+Label50:TRBLabel
+Label51:TRBLabel
+Label52:TRBLabel
+bndROOT:TRBDetailBand
+Label11:TRBLabel
+Image1:TRBImage
+Label2:TRBLabel
+lbName:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label1:TRBLabel
+Label3:TRBLabel
+Label7:TRBLabel
+bndADDR:TRBDetailBand
+lbAD:TRBLabel
+Label38:TRBLabel
+Label39:TRBLabel
+Label40:TRBLabel
+Band2:TRBBand
+Label4:TRBLabel
+Label10:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label17:TRBLabel
+Band3:TRBBand
+Label6:TRBLabel
+Label5:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label37:TRBLabel
+Label45:TRBLabel
+bndPHONE:TRBDetailBand
+Label41:TRBLabel
+Label42:TRBLabel
+Label43:TRBLabel
+Label44:TRBLabel
+lbPH:TRBLabel
+Band5:TRBBand
+Label18:TRBLabel
+Label46:TRBLabel
+Label21:TRBLabel
+bndEMAIL:TRBDetailBand
+Label47:TRBLabel
+Label48:TRBLabel
+Band6:TRBBand
+Band7:TRBBand
+Band9:TRBBand
+Band1:TRBBand
+Label22:TRBLabel
+Label28:TRBLabel
+Label30:TRBLabel
+Label32:TRBLabel
+Label34:TRBLabel
+Band10:TRBBand
+Structure1:TRBStructure

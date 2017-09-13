@@ -1,0 +1,68 @@
+interface
+
+uses
+  System, DispIntf;
+Var
+  PaysIn, PaysOut : ISJournal;
+  AccsPart: ISAccs;
+  Currency: ISDictionary;
+
+implementation
+
+procedure InitSrvDate;server;
+begin
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Currency := CreateObject('—правочники.¬алюты');
+  if not Currency.FindByField('јктивность', VarAsInt(true), false) then
+    begin
+      Currency.Select;
+      Currency.SelectNext;
+    end;
+end;
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := Data.Total('—умма');
+end;
+
+procedure OrderCalcFields(Order : ISJournal);
+var
+  TmpDoc : ISDocuments;
+begin
+  PaysOut.UseMaster(Order);
+  Order.ќплачено¬ал := PaysOut.Total('—умма¬¬алюте');
+  PaysOut.UseMaster(Null);
+  Order.ƒолжны¬ал := Order.—умма¬ал - Order.ќплачено¬ал;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysIn := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+  PaysIn.SetDocMultiStateRange('1;2;');
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+function FindDoc : Variant; server;
+var
+  Docs : ISDocuments;
+begin
+  Docs := CreateObject('ƒокументы.„ек');
+  Docs.SortByField('ƒатаƒокумента');
+  Docs.SelectNext;
+  Result := Docs;
+end;
+
+function GetPartBalance(Part: Variant): Decimal;server;
+begin
+  AccsPart.ClearFieldBuffers;
+  AccsPart.ClearFieldFilters;
+  if Currency.IsFocused then
+    AccsPart.CalcGroupRestDirect(400000, ArrayOf(Part, Currency))
+  else
+    AccsPart.CalcGroupRestDirect(400000, ArrayOf(Part));
+  Result := AccsPart.—умќбщ¬ал;
+end;
+
+end.

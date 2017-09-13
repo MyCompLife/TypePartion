@@ -1,0 +1,43 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  AccBank, AccKassa, AccKassaBlack : ISAccs;
+  Date : DateTime;
+
+procedure SetSrvParams; server;
+begin
+  AccBank := CreateObject('Аккумуляторы.ОстаткиНаРасчСчет');
+  AccKassa := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+end;
+
+procedure GetSumma(Doc : ISDocuments);
+begin
+  //Date := RoundDate(Date, rdDay, true);
+  AccBank.ClearFieldBuffers();
+  AccKassa.ClearFieldBuffers();
+  case VarAsInt(Doc.Тип) of
+    0 :
+      begin
+        AccBank.CalcGroupRestDirect(Date, ArrayOf(Doc.Счет, Doc.@Валюта));
+        Doc.РасчСумма := AccBank.СумОбщ;
+      end;
+    1 :
+      begin
+        AccKassa.CalcGroupRestDirect(Date, ArrayOf(Doc.@Валюта, Doc.@Касса));
+        Doc.РасчСумма := AccKassa.СумОбщ;
+      end;
+  end;
+end;
+
+function GetCalcParams(DT : DateTime) : Variant; server;
+begin
+  Date := DT;
+  Result := EntryPoint(GetSumma);
+end;
+
+end.

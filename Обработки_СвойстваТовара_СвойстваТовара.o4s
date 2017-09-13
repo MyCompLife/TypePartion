@@ -1,0 +1,91 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  AccsGood, AccsPartGood, AccsGoodRes : ISAccs;
+  DocsTbl, StoreTbl, RezTbl : ISValueTable;
+  GoodsList : ISValueList;
+  GoodDict : ISDictionary;
+  DateFrom, DateTo : DateTime;
+  Stores : ISValueList;
+  Store : ISDictionary;
+  Constants : IS4VPAConst;
+  TblStore, TblPartGood : ISValueTable;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoodRes := CreateObject('Аккумуляторы.ТоварыВРезерве');
+end;
+
+procedure GetInDoc(ADocsTbl : ISValueTable; AGoodDict : ISDictionary); server;
+begin
+  DocsTbl := ADocsTbl;
+  GoodDict := AGoodDict;
+  if (not IsNil(GoodDict)) and VarAsBool(GoodDict.IsFocused) then
+    begin
+      AccsGood.ClearFieldBuffers();
+      AccsGood.ClearFieldFilters();
+      AccsGood.SetFieldFilter('Товар', GoodDict);
+      AccsGood.AppendMotionToValueTable(0, RoundDate(CurrentDate, rdDay, True), amtIncome,
+        'Document;КолОбщ;СумВх;СумВалВх', -1, DocsTbl);
+      DocsTbl.DoGetLinks('Партнер=Document.Партнер');
+      DocsTbl.GroupBy('Партнер', 'СумВх;СумВалВх;КолОбщ');
+    end;
+end;
+
+procedure GetOutDoc(ADocsTbl : ISValueTable; AGoodDict : ISDictionary); server;
+begin
+  DocsTbl := ADocsTbl;
+  GoodDict := AGoodDict;
+  if (not IsNil(GoodDict)) and VarAsBool(GoodDict.IsFocused) then
+    begin
+      AccsGood.ClearFieldBuffers();
+      AccsGood.ClearFieldFilters();
+      AccsGood.SetFieldFilter('Товар', GoodDict);
+      AccsGood.AppendMotionToValueTable(0, RoundDate(CurrentDate, rdDay, True), amtOutcome,
+        'Document;КолОбщ;СумОтп;СумВалОтп', -1, DocsTbl);
+      DocsTbl.DoGetLinks('Партнер=Document.Партнер');
+      DocsTbl.GroupBy('Партнер', 'СумОтп;СумВалОтп;КолОбщ');
+      DocsTbl.SortBy('Партнер')
+    end;
+end;
+
+procedure GetStore(AStoreTbl : ISValueTable; AGoodDict : ISDictionary); server;
+begin
+  StoreTbl := AStoreTbl;
+  GoodDict := AGoodDict;
+  if (not IsNil(GoodDict)) and VarAsBool(GoodDict.IsFocused) then
+    begin
+      AccsGood.ClearFieldBuffers();
+      AccsGood.ClearFieldFilters();
+      AccsGood.SetFieldFilter('Товар', GoodDict);
+      AccsGood.AppendGroupRestToValueTable(RoundDate(CurrentDate, rdDay, True), 'Склад;КолОбщ', StoreTbl);
+      StoreTbl.GroupBy('Склад', 'КолОбщ');
+      StoreTbl.SortBy('Склад');
+    end;
+end;
+
+procedure GetRez(ARezTbl : ISValueTable; AGoodDict : ISDictionary); server;
+begin
+  RezTbl := ARezTbl;
+  GoodDict := AGoodDict;
+  if (not IsNil(GoodDict)) and VarAsBool(GoodDict.IsFocused) then
+    begin
+      AccsGoodRes.ClearFieldBuffers();
+      AccsGoodRes.ClearFieldFilters();
+      AccsGoodRes.SetFieldFilter('Товар', GoodDict);
+      AccsGoodRes.AppendGroupRestToValueTable(RoundDate(CurrentDate, rdDay, True), 'Счет;КолОбщ', RezTbl);
+      RezTbl.DoGetLinks('Партнер=Счет.Партнер');
+      RezTbl.DoGetLinks('Дата=Счет.ОкончаниеРезерва');
+      RezTbl.GroupBy('Партнер;Дата', 'КолОбщ');
+      RezTbl.SortBy('Партнер');
+    end;
+end;
+
+end.

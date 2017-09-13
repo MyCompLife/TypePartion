@@ -1,0 +1,35 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+
+procedure pmiUseNoLevel_Click(Sender : TObject);
+begin
+  MasterData.Params['UseLevel'] := False;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  MasterData.Params['UseLevel'] := True;
+end;
+
+procedure pmiUseLevel_Click(Sender : TObject);
+begin
+  MasterData.Params['UseLevel'] := True;
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbtCtg:TO4DBTreeView
+pmCtg:TO4PopupMenu
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+MDS:TO4DataSource

@@ -1,0 +1,139 @@
+interface
+
+uses
+  System, DispIntf, ConstNames;
+
+implementation
+var 
+      Excel, TrgRange : Variant;
+      CursorVis : TCursor;   
+      GoodsTbl, CtgTbl:ICValueTable;
+      MasterData : ICProcessing;  
+
+procedure Form_Open(Sender: TObject);
+begin
+ GoodsTbl :=  CreateObject('ТаблицаЗначений');
+ GoodsTbl.AddColumn('Self', vtcLink, 0);
+ GoodsTbl.AddColumn('Производитель', vtcLink, 0);
+ GoodsTbl.AddColumn('product_id', vtcString, 20);
+ GoodsTbl.AddColumn('name', vtcString, 150);
+ GoodsTbl.AddColumn('categories', vtcString, 20);
+ GoodsTbl.AddColumn('price', vtcFFT , 2);
+ GoodsTbl.AddColumn('manufacturer', vtcString , 200);
+ GoodsTbl.AddColumn('image_name', vtcString , 255);
+ GoodsTbl.Open;
+ CtgTbl := CreateObject('ТаблицаЗначений'); 
+ CtgTbl.AddColumn('Self', vtcLink, 0);
+ CtgTbl.AddColumn('category_id', vtcString, 20);
+ CtgTbl.AddColumn('parent_id', vtcString, 20);
+ CtgTbl.AddColumn('name', vtcString, 150);
+ CtgTbl.AddColumn('status', vtcBoolean, 0);
+ CtgTbl.Open;
+end;
+
+
+
+procedure btOK_Click(Sender: TObject);   
+var Row, Count, Total : integer;
+begin
+ try
+    CursorVis := WaitCursorStart; 
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer;
+    CtgTbl.Clear;
+    CtgTbl.CopyDataToServer;
+    if MasterData.RunThreadProcess(server.SaveDicToTblEP(GoodsTbl.SrvMean, CtgTbl.SrvMean, eTypePrice.Text),ReportRunning) then
+      begin
+        GoodsTbl.CopyDataFromServer;
+        CtgTbl.CopyDataFromServer;
+        GoodsTbl.SrvMean.Clear;
+        CtgTbl.SrvMean.Clear;
+        Excel := CreateOleObject('Excel.Application');
+        Excel.Visible := false;
+        Excel.Interactive := False;
+        Excel.ScreenUpdating := False;
+        Excel.DisplayStatusBar := False;
+        Excel.Application.SheetsInNewWorkbook := 2;
+        Excel.Application.WorkBooks.Add;
+        Excel.Application.WorkSheets[1].Cells.NumberFormat := '@';
+        Excel.Application.WorkSheets[1].Name := 'Categories';
+        Excel.Application.WorkSheets[2].Cells.NumberFormat := '@';
+        Excel.Application.WorkSheets[2].Name := 'Products';
+        // заполнение категорий
+        TrgRange := Excel.Application.WorkSheets[1];
+        TrgRange.Cells(1, 1) :=  'category_id';
+        TrgRange.Cells(1, 2) :=  'parent_id';
+        TrgRange.Cells(1, 3) :=  'name';
+        TrgRange.Cells(1, 4) :=  'status enabled';
+        Row := 2;
+        CtgTbl.Select;
+        Count := 0;
+        Total := CtgTbl.LineCount;
+        While CtgTbl.SelectNext do
+          begin
+            TrgRange.Cells(Row, 1) :=  CtgTbl.category_id;
+            TrgRange.Cells(Row, 2) :=  CtgTbl.parent_id;
+            TrgRange.Cells(Row, 3) :=  CtgTbl.name;
+            if VarAsBool(CtgTbl.status) then
+              TrgRange.Cells(Row, 4) :=  'true'
+            else
+              TrgRange.Cells(Row, 4) :=  'false';
+            inc(Row);
+            inc(Count);
+            if (Count mod 10)=0 then
+              StatusText('Выгружено '+IntToStr(Count)+' из '+IntToStr(Total));
+          end;
+        // заполнение товаров
+        TrgRange := Excel.Application.WorkSheets[2];
+        TrgRange.Cells(1, 1) :=  'product_id';
+        TrgRange.Cells(1, 2) :=  'name';
+        TrgRange.Cells(1, 3) :=  'categories';
+        TrgRange.Cells(1, 4) :=  'price';
+        TrgRange.Cells(1, 5) :=  'manufacturer';
+        TrgRange.Cells(1, 6) :=  'image_name';
+        Row := 2;
+        GoodsTbl.Select;
+        Count := 0;
+        Total := GoodsTbl.LineCount;
+        While GoodsTbl.SelectNext do
+          begin
+            TrgRange.Cells(Row, 1) :=  GoodsTbl.product_id;
+            TrgRange.Cells(Row, 2) :=  GoodsTbl.name;
+            TrgRange.Cells(Row, 3) :=  GoodsTbl.categories;
+            TrgRange.Cells(Row, 4) :=  GoodsTbl.price;
+            TrgRange.Cells(Row, 5) :=  GoodsTbl.manufacturer;
+            TrgRange.Cells(Row, 6) :=  GoodsTbl.image_name;
+            inc(Row); 
+            inc(Count);
+            if (Count mod 10)=0 then
+              StatusText('Выгружено '+IntToStr(Count)+' из '+IntToStr(Total));
+          end;
+        Excel.ScreenUpdating := True;
+        Excel.Interactive := True;
+        Excel.Visible := True;
+
+      end
+    else
+      ShowMessage('Выгрузка прервана!');
+  finally
+    StatusText('');
+    nil(Excel);
+    nil(TrgRange); 
+    SetCursor(CursorVis);
+  end;
+end;
+
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+ MasterData := Mean;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+btOK:TO4Button
+btCancel:TO4Button
+eTypePrice:TO4Edit
+SaveDialog1:TO4SaveDialog

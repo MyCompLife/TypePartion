@@ -1,0 +1,38 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var MasterProc : ICProcessing;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+ MasterProc := Mean;
+end;
+
+
+procedure Form_Close(Sender: TObject);
+begin
+  MasterProc.Params['SortType'] := edSort.ItemIndex;
+  MasterProc.Params['ShowRestBegin'] := cbShowRestBegin.Checked;
+  MasterProc.Params['ShowRestEnd'] := cbShowRestEnd.Checked;
+  MasterProc.Params['GroupByCtg'] := cbGroupByCtg.Checked;
+end;
+
+
+procedure edSort_Change(Sender: TObject);
+begin
+  cbGroupByCtg.Enabled := edSort.ItemIndex<>0;
+  if edSort.ItemIndex=0 then
+    cbGroupByCtg.Checked := false;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+edSort:TO4Edit
+cbShowRestBegin:TO4CheckBox
+btOK:TO4Button
+cbShowRestEnd:TO4CheckBox
+cbGroupByCtg:TO4CheckBox

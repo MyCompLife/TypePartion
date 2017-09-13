@@ -1,0 +1,163 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –абота—ѕеременными, –абота—ќбъектами,
+  –абота—“аблицами«начений, –абота—о—правочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  SetActivCurrency, SetNatCurrency, Append : Boolean;
+  Constants : IC4VPAConst;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  SetActivCurrency := False;
+  SetNatCurrency := False;
+  Constants := GetConstants;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  cbNatCurrency.Visible := GetUDASet('NatCurrency');
+  edBankDate.Text := DateToStr(CurrentDate);
+  cbNatCurrency.Checked := VarAsBool(MasterData.Ќац¬алюта);
+  cbActivCurrency.Checked := VarAsBool(MasterData.јктивность);
+  tsClient.Visible := VarAsBool(Constants. лиент);
+  cbHardCur.Checked := VarAsBool(MasterData.“верда€¬алюта);
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeCurName.Text), '');
+  if not(Append) then
+    begin
+//      edBankCurs.Enabled := false;
+//      edCashCurs.Enabled := false;
+      cbNatCurrency.Enabled := false;
+      cbActivCurrency.Enabled := false;
+    end;
+end;
+
+procedure eBankDate_Change(Sender : TObject);
+begin
+  edBankCurs.Text := MasterData.GetTimedValue(' урсЌацЅанка', StrToDateDef(edBankDate.Text, CurrentDate));
+  edCashCurs.Text := MasterData.GetTimedValue(' урсЌаличный', StrToDateDef(edBankDate.Text, CurrentDate));
+end;
+
+procedure eCashDate_Change(Sender : TObject);
+begin
+  // eCashCurs.Text := MasterData.GetTimedValue(' урсЌаличный', StrToDateDef(eCashDate.Text, CurrentDate));
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+var
+  tmpData : ICDictionary;
+begin
+  MasterData.SetTimedValue(' урсЌацЅанка', StrToDateDef(edBankDate.Text, CurrentDate), StrToDecDef(edBankCurs.Text, 0));
+  MasterData.SetTimedValue(' урсЌаличный', StrToDateDef(edBankDate.Text, CurrentDate), StrToDecDef(edCashCurs.Text, 0));
+  if SetActivCurrency or SetNatCurrency then
+    begin
+      tmpData := CreateObject('—правочники.¬алюты');
+      tmpData.Select;
+      while tmpData.SelectNext do
+        if VarAsBool(tmpData.IsFocused) and (not IsObjEQ(tmpData, MasterData, False)) and
+          ((VarAsBool(tmpData.јктивность) and SetActivCurrency) or
+          (VarAsBool(tmpData.Ќац¬алюта) and SetNatCurrency)) then
+          begin
+            tmpData.Edit;
+            if VarAsBool(tmpData.јктивность) and SetActivCurrency then
+              tmpData.јктивность := VarAsInt(False);
+            if VarAsBool(tmpData.Ќац¬алюта) and SetNatCurrency then
+              tmpData.Ќац¬алюта := VarAsInt(False);
+            tmpData.Post;
+          end;
+      tmpData.ApplyUpdates;
+    end;
+end;
+
+procedure cbNatCurrency_Click(Sender : TObject);
+begin
+  if cbNatCurrency.Checked then
+    begin
+      MasterData.Ќац¬алюта := VarAsInt(cbNatCurrency.Checked);
+      SetNatCurrency := cbNatCurrency.Checked;
+    end;
+end;
+
+procedure cbActivCurrency_Click(Sender : TObject);
+begin
+  if cbActivCurrency.Checked then
+    begin
+      MasterData.јктивность := VarAsInt(cbActivCurrency.Checked);
+      SetActivCurrency := cbActivCurrency.Checked;
+    end;
+end;
+
+procedure tsClient_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbData.PageIndex := NewTab;
+end;
+
+procedure cbHardCur_Click(Sender : TObject);
+begin
+  MasterData.“верда€¬алюта := VarAsInt(cbHardCur.Checked);
+end;
+
+procedure dbeCurName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeCurName.Text), '');
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+  Append := true;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+nbData:TO4Notebook
+Label3:TO4Label
+Label4:TO4Label
+Label6:TO4Label
+Label7:TO4Label
+Label2:TO4Label
+Label5:TO4Label
+Label1:TO4Label
+edBankCurs:TO4Edit
+edBankDate:TO4Edit
+edCashDate:TO4Edit
+edCashCurs:TO4Edit
+cbNatCurrency:TO4CheckBox
+cbActivCurrency:TO4CheckBox
+dbeShortName:TO4DBEdit
+dbeCurName:TO4DBEdit
+dbeCustomsCode:TO4DBEdit
+cbHardCur:TO4CheckBox
+Label19:TO4Label
+Label20:TO4Label
+Label22:TO4Label
+Label21:TO4Label
+DBEdit1:TO4DBEdit
+DBEdit2:TO4DBEdit
+DBEdit3:TO4DBEdit
+DBEdit4:TO4DBEdit
+tsClient:TO4TabSet
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnTitle:TO4Panel
+lbTitle:TO4Label
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

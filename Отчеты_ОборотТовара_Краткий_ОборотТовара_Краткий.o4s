@@ -1,0 +1,327 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, –асчеты, Reports;
+
+const
+  «начени€ЌаЌачало = ' олќбщ= олЌач;—ум¬х=—умЌач¬х;—умЌац=—умЌацЌачало';
+  «начени€Ќа онец = ' олќбщ= ол он;—ум¬х=—ум он¬х;—умЌац=—умЌац';
+  GoodLinksListSmall = ' олЌач;—умЌач¬х;' +
+    ' олѕрих;—умѕрих¬х;' +
+    ' ол–асх;—ум–асх¬х;—ум–асхќтп;—ум–асхЌац;' +
+    ' ол он;—ум он¬х;' +
+    '—умЌац;ѕроцент;—умЌацЌачало';
+  GoodLinksListSmall1 = ' олЌач;—умЌач¬х;' +
+    ' олѕрих;—умѕрих¬х;' +
+    ' ол–асх;—ум–асх¬х;—ум–асхќтп;—ум–асхЌац;' +
+    ' ол он;—ум он¬х;' +
+    '—умЌац';
+
+implementation
+
+var
+  AccsGood, AccsPartGood : ISAccs;
+  TblPartGood, GoodsTbl, CtgGoodsTbl, StoreTbl : ISValueTable;
+  PartList, PartGoodList, GoodsList : ISValueList;
+  Partner, Store : Variant;
+  DateFrom, DateTo : DateTime;
+  ShowCodeUnitname, OnlyMoving, UseLevel, GroupModel : Boolean;
+  Items : ISDictionary;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  TblPartGood := CreateObject('“аблица«начений');
+  TblPartGood.Close();
+  TblPartGood.AddColumn('DimensionID', lftFloat, 0);
+  TblPartGood.AddColumn('“овар', lftLink, 0);
+  TblPartGood.Open();
+  PartList := CreateObject('—писок«начений');
+  PartGoodList := CreateObject('—писок«начений');
+end;
+
+function SetFilters : Boolean;
+begin
+  Result := True;
+  if (not IsNil(Store)) and VarAsBool(Store.IsFocused) then
+    AccsGood.SetFieldFilter('—клад', Store);
+  if (not IsNil(Partner)) and VarAsBool(Partner.IsFocused) then
+    begin
+      TblPartGood.Clear();
+      AccsPartGood.SetFieldFilter('ѕартнер', Partner);
+      if OnlyMoving then
+        begin
+          AccsPartGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+            '“овар;DimensionID', -1, TblPartGood);
+          TblPartGood.GroupToList('DimensionID', PartList);
+          TblPartGood.GroupToList('“овар', PartGoodList);
+          Result := (PartList.Count <> 0);
+          AccsGood.SetFieldFilter('ѕарти€', PartList);
+          AccsGood.SetFieldFilter('“овар', PartGoodList);
+        end
+      else
+        begin
+          AccsPartGood.AppendMotionToValueTable(0, DateTo, amtBoth,
+            'DimensionID', -1, TblPartGood);
+          TblPartGood.GroupToList('DimensionID', PartList);
+          Result := (PartList.Count <> 0);
+          AccsGood.SetFieldFilter('ѕарти€', PartList);
+        end;
+    end
+  else
+    if OnlyMoving then
+      begin
+        TblPartGood.Clear();
+        AccsGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+          '“овар;ѕарти€=DimensionID', -1, TblPartGood);
+        TblPartGood.GroupToList('DimensionID', PartList);
+        TblPartGood.GroupToList('“овар', PartGoodList);
+        Result := (PartList.Count <> 0);
+        //     AccsGood.SetFieldFilter('ѕарти€', PartList);
+        AccsGood.SetFieldFilter('“овар', PartGoodList);
+      end;
+end;
+
+procedure SetGoods(Rep : ISReport; var Accept : Boolean);
+var
+  CtgDic, GoodDic : ISDictionary;
+  CtgName : string;
+  MotionID,i,j : Integer;
+  «начени€ѕрихода, «начени€ќтпуска : string;
+  CtgGoodTbl, tmpGoodsTbl : ISValueTable;
+begin
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+  AccsPartGood.ClearFieldBuffers();
+  AccsPartGood.ClearFieldFilters();
+  PartList.Clear();
+  PartGoodList.Clear();
+
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);  
+  Rep.NotifyClient(RestsView, 1, 5);
+  if Rep.Terminated then  exit;
+  // ‘ормирование таблицы категорий
+  CtgDic := CreateObject('—правочники.“овары');
+  CtgDic.IncludeOnlyLevels(true);
+  GoodDic := CreateObject('—правочники.“овары');
+  GoodDic.IncludeLevels(false);
+  CtgGoodTbl := CreateObject('“аблица«начений');
+  CtgGoodTbl.AddColumn('“овар',vtcLink,0);
+  CtgGoodTbl.AddColumn(' атегори€',vtcLink,0);
+  CtgGoodTbl.AddColumn(' атегори€Ќазвание',vtcString,150);
+  CtgGoodTbl.Open; 
+  tmpGoodsTbl := CreateObject('“аблица«начений');
+  if UseLevel and (GoodsList.Count>0) then
+    begin
+      for i:=0 to GoodsList.Count-1 do
+       if CtgDic.Find(GoodsList.GetValue(i)) then
+         begin
+           CtgName := CtgDic.GetCtgPath('\',true, true);
+           if StrLength(CtgName)>0 then
+             begin
+               for j:=1 to StrLength(CtgName) do
+                 if CtgName[j]='''' then CtgName[j]:='"';
+               if CtgName[1]='\' then
+                 StrDelete(CtgName,1,1);
+             end;
+           GoodDic.UseParent(CtgDic);
+           GoodDic.Select;
+           GoodDic.SaveToValueTable('Self',tmpGoodsTbl,0,GoodDic.RecordCount);
+           tmpGoodsTbl.select;
+           While tmpGoodsTbl.SelectNext do
+             begin
+               CtgGoodTbl.Append;
+               CtgGoodTbl.“овар := tmpGoodsTbl.@Self;
+               CtgGoodTbl. атегори€ := CtgDic;
+               CtgGoodTbl. атегори€Ќазвание := CtgName;
+               CtgGoodTbl.Post;
+             end;
+         end;
+    end
+  else
+    begin
+      CtgDic.Select;
+      While CtgDic.SelectNext do
+        begin
+          CtgName := CtgDic.GetCtgPath('\',true, true);
+          if StrLength(CtgName)>0 then
+            begin
+              for j:=1 to StrLength(CtgName) do
+                if CtgName[j]='''' then CtgName[j]:='"';
+              if CtgName[1]='\' then
+                StrDelete(CtgName,1,1);
+            end;
+          GoodDic.UseParent(CtgDic);
+          GoodDic.Select;
+          GoodDic.SaveToValueTable('Self',tmpGoodsTbl,0,GoodDic.RecordCount);
+          tmpGoodsTbl.select;
+          While tmpGoodsTbl.SelectNext do
+            begin
+              CtgGoodTbl.Append;
+              CtgGoodTbl.“овар := tmpGoodsTbl.@Self;
+              CtgGoodTbl. атегори€ := CtgDic;
+              CtgGoodTbl. атегори€Ќазвание := CtgName;
+              CtgGoodTbl.Post;
+            end;
+        end;
+    end; 
+
+  GoodsTbl.Clear();
+  GoodsTbl.SortBy('“овар');
+  StoreTbl.Clear();
+  StoreTbl.SortBy('');
+  if not SetCtgFilter(UseLevel, GoodsList, Items, AccsGood, '“овар') then
+    begin
+      Accept := True;
+      exit;
+    end;
+  //
+  if SetFilters then
+    begin
+      // отправка сообщени€ клиенту
+      Rep.NotifyClient(RestsView, 2, 5);
+      if Rep.Terminated then  exit;
+      for MotionID := 1 to 36 do
+        begin
+          if Rep.Terminated then  exit;
+          «начени€ѕрихода := '';
+          «начени€ќтпуска := '';
+          if (not IsNil(Store)) and VarAsBool(Store.IsFocused) then
+            case MotionID of
+              midIncome :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х'; 
+              midOutcome :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';  
+              midInternalIncome :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midInternalOutcome :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midRetBuyer :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midRetSupplier :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midRetRealBuyer :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midRetRealSupplier :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midRetFactory :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midReadyFactory :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midDiscardFactory :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midInputRest :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midDiscard :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midRevision :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midPriceChange :
+                «начени€ѕрихода := '—ум¬х=—умѕрих¬х';
+              else
+                continue;
+            end
+          else
+            case MotionID of
+              midIncome :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midOutcome :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midRetBuyer :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midRetSupplier :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midRetRealBuyer :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midRetRealSupplier :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midRetFactory :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midReadyFactory :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midDiscardFactory :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midInputRest :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midDiscard :
+                «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умЌац=—ум–асхЌац';
+              midRevision :
+                «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х';
+              midPriceChange :
+                «начени€ѕрихода := '—ум¬х=—умѕрих¬х';
+              else
+                continue;
+            end;
+          AccsGood.SetFieldFilter('“ип', MotionID);
+          AccsGood.AppendGroupRest2ToValueTable(DateFrom, DateTo, '“овар;—клад',
+            «начени€ЌаЌачало, «начени€ѕрихода, «начени€ќтпуска,
+            «начени€Ќа онец, GoodsTbl);
+        end;
+      GoodsTbl.GroupBy('“овар; атегори€;—клад', GoodLinksListSmall);
+      GoodsTbl.SortBy('“овар');
+    end;
+  Rep.NotifyClient(RestsView, 3, 5);
+  if Rep.Terminated then  exit;
+  GoodsTbl.DoCalculation(' атегори€',''' Ѕез категории''');
+  GoodsTbl.SortBy('“овар');
+  CtgGoodTbl.Select;
+  While CtgGoodTbl.SelectNext do
+    begin
+      GoodsTbl.SetRange(CtgGoodTbl.@“овар, CtgGoodTbl.@“овар);
+      GoodsTbl.DoCalculation(' атегори€',''''+VarAsStr(CtgGoodTbl. атегори€Ќазвание)+'''');
+    end;  
+  Rep.NotifyClient(RestsView, 4, 5);
+  if Rep.Terminated then  exit;
+  GoodsTbl.CancelRange;
+  GoodsTbl.SortBy('');
+  GoodsTbl.DoCalculation('—умЌац','—умЌацЌачало-—умЌац');
+  GoodsTbl.GroupTo(' атегори€;—клад', GoodLinksListSmall, CtgGoodsTbl);
+  CtgGoodsTbl.DoCalculation('ѕроцент', '(—умЌац/—ум–асхќтп)*100');
+  AccsGood.ClearFieldFilters();
+  DeleteColumnsByCondition(GoodsTbl, 'CondField', '( олЌач=0)and(—умЌач¬х=0)and( олѕрих=0)'+
+                           'and(—умѕрих¬х=0)and( ол–асх=0)and(—ум–асх¬х=0)and(—ум–асхќтп=0)' +
+                           'and( ол он=0)and(—ум он¬х=0)');
+  GoodsTbl.DoGetLinks('Ќазвание“овара=“овар.Ќазв“овара; од=“овар. од;≈д»зм=“овар.≈д»зм'); 
+  Rep.NotifyClient(RestsView, 5, 5);
+  if Rep.Terminated then  exit;
+  if GroupModel then
+    begin
+      GoodsTbl.DoGetLinks('ћодель=“овар. од');
+      GoodsTbl.DoCalculation(' од','ћодель');
+      GoodsTbl.GroupBy(' од;≈д»зм; атегори€;—клад',GoodLinksListSmall1+';ѕроцент');
+    end;
+  GoodsTbl.DoCalculation('ѕроцент', '(—умЌац/—ум–асхќтп)*100');
+                //  
+  GoodsTbl.CopyTo(' од;'+GoodLinksListSmall+'; атегори€;—клад', StoreTbl);
+  StoreTbl.DoGetLinks(' од=—клад.Ќазвание');
+  StoreTbl.GroupBy(' од;—клад', GoodLinksListSmall);
+  StoreTbl.SortBy(' од;—клад');
+
+  AddTotalRow(GoodsTbl, ' од', GoodLinksListSmall1);
+  Accept := True;
+end;
+
+function GetRunReportEP(GoodsTbls, CtgGoodsTbls, StoreTbls : ISValueTable;  GoodLists : ISValueList;
+  Partners, Stores : Variant; ShowCodeUnitnames, OnlyMovings, GroupModels, UseLevels : Boolean;
+  AItems : ISDictionary;
+  DateFroms, DateTos : DateTime) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;
+  CtgGoodsTbl := CtgGoodsTbls;
+  StoreTbl := StoreTbls;
+  GoodsList := GoodLists;
+  Partner := Partners;
+  Store := Stores;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  ShowCodeUnitname := ShowCodeUnitnames;
+  OnlyMoving := OnlyMovings;
+  UseLevel := UseLevels;
+  GroupModel := GroupModels;
+  Items := AItems;
+  Result := EntryPoint(SetGoods);
+end;
+
+end.

@@ -1,0 +1,51 @@
+interface
+
+uses
+  System, DispIntf;
+
+function CheckError(Error: Integer; Var ErrorMessage : String): boolean;
+
+implementation
+
+function CheckError(Error: Integer; Var ErrorMessage : String): boolean;
+begin
+  if Error = 0 then
+    begin
+      result := true;
+      exit;
+    end;
+  case Error of
+    1: begin
+      ErrorMessage := 'Ошибка при работе с СОМ-портом, убедитесь в правильности имени СОМ-порта,'+#13+'а также или СОМ-порт не занят другим приложением.';
+      result := false;
+    end;
+    2: begin
+      ErrorMessage := 'Сом-порт закрыт. Возможно, был аппаратный сбой.';
+      result := false;
+    end;
+    3: begin
+      ErrorMessage := 'Нет ответа от весов. Проверьте включены ли весы, а также кабель подключения к весам.';
+      result := false;
+    end;
+    4: begin
+      ErrorMessage := 'Ошибка в формате цены.';
+      result := false;
+    end;
+    5: begin
+      ErrorMessage := 'Ошибка в типе весов. Этот тип весов не поддерживат данной команды.';
+      result := false;
+    end;
+    6: begin
+      ErrorMessage := 'Даная копия компонента для работы с весами нелицензионная.'+#13+'Обратитесь к поставщику за получением лицензионного кода.';
+      result := false;
+    end;
+    else
+      begin
+      ErrorMessage := 'Ошибка ' + VarAsStr(Error);
+      result := false;
+    end;
+  end;
+end;
+
+
+end.

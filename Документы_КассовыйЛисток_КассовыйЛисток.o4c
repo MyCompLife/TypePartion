@@ -1,0 +1,187 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, РаботаСЖурналомИзменений;
+
+implementation 
+
+var
+  TblKassaPays, TmpTbl, TmpDocContentsTbl : ICValueTable;
+  MasterData : ICDocuments;
+  Currency : ICDictionary;
+  LockCalc, isSave : Boolean;
+  Options : ICOptions;
+  AddDoc : Boolean;
+
+procedure CalcFields;
+begin            
+  Options := GetOptions;
+  MasterData.SaveContents('', TmpTbl);
+  TmpTbl.SortBy('Тип');
+  TmpTbl.SetRange(amtIncome, amtIncome);
+  TmpTbl.Select;
+  MasterData.ПриходЗаДень := TmpTbl.Total('Сумма');
+  TmpTbl.CancelRange;
+  TmpTbl.SetRange(amtOutcome, amtOutcome);
+  TmpTbl.Select;
+  MasterData.РасходЗаДень := TmpTbl.Total('Сумма');
+  TmpTbl.CancelRange;
+end;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+  MasterData := MDS.GetMean;
+  TmpTbl := CreateObject('ValueTable');
+  TblKassaPays := CreateObject('ValueTable');
+  TblKassaPays.AddColumn('Документ', vtcLink, 0);
+  TblKassaPays.AddColumn('Назначение', vtcString, 128);
+  TblKassaPays.AddColumn('Тип', vtcInteger, 0);
+  TblKassaPays.AddColumn('Сумма', vtcFFt, 2);
+  TblKassaPays.AddColumn('НазвПартнера', vtcString, 100);
+  TblKassaPays.AddColumn('Партнер', vtcLink, 100);
+  TblKassaPays.AddColumn('Счет', vtcString, 8);
+  TblKassaPays.Open;
+  server.CreateObjects;
+  TmpDocContentsTbl := CreateObject('ValueTable');
+  Currency := CreateObject('Справочники.Валюты');
+  Currency := GetNatCurrency(Currency);
+end;
+
+procedure TableCalcFields(Doc : Variant);
+var
+  TmpDoc : ICDocuments;
+begin
+  TmpDoc := MasterData.Документ;
+  if VarAsBool(TmpDoc.IsFocused) then
+    begin
+      case TmpDoc.GetSign of
+        'ВводОстатковПоБанкуИКассе' :
+          begin
+            TmpDoc.SaveContents('', TmpDocContentsTbl);
+            TmpDocContentsTbl.SortBy('Тип;Валюта');
+            TmpDocContentsTbl.SetRange(ArrayOf(1, Currency), ArrayOf(1, Currency));
+            TmpDocContentsTbl.Select;
+            if TmpDocContentsTbl.SelectNext then
+              begin
+                MasterData.Сумма := TmpDocContentsTbl.СуммаВВалюте;
+                if VarAsBool(TmpDoc.@Ответственный.IsFocused) then
+                  MasterData.НазвПартнера := TmpDoc.Ответственный.ПолноеНазвание;
+                MasterData.Номер := TmpDoc.НомерДокумента;
+                MasterData.Дата := TmpDoc.ДатаДокумента;
+              end;
+          end
+        else
+          begin
+            MasterData.Сумма := TmpDoc.Сумма;
+            if VarAsBool(TmpDoc.@Партнер.IsFocused) then
+              MasterData.НазвПартнера := TmpDoc.Партнер.ПолноеНазвание;
+            MasterData.Номер := TmpDoc.НомерДокумента;
+            MasterData.Дата := TmpDoc.ДатаДокумента;
+            MasterData.Счет := TmpDoc.Счет;
+          end;
+      end
+    end
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  CreateObjects;
+  MasterData.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+end;
+
+procedure tbRefresh_Click(Sender : TObject);
+var
+  Date : DateTime;
+  V : Variant;
+begin
+  Date := StrToDateTime(eData.Text);
+  TblKassaPays.Clear;
+  MasterData.AppendLinesTo('Документ;Назначение', TblKassaPays);
+  TblKassaPays.CopyDataToServer;
+  server.GetDocs(Date, TblKassaPays.SrvMean);
+  TblKassaPays.CopyDataFromServer;
+  TblKassaPays.SrvMean.Clear;
+  MasterData.DisableTableControls;
+  try
+    MasterData.SelectLines;
+    MasterData.SelectNextLine;
+    while MasterData.LinesCount <> 0 do
+      TDS.ActionClick(actDel);
+    TblKassaPays.Select;
+    while TblKassaPays.SelectNext do
+      begin
+        MasterData.AppendLine;
+        MasterData.AssignFields('Документ;Назначение;Тип', TblKassaPays);
+        MasterData.PostLine;
+      end;
+    CalcFields;
+  finally
+    MasterData.EnableTableControls;
+  end;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin 
+  AddDoc := true;
+  tbRefresh_Click(Sender);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form);
+  CalcFields;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+deZPRest:TO4DBEdit
+Panel2:TO4Panel
+Panel7:TO4Panel
+tbrData:TO4ToolBar
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+BottomPanel:TO4Panel
+Label4:TO4Label
+Label5:TO4Label
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+eSumPlus:TO4DBEdit
+eSumMinus:TO4DBEdit
+dgPays:TO4DBGrid
+MDS:TO4DataSource
+TDS:TO4DocContentsSource

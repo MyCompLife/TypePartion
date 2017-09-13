@@ -1,0 +1,80 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, –асчеты;
+
+implementation
+var MasterProc : ICProcessing;
+    MasterDoc : ICDocuments;
+    ResultTbl : ICValueTable;
+    GoodDic, StoreDic : ICDictionary;   
+    GoodCount : Decimal;
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+  GoodDic := Params;
+  if IsObjFocused(GoodDic) then
+    lbGood.Caption := '“овар: '+GoodDic.NameField
+  else
+    raise('Ќе задан товар!');
+  if MasterProc.HasParam('Doc') and IsObjFocused( MasterProc.Params['Doc']) then
+    MasterDoc := MasterProc.Params['Doc']
+  else
+    raise('Ќеверно заданы параметры');  
+  StoreDic := MasterDoc.—кладѕо”молч;
+  if IsObjFocused(StoreDic) then
+    lbStore.Caption := '—клад: '+StoreDic.NameField
+  else
+    raise('Ќе задан склад!');
+  GoodCount := VarAsDec(MasterDoc. оличество);
+  if GoodCount>0 then
+    lbGoodCount.Caption := lbGoodCount.Caption + DecToStr(GoodCount)
+  else
+    lbGoodCount.Visible := false;
+
+  ResultTbl := CreateObject('“аблица«начений');
+  ResultTbl.AddColumn('“овар', lftLink, 0);
+  ResultTbl.AddColumn('ѕартнер', lftLink, 0);
+  ResultTbl.AddColumn('ѕарти€', lftFloat, 0);
+  ResultTbl.AddColumn('¬алюта', lftLink, 0);
+  ResultTbl.AddColumn(' омисси€', lftInteger, 0);
+  ResultTbl.AddColumn('ƒатаѕр', lftDate, 0);
+  AddFFtColumnsList(ResultTbl, ' олќбщ;¬х÷енаЅезЌƒ—;¬х÷ена¬ал; олќбщѕартии');
+  ResultTbl.Open;
+  ResultTbl.SetColumnFormat(' олќбщ; олќбщѕартии','0.#####');
+  ResultTbl.SetColumnFormat('¬х÷енаЅезЌƒ—;¬х÷ена¬ал','0.00#####');
+  StoreDic.SetSrvToClientPos;
+  GoodDic.SetSrvToClientPos;
+  ResultTbl.CopyDataToServer;
+  server.FillResultTbl(ResultTbl.SrvMean,GoodDic.SrvMean,StoreDic.SrvMean,MasterDoc.GetDate);  
+  ResultTbl.CopyDataFromServer;
+  ResultTbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+ if ResultTbl.IsFocused then
+   begin
+     if StoreDic.IsFocused and (GoodCount>0) then
+       begin
+         if  (ResultTbl. олќбщ<GoodCount) and
+           (MessageDlg('ќстаток товара выбраной партии на складе '+StoreDic.NameField+#13+
+           'меньше количества добавл€емого товара! ¬се равно выбрать эту партию?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrNo) then
+           exit;
+       end;
+     MasterProc.Params['ResultTbl'] := ResultTbl;  
+     Form.ModalResult := mrOK;
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbGood:TO4Label
+lbStore:TO4Label
+Panel1:TO4Panel
+lbGoodCount:TO4Label
+Panel2:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+dbgPart:TO4DBGrid
+TVS:TO4TableValueSource

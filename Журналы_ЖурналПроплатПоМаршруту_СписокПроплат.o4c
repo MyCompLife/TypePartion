@@ -1,0 +1,131 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСДокументамиВЖурналах, ЭкспортВExcel;
+
+var
+  MasterData : ICJournal ;
+  Constants: IC4VPAConst;
+  Options: ICOptions;
+  LockCh : Boolean;
+
+implementation
+
+
+procedure GetTotalSums;
+var
+  V : Variant;
+begin
+  if not pSum.Visible then exit;
+  MasterData.SrvAssignClientSelectParams;
+  V := server.GetTotalSumsSrv(MasterData.SrvMean);
+  lSum.Caption := FormatFloat('0.00', V);
+  if V < 0 then
+    lSum.Font.Color := clRed
+  else
+    lSum.Font.Color := clNavy;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+var
+ i : integer;
+ Strs : Variant;
+begin
+ MasterData := MDS.GetMean;
+ Constants := GetConstants;
+ SetColors(Constants);
+ Options := GetOptions;
+
+end;
+
+procedure Form_Open(Sender: TObject);
+var
+ Nobody : TO4ToolBar; // заглушка на NIL
+ i : integer;
+begin
+ MakeInterface(tbrData, Nobody, dbgData);
+ for i := 0 to MasterData.StateCount - 1 do
+   tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+ MasterData.DefineSelectParams(True);
+ tsState.TabIndex := MasterData.GetDocStateRange+1;
+ LockCh := true;
+ GetTotalSums;
+
+end;
+
+
+procedure tsState_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  if LockCh then
+    begin
+      MasterData.SetDocStateRange(NewTab - 1);
+      MasterData.Select;
+    end;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+ MasterData.DefineSelectParams(False);
+ tsState.TabIndex := MasterData.GetDocStateRange+1;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+{ if MasterData.IsFocused then begin
+   if MasterData.GetDocState = 0 then
+     Index1 := 9
+   else
+   if MasterData.GetDocState = 1 then
+     Index1 := 10
+   else
+   if MasterData.GetDocState = 2 then
+     Index1 := 12;
+ end;
+}
+end;
+{$D+}
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+ MasterData.Refresh;
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  LockCh := false;
+  tsState.TabIndex := MasterData.GetDocStateRange+1;
+  LockCh := true;
+  GetTotalSums;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+dbNotes:TO4DBMemo
+tsState:TO4TabSet
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiRefresh:TO4MenuItem
+pSum:TO4Panel
+Panel8:TO4Panel
+Label6:TO4Label
+lSum:TO4Label

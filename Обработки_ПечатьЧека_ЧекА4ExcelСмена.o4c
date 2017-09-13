@@ -1,0 +1,119 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  CNV : ICWriNums;
+  V : ICReport;
+  MYF, ADR, TLF : ICDictionary;
+  Tbl, TblContents: ICValueTable;
+  DateDoc, SumInWord : string;
+  i : integer;
+
+implementation
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+  Tbl := Params;
+  TblContents := CreateObject('ValueTable');
+  TblContents.AddColumn('НомСтроки',vtcInteger,0);
+  TblContents.AddColumn('Код',vtcString,20);
+  TblContents.AddColumn('Товар',vtcLink,0);
+  TblContents.AddColumn('ЕдИзм',vtcLink,0);
+  TblContents.AddColumn('Количество',vtcFFT,5);
+  TblContents.AddColumn('Цена',vtcFFT,7);
+  TblContents.AddColumn('Сумма',vtcFFT,7);
+  TblContents.Open;
+  Tbl.AppendTo('Товар;Количество;Цена',TblContents);
+  TblContents.SortBy('Товар');
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  MYF.Select;
+  if not MYF.SelectNext then
+    begin
+      if MessageDlg(Trans('Нет данных о Вашем предприятии. Желаете ли Вы определить их сейчас?'),
+        mtConfirmation, ArrayOf(mbOk, mbCancel)) <> 1 then
+        exit;
+      MYF.EditInForm('', 0);
+      MYF.Select;
+      if not MYF.SelectNext then
+        exit;
+    end;
+  ADR := CreateObject('Справочники.Адреса');
+  TLF := CreateObject('Справочники.Телефоны');
+  CNV := CreateObject('ЧислаПрописью');
+  TblContents.GroupBy('Товар;Цена', 'Количество');
+  TblContents.DoCalculation('Сумма', 'Количество*Цена');
+  TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  TblContents.DoNumbering('НомСтроки',1,1);
+  SumInWord := CNV.MoneyToStr(Tbl.Params['Сумма'], 'ГРН', 1058); //C_GRN,C_KOP,True);
+  TblContents.SelectFirst;
+  XGrid.AddSection('Hed');
+  TblContents.AddToXGrid(CtrlToVar(XGrid), 'Det', 'НомСтроки;Код;Товар;ЕдИзм;Количество;Цена;Сумма', 0, 0);
+  XGrid.AddSection('Total');
+end;
+
+procedure XGrid_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  DateDoc := DateToStr(Tbl.Params['ДатаДокумента']);
+  case HSect of
+    'Hed','HedCnt' :
+      begin
+        Vars.NumberDate := VarAsStr(Tbl.Params['Документ']) + ' від ' + DateDoc;
+        Vars.MFN := GetPartName(MYF);
+        Vars.MFA := GetActiv(ADR, 'ПочтИндекс', MYF) + ', ' + GetActiv(ADR, 'Город.Название', MYF) + ', ' + GetActiv(ADR, 'Адрес', MYF);
+        Vars.MFP := GetActiv(TLF, 'Номер', MYF);
+        Vars.PART := VarAsStr(Tbl.Params['Партнер'].Код) + ' ' + Tbl.Params['Партнер'].Название;
+      end;
+    'Total' :
+      begin
+        Vars.SumStr := SumInWord;
+        Vars.Summa := Tbl.Params['Сумма'];
+      end;
+    'TotalCurr' :
+      begin
+       if VarAsBool(Tbl.Params['Валюта'].IsFocused) then
+         begin
+           Vars.Cur := Tbl.Params['Валюта'].Код;
+           Vars.CurVal := Tbl.Params['Курс'];
+           Vars.CurName := 'Сума в ' + Tbl.Params['Валюта'].Код
+         end;
+        Vars.SumVal := Tbl.Params['Сумма'];
+      end;
+  end;
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure tbXTools_Click(Sender: TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible
+   then tbXTools.ImageIndex := 98 else tbXTools.ImageIndex := 44;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+XGrid:TO4XGrid

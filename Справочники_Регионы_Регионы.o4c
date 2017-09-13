@@ -1,0 +1,187 @@
+interface
+
+uses
+  System, Интерфейс, Reports, Расчеты;
+
+var
+  MasterData: ICDictionary;
+  DateFrom, DateTo : DateTime;
+  Tbl : ICValueTable;
+  Options : ICOptions;
+
+implementation
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure SetAccSums;
+begin
+  Tbl.UseDataSource(0);
+  Tbl.Clear;
+  Tbl.CopyDataToServer;
+  server.GetSum(MasterData.SrvMean, Tbl.SrvMean,DateFrom, DateTo);
+  Tbl.CopyDataFromServer;
+  if Tbl.LineCount <> 0 then
+    Tbl.SortBy('Артикул;Код');
+  Tbl.UseDataSource(CtrlToVar(TVSRegion));
+end;
+
+procedure Form_Open(Sender: TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+begin
+  MakeInterface(tbrData, Nobody, dbgData);  
+  Options := GetOptions;
+  pmiSort.Enabled := MasterData.IsFocused();
+  DateFrom := CurrentDateTime;
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  Tbl := CreateObject('ТаблицаЗначений');
+  Tbl.Close();
+  Tbl.AddColumn('Артикул', lftInteger, 0);
+  Tbl.AddColumn('Код', lftString, 6);
+  Tbl.AddColumn('Статья', lftLink, 0);
+  Tbl.AddColumn('Сумма', vtcFft, 7);
+  Tbl.AddColumn('MotionSign', vtcInteger, 0);
+  Tbl.Open();
+  Tbl.SetColumnFormat('Сумма', '0.00');
+  if MasterData.IsFocused  then
+    begin
+      Label1.Caption := MasterData.Название;
+      Label1.Refresh;
+      SetAccSums;
+    end;
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  MasterData.Refresh;
+  pmiSort.Enabled := MasterData.IsFocused();
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure eDateFrom_Change(Sender: TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+  MasterData.Refresh;
+end;
+      
+procedure miFirstHalfYear_Click(Sender: TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+{$D-}
+procedure dbgBalance_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if Tbl.IsFocused  then
+    if (Tbl.Сумма < 0) then
+     DrawFont.Color := clRed
+    else
+      DrawFont.Color := clWindowText;
+   if Tbl.Артикул = 1000000 then
+     if Highlight then
+       BackColor:=clScrollBar
+     else
+       BackColor:=clBtnFace;
+end;
+{$D+}
+
+procedure MDS_VPAAfterScroll(Sender: TObject);
+begin
+  if MasterData.IsFocused and MasterData.SetSrvToClientPos then
+    SetAccSums;
+end;
+
+
+procedure miPrint_Click(Sender: TObject);
+begin
+  MasterData.PrintForm('СписокСтатья', not VarAsBool(Options.GetServerPrm(DirectPrint)), 0, ArrayOf(Tbl,DateFrom,DateTo));
+end;
+
+procedure dbgBalance_DblClick(Sender: TObject);
+var 
+  StName : string;
+  V: ICProcessing;
+begin
+  if VarAsBool(Tbl.Статья.IsFocused) then
+    begin
+      StName := Tbl.Статья.Название;   
+      Tbl.Params['Region'] := MasterData;
+      Tbl.Params['StDic'] := Tbl.Статья;      
+      Tbl.Params['DateFrom'] := DateFrom;
+      Tbl.Params['DateTo'] := DateTo;
+      V := CreateObject('Обработки.ДвижениеПоСтатьям');
+      V.Execute('Движение',Tbl);
+    end;
+  //ShowMessage('Запустить отчет по статьє ' + StName);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+splLists:TO4Splitter
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+Panel1:TO4Panel
+Splitter3:TO4Splitter
+dbgBalance:TO4DBGrid
+Panel2:TO4Panel
+ToolBar2:TO4ToolBar
+Panel3:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+eDateTo:TO4Edit
+eDateFrom:TO4Edit
+tbSelectDates:TO4ToolButton
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem1:TO4MenuItem
+miRefresh:TO4MenuItem
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+TVSRegion:TO4TableValueSource

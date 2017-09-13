@@ -1,0 +1,188 @@
+interface
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation
+
+const
+  ReportName = 'Перелік клієнтів, які святкують День народження ';
+
+Var
+  PeopleTbl : ICValueTable;
+  DateFrom, DateTo : DateTime;
+  PartYaers : Integer;
+  V: ICReport;  
+
+
+procedure CreateObjects;
+begin
+  PeopleTbl := CreateObject('ТаблицаЗначений');
+  PeopleTbl.AddColumn('НомерСтроки',vtcInteger,0);
+  PeopleTbl.AddColumn('Дата',vtcDate,0);
+  PeopleTbl.AddColumn('ДатаВыборки',vtcDate,0);
+  PeopleTbl.AddColumn('ПолноеНазвание',vtcString,200);
+  PeopleTbl.AddColumn('Телефон',vtcString,30);
+  PeopleTbl.AddColumn('Годовщина',vtcInteger,0);
+  PeopleTbl.AddColumn('Месяц',vtcInteger,0);
+  PeopleTbl.AddColumn('День',vtcInteger,0);
+  PeopleTbl.AddColumn('Партнер',vtcLink,0);
+  PeopleTbl.Open;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+ SetMenuDates(Sender, DateFrom, DateTo,
+              eDateFrom, eDateTo);
+ (Sender as TO4MenuItem).Checked := true;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure SetOneDate(Sender : TObject; var DateFrom, DateTo : DateTime);
+var
+  Date : DateTime;
+begin
+  try
+    Date := StrToDate((Sender as TO4Edit).Text);
+    case (Sender as TO4Edit).Tag of
+      0 : DateFrom := Date;
+      1 : DateTo := Date;
+    end;
+  except
+  end;
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDate(Sender, DateFrom, DateTo);
+end;
+
+procedure ВыполнитьОтчет;
+var
+  MasterDict : ICDictionary;
+  NumStr : Integer;
+begin
+  NumStr := 0;
+  PeopleTbl.Clear;
+  PeopleTbl.CopyDataToServer;
+  Server.AssignPeopleTbl(PeopleTbl.SrvMean,DateFrom,DateTo);
+  PeopleTbl.CopyDataFromServer;
+  PeopleTbl.Select;
+
+
+  PeopleTbl.SortBy('ДатаВыборки;ПолноеНазвание');
+  PeopleTbl.DoNumbering('НомерСтроки',1,1);
+
+  XGrid.ClearAll;
+  XGrid.AddSection('HedResp');
+  PeopleTbl.AddToXGrid(CtrlToVar(XGrid), 'DetResp', 'НомерСтроки;Дата;ПолноеНазвание;Телефон;Годовщина;Месяц;День' , 1, PeopleTbl.LineCount);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  CreateObjects;
+  XGrid.AddSection('HedResp');
+  ВыполнитьОтчет;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+begin
+  ВыполнитьОтчет;
+end;
+
+procedure RadioGroup1_Click(Sender : TObject);
+begin
+  XGrid.ClearAll;
+  XGrid.AddSection('HedResp');
+end;
+
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(V.GetActiveFormComment(), True);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure XGrid_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  case HSect of
+    'HedResp' :
+      begin
+        Vars.HedCaption := ReportName + ' з ' +
+        FormatDateTime('dd.mm.yyyy', DateFrom) + ' по ' + FormatDateTime('dd.mm.yyyy', DateTo);
+      end;
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel4:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+XGrid:TO4XGrid
+TableValueSource1:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+MenuItem17:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

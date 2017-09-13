@@ -1,0 +1,119 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, ФиксацияCL, ФиксацияПрибылиИЗатрат;
+
+implementation
+
+var
+  AccsGoods, AccsPart, AccsPartGood, AccsGoodCurrent, AccsGoodMotion, AccsInOutCome, AccsDocs : ISAccs;
+  ApplyTbl : ISValueTable;
+  ItemsInOutComeDic : ISDictionary;
+
+function GetPartSumBalance(Part: Variant): Decimal; Server;
+var
+  Proc : Decimal;
+begin
+  result := 0;
+  if not IsObjFocused(Part) then
+    exit;    
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  AccsPart.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Part);
+  result := AccsPart.СумОбщВал
+end;
+
+procedure ChangeStateUp(Doc:ISDocuments);
+var
+  DocDate : DateTime;
+  Sum, Col, PaymentSumVal, DocCourse : Decimal;
+  Dimensions, Fields, Resources: Variant;
+  Currency: ISDictionary; 
+  ServiceTbl : ISValueTable;
+  Constants : IS4VPAConst;
+begin                                                    
+  AccsDocs := CreateObject('Аккумуляторы.РасчетыПоДокументам');
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  ApplyTbl := CreateObject('ТаблицаЗначений');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  AccsInOutCome := CreateObject('Аккумуляторы.ДоходыРасходы');
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  if isNil(ItemsInOutComeDic) then
+   ItemsInOutComeDic := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');
+  Constants := GetConstants;
+  SetFldToApplyTbl(ApplyTbl); 
+  ServiceTbl := CreateObject('ТаблицаЗначений');
+  SetFldToServiceTbl(ServiceTbl);
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+    if VarAsBool(Doc.Товар.Услуга) then
+      AppendLineToServiceTbl(Doc,ServiceTbl)
+    else
+      CreateApplyTableExternal(Doc.Товар, Doc, ApplyTbl, AccsGoods, AccsPartGood);
+  Doc.Edit;
+  Doc.Наценка := ApplyTbl.Total('СумВалНац');
+  Doc.Post;
+  ApplyTbl.Select;
+  While ApplyTbl.SelectNext do
+    begin
+      //----oстатки товаров-----------------------------------------------
+      Currency := ApplyTbl.ВалютаТовара;
+      Dimensions := ArrayOf(ApplyTbl.@Товар, ApplyTbl.@Склад, ApplyTbl.Партия, midOutcome);
+      Fields     := ArrayOf(Currency, ApplyTbl.КурсТовара);
+      AccsGoods.ClearFieldBuffers();
+      AccsGoods.OutcomeDirect(Doc, Doc.ДатаДокумента, ApplyTbl.НомСтроки, Dimensions, ArrayOf(ApplyTbl.КолОбщ, ApplyTbl.СумВх, ApplyTbl.СумВхНДС, ApplyTbl.СумОтп,
+                             ApplyTbl.СумОтпНДС, ApplyTbl.СумНац, ApplyTbl.СумВалВх, ApplyTbl.СумВалОтп, ApplyTbl.СумВалНац), Fields);
+      //----партии товаров------------------------------------------------
+      RestructureExistedConsg(Doc, AccsPartGood, amtOutcome, ApplyTbl, 'КолОбщ');
+      //----остатки товара на сегодня-------------------------------------
+      MakeGoodMotionCurrent(AccsGoodCurrent, Doc, ApplyTbl, midOutcome, ApplyTbl.КолОбщ);
+      //  прибыль/расход
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions := ArrayOf(ApplyTbl.@Товар,Doc.@Партнер,Doc.@Статья,ApplyTbl.@ВалютаТовара,Doc.@Регион);
+      Resources  := ArrayOf(ApplyTbl.СумВалНац,ApplyTbl.КолОбщ,ApplyTbl.СумВалНац*ApplyTbl.КурсТовара);
+      Fields     := ArrayOf(ApplyTbl.КурсТовара);
+      AccsInOutCome.IncomeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;    
+  // Доходы от услуг
+  if ServiceTbl.LineCount>0 then
+    begin   
+      DocCourse := Doc.Валюта.GetTimedValue(Constants.UsedCurs, Doc.ДатаДокумента);
+      if DocCourse<=0 then DocCourse := 1;
+      ServiceTbl.Select;
+      While ServiceTbl.SelectNext do
+        begin
+          //  прибыль/расход
+          AccsInOutCome.ClearFieldBuffers();
+          Dimensions := ArrayOf(ServiceTbl.@Товар,Doc.@Партнер,Doc.@Статья,Doc.@Валюта,Doc.@Регион);
+          Resources  := ArrayOf(ServiceTbl.СуммаСтроки/DocCourse,ServiceTbl.Количество,ServiceTbl.СуммаСтроки);
+          Fields     := ArrayOf(DocCourse);
+          AccsInOutCome.IncomeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+        end;
+    end;
+  // Расчеты с партнерами
+  AccsPart.ClearFieldFilters();
+  AccsPart.AssignFields('Партнер;СумПрихВал=СуммаВВалюте;СумОбщВал=СуммаВВалюте;Валюта', Doc);
+  if VarAsBool(Doc.@АналитикаВзаиморасчета.IsFocused) then
+    AccsPart.АналитикаВзаиморасчета := Doc.@АналитикаВзаиморасчета;
+  AccsPart.Income(Doc, Doc.GetDate(), 0);    
+  // Расчеты по документу
+  AccsDocs.ClearFieldFilters();
+  AccsDocs.AssignFields('Партнер;СумПрихВал=СуммаВВалюте;СумОбщВал=СуммаВВалюте;Валюта', Doc);
+  AccsDocs.Док := Doc;
+  AccsDocs.Income(Doc, Doc.GetDate(), 0);
+end;
+
+procedure GetChangeStateUpEP (Doc : ISDocuments); server;
+begin
+  ChangeStateUp(Doc)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+begin
+  case Doc.GetDocState of
+    1 :
+      ChangeStateUp(Doc)
+  end;
+end;
+
+end.

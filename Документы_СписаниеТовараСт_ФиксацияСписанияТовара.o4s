@@ -1,0 +1,129 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, ФиксацияПрибылиИЗатрат, Фиксация;
+
+implementation
+
+var
+  AccsGood, AccsPartGood, AccsGoodCurrent : ISAccs;
+  ApplyTbl, MinTbl : ISValueTable;
+  Constants : IS4VPAConst;
+
+procedure CreateApplyTable(Doc : ISDocuments; var Accept : Boolean);
+begin
+  // отправка сообщения клиенту
+  Doc.NotifyClient(CheckAboutOverflow, 1, 2);
+  CreateApplyTableExternal(Doc, AccsGood, ApplyTbl, MinTbl);
+  Accept := not Doc.Terminated
+end;
+
+procedure ApplyTblToAccs(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+  PartGoodID : Double;
+  SumInNt, TaxIn, SumNt, Tax, Cnt, CurSum, OverSum, OverCurSum : Decimal;
+begin
+
+  Count := 1;
+  Total := Doc.LinesCount;
+  Doc.SelectLines;
+  Constants := GetConstants;
+  while Doc.SelectNextLine do
+    begin
+      Cnt := Doc.Количество;
+      SumInNt := Doc.Количество*Doc.ВхЦенаБезНДС;
+      TaxIn := SumInNt*Doc.СтавкаНДС;
+      SumNt := 0;
+      Tax := 0;
+      OverSum := -(Doc.Количество*Doc.Цена); // к входной стоимости еще добавлена курсовая разница;
+      CurSum := Doc.Количество*Doc.ЦенаВВалюте;
+      OverCurSum := -(Doc.Количество*Doc.ЦенаВВалюте);
+      if  RestructureExistedConsg(Doc, AccsPartGood, amtOutcome) then
+        PartGoodID := Doc.Партия;
+      //Остатки товаров
+      MakeGoodMotion(AccsGood, Doc, PartGoodID, midDiscard,
+        ArrayOf(Cnt, SumInNt, TaxIn, SumNt, Tax, OverSum, CurSum, 0, OverCurSum));
+      //oстатки товара на сегодня
+      MakeGoodMotionCurrent(AccsGoodCurrent, Doc, midDiscard, Cnt);
+      //  прибыль/расход
+      AppendRecAccsInOutCome(Doc,Null);
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+     end;
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP(AccsGoods : ISAccs; ApplyTbls : ISValueTable) : Variant; server;
+begin
+  AccsGood := AccsGoods;
+  ApplyTbl := ApplyTbls;
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  Result := EntryPoint(ApplyTblToAccs);
+end;
+
+procedure CanChangeStateUp(Data : ISDocuments; var Accept : Boolean);
+begin
+  Accept := True;
+  case Data.GetDocState of
+    0 :
+      begin
+        AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+        AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+        AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+        ApplyTbl := CreateObject('ТаблицаЗначений');
+        MinTbl := CreateObject('ТаблицаЗначений');
+        CreateApplyTable(Data, Accept);
+      end;
+    1 :
+      ;
+  end;
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      ApplyTblToAccs(Doc, Accept);
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  SumNt, SumInNt : Decimal;
+begin
+  case StrLowerCase(Synonym) of
+    'суммастрокибезндс' :
+      begin
+        SumNt := Doc.ЦенаБезНДС * Doc.Количество;
+        if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+          Value := RoundFloat(SumNt, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС)
+        else
+          Value := SumNt;
+      end;
+    'суммастроки' :
+      Value := Doc.ЦенаБезНДС * Doc.Количество * (1 + Doc.СтавкаНДС / 100);
+    'суммандсстроки' :
+      Value := Doc.ЦенаБезНДС * Doc.Количество * Doc.СтавкаНДС / 100; 
+  end
+end;
+
+end.

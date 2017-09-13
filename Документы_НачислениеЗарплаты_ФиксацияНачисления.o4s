@@ -1,0 +1,72 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, ФиксацияПрибылиИЗатрат,
+  РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+implementation
+
+var
+  AccPart, AccsGoodByInv, AccSt, AccsInOutCome : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;  
+  Dimensions, Fields, Resources: Variant;
+begin
+  //взаиморасчеты с партнерами
+  Doc.SelectLines;
+  Count := 1;
+  Total := 1;//Doc.LinesCount;
+ // while Doc.SelectNextLine do
+ //   begin
+      AccPart.ClearFieldBuffers();
+      AccPart.Партнер := Doc.@Партнер;
+      AccPart.Валюта := Doc.@Валюта;
+      AccPart.СумРасхВал := Doc.СуммаВВалюте;
+      AccPart.СумОбщВал := Doc.СуммаВВалюте;
+      AccPart.Outcome(Doc, Doc.GetDate, 0);
+
+      //  прибыль/расход
+      if VarAsBool(Doc.@Статья.IsFocused) then
+        begin
+          AccsInOutCome.ClearFieldBuffers();
+          Dimensions :=  ArrayOf(Null, Doc.@Партнер, Doc.@Статья, Doc.Валюта, Doc.Регион);
+          Resources  :=  ArrayOf(Doc.СуммаВВалюте, 1, Doc.Сумма);
+          Fields     :=  ArrayOf(Doc.Курс);
+          AccsInOutCome.OutcomeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+        end;
+     // отправка сообщения клиенту
+     if Count mod 10 = 0 then
+       Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+     inc(Count);
+  //  end;
+  Accept := true;
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPart := CreateObject('Аккумуляторы.РасчетыСПартнерами'); 
+  AccsInOutCome := CreateObject('Аккумуляторы.ДоходыРасходы');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccPart := CreateObject('Аккумуляторы.РасчетыСПартнерами'); 
+        AccsInOutCome := CreateObject('Аккумуляторы.ДоходыРасходы');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.

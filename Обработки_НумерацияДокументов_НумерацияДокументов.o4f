@@ -1,0 +1,129 @@
+object Form: TO4Form
+  Left = 0
+  Top = 0
+  Width = 344
+  Height = 280
+  HelpContext = 27450
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  Caption = 'Form'
+  TabOrder = 0
+  HelpFile = 'reports'
+  Transparent = False
+  VPAOnExecute.EventName = 'Form_Execute'
+  object BottomPanel: TO4Panel
+    Left = 1
+    Top = 250
+    Width = 342
+    Height = 29
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    TabOrder = 0
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 166
+      Top = 1
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 13
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        WordWrap = False
+        O4Action = actSave
+        VPAOnClick.EventName = 'btOK_Click'
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        WordWrap = False
+        O4Action = actCancel
+      end
+    end
+  end
+  object dbgData: TO4DBGrid
+    Left = 1
+    Top = 1
+    Width = 342
+    Height = 249
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    DragDisabled = False
+    Options = [dgEditing, dgTitles, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = TVS
+    TabOrder = 1
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'Документ'
+        Title.Caption = 'Документ'
+        Width = 240
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '02.03.2002'
+      end
+      item
+        O4FieldName = 'Номер'
+        Title.Caption = 'Номер'
+        Width = 96
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '02.03.2002'
+      end>
+  end
+  object edDoc: TO4Edit
+    Left = 59
+    Top = 167
+    Width = 121
+    Height = 21
+    EditStyle = fesListBox
+    Period.Enabled = False
+    Period.StrStartDate = '02.03.2002'
+    TabOrder = 2
+    Text = 'edDoc'
+    Visible = False
+  end
+  object TVS: TO4TableValueSource
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 59
+    Top = 77
+  end
+end

@@ -1,0 +1,426 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation
+const PayTypeCash=1;
+      PayTypeCard=2;   
+      PayTypeNameList='Оплата в кассу;Оплата картой';
+var
+  V: ICProcessing;
+  Constants: IC4VPAConst;
+  DocCurrency, PartnerBonus, Terminal, SelTerminal : ICDictionary;
+  DocSum, CardSum, KashGiveSum, RestSum, ToPaySum, CashPaySum, Course : Decimal;
+  ContractTbl, PayTbl : ICValueTable;
+  ContractList : ICValueList;
+  UseCardPay, UseFiscalPrinter, IsFirstKeyPress, ChangeLock, FormIsShow : boolean;
+  ContractDoc : ICDocuments;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  PlaySound('Ding');
+  V.Params['CardSum'] := CardSum;
+  V.Params['SumPay'] := CashPaySum;
+  V.Params['Sum'] := KashGiveSum;
+  V.Params['Terminal'] := Terminal;
+  V.Params['RestSum'] :=RestSum;
+  V.Params['AuthCode'] :=edAuthCode.Text;
+  if not IsNil(ContractList) and not IsNil(ContractTbl) and (ContractList.CurIndex<>-1) then
+   ContractTbl.FindByRecID(ContractList.GetValue(ContractList.CurIndex));
+  Form.ModalResult := mrOK;
+  Form.Close;
+end; 
+
+procedure TVS_VPATimedAfterScroll(Sender: TObject);
+begin 
+  ChangeLock := true;
+  edCount.Text := DecToStr(PayTbl.Sum);
+  ChangeLock := false;
+  pnTypeVlue.Caption := VarAsStr(PayTbl.Name);
+  pnCardContract.Visible := UseCardPay and (VarAsInt(PayTbl.PayType)=PayTypeCard);
+  edCount.SetFocus; 
+  IsFirstKeyPress := true;
+end; 
+
+procedure CheckSums;  //DocSum, CardSum, KashGiveSum, RestSum, ToPaySum, CashPaySum
+begin  
+ if UseCardPay and (CardSum>0) and not IsObjFocused(Terminal) then
+   begin
+    ToPaySum := 0;
+    RestSum := AbsD(DocSum - CardSum - KashGiveSum);
+    lbAlert.Caption := 'Не выбран терминал';
+    lbAlert.Visible :=true;
+    btOK.Enabled := false;
+   end   
+ else
+ if CardSum>DocSum then
+   begin
+    ToPaySum := 0;
+    RestSum := AbsD(DocSum - CardSum - KashGiveSum);
+    lbAlert.Caption := 'Оплата картой больше суммы документа';
+    lbAlert.Visible :=true;
+    btOK.Enabled := false;
+   end
+ else  
+ if UseCardPay and UseFiscalPrinter and (CardSum>0)  and (edAuthCode.Text='') then
+   begin
+    ToPaySum := 0;
+    RestSum := AbsD(DocSum - CardSum - KashGiveSum);
+    lbAlert.Caption := 'Не введен код авторизации';
+    lbAlert.Visible :=true;
+    btOK.Enabled := false;
+   end
+ else
+   begin
+     ToPaySum := DocSum - KashGiveSum - CardSum ;
+     if ToPaySum<=0 then
+       begin
+         RestSum := AbsD(ToPaySum);
+         ToPaySum := 0;
+         CashPaySum := DocSum - CardSum;
+         btOK.Enabled := true;
+       end
+     else
+       begin
+         RestSum := 0;
+         CashPaySum := KashGiveSum;
+         btOK.Enabled := false;
+       end; 
+     lbAlert.Visible :=false;
+   end;
+ pnSumToPay.Caption := DecToStr(ToPaySum,2);
+ pnSumRest.Caption := DecToStr(RestSum,2);
+end;         
+
+procedure FillContractList(ContractList:ICValueList);
+begin  
+ ContractList.UseControl(0);
+ ContractTbl.SortBy('НомСтроки');
+ ContractList.Clear;
+ ContractTbl.Select;
+ while ContractTbl.SelectNext do
+    ContractList.AddValue(ContractTbl.Комментарий, ContractTbl.RecID);
+ ContractList.UseControl(CtrlToVar(eTypeCard));
+ ContractTbl.SortBy('Активность');
+ if ContractTbl.Find(VarAsInt(true)) then
+   ContractList.CurIndex := ContractList.FindByValue(ContractTbl.RecID)
+ else
+   ContractList.CurIndex := 0;
+ ContractTbl.SortBy('НомСтроки');
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);    
+var i:integer;
+begin
+  UseCardPay := false;
+  V := Mean;
+  UseFiscalPrinter := V.HasParam('UseFiscalPrinter') and VarAsBool(V.Params['UseFiscalPrinter']);
+  if V.HasParam('DocCurrency') and IsObjFocused(V.Params['DocCurrency']) then
+    DocCurrency := V.Params['DocCurrency']
+  else
+    raise('Не указана валюта документа!');
+  Course := DocCurrency.GetTimedValue('КурсНаличный', CurrentDateTime);
+  if Course<=0 then Course := 1;
+  lbSumDoc.Caption := 'Сумма документа, '+DocCurrency.CodeField;
+  lbSumToPay.Caption := 'К оплате, '+DocCurrency.CodeField;  
+  lbSumRest.Caption := 'Здача, '+DocCurrency.CodeField;
+  Constants := GetConstants;  
+  cbUseMultiPay.Checked  := VarAsBool(Constants.РазрешитьМультиОплату);
+  DocSum := RoundDec(VarAsDec(Params),2);
+  ToPaySum := DocSum;
+  CardSum := 0;
+  CashPaySum := 0;
+  KashGiveSum := 0; 
+  pnSumDoc.Caption := DecToStr(DocSum,2);
+  pnSumToPay.Caption := DecToStr(ToPaySum,2);
+  pnSumRest.Caption := DecToStr(RestSum,2);
+  RestSum := 0;  
+  if V.HasParam('ContractTbl') and V.HasParam('Terminal') then
+      begin  
+        ContractList := CreateObject('СписокЗначений');
+        Terminal := CreateObject('Справочники.Терминалы');
+        Terminal.Find(V.Params['Terminal']);
+        ContractTbl := V.Params['ContractTbl'];
+        if isObjFocused(Terminal) and not IsNil(ContractTbl) and (ContractTbl.LineCount>0) then
+          begin  
+            UseCardPay := true; 
+            edTerminal.Text := Terminal.Название;
+            FillContractList(ContractList);
+           end;
+      end;
+
+  PayTbl := CreateObject('ТаблицаЗначений');
+  PayTbl.AddColumn('PayType', vtcInteger,0);
+  PayTbl.AddColumn('Name',vtcString,50);
+  PayTbl.AddColumn('Sum',vtcFFT,2);   
+  PayTbl.AddColumn('Num',vtcInteger,0);
+  PayTbl.Open;
+  PayTbl.SetColumnFormat('Sum','0.00'); 
+  PayTbl.Append;
+  PayTbl.PayType := PayTypeCash;
+  PayTbl.Name := ExtractWord(PayTypeCash,PayTypeNameList,';')+', '+DocCurrency.CodeField;
+  PayTbl.Sum := 0;
+  PayTbl.Post;  
+  if UseCardPay then
+    begin
+      PayTbl.Append;
+      PayTbl.PayType := PayTypeCard;
+      PayTbl.Name := ExtractWord(PayTypeCard,PayTypeNameList,';')+', '+DocCurrency.CodeField;
+      PayTbl.Sum := 0;
+      PayTbl.Post;
+    end; 
+  PayTbl.DoNumbering('Num',1,1);
+  CheckSums;
+  PayTbl.SortBy('PayType');
+  PayTbl.SelectFirst;
+  PayTbl.UseDataSource(CtrlToVar(TVS));  
+ // TVS_VPATimedAfterScroll(Form);
+end;
+
+procedure tbCancel_Click(Sender: TObject);
+begin
+    Form.ModalResult := mrCancel;
+end;
+
+
+procedure bt_Click(Sender: TObject);  
+Var
+  TOper : Integer;
+begin
+  PlaySound('Ding');
+  TOper := (Sender as TO4Button).Tag;
+  case TOper of
+    10:
+      if not IsFirstKeyPress and (StrPos(DecimalSeparator,edCount.Text)=0) then
+        edCount.Text := edCount.Text + DecimalSeparator;
+    11: edCount.Text := '';
+    12:
+      if StrLength(edCount.Text)>0 then
+        edCount.Text := StrCopy(edCount.Text, 0, StrLength(edCount.Text) - 1);
+    else
+      begin
+        if IsFirstKeyPress or (StrToDecDef(edCount.Text,0)=0) then
+          edCount.Text := VarAsStr(TOper)
+        else
+          edCount.Text := edCount.Text + VarAsStr(TOper);
+      end;
+  end;
+end;
+
+
+procedure ClearOtherPayType(PayTbl:ICValueTable; PayType:integer);
+var RecID : Double;
+begin
+  if PayTbl.IsFocused then
+    RecID := PAyTbl.RecID;
+  try       
+    TVS.AfterScrollLock := true;
+    PayTbl.DisableControls;
+    PayTbl.Select;
+    While PayTbl.SelectNext do
+     if VarAsInt(PayTbl.PayType)<>PayType then
+       begin
+         PayTbl.Edit;
+         PayTbl.Sum := 0;
+         PayTbl.Post;
+       end;
+  finally  
+    if RecID<>0 then
+      PayTbl.FindByRecID(RecID);
+    PayTbl.EnableControls;  
+    TVS.AfterScrollLock := false;
+  end;
+end;
+
+procedure edCount_Change(Sender: TObject);
+begin
+ if not ChangeLock and PayTbl.IsFocused then
+   begin
+     IsFirstKeyPress := false;
+     PayTbl.Edit;
+     PayTbl.Sum := StrToDecDef(edCount.Text, 0);
+     PayTbl.Post;
+     case VarAsInt(PayTbl.PayType) of
+       PayTypeCash:  // оплата в кассу
+        begin
+          KashGiveSum := VarAsDec(PayTbl.Sum);
+          if not cbUseMultiPay.Checked then
+            begin
+              CardSum := 0;
+              ClearOtherPayType(PayTbl,VarAsInt(PayTbl.PayType));
+            end;
+        end;
+       PayTypeCard:  // оплата картой
+        begin
+          CardSum := VarAsDec(PayTbl.Sum);
+          if not cbUseMultiPay.Checked then
+            begin
+              KashGiveSum := 0;
+              ClearOtherPayType(PayTbl,VarAsInt(PayTbl.PayType));
+            end;
+        end;
+     end;
+
+     CheckSums;
+   end;
+end; 
+
+procedure cbUseMultiPay_Click(Sender: TObject);
+begin   
+ if FormIsShow then
+   begin
+     if not cbUseMultiPay.Checked and PayTbl.IsFocused then
+       begin
+         case VarAsInt(PayTbl.PayType) of
+           PayTypeCash:  // оплата в кассу
+             CardSum := 0;
+           PayTypeCard:  // оплата картой
+             KashGiveSum := 0;
+         end;
+         ClearOtherPayType(PayTbl,VarAsInt(PayTbl.PayType));
+         CheckSums;
+       end;
+   end;
+end;
+
+{$D-}
+procedure dbgSales_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if PayTbl.IsFocused and Highlight then
+   BackColor := $00FFA0A0;
+end;
+{$D+}
+
+
+procedure miEnter_Click(Sender: TObject);
+begin
+ if btOK.Enabled then
+    btOK_Click(Form);
+end;
+
+procedure Form_Show(Sender: TObject);
+begin
+ TVS.AfterScrollLock := false;
+ TVS_VPATimedAfterScroll(Form);
+ FormIsShow := true;
+end;
+
+{$D-}
+procedure dbgSales_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+ if PayTbl.IsFocused then
+   case VarAsInt(PayTbl.PayType) of
+    PayTypeCash : Index1 := 11;
+    PayTypeCard : Index1 := 12;
+   end;
+end;
+{$D+}
+
+procedure miUp_Click(Sender: TObject);
+begin    
+  if PayTbl.IsFocused and (VarAsInt(PayTbl.Num)=1) then
+    PayTbl.SelectLast
+  else
+    PayTbl.SelectPrior;
+
+  dbgSales.SetFocus;
+  edCount.SetFocus;
+end;
+
+procedure edTerminal_ActionClear(Sender: TObject);
+begin
+ Nil(Terminal);
+ edTerminal.Text := '';   
+ ContractList.Clear;
+ CheckSums;
+end;
+
+procedure edTerminal_ActionExecute(Sender: TObject);  
+var DefName : string;
+begin
+ if IsNil(SelTerminal) then
+   SelTerminal := CreateObject('Справочники.Терминалы');
+ if SelTerminal.SelectInForm('',DefName,Null) then
+   begin
+     if IsNil(Terminal) then
+       Terminal := CreateObject('Справочники.Терминалы');
+     Terminal.Find(SelTerminal);  
+     edTerminal.Text := DefName;
+     ContractDoc := Terminal.Договор;
+     if IsObjFocused(ContractDoc) then
+       begin
+         ContractDoc.SaveContents('НомСтроки;Комментарий;Процент;ПроцентДоп;Активность', ContractTbl);
+         FillContractList(ContractList);
+       end;
+     CheckSums;
+   end;
+end;
+
+procedure edAuthCode_Change(Sender: TObject);
+begin
+ CheckSums;
+end;
+
+
+
+procedure eTypeCard_Change(Sender: TObject);
+begin
+ if FormIsShow then
+   begin
+     IsFirstKeyPress := true;
+     edCount.SetFocus;
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnCalc:TO4Panel
+bt7:TO4Button
+bt8:TO4Button
+bt9:TO4Button
+btMin:TO4Button
+btBack:TO4Button
+bt6:TO4Button
+bt5:TO4Button
+bt4:TO4Button
+bt1:TO4Button
+bt2:TO4Button
+bt3:TO4Button
+btPoint:TO4Button
+bt0:TO4Button
+edCount:TO4Edit
+pnTypeVlue:TO4Panel
+Panel2:TO4Panel
+dbgSales:TO4DBGrid
+pnCardContract:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+eTypeCard:TO4Edit
+edTerminal:TO4Edit
+edAuthCode:TO4Edit
+Panel3:TO4Panel
+lbAlert:TO4Label
+ToolBar1:TO4ToolBar
+btOK:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbCancel:TO4ToolButton
+Panel1:TO4Panel
+cbUseMultiPay:TO4CheckBox
+Panel4:TO4Panel
+lbSumToPay:TO4Label
+pnSumToPay:TO4Panel
+Panel5:TO4Panel
+lbSumDoc:TO4Label
+pnSumDoc:TO4Panel
+pnRest:TO4Panel
+lbSumRest:TO4Label
+pnSumRest:TO4Panel
+TVS:TO4TableValueSource
+PopupMenu:TO4PopupMenu
+miEnter:TO4MenuItem
+MenuItem1:TO4MenuItem
+miDown:TO4MenuItem
+miUp:TO4MenuItem

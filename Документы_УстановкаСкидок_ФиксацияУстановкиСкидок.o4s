@@ -1,0 +1,43 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, ФиксацияCL;
+
+implementation
+
+var
+  Accs : ISAccs;
+  ApplyTbl : ISValueTable;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc:ISDocuments);
+var Date: DateTime;
+begin  
+  Date := RoundDate(Doc.ДатаДокумента, rdDay, false);
+  while Date <= RoundDate(Doc.ДатаКон, rdDay, false) do
+    begin                                
+      Accs.ДатаСкидки := Date;
+      Accs.Income(Doc,Doc.GetDate,0);
+      Date := Date + 1;
+    end;
+end;
+
+procedure GetChangeStateUpEP (Doc : ISDocuments); server;
+begin
+  Accs := CreateObject('Аккумуляторы.УстановкаСкидок');
+  ChangeStateUp(Doc);
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+begin
+  case Doc.GetDocState of
+    1 :
+      begin
+        Accs := CreateObject('Аккумуляторы.УстановкаСкидок');
+        ChangeStateUp(Doc);
+      end;
+  end;
+end;
+
+end.
+

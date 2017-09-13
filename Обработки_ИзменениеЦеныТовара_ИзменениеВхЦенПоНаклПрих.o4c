@@ -1,0 +1,148 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, –асчеты, –абота—о—правочникамиCL;
+
+implementation 
+const Comment = '»зменение ¬х.цены во врем€ фиксации накладной прихода';
+Var MasterProc : ICProcessing;
+    ContentsTbl : ICValueTable;
+    GoodDic : ICDictionary;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean; 
+  GoodDic := CreateObject('—правочники.“овары');
+  ContentsTbl := Params;
+  ContentsTbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+
+procedure tbChangeInPrice_Click(Sender: TObject);
+begin
+ if ContentsTbl.IsFocused and (VarAsDec(ContentsTbl.¬х÷ена)<>VarAsDec(ContentsTbl.÷ена¬¬алюте—пр)) and
+   (MessageDlg('»зменить ¬х.цену?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   begin
+     ChangePrice(ContentsTbl.“овар, ContentsTbl.¬алюта¬х÷ена,ContentsTbl.÷ена¬¬алюте—пр,'¬х÷ена',Comment, 'EditInDoc');
+     ContentsTbl.Edit;
+     ContentsTbl.¬х÷ена := ContentsTbl.÷ена¬¬алюте—пр;  
+     ContentsTbl.IsCange := false;
+     ContentsTbl.Post;
+   end;
+end;
+
+procedure tbChangeAllInPrice_Click(Sender: TObject);
+begin
+ if MessageDlg('»зменить ¬х.цену дл€ всех товаров?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+   begin
+     ContentsTbl.Select;
+     While ContentsTbl.SelectNext do
+       if VarAsDec(ContentsTbl.¬х÷ена)<>VarAsDec(ContentsTbl.÷ена¬¬алюте—пр) then
+         begin
+           ChangePrice(ContentsTbl.“овар, ContentsTbl.¬алюта¬х÷ена,ContentsTbl.÷ена¬¬алюте—пр,'¬х÷ена',Comment, 'EditInDoc');
+           ContentsTbl.Edit;
+           ContentsTbl.¬х÷ена := ContentsTbl.÷ена¬¬алюте—пр; 
+           ContentsTbl.IsCange := false;
+           ContentsTbl.Post;
+         end;
+   end;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+ if ContentsTbl.IsFocused and (VarAsDec(ContentsTbl.¬х÷ена)<>VarAsDec(ContentsTbl.÷ена¬¬алюте—пр)) then
+   Index1 := 49;
+end;   
+
+procedure dbgData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if ContentsTbl.IsFocused and VarAsBool(ContentsTbl.IsCange) then
+    BackColor := $00FFB0B0;
+end;
+
+{$D+}
+
+
+procedure dbgData_DblClick(Sender: TObject);
+begin
+ if ContentsTbl.IsFocused then
+   begin
+     ContentsTbl.Edit;
+     ContentsTbl.IsCange := not VarAsBool(ContentsTbl.IsCange);
+     ContentsTbl.Post;
+   end;
+end;
+
+procedure miSelectAll_Click(Sender: TObject);
+var RecID : Double;
+begin
+ try   
+   if ContentsTbl.IsFocused then
+    RecID := ContentsTbl.RecID;
+   ContentsTbl.DisableControls;
+   ContentsTbl.Select;
+   While ContentsTbl.SelectNext do
+     begin
+       ContentsTbl.Edit;
+       ContentsTbl.IsCange := (Sender as TO4MenuItem).Tag;
+       ContentsTbl.Post;
+     end;
+ finally
+   if RecID<>0 then
+    ContentsTbl.FindByRecID(RecID);
+   ContentsTbl.EnableControls;
+ end;
+end;
+
+procedure tbChangeSelInPrice_Click(Sender: TObject);
+begin
+ if MessageDlg('»зменить ¬х.цену дл€ выделенных товаров?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+   begin
+     ContentsTbl.Select;
+     While ContentsTbl.SelectNext do
+       if VarAsBool(ContentsTbl.IsCange) and (VarAsDec(ContentsTbl.¬х÷ена)<>VarAsDec(ContentsTbl.÷ена¬¬алюте—пр)) then
+         begin
+           ChangePrice(ContentsTbl.“овар, ContentsTbl.¬алюта¬х÷ена,ContentsTbl.÷ена¬¬алюте—пр,'¬х÷ена',Comment, 'EditInDoc');
+           ContentsTbl.Edit;
+           ContentsTbl.¬х÷ена := ContentsTbl.÷ена¬¬алюте—пр;
+           ContentsTbl.IsCange := false;
+           ContentsTbl.Post;
+         end;
+   end;
+end;
+
+procedure miEdit_Click(Sender: TObject);
+begin
+ if ContentsTbl.IsFocused and GoodDic.Find(ContentsTbl.@“овар) then
+   begin
+     GoodDic.EditInForm('',1);
+     ContentsTbl.Edit;
+     ContentsTbl.¬х÷ена := GoodDic.¬х÷ена;
+     ContentsTbl.¬алюта¬х÷ена :=GoodDic.@¬алюта¬х÷ена;
+     ContentsTbl. урс¬х÷ена := GoodDic.¬алюта¬х÷ена.GetTimedValue(GetConstants.UsedCurs, ContentsTbl.OnDate);
+     if VarAsDec(ContentsTbl. урс¬х÷ена)<=0 then ContentsTbl. урс¬х÷ена := 1;
+     ContentsTbl.÷ена¬¬алюте—пр := VarAsDec(ContentsTbl.÷ена)/VarAsDec(ContentsTbl. урс¬х÷ена);    
+     ContentsTbl.Post;
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ToolBar1:TO4ToolBar
+tbChangeInPrice:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbChangeSelInPrice:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbChangeAllInPrice:TO4ToolButton
+dbgData:TO4DBGrid
+TVS:TO4TableValueSource
+pmData:TO4PopupMenu
+miEdit:TO4MenuItem
+MenuItem1:TO4MenuItem
+miChangeInPrice:TO4MenuItem
+miChangeSelInPrice:TO4MenuItem
+miChangeAllInPrice:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSelectAll:TO4MenuItem
+miClearAll:TO4MenuItem

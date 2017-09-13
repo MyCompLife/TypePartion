@@ -1,0 +1,76 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+end;
+
+procedure miPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null)
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+splCtg:TO4Splitter
+CtgPanel:TO4Panel
+dbtCtg:TO4DBTreeView
+tbrCtg:TO4ToolBar
+tbAddLevel:TO4ToolButton
+tbEditLevel:TO4ToolButton
+tbDelLevel:TO4ToolButton
+DataPanel:TO4Panel
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+pmAddLevels:TO4PopupMenu
+pmiAddBros:TO4MenuItem
+pmiAddChild:TO4MenuItem
+pmCountry:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

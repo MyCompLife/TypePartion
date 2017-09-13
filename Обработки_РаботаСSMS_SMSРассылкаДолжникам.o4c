@@ -1,0 +1,182 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСSMS, РаботаСПеременными;
+
+implementation
+
+var PartTbl, ResultTbl : ICValueTable;
+    DateTo : DateTime;
+    CursorVis : TCursor;
+    PaySum : Decimal;
+    PayDelay :integer;
+    Options : ICOptions;  
+    MYF : ICDictionary;
+    MYFName:string;
+procedure GetResultTbl(PaySum : Decimal; PayDelay :integer);
+begin
+  ResultTbl.UseDataSource(0);
+  PartTbl.Select;
+  ResultTbl.Clear;
+  While PartTbl.SelectNext do
+   if (VarAsDec(PartTbl.СумКон,0)>PaySum) and
+      (VarAsDec(PartTbl.ПросрочкаОплаты,0)>PayDelay) then
+    begin
+      ResultTbl.Append;
+      ResultTbl.AssignFields('Партнер;Регион;ПросрочкаОплаты;СумКон',PartTbl);
+      ResultTbl.Post;
+    end; 
+  ePartCount.Text := IntToStr(ResultTbl.LineCount);
+  ResultTbl.UseDataSource(CtrlToVar(TVS));
+end;  
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var i:integer;
+begin
+ try
+  PartTbl := Params[0];
+  DateTo :=  Params[1];
+  if PartTbl.LineCount=0 then
+   begin
+    ShowMessage('Список партнеров пустой');
+    Form.ModalResult := mrCancel;
+    Form.Close;
+   end;
+ except
+  ShowMessage('Не заданы параметры обработки');
+  Form.ModalResult := mrCancel;
+  Form.Close;
+ end;   
+ ResultTbl := CreateObject('ТаблицаЗначений');
+ PartTbl.CopyColumnsTo(ResultTbl);
+ GetResultTbl(0,0);
+ Options := CreateObject('ОпцииКлиента');
+ if VarAsStr(Options.GetServerPrm('ТекстSMSСообщенияОПросрочке'))<>'' then
+  mTextMessage.Lines.Text := VarAsStr(Options.GetServerPrm('ТекстSMSСообщенияОПросрочке'));  
+ MYF := CreateObject('Справочники.ВашеПредприятие');
+ if MYF.Select and MYF.SelectNext then
+   MYFName := MYF.NameField
+ else
+   begin
+     MYFName := '';
+     ShowMessage('Данные о Вашем предприятии не заполнены! Заполните их!');
+   end;
+end;
+
+procedure btOK_Click(Sender: TObject);
+var SMSDoc : ICdocuments;
+    EmplEditCtrl : TO4DBEdit;
+    ReportDate, tmpStr : string;
+    TLF : ICDictionary;
+begin
+  if mTextMessage.Lines.Text='' then
+   begin
+    ShowMessage('Введите текст сообщения');
+    exit;
+   end;
+    PaySum := StrToDecDef(ePaySum.Text,0);
+    if PaySum<0 then
+     begin
+      ShowMessage('Задолженость дожна быть больше 0');
+      exit;
+     end;
+    PayDelay := StrToIntDef(ePayDelay.Text,0);
+    if PayDelay<0 then
+     begin
+      ShowMessage('Просрочка дожна быть больше 0');
+      exit;
+     end; 
+    
+    // Создаем список партнеров задолженость которых отвечает условиям
+    GetResultTbl(PaySum,PayDelay);
+
+    if ResultTbl.Linecount=0 then
+     begin
+      ShowMessage('Нет задолженостей отвечающих заданым условиям');
+      exit;
+     end; 
+ try
+    CursorVis := WaitCursorStart;
+    SMSDoc := CreateSMSDoc;
+    SMSDoc.ИспОбщТекстСообщения := false;
+    // Заполнение табличной части документа
+    ReportDate := DateToStr(DateTo);
+    TLF := CreateObject('Справочники.Телефоны');
+    ResultTbl.Select;
+    While ResultTbl.SelectNext do
+     begin  
+      tmpStr := ReplaceOneStrWithAnother(mTextMessage.Lines.Text,'<<Долг>>',DecToStr(ResultTbl.СумКон,2));
+      tmpStr := ReplaceOneStrWithAnother(tmpStr,'<<Дата>>',VarAsStr(DateTo));
+      tmpStr := ReplaceOneStrWithAnother(tmpStr,'<<Просрочка>>',VarAsStr(ResultTbl.ПросрочкаОплаты));
+      if VarAsBool(ResultTbl.@Регион.IsFocused) and MYF.FindByField('Регион',ResultTbl.@Регион, false) then
+        tmpStr := ReplaceOneStrWithAnother(tmpStr,'<<ВашеПредприятие>>',MYF.NameField)
+      else
+        tmpStr := ReplaceOneStrWithAnother(tmpStr,'<<ВашеПредприятие>>',MYFName);
+      AppendLineToSMSDoc(SMSDoc,ResultTbl.Партнер,SelectionTelByPartner(ResultTbl.Партнер,TLF), tmpStr);
+     end;
+    CalcAllSMSCounts(SMSDoc);
+    CalcTotalSumSMSDoc(SMSDoc);
+    SMSDoc.Post;
+    SMSDoc.EditInForm('SMSРассылка',1);
+ finally
+    SetCursor(CursorVis);
+    Form.ModalResult := mrOK;
+    Form.Close;
+   end;
+end;
+
+
+procedure PageControl1_Changing(Sender: TObject; var AllowChange: boolean);
+begin
+ AllowChange := true;
+ if PageControl1.ActivePage.Tag=0 then
+  begin
+   PaySum := StrToDecDef(ePaySum.Text,0);
+   if PaySum<0 then
+    begin
+     ShowMessage('Задолженость дожна быть больше 0');
+     AllowChange := false;
+     exit;
+    end;
+   PayDelay := StrToIntDef(ePayDelay.Text,0);
+   if PayDelay<0 then
+    begin
+     ShowMessage('Просрочка дожна быть больше 0');
+      AllowChange := false;
+     exit;
+    end;
+   GetResultTbl(PaySum,PayDelay);
+  end;
+end;
+
+procedure tbSave_Click(Sender: TObject);
+begin
+ Options.SetServerPrm('ТекстSMSСообщенияОПросрочке',mTextMessage.Lines.Text);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+PageControl1:TO4PageControl
+tsMain:TTabSheet
+Label7:TO4Label
+mTextMessage:TO4Memo
+GroupBox1:TO4GroupBox
+Label4:TO4Label
+Label5:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+ePayDelay:TO4Edit
+ePaySum:TO4Edit
+Panel3:TO4Panel
+Label1:TO4Label
+ToolBar1:TO4ToolBar
+tbSave:TO4ToolButton
+tsPartList:TTabSheet
+dbgPartList:TO4DBGrid
+Panel2:TO4Panel
+Label9:TO4Label
+ePartCount:TO4Edit
+Panel1:TO4Panel
+btCancel:TO4Button
+btOk:TO4Button
+TVS:TO4TableValueSource

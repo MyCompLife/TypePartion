@@ -1,0 +1,146 @@
+interface
+
+uses 
+  System, DispIntf, ConstNames;
+
+function DefaultOptions(CheckFirst : Boolean = True) : ICOptions;
+function DefaultConstants(CheckFirst : Boolean = True) : IC4VPAConst;
+
+implementation
+
+function GetActiveCurrency:ICDictionary;
+var Currency:ICDictionary;
+begin
+  Currency := CreateObject('—правочники.¬алюты');
+  if Currency.FindByField('јктивность', true, false) then
+    Result := Currency;
+end;
+
+function DefaultOptions(CheckFirst : Boolean = True) : ICOptions;
+begin
+  Result := CreateObject('ќпции лиента');
+  if not (CheckFirst and VarAsBool(Result.GetServerPrm(NoFirstStart))) then
+    begin
+      Result.SetServerPrm(CountAck, True);
+      Result.SetServerPrm(ShowCaptions, True);
+      Result.SetServerPrm(CaptionsList, False);
+      Result.SetServerPrm(Flat, True);
+      Result.SetServerPrm(Transparent, True);
+      Result.SetServerPrm(GridReadOnly, True);
+      Result.SetServerPrm(FixAck, True);
+      Result.SetServerPrm(DelAck, True);
+      Result.SetServerPrm('CloseAck', True);
+      Result.SetServerPrm(RefreshOnEnter, True);
+      Result.SetLocalPrm(DelayTime, 1000);
+      Result.SetServerPrm(ImportEnabled, False);
+      Result.SetServerPrm(DirectPrint, False);
+      Result.SetServerPrm(ShowCodeUnitName, True);
+      Result.SetServerPrm(FixPays, False);
+      Result.SetServerPrm(DatesForReport, 0);
+      Result.SetServerPrm(NoFirstStart, True);
+      //    Result.SetServerPrm(CalcGoodCount, True);
+      Result.SetServerPrm(CheckZero, True);
+      Result.SetServerPrm(StateOnOpen, 1);
+      Result.SetServerPrm(StateOnOpenInplace, 0);
+      Result.SetServerPrm(NoPayNormOpt, 12969963);
+      Result.SetServerPrm(NoPaySelOpt, 8750588);
+      Result.SetServerPrm(BlZeroOpt, 15006971);
+      Result.SetServerPrm(BlFZeroOpt, 605377);
+      Result.SetServerPrm(BlZeroSelOpt, 10725370);
+      Result.SetServerPrm(BlFZeroSelOpt, 9828343);
+    end;
+end;
+
+function DefaultConstants(CheckFirst : Boolean = True) : IC4VPAConst;
+var
+  Currency : ICDictionary;
+  Cursor : TCursor;
+  CurNatCode : string;
+begin
+  Result := CreateObject(' онстанты');
+  if not (CheckFirst and VarAsBool(Result.Ќеѕервый«апуск)) then
+    try
+      Cursor := WaitCursorStart;
+      Result.ProcentPDV := 0;
+      //реклама
+      Result.—тавкаЌЌ– ол1 := 0.1;
+      Result.—тавкаЌЌ– олЅольше1 := 0.5;
+
+      Result.PayDate := 3;
+      Result.Ќе»спользовать—рокќплаты := 0;
+      Result.UseNalCourse := False;
+      Result.UsedCurs := ' урсЌацЅанка';
+      Result.‘ормат÷ены√–Ќ := '0.00#####';
+      Result.‘ормат÷ены¬ал := '0.00#####';
+      Result.‘ормат—ум√–Ќ := '0.00##';
+      Result.‘ормат—ум¬ал := '0.00##';
+      Result.‘ормат ол := '0.#####';
+      Result.‘ормат урс := '0.00####';
+      Result.ѕроцентЅанка := 1;
+      Result.ѕроцентѕенс := 1;
+      Result.SWIFT := 10;
+      Result.—умма омиссии := 10;
+      Result.ѕроц омиссии := 0.2;
+      Result.Ѕанк—умма := 5000;
+      Result.Ќольѕроц := 0;
+      // проверка валют - отключена 29.06.2004
+      {Currency := CreateObject('—правочники.¬алюты');
+      if Currency.FindByField('Ќац¬алюта', True, False)
+        then CurNatCode := Currency. од else CurNatCode := '';
+      if (not Currency.FindByField('јктивность', True, False)) or (CurNatCode='') then begin
+        if CurNatCode = '' then CurNatCode := '√–Ќ';
+        if Currency.IsFocused or Currency.FindByCode(CurNatCode, False) then Currency.Edit else begin
+          Currency.Append;
+          Currency. од := CurNatCode;
+          Currency.Ќазвание := '√ривна ”краины';
+        end;
+        Currency.Ќац¬алюта := True;
+        Currency.јктивность := True;
+        Currency.SetTimedValue(' урсЌацЅанка', 0, 1);
+        Currency.SetTimedValue(' урсЌаличный', 0, 1);
+        Currency.Post;
+        Currency.ApplyUpdates;
+      end;}
+      Result.”четƒата := True;
+      Result.”четѕо—редней—тоим := False;
+      Result.StartTaxDate := EncodeDate(GetYear(CurrentDate),
+        GetMonth(RoundDate(CurrentDate, rdYear, False)),
+        GetDay(RoundDate(CurrentDate, rdYear, False)));
+      Result.EndTaxDate := EncodeDate(GetYear(CurrentDate),
+        GetMonth(RoundDate(CurrentDate, rdYear, True)),
+        GetDay(RoundDate(CurrentDate, rdYear, True)));
+      //зарплата
+      Result.ƒети := 2;
+      Result.Ќеоблагћин := 17;
+      Result.—тавкаЌ‘Ћ := 15;
+      Result.—тавкаЌ‘Ћѕревышение«ѕ := 17;
+      Result.ѕереходной оэф—оцЋьготы := 50;
+      Result.–егул«ѕ := True;
+      Result.ћин«арплатаЌач√ода := 941;
+      Result.ѕрожитћинимумЌач√ода := 941;
+      Result.ћакс«арплата := 14115;
+      Result.≈—¬—лужащий := 3.6;
+      Result.≈—¬—лужащийЅольничные := 2;
+      Result.≈—¬—лужащий онтракт := 2.6;
+      Result.≈—¬ѕредпр := 36.76;
+      Result.≈—¬ѕредпр»нвалид := 8.41;
+      Result.≈—¬ѕредпрЅольничные := 33.2;
+      Result.≈—¬ѕредпр онтракт := 34.7;
+      Result. оефƒл€Ќалога—ƒоходов := 1;
+      Result. оэф¬ыплатыјванса := 1;
+      //выплата налоговов при авансовых платежах
+      Result.»нформаци€ѕро–абочуюЌеделю := Bits(2, 3, 4, 5, 6);
+      Result.¬ыплатыЌалоговјванс := Bits(1, 2, 5); //выплата всех видов налога от суммы с налогом
+
+      Result.¬алюта÷ена”молч := GetActiveCurrency;
+      Result.¬алютаќпт÷ена”молч := GetActiveCurrency;
+      Result.¬алюта рќпт÷ена”молч := GetActiveCurrency;
+
+
+      Result.Ќеѕервый«апуск := True;
+    finally
+      WaitCursorFinish(Cursor);
+    end;
+end;
+
+end.

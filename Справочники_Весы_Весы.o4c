@@ -1,0 +1,70 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation      
+
+var
+  MasterData : ICDictionary;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');  
+  edType.Text := MasterData.Тип; 
+  edSpeed.Text := MasterData.Скорость;
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  MasterData.Тип := edType.Text;
+  if MasterData.Тип = '' then
+    raise('Выберите тип весов!');
+  MasterData.Скорость := VarAsInt(edSpeed.Text);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+lbCashServerProc:TO4Label
+lbCashServerName:TO4Label
+Panel5:TO4Panel
+LinkImage1:TO4LinkImage
+dbeName:TO4DBEdit
+edType:TO4Edit
+gbComSettings:TO4GroupBox
+lbCOMPortNumber:TO4Label
+Label1:TO4Label
+dbeCOMPortNumber:TO4DBEdit
+edSpeed:TO4Edit
+gbInterfaceType:TO4GroupBox
+rbCom:TO4RadioButton
+rbEthernet:TO4RadioButton
+Panel4:TO4Panel
+lbTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem

@@ -1,0 +1,343 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, РаботаСОбъектами, Reports, XMLИмпортЭкспорт, РаботаСТаблицамиЗначенийCL;
+
+
+implementation
+
+var
+  AccsGood, AccsPartGood, AccsDiscount : ISAccs;
+  TblPartGood, GoodsTbl, RegionsTbl, CtgTbl, PartTbl, BrandTbl, GroupTbl, SizesTbl, ColorsTbl, ActionTbl, DiscTbl, StoreTbl : ISValueTable;
+  RegionsLst, StoresLst, PartGoodList,PartList, GoodsList : ISValueList;
+  Partner, Store : Variant;
+  Date : DateTime;
+  ShowCodeUnitname : boolean;
+  UseLevel : boolean;
+  Items : ISDictionary;
+  DataDir : string;
+  TxtList : TStringList;
+  Course, MinCount: Decimal;
+  Сonstants: IS4VPAConst;  
+  TblLocal: ISValueTable;
+
+function FileNamesDoc(FileName:String):String;server;
+begin
+  DataDir := FileName;
+end;
+
+procedure ExportTxt;
+begin
+  try
+    TxtList := CreateStringList;
+    GoodsTbl.Select;
+    while GoodsTbl.SelectNext do
+      begin
+        TxtList.Add(VarAsStr(GoodsTbl.Товар.НазвТовара)+'|'+ VarAsStr(GoodsTbl.code)+'|'+ VarAsStr(GoodsTbl.retail_price)+'|'+
+                    VarAsStr(GoodsTbl.cat_code)+'|'+ VarAsStr(GoodsTbl.Категория)+'|'+ VarAsStr(GoodsTbl.Товар.Информация));
+      end;
+  finally
+    TxtList.SaveToFile(DataDir);
+    TxtList.Free
+  end;
+end;
+
+procedure CreateSrvObjects; server;
+begin
+ AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+ AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+ AccsDiscount := CreateObject('Аккумуляторы.УстановкаСкидок');
+ TblPartGood := CreateObject('ТаблицаЗначений');
+ TblPartGood.Close();
+ TblPartGood.AddColumn('DimensionID', lftFloat, 0);
+
+ TblPartGood.Open();
+ PartList := CreateObject('СписокЗначений');
+ PartGoodList := CreateObject('СписокЗначений');
+end; 
+
+procedure CheckLocalTbl(var TblLocal: ISValueTable);
+begin
+  if isNil(TblLocal) then
+    begin
+      TblLocal := CreateObject('ValueTable');
+      TblLocal.AddColumn('code', vtcString, 3);
+      TblLocal.AddColumn('title', vtcString, 250);
+      TblLocal.AddColumn('description', vtcMemo, 0);
+      TblLocal.Open;
+    end;
+end;                                                      
+
+procedure CreateDicsTbl(DicName: String; Tbl: ISValueTable);
+var
+  tmpDic: ISDictionary; 
+  tmpTbl: ISValueTable;
+begin  
+  tmpTbl := CreateObject('ValueTable');
+  tmpTbl.Open;
+  tmpDic := CreateObject('Справочники.' + DicName);
+  tmpDic.Select;
+  tmpDic.SaveToValueTable('',tmpTbl,1,tmpDic.RecordCount);
+  tmpTbl.AppendTo('Код=code;Название=title',Tbl);
+end;
+
+procedure SetGoods(Doc:ISProcessing; var Accept : boolean);
+var
+ Dims: Double;
+ b: boolean;
+ CtgName: String;
+ Ctg, GoodDic, ModelsDic, tmpModelsDic, PartDic, EmailDic, PhoneDic, StoreDic, DiscontDic: ISDictionary;
+ i, total, count, j: Integer;
+ tmpTbl, tmpTbl2, tmpTbl3, tmpTbl4, modelsTbl: ISValueTable;
+ ModelsList, tmpList: ISValueList;
+ tmpString: String;
+ ОтображатьНаСайте: Boolean;
+begin
+  Сonstants := GetConstants;
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+  AccsPartGood.ClearFieldBuffers();
+  AccsPartGood.ClearFieldFilters();
+  PartList.Clear();
+  Date := RoundDate(Date, rdDay, true);
+  GoodsTbl.SortBy('');
+  ModelsList := CreateObject('ValueList');
+  //ModelsDic := CreateObject('Справочники.МоделиГотовойПродукции');
+  DiscontDic := CreateObject('Справочники.ДисконтныеКарты');
+  tmpModelsDic := CreateObject('Справочники.Товары');
+  GoodDic := CreateObject('Справочники.Товары');
+  tmpTbl := CreateObject('ValueTable');
+  tmpTbl.Open;  
+  tmpTbl4 := CreateObject('ValueTable');
+  tmpTbl4.AddColumn('self',vtcLink,0);
+  tmpTbl4.AddColumn('КолОбщ', vtcFFT,5);  
+  tmpTbl4.AddColumn('Номер', vtcInteger,0);
+  tmpTbl4.Open;
+  modelsTbl := CreateObject('ValueTable');
+  modelsTbl.Open;
+  tmpTbl3 := CreateObject('ValueTable');
+  tmpTbl3.AddColumn('code',vtcString,200);
+  tmpTbl3.AddColumn('good', vtcString,20);
+  tmpTbl3.Open;
+  tmpList := CreateObject('ValueList');
+
+  CreateDicsTbl('Регионы', RegionsTbl);
+  CreateDicsTbl('Производители', BrandTbl);
+  CreateDicsTbl('ГруппыТоваров', GroupTbl);
+
+  Ctg := CreateObject('Справочники.Товары');
+  Ctg.IncludeOnlyLevels(true);
+  //ModelsDic.SetFieldFilter('ОтображатьНаСайте','=',true,'','',Null);
+  for i := 0 to GoodsList.Count-1 do
+    if Ctg.Find(GoodsList.GetValue(i)) then
+      begin
+        //----------------------------------------------------
+        //------------- Заполнение категорий -----------------
+        //----------------------------------------------------
+        CtgTbl.Append;
+        CtgTbl.code := Ctg.Код;
+        CtgTbl._Default['title'] := Ctg.НазвТовара;
+        if VarAsBool(Ctg.GetParent.IsFocused) then
+          CtgTbl.parentcat := Ctg.GetParent.Код
+        else
+          CtgTbl.parentcat := 0;
+        CtgTbl.ValueStrID := FloatToHexStr(Ctg.GetUniID);
+        CtgTbl.Post;
+        //----------------------------------------------------
+        //----------------- Подбор моделей -------------------
+        //----------------------------------------------------
+        tmpModelsDic.SetFieldFilter('ОтображатьНаСайте','=',true,'','',Null);
+        tmpModelsDic.UseParent(Ctg);
+        tmpModelsDic.Select;
+        tmpModelsDic.SaveToValueTable('Модель;Код', modelsTbl, 1, tmpModelsDic.RecordCount);
+        modelsTbl.GroupBy('Модель','');
+        modelsTbl.DoGetLinks('Код=Модель.Код');
+
+        //ModelsDic.CancelFieldFilter('Категория');
+        //ModelsDic.SetFieldFilter('Категория','=',GoodsList.GetValue(i),'','',Null);
+        //ModelsDic.Select;
+        total := modelsTbl.LineCount;
+        count := 1;
+        modelsTbl.Select;
+        while modelsTbl.SelectNext do
+          begin
+            GoodsTbl.Append;
+            GoodsTbl.Товар_D := modelsTbl.Модель;
+            GoodsTbl.cat := Ctg.Код;
+            GoodsTbl.РазмерныйРяд_D := GoodsTbl.Товар_D.РазмерныйРяд;
+            GoodsTbl.ЦветовойРяд_D := GoodsTbl.Товар_D.ЦветовойРяд;
+            //----------------------------------------------------
+            //------------ Заполнение группы и бренда товара --------------
+            //----------------------------------------------------
+            if VarAsBool(GoodsTbl.Товар_D.@Группа.IsFocused) then
+              GoodsTbl.group := GoodsTbl.Товар_D.Группа.Код;
+            if VarAsBool(GoodsTbl.Товар_D.@Производитель.IsFocused) then
+              GoodsTbl.brand := GoodsTbl.Товар_D.Производитель.Код;
+            //----------------------------------------------------
+            //----- Заполнение цветового и размерного ряда -------
+            //----------------------------------------------------
+            GoodDic.CancelFieldFilter('Модель');
+            GoodDic.SetFieldFilter('Модель','=',modelsTbl.Модель,'','',Null);
+            GoodDic.Select;
+            tmpTbl.Clear;
+            GoodDic.SaveToValueTable('',tmpTbl,0,GoodDic.RecordCount);
+            tmpList.Clear;
+            tmpTbl.GroupToList('SELF', tmpList);
+            AccsGood.ClearFieldBuffers;
+            AccsGood.ClearFieldFilters;
+            AccsGood.SetFieldFilter('Товар',tmpList);
+            AccsGood.SetFieldFilter('Склад',StoresLst);
+            tmpTbl.DoCalculation('Номер','0');
+            AccsGood.IncludeZeroRest := false;   
+            tmpTbl4.Clear;
+            AccsGood.AppendGroupRestToValueTable(Date, 'Товар=SELF;КолОбщ', tmpTbl4);
+            tmpTbl4.SortBy('КолОбщ');
+            tmpTbl4.Select;
+            while tmpTbl4.SelectNext do
+              if tmpTbl4.КолОбщ > 0 then
+                break
+              else
+                begin
+                  tmpTbl4.Delete;
+                  tmpTbl4.Select;
+                end;  
+            tmpTbl4.DoCalculation('Номер','1');
+            tmpTbl4.AppendTo('SELF;Номер',tmpTbl);
+            tmpTbl.GroupBy('SELF','Номер');
+            tmpTbl.DoGetLinks('Модель=SELF.Модель');
+            tmpTbl.DoGetLinks('Код=Модель.Код;Цвет=SELF.Цвет;КодЦвета=SELF.КодЦвета');
+            tmpTbl.AppendTo('Код=good;КодЦвета=code;Цвет=title;Номер=active',ColorsTbl);
+
+            tmpTbl2 := CreateTblFromBLOBS(GoodsTbl.РазмерныйРяд_D);
+            if not isNil(tmpTbl2) then
+              begin
+                tmpTbl3.Clear;
+                tmpTbl2.AppendTo('Название=code',tmpTbl3);
+                tmpTbl3.Select;
+                while tmpTbl3.SelectNext do
+                  begin
+                    tmpTbl3.Edit;
+                    tmpTbl3.good := GoodsTbl.Товар_D.Код;
+                    tmpTbl3.Post;
+                  end;
+                tmpTbl3.AppendTo('code;good',SizesTbl);
+              end;
+            GoodsTbl.Post;
+            Doc.NotifyClient('Подбор моделей для сайта: ' + IntToStr(count) + ' : ' + IntToStr(total)
+                             + ', катигория:'+ IntToStr(i+1) + ' : ' + IntToStr(GoodsList.Count),count,total);
+            inc(count);
+          end;
+        GoodsTbl.DoGetLinks('article=Товар_D.Код;'
+                     +'prodID=Товар_D.КодПроизводителя;'
+                     +'title=Товар_D.Название;'
+                     +'description=Товар_D.Информация'
+                     +'price_0=Товар_D.Цена;'
+                     +'price_1=Товар_D.ОптЦена;'
+                     +'price_2=Товар_D.КрОптЦена;'   
+                     +'count=Товар_D.КолВУпаковке');
+        SizesTbl.DoCalculation('active','1');
+      end;
+
+  PartDic := CreateObject('Справочники.ЮрПартнеры');
+  EmailDic := CreateObject('Справочники.Email');
+  EmailDic.SetFieldFilter('Активность','=',VarAsInt(true),'','',Null);
+  PhoneDic := CreateObject('Справочники.Телефоны');
+  PhoneDic.SetFieldFilter('Активность','=',VarAsInt(true),'','',Null);
+  PartDic.SetFieldFilter('ЭкспортНаСайт','=',1,'','',Null);
+  for i := 0 to RegionsLst.Count - 1 do
+    begin
+      PartDic.SetFieldFilter('Регион','=',RegionsLst.GetValue(i),'','',Null);
+      PartDic.Select;
+      total := PartDic.RecordCount;
+      count := 1;
+      while PartDic.SelectNext do
+        begin
+          PartTbl.Append;
+          PartTbl.login := PartDic.Логин;
+          PartTbl._Default['title'] := PartDic.Название;
+          PhoneDic.UseMaster(PartDic);
+          PhoneDic.Select;
+          if PhoneDic.SelectNext then
+            PartTbl.phone := PhoneDic.Номер;
+          EmailDic.UseMaster(PartDic);
+          EmailDic.Select;
+          if EmailDic.SelectNext then
+            PartTbl.email := EmailDic.Адрес;
+          case VarAsStr(PartDic.ТипЦены) of
+           'Цена': PartTbl.price_type := 0;
+           'ОптЦена': PartTbl.price_type := 1;
+           'КрОптЦена': PartTbl.price_type := 2;
+          end;
+          PartTbl.percent := PartDic.ГруппаСкидки.СкидкаНадбавка;
+          PartTbl.region := PartDic.Регион.Код;
+          PartTbl.Post;
+
+          DiscontDic.UseMasterAndSelect(PartDic);
+          while DiscontDic.SelectNext do
+            begin
+              DiscTbl.Append;
+              DiscTbl.code := DiscontDic.Код;
+              DiscTbl.partner := PartDic.Логин;
+              DiscTbl.Post;
+            end;
+          Doc.NotifyClient('Выгрузка партнеров региона ' + VarAsStr(RegionsLst.GetValue(i).Название) + ': ' + IntToStr(count) + ' : ' + IntToStr(total),count,total);
+          inc(count);
+        end;
+    end;
+
+  AccsDiscount.SetFieldFilter('ДатаСкидки',CurrentDate);
+  AccsDiscount.AppendGroupMotionToValueTable(0,400000,amtBoth,'Document=Document_D',-1,ActionTbl);
+  ActionTbl.DoGetLinks('date_from=Document_D.ДатаДокумента;date_to=Document_D.ДатаКон;'+
+                       'ТипЦены_D=Document_D.ТипЦены;percent=Document_D.Процент;allpartners=Document_D.ВсеПартнеры;'+
+                       'allgoods=Document_D.ВсеТовары;article=Document_D.NumID;Регион_D=Document_D.Регион');
+  ActionTbl.DoGetLinks('region=Регион_D.Код');
+  total := ActionTbl.LineCount;
+  count := 1;
+  ActionTbl.Select;
+  while ActionTbl.SelectNext do
+    begin
+      ActionTbl.Edit;
+      ActionTbl._Default['title'] := ActionTbl.Document.Название.Название;
+      case VarAsStr(ActionTbl.ТипЦены_D) of
+       'Цена': ActionTbl.price_type := 0;
+       'ОптЦена': ActionTbl.price_type := 1;
+       'КрОптЦена': ActionTbl.price_type := 2;
+      end;
+      ActionTbl.Post;
+      Doc.NotifyClient('Выгрузка акций: ' + IntToStr(count) + ' : ' + IntToStr(total),count,total);
+      inc(count);
+    end;
+  //ExportTxt;
+end;
+
+
+function GetRunReportEP(ArrTbl : Variant; GoodLists, StoresLists, RegionsLists : ISValueList;
+                        ShowCodeUnitnames, UseLevels : boolean;
+                        AItems : ISDictionary;
+                        Dates : DateTime; MinCountS : Decimal) : Variant; server;
+begin
+  GoodsList := GoodLists;
+  StoresLst := StoresLists;
+  RegionsLst := RegionsLists;
+  GoodsTbl   := ArrTbl[0];
+  RegionsTbl := ArrTbl[1];
+  CtgTbl     := ArrTbl[2];
+  PartTbl    := ArrTbl[3];
+  BrandTbl   := ArrTbl[4];
+  GroupTbl   := ArrTbl[5];
+  SizesTbl   := ArrTbl[6];
+  ColorsTbl  := ArrTbl[7];
+  ActionTbl  := ArrTbl[8];
+  DiscTbl    := ArrTbl[9];
+  StoreTbl   := ArrTbl[10];
+
+  Date := Dates;
+  ShowCodeUnitname := ShowCodeUnitnames;
+  UseLevel := UseLevels;
+  Items := AItems;
+  MinCount := MinCountS;
+ // Course := CourseS;
+  Result := EntryPoint(SetGoods);
+end;
+
+end.

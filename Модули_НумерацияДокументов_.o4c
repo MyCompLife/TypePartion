@@ -1,0 +1,162 @@
+interface
+
+uses
+  System, DispIntf;
+
+//procedure СохранитьНомерДокумента(DocCurrent : ICDocuments);
+function УстановитьНомерДокумента(DocCurrent : ICDocuments; Preffix : String = '') : String;
+function ПолучитьНомерНалоговогоДокументаНаПечать(DocCurrent : ICDocuments) : String;
+function ПолучитьКодДляСправочника(Dic : ICDictionary): Integer;
+function ПроверитьКодСправочника(Dic : ICDictionary; Code: Integer): Boolean;
+
+implementation
+
+function ПроверитьКодСправочника(Dic : ICDictionary; Code: Integer): Boolean;
+var
+  Regions : ICDictionary;
+  Constants : IC4VPAConst;
+  MinNum, MaxNum: Integer;
+begin
+  Result := false;
+  Regions := CreateObject('Справочники.Регионы');
+  Constants := CreateObject('Константы');
+  if VarAsInt(Constants.КодИБ) = 0 then
+  begin
+    ShowMessage('Укажите в значениях важных констант код информационной базы');
+    exit;
+  end;
+  if not Regions.Find(Dic.Регион) then
+  begin
+    if Dic.GetSign = 'ЮрПартнеры' then
+      ShowMessage('Регион партнера не найден!')
+    else
+      ShowMessage('Регион служащего не найден!');
+    exit;
+  end;
+  Case Dic.GetSign of
+    'ЮрПартнеры':
+       begin
+         MinNum := Regions.НумерацияПарнеровС;
+         MaxNum := Regions.НумерацияПарнеровПо;
+       end;
+    'Служащие' :
+       begin
+         MinNum := Regions.НумерацияСлужащихС;
+         MaxNum := Regions.НумерацияСлужащихПо;
+       end;
+  else
+    begin
+      ShowMessage('Данная функция по текщему справочнику автокодирование не выполняет');
+      exit;
+    end;
+  end;
+  if (MaxNum < Code) or (MinNum > Code) then
+    exit;
+  Result := true;
+end;
+
+function ПолучитьКодДляСправочника(Dic : ICDictionary): Integer;
+var
+  Regions : ICDictionary;
+  Constants : IC4VPAConst;
+  MinNum, MaxNum: Integer;
+begin
+  Result := VarAsInt(Dic.Код);
+  Regions := CreateObject('Справочники.Регионы');
+  Constants := CreateObject('Константы');
+  if VarAsInt(Constants.КодИБ) = 0 then
+  begin
+    ShowMessage('Укажите в значениях важных констант код информационной базы');
+    exit;
+  end;
+  if not Regions.Find(Dic.Регион) then
+  begin
+    if Dic.GetSign = 'ЮрПартнеры' then
+      ShowMessage('Регион партнера не найден!')
+    else
+      ShowMessage('Регион служащего не найден!');
+    exit;
+  end;
+  Case Dic.GetSign of
+    'ЮрПартнеры':
+       begin
+         MinNum := Regions.НумерацияПарнеровС;
+         MaxNum := Regions.НумерацияПарнеровПо;
+       end;
+    'Служащие' :
+       begin
+         MinNum := Regions.НумерацияСлужащихС;
+         MaxNum := Regions.НумерацияСлужащихПо;
+       end;
+  else
+    begin
+      ShowMessage('Данная функция по текщему справочнику автокодирование не выполняет');
+      exit;
+    end;
+  end;  
+  if (Result<MinNum) or (Result>MaxNum) then
+    Result := server.GetNextNumber(Dic.GetSign, MinNum, MaxNum);
+  if Result >= MaxNum then
+    ShowMessage('По текущему региону достигнут предел в автокодировании');
+end;
+
+function IsObjFocused(Obj: Variant): Boolean;
+begin
+ Result := IsObject(Obj) and VarAsBool(Obj.IsFocused);
+end;
+
+//procedure СохранитьНомерДокумента(DocCurrent : ICDocuments);
+//begin
+  // документ уже сохранен в базе, позиционирование на сервере
+//  DocCurrent.SetSrvToClientPos;
+//  server.СохранитьНомерДокумента(DocCurrent.SrvMean);
+//end;
+
+function ReplaceOneStrWithAnother(Source, StrFrom, StrTo : String) : String;
+var
+  Pos : Integer;
+begin
+  if StrFrom = StrTo then
+    begin
+      Result := Source;
+      exit;
+    end;
+  Result := '';
+  Pos := StrPos(StrFrom, Source);
+  while Pos <> 0 do
+    begin
+      Result := Result + StrCopy(Source, 1, Pos - 1) + StrTo;
+      Source := StrCopy(Source, Pos + StrLength(StrFrom), StrLength(Source)); // сэконмлен подсчет третьего параметра - заведомо большее число
+      Pos := StrPos(StrFrom, Source);
+    end;
+  Result := Result + Source; // остаток
+end;
+
+function УстановитьНомерДокумента(DocCurrent : ICDocuments; Preffix : String = '') : String;
+var
+  DocOwner : ICDocuments;
+  DocCurrentSrvIsFocused, DocOwnerSrvIsFocused : Boolean;
+begin
+  DocCurrentSrvIsFocused := DocCurrent.SetSrvToClientPos;
+  Result := server.УстановитьНомерДокумента(
+                   DocCurrent.SrvMean, Null,
+                   DocCurrentSrvIsFocused, DocOwnerSrvIsFocused,
+                   Preffix, DocCurrent.ДатаДокумента);
+end;
+
+function ПолучитьНомерНалоговогоДокументаНаПечать(DocCurrent : ICDocuments) : String;
+var
+  НомерДокумента : String;
+begin
+  НомерДокумента := DocCurrent.НомерДокумента;
+  НомерДокумента := ReplaceOneStrWithAnother(НомерДокумента, VarAsStr(DocCurrent.ВашеПредприятие.Префикс), '');
+
+  // ВозвратОтПокупателя, НакладнаяОтпуска имеют префикс 'А' (рус.)
+  if VarAsBool(DocCurrent.HasField('ТипНДС')) then
+    if DocCurrent.ТипНДС = 1 then
+      НомерДокумента := ReplaceOneStrWithAnother(НомерДокумента, 'А', '');
+
+  Result := НомерДокумента;
+end;
+
+end.

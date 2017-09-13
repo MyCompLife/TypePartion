@@ -1,0 +1,390 @@
+interface
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, InitColors;
+
+implementation
+
+const
+  errUserBreak = 'Формирование отчета прекращено пользователем!';
+
+Var
+  GoodDict: ICDictionary;
+  PartionTbl, PartionInTbl, Part, PartOut : ICValueTable;
+  Constants : IC4VPAConst;
+  CursorVis : TCursor;
+  DateFrom, DateTo : DateTime;
+  AfterExecute : Boolean;
+  i : integer;
+
+procedure CreateTblObjects;
+Begin
+  Part := CreateObject('ТаблицаЗначений');
+  Part.AddColumn('ПартнерПериод', vtcString, 250);
+  Part.AddColumn('Сортировка', vtcString, 250);
+  Part.Open;  
+  PartOut := CreateObject('ТаблицаЗначений');
+  PartOut.AddColumn('ПартнерПериод', vtcString, 250);
+  PartOut.AddColumn('Сортировка', vtcString, 250);
+  PartOut.Open;
+  PartionTbl := CreateObject('ТаблицаЗначений');
+  PartionTbl.AddColumn('Date', vtcDateTime, 0);
+  PartionTbl.AddColumn('Товар', vtcLink, 0);
+  PartionTbl.AddColumn('ТипЦены', vtcString, 50);
+  PartionTbl.AddColumn('Валюта', vtcLink, 0);
+  PartionTbl.AddColumn('Цена', vtcFFt, 3);
+  PartionTbl.AddColumn('СумОтп', vtcFFt, 3);
+  PartionTbl.AddColumn('КолОбщ', vtcFFt, 3);
+  PartionTbl.AddColumn('Партнер', vtcString, 250);
+  PartionTbl.AddColumn('Основание', vtcString, 100);
+  PartionTbl.AddColumn('Пользователь', vtcString, 100);
+  PartionTbl.AddColumn('Сортировка', vtcString, 250);
+  PartionTbl.AddColumn('ПартнерПериод', vtcString, 250);
+  PartionTbl.AddColumn('Document', vtcLink, 0);
+  PartionTbl.Open;
+  PartionInTbl := CreateObject('ТаблицаЗначений');
+  PartionInTbl.AddColumn('Date', vtcDateTime, 0);
+  PartionInTbl.AddColumn('Товар', vtcLink, 0);
+  PartionInTbl.AddColumn('Валюта', vtcLink, 0);
+  PartionInTbl.AddColumn('Цена', vtcFFt, 3);
+  PartionInTbl.AddColumn('СтавкаНДС', vtcFFt, 3);
+  PartionInTbl.AddColumn('Основание', vtcString, 100);
+  PartionInTbl.AddColumn('Партнер', vtcString, 250);
+  PartionInTbl.AddColumn('Период', vtcString, 250);
+  PartionInTbl.AddColumn('ПартнерПериод', vtcString, 250);
+  PartionInTbl.AddColumn('Document', vtcLink, 0);
+  PartionInTbl.AddColumn('Сортировка', vtcString, 250);
+  PartionInTbl.Open;
+end;
+
+procedure XGrid_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  case HSect of
+    'Hed' :
+      begin
+        Vars.Good := GoodDict.Код + ' ' + GoodDict.НазвТовара;
+        Vars.RepDateTime := VarAsStr(CurrentDateTime);
+      end;
+  end;
+end;
+
+procedure XGridIn_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  case HSect of
+    'Hed' :
+      begin
+        Vars.Good := GoodDict.Код + ' ' + GoodDict.НазвТовара;
+        Vars.RepDateTime := VarAsStr(CurrentDateTime);
+      end;
+  end;
+end;
+
+procedure ViewXGrid;
+begin
+  XGrid.ClearAll;
+  XGrid.AddSection('Hed');
+  if PartionTbl.LineCount = 0 then
+    exit;
+  i := 1;
+  PartionTbl.SortBy('ПартнерПериод;Date');
+  PartOut.SortBy('Сортировка');
+  PartOut.Select;
+  while PartOut.SelectNext do
+    begin
+      PartOut.AddToXGrid(CtrlToVar(XGrid), 'Part', 'ПартнерПериод' , i, 1);
+      PartionTbl.CancelRange;
+      PartionTbl.SetRange(PartOut.ПартнерПериод,PartOut.ПартнерПериод);
+      XGrid.AddSection('HedDet');
+      PartionTbl.AddToXGrid(CtrlToVar(XGrid), 'Det', ';Date;Цена;Валюта;Основание;Партнер' , 1, PartionTbl.LineCount);
+      inc(i);
+    end;
+end;
+
+procedure ViewXGridIn;
+begin
+  XGridIn.ClearAll;
+  XGridIn.AddSection('Hed');
+  if PartionInTbl.LineCount = 0 then
+    exit;
+  i := 1;
+  PartionInTbl.SortBy('ПартнерПериод;Date');
+  Part.SortBy('Сортировка');
+  Part.Select;
+  while Part.SelectNext do
+    begin
+      Part.AddToXGrid(CtrlToVar(XGridIn), 'Part', 'ПартнерПериод' , i, 1);
+      PartionInTbl.CancelRange;
+      PartionInTbl.SetRange(Part.ПартнерПериод,Part.ПартнерПериод);
+      XGridIn.AddSection('HedDet');
+      PartionInTbl.AddToXGrid(CtrlToVar(XGridIn), 'Det', ';Date;Цена;Валюта;Основание;Партнер' , 1, PartionInTbl.LineCount);
+      inc(i);
+    end;
+end;
+
+procedure RunReport;
+var Period : integer;
+begin
+  if rbPeriodKind1.Checked then Period := 0
+  else
+  if rbPeriodKind2.Checked then Period := 1
+  else
+  if rbPeriodKind3.Checked then Period := 2
+  else
+  if rbPeriodKind4.Checked then Period := 3
+  else
+  if rbPeriodKind5.Checked then Period := 4;
+  DateFrom := RoundDate(DateFrom, rdDay, false);
+  DateTo := RoundDate(DateTo, rdDay, true);
+  PartOut.Clear;
+  PartOut.CopyDataToServer;
+  PartionTbl.Clear;
+  PartionTbl.CopyDataToServer;
+  server.GetReportData(PartionTbl.SrvMean,PartOut.SrvMean,GoodDict,Period,DateFrom,DateTo);
+  PartionTbl.CopyDataFromServer;
+  PartOut.CopyDataFromServer;
+end;
+
+procedure RunReportIn;
+var Period : integer;
+begin
+  if rbPeriodKind1.Checked then Period := 0
+  else
+  if rbPeriodKind2.Checked then Period := 1
+  else
+  if rbPeriodKind3.Checked then Period := 2
+  else
+  if rbPeriodKind4.Checked then Period := 3
+  else
+  if rbPeriodKind5.Checked then Period := 4;
+  DateFrom := RoundDate(DateFrom, rdDay, false);
+  DateTo := RoundDate(DateTo, rdDay, true);
+  Part.Clear;
+  Part.CopyDataToServer;
+  PartionInTbl.Clear;
+  PartionInTbl.CopyDataToServer;
+  server.GetReportInData(PartionInTbl.SrvMean,Part.SrvMean,GoodDict,Period,DateFrom,DateTo);
+  PartionInTbl.CopyDataFromServer;
+  Part.CopyDataFromServer;
+end;
+
+procedure SetDatesOnOpenForm(var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+var
+  Date : DateTime;
+  Prd : Integer;
+  Last : Boolean;
+begin
+  Prd := VarAsInt(4);
+  Last := Prd div 4 <> 0;
+  Prd := Prd mod 4 + 3;
+  Date := CurrentDate;
+ // if Last then
+ //   Date := RoundDate(Date, rdYear, true) - 1;
+  DateFrom := RoundDate(Date, rdYear, false);
+  DateTo := RoundDate(Date, rdYear, true)-1;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  InPriceNt, InPrice, InHdPrice : decimal;
+  GoodName, Units, ГРН, ВалВх, ВалОтп : string;
+begin
+  GoodDict := Params;
+  if not IsObjFocused(GoodDict) then
+    begin
+      ShowMessage('Товар не выбран.');
+      exit;
+    end;
+  Constants := GetConstants;
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  CreateTblObjects;
+  if GoodDict.Код <> '' then
+    GoodName := GoodDict.Код + ' ' + GoodDict.НазвТовара
+  else
+    GoodName := GoodDict.НазвТовара;
+  lGoodNameWhite.Caption := 'История цены по товару:' +  GoodName;
+  lGoodNameBlack.Caption := 'История цены по товару:' +  GoodName;
+  RunReport;
+  ViewXGrid; 
+  RunReportIn;
+  ViewXGridIn;
+  AfterExecute := true;
+end;
+    
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo, eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := true;
+  RunReport;  
+  RunReportIn;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  x, y : integer;
+begin
+  tbSelectDates.GetScreenPos(x, y);
+  y := y + tbSelectDates.Height;
+  pmDates.Popup(x, y);
+end;
+
+procedure DateFrom_Change(Sender: TObject);
+begin
+  Case (Sender as TO4Edit).Tag of       // проверка на неверный период
+    0 : begin
+          if StrToDate((Sender as TO4Edit).Text) > DateTo then
+            begin
+              ShowMessage('Начальная дата не может быть больше конечной');
+              eDateFrom.VPAOnChange.EventName := '';
+              (Sender as TO4Edit).Text := VarAsStr(DateFrom);
+              eDateFrom.VPAOnChange.EventName := 'DateFrom_Change';
+              exit;
+            end;
+        end;
+    1 : begin
+          if StrToDate((Sender as TO4Edit).Text) < DateFrom then
+            begin
+              ShowMessage('Конечная дата не может быть меньше начальной');
+              eDateFrom.VPAOnChange.EventName := '';
+              (Sender as TO4Edit).Text := VarAsStr(DateFrom);
+              eDateFrom.VPAOnChange.EventName := 'DateFrom_Change';
+              exit;
+            end;
+        end;
+  end;
+  if AfterExecute then
+    begin
+      SetOneDates(Sender,DateFrom,DateTo);
+      RunReport;
+      ViewXGrid;
+      RunReportIn;
+      ViewXGridIn;
+    end;
+end;
+
+{$D-}
+procedure dbgPartGood_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : boolean);
+begin
+ if PartionTbl.IsFocused and (PartionTbl.КолОбщ <= 0) then
+   if Highlight then
+     begin
+       BackColor:=BlZeroSel;
+       DrawFont.Color := BlFZeroSel;
+     end
+   else
+     begin
+       BackColor:=BlZero;
+       DrawFont.Color := BlFZero;
+     end;
+end;
+{$D+}
+
+procedure Button1_Click(Sender: TObject);
+begin
+  SetOneDates(Sender,DateFrom,DateTo);
+  RunReport;
+  RunReportIn;
+end;
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+  if PageControl1.ActivePage.Name = 'TabSheet1' then
+    XGridIn.ExportToExcel
+  else
+    XGrid.ExportToExcel;
+end;
+
+procedure ToolButton1_Click(Sender: TObject);
+begin
+  if PageControl1.ActivePage.Name = 'TabSheet1' then
+    XGridIn.Print('', True)
+  else
+    XGrid.Print('', True);
+end;
+
+procedure tbXTools_Click(Sender: TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible
+   then tbXTools.ImageIndex := 98 else tbXTools.ImageIndex := 44;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+end;
+
+procedure rbDate_Click(Sender: TObject);
+begin
+  ViewXGridIn;
+  ViewXGrid;
+end;
+
+procedure rbPeriodKind1_Click(Sender: TObject);
+begin
+  RunReport;
+  RunReportIn;
+  ViewXGridIn;
+  ViewXGrid;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel5:TO4Panel
+Splitter3:TO4Splitter
+Panel1:TO4Panel
+lbGoodName:TO4Label
+lGoodNameBlack:TO4Label
+lGoodNameWhite:TO4Label
+rgPeriodKind:TO4GroupBox
+rbPeriodKind1:TO4RadioButton
+rbPeriodKind2:TO4RadioButton
+rbPeriodKind3:TO4RadioButton
+rbPeriodKind4:TO4RadioButton
+rbPeriodKind5:TO4RadioButton
+PageControl1:TO4PageControl
+TabSheet1:TTabSheet
+XGridIn:TO4XGrid
+TabSheet2:TTabSheet
+XGrid111:TO4XGrid
+XGrid:TO4XGrid
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+Panel13:TO4Panel
+Label8:TO4Label
+Label9:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbXTools:TO4ToolButton
+tbSelectDates:TO4ToolButton
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

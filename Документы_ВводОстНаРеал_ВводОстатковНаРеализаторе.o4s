@@ -1,0 +1,62 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  AccsGoods, AccsReserv : ISAccs;
+  Store : ISDictionary;
+  Date : DateTime;
+  AppendLock : Boolean;
+
+procedure InitSrvData; server;
+begin
+  Date := CurrentDate;
+  AppendLock := False;
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsReserv := CreateObject('Аккумуляторы.ТоварыВРезерве');
+end;
+
+procedure SetStoreParams(DT : DateTime; Stores : ISValueList; Index : Integer); server;
+begin
+  AppendLock := False;
+  Date := RoundDate(DT, rdDay, True);
+  if Stores.ValidIndex(Index) and (Index <> 0) then
+    Store := Stores.GetValue(Index)
+  else
+    nil(Store);
+end;
+
+procedure GetGoodCount(tmpCtx : ISValueTable; Date : DateTime); server;
+begin
+  if AppendLock or (not tmpCtx.Active) then
+    exit;
+  tmpCtx.Select;
+  while tmpCtx.SelectNext do
+    begin
+      if VarAsFloat(tmpCtx.Партия) <> 0 then
+        AccsGoods.CalcGroupRestDirect(Date, ArrayOf(tmpCtx.@Товар, tmpCtx.@Склад, tmpCtx.Партия))
+      else
+        if VarAsBool(tmpCtx.@Склад.IsFocused) then
+          AccsGoods.CalcGroupRestDirect(Date, ArrayOf(tmpCtx.@Товар, tmpCtx.@Склад))
+        else
+          AccsGoods.CalcGroupRestDirect(Date, tmpCtx.@Товар);
+      tmpCtx.Edit;
+      tmpCtx.AssignFields('НаличиеТовара=КолОбщ', AccsGoods);
+      tmpCtx.Post;
+    end;
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+end.

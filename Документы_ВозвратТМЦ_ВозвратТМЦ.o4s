@@ -1,0 +1,103 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСОбъектами, РаботаСПеременными, РаботаСТаблицамиЗначений;
+
+implementation
+
+const
+  cCommonGrFieldsList = 'Товар;Цена;НДС;ЦенаБезНДС;СтавкаНДС;ПроцентСкидкиНадбавки;' +
+    'ЦенаБезСкидкиНадбавки;ВалютаТовара;КурсТовара;' +
+    'ЦенаВВалюте;Упаковка;ВхЦенаБезНДС;КоличествоУпаковок';
+  cCommonSumFieldsList = 'Количество';
+  cAdditGrFieldsList = 'Партия';
+  cAssistFieldForGroup = 'ОбщКол';
+  errBadDocFixation = 'Имели место ошибки при фиксации документа %s.%sПерефиксируйте его';
+
+var
+  Date : DateTime;
+  AccsGoodByInvoice : ISAccs;
+
+procedure InitSrvData; server;
+begin
+  AccsGoodByInvoice := CreateObject('Аккумуляторы.ОстаткиТоваровТМЦпоСчетам');
+  Date := CurrentDate + 1;
+end;
+
+procedure GetMyGoodCount(tmpCtx : ISValueTable; Data : Variant); server;
+begin
+  if (not tmpCtx.Active) then
+    exit;
+  tmpCtx.Select;
+  while tmpCtx.SelectNext do
+    begin
+      AccsGoodByInvoice.CalcGroupRestDirect(Date, ArrayOf(Data.Owner, tmpCtx.@Товар, tmpCtx.Партия));
+      tmpCtx.Edit;
+      tmpCtx.AssignFields('НаличиеТовара=КолОбщ;ОбщКол=КолОбщ', AccsGoodByInvoice);
+      tmpCtx.Post;
+    end;
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure СформироватьСодержимоеДляСброса(TblTmpCtx : ISValueTable;
+  OrderOwner : ISDocuments); server;
+var
+  DocSubordOutSlips, DocCurrent : ISDocuments;
+  TblMotions, TblTmp, TblTmp2 : ISValueTable;
+  vblFirstDoc : Boolean;
+  i : Integer;
+  OneField : string;
+begin
+  // ТМЦ и услуги
+  AccsGoodByInvoice.SetFieldFilter('Счет', OrderOwner);
+  TblMotions := CreateObject('ValueTable');
+  AccsGoodByInvoice.SaveMotionToValueTable(0, Date, amtBoth, -1, TblMotions);
+  TblMotions.GroupBy('Document;DocLineNum;MotionSign', ''); // на случай, если произошло разбитие одной позиции на несколько проводок
+  TblMotions.SortBy('Document');
+  TblMotions.Select;
+  while TblMotions.SelectNext do
+    begin
+      if not IsObjFocused(DocCurrent) or not IsObjEQ(TblMotions.@Document, DocCurrent) then
+        DocCurrent := TblMotions.Document;
+      if not DocCurrent.FindLineBy('НомСтроки', TblMotions.DocLineNum) then
+        raise(GetTranslation(errBadDocFixation, ArrayOf(DocCurrent.GetName + ' № ' + DocCurrent.GetNumber, #13#10)));
+      TblTmpCtx.Append;
+      TblTmpCtx.AssignFields(MakeDelimitedValue(ArrayOf(cCommonGrFieldsList, cCommonSumFieldsList)), DocCurrent);
+      for i := 1 to WordCount(cAdditGrFieldsList, ';') do
+        begin
+          OneField := ExtractWord(i, cAdditGrFieldsList, ';');
+          if DocCurrent.HasTableField(OneField) then
+            TblTmpCtx.AssignFields(OneField, DocCurrent)
+          else
+            TblTmpCtx._Default[OneField] := DefaultVariant(TblTmpCtx.GetColumnDataType
+              (GetColumnIndexByName(TblTmpCtx, OneField)));
+        end;
+      for i := 1 to WordCount(cCommonSumFieldsList, ';') do
+        begin
+          OneField := ExtractWord(i, cCommonSumFieldsList, ';');
+          TblTmpCtx._Default[OneField] := VarAsDec(TblTmpCtx._Default[OneField]) * VarAsInt(TblMotions.MotionSign);
+        end;
+      TblTmpCtx.Post;
+    end;
+  OneField := MakeDelimitedValue(ArrayOf(cCommonGrFieldsList, cAdditGrFieldsList));
+  // проверка на Null-значения для необ. перед группировкой
+  FillColsWithDefVarValues(TblTmpCtx, OneField);
+  // группировка
+  //SaveTableToExcel(TblTmpCtx); // - для отладки
+  ExtendedGroupBy(TblTmpCtx, OneField, cCommonSumFieldsList, cAssistFieldForGroup);
+  DeleteColumnsByCondition(TblTmpCtx, cAssistFieldForGroup, 'Количество<=0');
+  //TblTmpCtx.CancelRange;
+  //SaveTableToExcel(TblTmpCtx); // для отладки
+  TblTmpCtx.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+end;
+
+end.

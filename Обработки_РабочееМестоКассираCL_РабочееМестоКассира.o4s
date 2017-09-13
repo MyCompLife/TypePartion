@@ -1,0 +1,184 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  ChildPaysOut, ChildPaysIn : ISJournal;
+  PartAccs : ISAccs;
+  Constants : IS4VPAConst;
+  Currency, DiscountLimitDic, GoodsDic : ISDictionary;
+
+function GetPartSumBalance(Part: Variant): Decimal; Server;
+var
+  Proc : Decimal;
+begin
+  result := 0;
+  if not IsObjFocused(Part) then
+    exit;
+  PartAccs.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Part);
+  result := PartAccs.СумОбщВал
+end;
+
+
+procedure CreateSrvObjects; Server;
+begin
+  ChildPaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  ChildPaysOut.SetDocMultiStateRange('1;2');
+  ChildPaysIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  ChildPaysIn.SetDocMultiStateRange('1;2');
+  PartAccs := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  Constants := GetConstants;
+  DiscountLimitDic := CreateObject('Справочники.ОграничениеСкидок');
+  GoodsDic := CreateObject('Справочники.Товары');
+  Currency := CreateObject('Справочники.Валюты');
+end;
+
+
+procedure GetPartDebtTbl(PartDebtTbl:ISValueTable; Partner:Variant);   server;
+begin  
+ if IsObjFocused(Partner) then
+   begin
+     PartAccs.SetFieldFilter('Партнер',Partner);
+     PartAccs.AppendGroupRestToValueTable(CurrentDateTime,'Валюта;СумОбщВал',PartDebtTbl);
+   end;
+end;
+
+function GetChildPaysOutSum(Doc:ISDocuments; DocType:string):Decimal; server;
+begin
+  ChildPaysOut.UseMaster(Doc);
+  ChildPaysOut.SetDocTypeRange('Документы.'+DocType);
+  result := ChildPaysOut.Total('Сумма');
+end;
+
+function GetChildPaysInSum(Doc:ISDocuments; DocType:string):Decimal; server;
+begin
+  ChildPaysIn.UseMaster(Doc);
+  ChildPaysIn.SetDocTypeRange('Документы.'+DocType);
+  result := ChildPaysIn.Total('Сумма');
+end;
+
+
+procedure ChangeTbl(TblContents, ActionTbl: ISValueTable; CourseDoc, PartnerDiscountPrecent : Decimal; TypePrice, CurrencyCodeDoc: String; DateDoc: DateTime); server;
+var
+  Course, Precent: Decimal;
+  CommentPercent:string;
+  FindDiscountCard : boolean; 
+  ActionDoc : IsDocuments;
+
+begin
+  TblContents.Select;
+  While TblContents.SelectNext do
+    if  not VarAsBool(TblContents.Возврат) and             // Если  не возврат, то пересчитываем цену
+        not VarAsBool(TblContents.РучнаяКорректировка) and // Если  не ручная коректировка цены, то пересчитываем цену
+        not VarAsBool(TblContents.ЦенаИзШтрихКода) and  // Если  не цена из штрих-кода, то пересчитываем цену
+        GoodsDic.Find(TblContents.@Товар) and Currency.Find(GoodsDic._Default['Валюта'+TypePrice]) then
+    begin
+      TblContents.Edit;
+      Precent := PartnerDiscountPrecent;
+      if Precent=0 then
+        CommentPercent := ''
+      else
+        CommentPercent := 'Скидка партнера';
+      if (Currency.Код = CurrencyCodeDoc) then
+        Course := CourseDoc
+      else
+        Course := Currency.GetTimedValue(Constants.UsedCurs, DateDoc); //переделать на дату документа
+      if (ActionTbl.LineCount>0) then
+        begin
+          if ActionTbl.Locate('ИспКатегории',0) and (VarAsDec(ActionTbl.Скидка)<Precent) then
+            begin
+              CommentPercent := 'Акция';
+              Precent := VarAsDec(ActionTbl.Скидка);
+              if VarAsBool(ActionTbl.@Document.IsFocused) then
+                begin
+                  ActionDoc := ActionTbl.Document;
+                  CommentPercent := CommentPercent + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+                end;
+            end
+          else
+          if ActionTbl.Locate('Категория', GoodsDic.GetParent) and (VarAsDec(ActionTbl.Скидка)<Precent) then
+            begin
+              Precent := VarAsDec(ActionTbl.Скидка);
+              CommentPercent := 'Акция по категориям';
+              if VarAsBool(ActionTbl.@Document.IsFocused) then
+                 begin
+                   ActionDoc := ActionTbl.Document;
+                   CommentPercent := CommentPercent + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+                 end;
+            end;
+        end;
+
+
+
+      if TypePrice <> '' then
+        TblContents.ЦенаБезСкидкиНадбавки :=GoodsDic._Default[TypePrice]*Course;
+       DiscountLimitDic.SetFieldFilter('Товар','=',GoodsDic,'','',Null);
+       DiscountLimitDic.SetFieldFilter('ТипЦены','=',TypePrice,'','',Null);
+       if DiscountLimitDic.Select and DiscountLimitDic.SelectNext then
+         begin
+          if VarAsDec(DiscountLimitDic.Скидка) > Precent then // если ограничение скидки менше скидки партнера, то ставим ограничение
+           begin
+             Precent := VarAsDec(DiscountLimitDic.Скидка);
+             CommentPercent := CommentPercent+ ' Скидка ограничения на товар';
+           end
+         end;
+      TblContents.ПроцентСкидкиНадбавки := Precent;
+      TblContents.КомментарийСкидкиНадбавки := CommentPercent;
+      TblContents.Цена := TblContents.ЦенаБезСкидкиНадбавки*(1 + TblContents.ПроцентСкидкиНадбавки/100);
+      if VarAsBool(Constants.ОкруглятьЦеныГрн) then
+        begin
+          if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+            begin
+              TblContents.ЦенаБезСкидкиНадбавки := RoundTo5Cop(TblContents.ЦенаБезСкидкиНадбавки);
+              TblContents.Цена := RoundTo5Cop(TblContents.Цена);
+            end
+          else
+            begin
+              TblContents.Цена := RoundDec(TblContents.Цена, VarAsInt(Constants.ОкруглениеЦенГрн));
+              TblContents.ЦенаБезСкидкиНадбавки := RoundDec(TblContents.ЦенаБезСкидкиНадбавки, VarAsInt(Constants.ОкруглениеЦенГрн));
+            end;
+        end;
+      TblContents.КурсТовара := Course;
+      if Course<>0 then
+        TblContents.ЦенаВВалюте :=  TblContents.Цена / Course;  
+      TblContents.ВалютаТовара := Currency;
+      TblContents.Post;
+    end;
+end;
+
+
+procedure GetPrintPricesTbl(TblGoodsPrintPrices: IsValueTable; TypePrice: string);server;
+var
+  TmpTbl : IsValueTable;
+  AccsEditPriceGood: ISAccs;
+  DateFrom, DateTo : DateTime;
+begin
+  TmpTbl := CreateObject('ValueTable');
+  TmpTbl.AddColumn('Товар', vtcLink, 0);
+  TmpTbl.AddColumn('Цена', vtcFFt, 7);
+  TmpTbl.AddColumn('Код',vtcInteger,20);
+  TmpTbl.AddColumn('ЕдИзм',vtcLink,0);
+  TmpTbl.AddColumn('Печать',vtcInteger,0);
+
+  TmpTbl.Open;
+  DateFrom := RoundDate(CurrentDate,rdDay,False);
+  DateTo := RoundDate(CurrentDate,rdDay,True);
+
+  AccsEditPriceGood := CreateObject('Аккумуляторы.ИзмОтпЦенСпрТовара');
+  AccsEditPriceGood.ClearFieldBuffers;
+  AccsEditPriceGood.ClearFieldFilters;
+  AccsEditPriceGood.IncludeZeroRest := true;
+  AccsEditPriceGood.AppendGroupMotionToValueTable(DateFrom, DateTo + 0.99999, amtBoth,
+                                                  'Товар;Цена', -1, TmpTbl);
+
+  TmpTbl.GroupBy('Товар','');
+  TmpTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;Цена=Товар.'+TypePrice);
+  TmpTbl.DoCalculation('Печать','0');
+  TmpTbl.Select;
+  TmpTbl.AppendTo('Товар;Цена;Код;ЕдИзм;Печать',TblGoodsPrintPrices)
+end;
+
+end.

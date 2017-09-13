@@ -1,0 +1,79 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений;
+
+const
+  // параметр на отмену проверки по возможности фиксации/расфиксации/удаления документа
+  prmnLockForStandartChangeDocStateCheck = 'LockForStandartChangeDocStateCheck';
+
+procedure ClearDocContents(DocCurrent : ISDocuments);
+procedure GetRoundSumsAndCorrect(TblWithSums : ISValueTable; PrecFields, RoundFields,
+  FieldForDelta : string; Precision : Integer = 2);
+
+implementation
+
+procedure ClearDocContents(DocCurrent : ISDocuments);
+begin
+  while DocCurrent.SelectLines and DocCurrent.SelectNextLine do
+    DocCurrent.DeleteLine;
+end;
+
+procedure GetRoundSumsAndCorrect(TblWithSums : ISValueTable; PrecFields, RoundFields,
+  FieldForDelta : string; Precision : Integer = 2);
+var
+  FieldsCounter : Integer;
+  OnePrecField, OneRoundField : string;
+  OneFieldDelta, OneCorrection : Decimal;
+begin
+  OneCorrection := 1 / VarAsInt('1' + FillStrByChar('0', Precision));
+  SaveSortingForTables(ArrayOf(TblWithSums));
+  try
+    for FieldsCounter := 1 to WordCount(PrecFields, ';') do
+      begin
+        OnePrecField := ExtractWord(FieldsCounter, PrecFields, ';');
+        OneRoundField := ExtractWord(FieldsCounter, RoundFields, ';');
+        TblWithSums.DoCalculation(OneRoundField, OnePrecField);
+        // первое округление полученных сумм
+        RoundValuesInTable(TblWithSums, OneRoundField, Precision);
+        // корректировка исходя из общей суммы
+        TblWithSums.DoCalculation(FieldForDelta, OnePrecField + '-' + OneRoundField); // в FieldForDelta должно быть достаточно знаков
+        OneFieldDelta := RoundFloat(VarAsDec(TblWithSums.Total(OnePrecField)), Precision) -
+          RoundFloat(VarAsDec(TblWithSums.Total(OneRoundField)), Precision);
+        if OneFieldDelta = 0 then
+          continue // нечего корректировать
+        else
+          if OneFieldDelta > 0 then
+            begin
+              if OneCorrection < 0 then
+                OneCorrection := -OneCorrection;
+              OnePrecField := '-' + FieldForDelta;
+            end
+          else
+            begin
+              if OneCorrection > 0 then
+                OneCorrection := -OneCorrection;
+              OnePrecField := FieldForDelta;
+            end;
+        TblWithSums.Select;
+        TblWithSums.SortBy(OnePrecField);
+        try
+          while OneFieldDelta <> 0 do
+            begin
+              TblWithSums.SelectNext;
+              TblWithSums.Edit;
+              TblWithSums._Default[OneRoundField] := VarAsDec(TblWithSums._Default[OneRoundField]) + OneCorrection;
+              TblWithSums.Post;
+              OneFieldDelta := OneFieldDelta - OneCorrection;
+            end;
+        finally
+          TblWithSums.SortBy('');
+        end;
+      end;
+  finally
+    RestoreSortingForTables(ArrayOf(TblWithSums));
+  end;
+end;
+
+end.

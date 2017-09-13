@@ -1,0 +1,261 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Пользователи, РаботаСЖурналомИзменений;
+
+implementation
+var
+  ChangeLock, isSave : Boolean;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MasterData : ICDocuments;
+  LinkDict, Ctg : ICDictionary;
+  OutParam : Variant;
+  AddDoc: Boolean;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  Constants := GetConstants; 
+  Options := GetOptions;
+  ChangeLock := false; 
+  Ctg := CreateObject('Справочники.Товары');
+  Ctg.IncludeOnlyLevels(true);
+end;
+
+procedure MDS_Append(Sender: TObject);  
+var
+    OldDoc : ICDocuments;
+    TmpLHead : ICValueTable;
+    Number : string;
+begin  
+  AddDoc := true;
+  MasterData.Регион := GetUsersField('Регион');
+  MasterData.ДатаКонцаАкции := CurrentDate;
+  if MasterData.HasParam('OldDoc') then
+    begin
+      OldDoc := MasterData.Params['OldDoc'];
+      if isObjEQ(OldDoc,MasterData,true) then
+        begin
+          Number := MasterData.НомерДокумента;
+          TmpLHead := CreateObject('ValueTable');
+          OldDoc.SaveHead('', TmpLHead);
+          MasterData.LoadHead('', TmpLHead);
+          OldDoc.SaveContents('', TmpLHead);
+          MasterData.LoadContents('', TmpLHead);
+          MasterData.ДатаДокумента := CurrentDateTime;
+          MasterData.НомерДокумента := Number;
+        end;
+    end;
+ MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+end;
+
+procedure edTypeAction_Change(Sender: TObject);
+begin
+ if not IsNil(LinkDict) then
+   LinkDict.ExecProc(MasterData,'usectg',edTypeAction.ItemIndex=1,OutParam);
+ try
+   dgbData.AutoAlign := false;
+   dgbData.PosColumns.Clear;
+
+   dgbData.PosColumns.Add;
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).O4FieldName := 'НомСтроки';
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).Title.Caption := '№';
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).Width := 38;
+   if edTypeAction.ItemIndex=1 then
+     begin
+       dgbData.PosColumns.Add;
+      (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).O4FieldName := 'Категория';
+      (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).Title.Caption := 'Категория';
+      (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).Width := 434;
+     end;
+   dgbData.PosColumns.Add;
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).O4FieldName := 'ТипЦены';
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).Title.Caption := 'Тип цены';
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).Width := 108;
+   dgbData.PosColumns.Add;
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).O4FieldName := 'Скидка';
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).Title.Caption := '% скидки';
+  (dgbData.PosColumns.Items[dgbData.PosColumns.Count-1] as TO4GridColumn).Width := 108;
+ finally
+  dgbData.AutoAlign := true;
+ end;
+end;
+procedure Form_Open(Sender: TObject);         
+var i:integer;
+begin
+  if VarAsBool(MasterData.ИспКатегории) then
+   edTypeAction.ItemIndex := 1
+  else
+    begin
+      edTypeAction.ItemIndex := 0;
+      edTypeAction_Change(Form);
+    end;
+  edTypeAction.Enabled :=  MasterData.LinesCount=0; 
+end;
+
+procedure TDS_StartDrop(Source: Variant; var Accept: boolean);
+begin
+  ChangeLock := True;
+  MasterData.UpdateLine(True);
+  MasterData.DisableTableControls;
+end;
+
+procedure TDS_EndDrop(Source: Variant);
+begin
+  ChangeLock := false;
+  MasterData.EnableTableControls;
+end;
+
+procedure tbSource_Click(Sender: TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.Товары', 'ПодборКаткгорииИТипаЦены', VarAsBool(edTypeAction.ItemIndex=1));
+end;
+
+procedure TDS_Drop(Source: Variant; var Accept: boolean);
+var Precent : Decimal;
+    TypePrice, s : string;
+begin
+  TypePrice := '';
+  if VarAsBool(Source.IsType('ТаблицаЗначений')) then
+    begin
+      if edTypeAction.ItemIndex=1 then
+        begin
+          if not Ctg.Find(LinkDict) then
+            begin
+              Accept := false;
+              ShowMessage('Не выбрана категория!');
+              exit;
+            end;
+        end;
+      if VarAsBool(LinkDict.HasParam('TypePrice')) then
+        TypePrice := VarAsStr(LinkDict.Params['TypePrice']);   
+      if VarAsBool(LinkDict.HasParam('Precent')) then
+        Precent := VarAsDec(LinkDict.Params['Precent']);
+    end
+  else
+    begin
+      Accept := false;
+      ShowMessage(DontMoveThat);
+      exit;
+    end;
+  if TypePrice='' then
+    begin
+      Accept := false;
+      ShowMessage('Не выбран тип цены!');
+    end
+  else
+    begin
+      if ((edTypeAction.ItemIndex=1) and not MasterData.FindLineBy('Категория;ТипЦены', ArrayOf(Ctg,TypePrice))) or
+       (not (edTypeAction.ItemIndex=1) and not MasterData.FindLineBy('ТипЦены', TypePrice))  then
+        begin   
+          s :=  'Введите % скидки '+TypePrice;
+          if edTypeAction.ItemIndex=1 then
+            s := s + ' ('+Ctg.NameField+')';
+          Accept := StdInpDec(s+':',Precent);
+          if Accept then
+            begin
+            if Precent>=0 then
+              begin
+                Accept := false;
+                ShowMessage('% скидки должен быть <0 !');
+                exit;
+              end;
+            end
+          else
+            exit;
+
+          MasterData.AppendLine;
+          if edTypeAction.ItemIndex=1 then
+            MasterData.Категория := Ctg;
+          MasterData.ТипЦены := TypePrice;
+          MasterData.Скидка := Precent;
+          MasterData.PostLine;
+        end;
+    end;
+end;
+
+procedure tsHed_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ nbHed.PageIndex := NewTab;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+ if RoundDate(MasterData.GetDate, rdDay,false)>VarAsDate(MasterData.ДатаКонцаАкции) then
+   raise('Дата начала акции должна быть не меньше чем дата конца акции!');
+ MasterData.ИспКатегории := edTypeAction.ItemIndex=1;
+end;
+
+procedure TDS_Validate(Sender: TObject);
+begin
+ if MasterData.Скидка>=0 then
+   raise('Скидка должна быть <0');
+end;
+
+procedure TDS_VPAAfterPost(Sender: TObject);
+begin
+ edTypeAction.Enabled :=  MasterData.LinesCount=0;
+end;
+
+
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  if AddDoc then
+    ChangeDoc(clmtAppend,MasterData)
+  else
+    ChangeDoc(clmtEdit,MasterData);
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+pmHed:TO4Panel
+tsHed:TO4TabSet
+nbHed:TO4Notebook
+Label1:TO4Label
+Label3:TO4Label
+Label26:TO4Label
+Label2:TO4Label
+Label6:TO4Label
+Label4:TO4Label
+eRespons:TO4DBEdit
+eDateTo:TO4DBEdit
+eDate:TO4DBEdit
+eNumber:TO4DBEdit
+dbeRegion:TO4DBEdit
+edTypeAction:TO4Edit
+dbmComment:TO4DBMemo
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+ToolBar1:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbParam:TO4ToolButton
+dgbData:TO4DocTableGrid
+Panel1:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+TDS:TO4DocContentsSource

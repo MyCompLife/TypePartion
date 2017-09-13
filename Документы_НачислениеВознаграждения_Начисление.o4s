@@ -1,0 +1,92 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, Интерфейс;
+
+implementation
+
+var
+  Journ: ISJournal;
+  Процент : Variant;
+  Constants : IS4VPAConst;
+
+procedure CalcTblDoc(Region,Source:Variant;PartTbl,BonusTbl:ISValueTable; DateFrom, DateTo : DateTime); server;
+begin
+  Constants := GetConstants;
+  PartTbl.Clear;
+
+  Journ := CreateObject('Журналы.ЖурналЧеков');
+  Journ.SetDateRange(RoundDate(DateFrom, rdDay, False),RoundDate(DateTo, rdDay, true));
+  if VarAsBool(Region.IsFocused) then
+    Journ.SetRangeByField('Регион',Region);
+  if VarAsBool(Source.IsFocused) then
+    Journ.SetRangeByField('Партнер',Source);
+  Journ.SetDocMultiStateRange('1;2');
+  Journ.Select;
+  while Journ.SelectNext do
+    begin
+      PartTbl.Append;
+      PartTbl.Партнер := Journ.Партнер;
+      PartTbl.СуммаЧек := Journ.Сумма;
+      PartTbl.СуммаВозврат := 0;
+      PartTbl.Валюта := Journ.Валюта;
+      PartTbl.Курс := Journ.Валюта.GetTimedValue('КурсНаличный', CurrentDateTime);
+      PartTbl.Post;
+    end;
+
+  Journ := CreateObject('Журналы.ЖурналВозвратовОтПокупателя');
+  Journ.SetDateRange(RoundDate(DateFrom, rdDay, False),RoundDate(DateTo, rdDay, true));
+  if VarAsBool(Region.IsFocused) then
+    Journ.SetRangeByField('Регион',Region);
+  if VarAsBool(Source.IsFocused) then
+    Journ.SetRangeByField('Партнер',Source);
+  Journ.SetDocMultiStateRange('1;2');
+  Journ.Select;
+  while Journ.SelectNext do
+    begin
+      PartTbl.Append;
+      PartTbl.Партнер := Journ.Партнер;
+      PartTbl.СуммаВозврат := - Journ.СуммаОпт;
+      PartTbl.СуммаЧек := 0;
+      PartTbl.Валюта := Journ.Валюта;
+      PartTbl.Курс := Journ.Валюта.GetTimedValue('КурсНаличный', CurrentDateTime);
+      PartTbl.Post;
+    end;
+
+  PartTbl.GroupBy('Партнер;Валюта;Курс','СуммаКРасчету;СуммаЧек;СуммаВозврат;Процент;Сумма;СуммаВВалюте');
+  PartTbl.DoCalculation('СуммаКРасчету','СуммаЧек + СуммаВозврат');
+  PartTbl.DoCalculation('СуммаВВалюте','Сумма*Курс');
+  if BonusTbl.LineCount = 0 then
+    exit;
+  PartTbl.Select;
+  while PartTbl.SelectNext do
+    begin
+      if PartTbl.СуммаКРасчету <> 0 then
+        begin
+          Процент := 0;
+          BonusTbl.SortBy('Сумма');
+          BonusTbl.Select;
+          while BonusTbl.SelectNext do
+            begin
+              if PartTbl.СуммаКРасчету >= BonusTbl.Сумма then
+                Процент := BonusTbl.Процент;
+            end;
+          if Процент <> 0 then
+            begin
+              PartTbl.Edit;
+              PartTbl.Процент := Процент;
+              PartTbl.Сумма := PartTbl.СуммаКРасчету * (Процент/100);
+
+              if VarAsBool(PartTbl.@Валюта.IsFocused) then
+                PartTbl.Курс := PartTbl.Валюта.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+              if VarAsDec(PartTbl.Курс) <> 0 then
+                PartTbl.СуммаВВалюте := PartTbl.Сумма / PartTbl.Курс;
+              PartTbl.Post;
+            end;
+        end;
+    end;
+
+  PartTbl.SortBy('Партнер');
+end;
+
+end.

@@ -1,0 +1,133 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+// создание таблицы значений из BLOB-поля   
+
+function CreateTableForBLOB : ISValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Structure', vtcBlob, 0);
+  Result.AddColumn('Data', vtcBlob, 0);
+  Result.Open;
+end;
+
+function CreateTableForBLOBStructure : ISValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Name', vtcString, 100);
+  Result.AddColumn('Type', vtcInteger, 0);
+  Result.AddColumn('Size', vtcInteger, 0);
+  Result.AddColumn('ColFormat', vtcString, 20);
+  Result.Open;
+end;  
+
+function CreateTblFromBLOB(OldData : Variant): ISValueTable;
+var
+  TblOldProps, TblStructure, TblAll : ISValueTable;
+  CommonFields : string;
+  DoExit : Boolean;
+begin
+  TblAll := CreateTableForBLOB;
+  try
+    TblAll.PackedData := OldData;
+  except // данные полностью несовместимы
+    DoExit := true;
+  end;
+  if DoExit then
+    begin
+      Result := Null;
+      exit;
+    end;
+  if not TblAll.SelectFirst then
+    begin
+      Result := Null;
+      exit;
+    end;
+  //
+  TblStructure := CreateTableForBLOBStructure;
+  TblStructure.PackedData := TblAll.Structure;
+  //
+  TblOldProps := CreateObject('ValueTable');
+  TblStructure.Select;
+  while TblStructure.SelectNext do
+    TblOldProps.AddColumn(TblStructure.Name, TblStructure.Type, TblStructure.Size);
+  TblOldProps.Open;
+  TblStructure.Select;
+  while TblStructure.SelectNext do
+    TblOldProps.SetColumnFormat(TblStructure.Name, VarAsStr(TblStructure.ColFormat));
+  TblOldProps.PackedData := TblAll.Data;
+  Result := TblOldProps;
+end;
+
+procedure AssignLinkRecords(TblContents: ISValueTable);server;
+var
+  Goods, DisCards, part, Allow : ISDictionary;
+  Doc : ISDocuments;
+  journ : ISJournal;
+  CodeList: ISValueList;
+  i: Integer;
+  TblGoods : ISValueTable;
+begin
+  if (TblContents.LineCount > 0) then
+    begin
+      CodeList := CreateObject('ValueList');
+      Goods := CreateObject('Справочники.Товары');
+      part := CreateObject('Справочники.ЮрПартнеры');
+      Doc := CreateObject('Документы.УстановкаСкидок');
+      journ := CreateObject('Журналы.ЖурналУстановкиСкидок');
+      Allow := CreateObject('Справочники.Скидки');
+      Doc.Select;
+      TblContents.SortBy('Код');
+      TblContents.GroupToList('Код', CodeList);
+      for i := 0 to CodeList.Count - 1 do
+        if Goods.FindByCode(CodeList.GetValue(i), false) then
+          begin
+            TblContents.CancelRange;
+            TblContents.SetRange(CodeList.GetValue(i),CodeList.GetValue(i));
+            TblContents.Select;
+            While TblContents.SelectNext do
+              begin
+                TblContents.Edit;
+                TblContents.Товар := Goods;
+
+                if VarAsFloat(TblContents.ЦенаБезСкидкиНадбавки) = 0 then
+                  if (TblContents.Дисконт = '') and (TblContents.Комментарий = '') then
+                    TblContents.ЦенаБезСкидкиНадбавки := TblContents.Цена
+                  else
+                    begin
+                      if (StrPos('карточка',TblContents.Комментарий) <> 0) or (StrPos('Ручная',TblContents.Комментарий) <> 0) then
+                        begin
+                          TblContents.ЦенаБезСкидкиНадбавки := Goods.Цена;
+                        end;
+                      if StrPos('установки',TblContents.Комментарий) <> 0 then
+                        begin
+                          if Allow.FindByName(ExtractWord(3,TblContents.Комментарий,' ')+' '+ExtractWord(4,TblContents.Комментарий,' '), false) then
+                            journ.SetRangeByField('Название',Allow);
+                          journ.Select;
+                          while journ.SelectNext do
+                            begin
+                              doc := journ.GetDoc;
+                              TblGoods := CreateTblFromBLOB(doc.Товары);
+                              TblGoods.SortBy('Код');
+                              if TblGoods.Find(TblContents.Код) then
+                                TblContents.ЦенаБезСкидкиНадбавки := Int(TblContents.Цена*(1+AbsF(TblGoods.Процент/100)));
+                            end
+                        end;
+                    end;
+
+                TblContents.Post;
+              end;
+          end;
+    end;
+  TblContents.CancelRange;
+end;
+
+
+
+
+
+end.

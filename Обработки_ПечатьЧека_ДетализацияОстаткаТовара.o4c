@@ -1,0 +1,122 @@
+interface
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, InitColors;
+
+implementation
+
+const
+  errUserBreak = 'Формирование отчета прекращено пользователем!';
+
+Var
+  Stores : ICValueList;
+  GoodDict, S, Store : ICDictionary;
+  GoodStoreTbl: ICValueTable;
+  RepCurrent : ICProcessing;
+  Constants : IC4VPAConst;
+  CursorVis : TCursor;
+  CursorsRefCount : Integer;
+  DateFrom, DateTo : DateTime;
+  IsZerro, LockStoreEdit, AfterExecute : Boolean;
+
+procedure CreateTblObjects;
+Begin
+  //партии товара
+  GoodStoreTbl := CreateObject('ТаблицаЗначений');
+  CreatePartGoodTblCols(GoodStoreTbl, False);
+  GoodStoreTbl.AddColumn('СкладНазвание', vtcString, 50);
+  SetFormatStdColumnsList(GoodStoreTbl, 'КолОбщ', '0.####');
+  GoodStoreTbl.Open;
+  GoodStoreTbl.SortedColumns := 'Склад';
+end;
+
+procedure RunReport;
+begin
+  GoodStoreTbl.UseDataSource(Null);
+  GoodStoreTbl.Clear;
+  GoodStoreTbl.CopyDataToServer;
+  server.CreateSrvObjects(GoodStoreTbl.SrvMean);
+  server.GetReportData(GoodDict,DateTo);
+  GoodStoreTbl.CopyDataFromServer;
+  GoodStoreTbl.UseDataSource(CtrlToVar(TVSPartGood));
+end;
+
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  GoodName: string;
+begin
+  Constants := GetConstants;
+  DateFrom := 0;
+  DateTo := CurrentDateTime;
+  CreateTblObjects;
+  GoodDict := Params.Товар; //Спавочник товаров
+//--------------------------------------------------
+  if VarAsBool(GoodDict.IsFocused) then
+    begin
+      if GoodDict.Код <> '' then
+        GoodName := GoodDict.Код + ' ' + GoodDict.НазвТовара
+      else
+        GoodName := GoodDict.НазвТовара;
+    end;
+  lGoodNameWhite.Caption := GoodName;
+  lGoodNameBlack.Caption := GoodName;
+  RunReport;
+  AfterExecute := true;
+end;
+
+
+{$D-}
+procedure dbgPartGood_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : boolean);
+begin
+ if GoodStoreTbl.IsFocused and (GoodStoreTbl.КолОбщ <= 0) then
+   if Highlight then
+     begin
+       BackColor:=BlZeroSel;
+       DrawFont.Color := BlFZeroSel;
+     end
+   else
+     begin
+       BackColor:=BlZero;
+       DrawFont.Color := BlFZero;
+     end;
+end;
+{$D+}
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel5:TO4Panel
+Splitter3:TO4Splitter
+dbgPartGood:TO4DBGrid
+Panel1:TO4Panel
+lbGoodName:TO4Label
+lGoodNameBlack:TO4Label
+lGoodNameWhite:TO4Label
+TVSPartGood:TO4TableValueSource
+TVSDoc:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

@@ -1,0 +1,680 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, –абота—ѕеременными, –абота—ќбъектами,
+  –абота— омпонентамиVCL, –абота—“аблицами«начений, –абота—“аблицами«наченийCL, –абота——айтом,
+  –абота—о—правочниками, –абота— оллекци€ми, –абота—о—правочникамиCL;
+
+implementation
+
+var
+  MasterData, SizesDic, ColorDic : ICDictionary;
+  CollectTbl, SizesTbl, ColorTbl, ColorTbl1: ICValueTable;
+  Article: Integer;
+  Dialog: ICProcessing;
+  Collection : ICCollection;
+  Options: ICOptions;
+  FieldList, FieldLinkList: String;
+  Values, ValuesLink : Variant;
+  Group, Cat, OldCat, BarCodeDic: ICDictionary;
+  Cursor: TCursor;
+  Constants: IC4VPAConst;
+  Append, UseSizeDet, UseColorDet : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  Options := GetOptions;
+  SizesDic := CreateObject('—правочники.“аблица–азмеров');
+  ColorDic := CreateObject('—правочники.÷вета'); 
+  BarCodeDic := CreateObject('—правочники.Ўтрих оды“оваров');
+  UseSizeDet := VarAsBool(Constants.ƒетализаци€ћоделейѕо–азмерам);
+  UseColorDet := VarAsBool(Constants.ƒетализаци€ћоделейѕо÷ветам);
+end;
+
+function GetCode(Article : Integer): String;
+var
+  i : integer;
+  BarCode: String;
+begin
+  BarCode := IntToStr(Article);
+  i := Constants.Ўтрих од“овара¬нутренний ол—имв;
+  while StrLength(BarCode) < i do
+    begin
+      BarCode := '0' + BarCode;
+    end;
+  Result := BarCode;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  PriceTypes: String;
+  i: Integer; 
+  ctrlTemp : TComponent;
+begin
+  GetLocalization(MasterData, Form);
+  if VarAsBool(MasterData.≈д»зм.IsFocused) then
+    edCollect.Text := MasterData.≈д»зм.Value;
+  Collection := CreateObject(' оллекции.≈д»зм');
+  CollectTbl := CreateObject('“аблица«начений');
+  CreateCollectionTbl(CollectTbl, Collection); //расчеты
+  while CollectTbl.SelectNext() do
+    edCollect.Items.Add(CollectTbl.Comment);
+  lbTitle.Caption := SetTitleCaption(ArrayOf(MasterData.ѕолноеЌазвание), '');
+  SizesTbl := CreateTblFromBLOB(MasterData.–азмерный–€д);
+  if IsNil(SizesTbl) then
+    begin
+      SizesTbl := CreateObject('ValueTable');
+      SizesTbl.AddColumn('Ќомѕозиции',vtcInteger,0);
+      SizesTbl.AddColumn('Ќазвание',vtcString,200);
+      SizesTbl.Open;
+      SizesTbl.SortBy('Ќомѕозиции');
+    end;
+  SizesTbl.UseDataSource(CtrlToVar(TVS));
+
+  ColorTbl1 := CreateTblFromBLOB(MasterData.÷ветовой–€д);
+  if IsNil(ColorTbl1) then
+    begin
+      ColorTbl1 := CreateObject('ValueTable');
+      ColorTbl1.AddColumn('јртикул',vtcInteger,0);
+      ColorTbl1.AddColumn(' од',vtcString,2);
+      ColorTbl1.AddColumn('Ќазвание',vtcString,200);
+      ColorTbl1.AddColumn('ѕолноеЌазвание',vtcString,200);
+      ColorTbl1.Open;
+    end;
+  if IsNil(ColorTbl) then
+    begin
+      ColorTbl := CreateObject('ValueTable');
+      ColorTbl.AddColumn('јртикул',vtcInteger,0);
+      ColorTbl.AddColumn(' од',vtcString,2);
+      ColorTbl.AddColumn('Ќазвание',vtcString,200);
+      ColorTbl.AddColumn('ѕолноеЌазвание',vtcString,200);
+      ColorTbl.Open;
+    end;
+  ColorTbl.SortBy('јртикул');
+  ColorTbl1.AppendTo('јртикул; од;Ќазвание;ѕолноеЌазвание',ColorTbl);
+  ColorTbl.UseDataSource(CtrlToVar(TVSColors));
+  cbShowOnSite.Checked := MasterData.ќтображатьЌа—айте;
+  Group := CreateObject('—правочники.√руппы“оваров');
+  Group.Find(MasterData.√руппа);
+  OldCat := CreateObject('—правочники.“овары');
+  OldCat.IncludeOnlyLevels(true);
+  if OldCat.Find(MasterData.@ атегори€) then
+    eCtg.Text := OldCat.NameField;
+  Cat := CreateObject('—правочники.“овары');
+  Cat.IncludeOnlyLevels(true);
+  Cat.Find(MasterData.@ атегори€);
+
+  Values := ArrayOf(MasterData. од,MasterData.Ќазвание,MasterData.ќтображатьЌа—айте,
+                    MasterData.¬х÷ена,MasterData.÷ена,MasterData.ќпт÷ена,MasterData. рќпт÷ена,
+                    MasterData. одѕроизводител€,MasterData. ол¬”паковке, 
+                    MasterData.ѕрЌац÷ена, MasterData.ѕрЌацќпт÷ена, MasterData.ѕрЌац рќпт÷ена);
+  ValuesLink := ArrayOf(MasterData.≈д»зм,MasterData.√руппа,MasterData.¬алюта¬х÷ена,MasterData.¬алюта÷ена,
+                        MasterData.¬алютаќпт÷ена,MasterData.¬алюта рќпт÷ена,MasterData. атегори€,MasterData.√руппа–азмеров);
+  FieldList := ' од;Ќазвание;ќтображатьЌа—айте;¬х÷ена;÷ена;ќпт÷ена; рќпт÷ена; одѕроизводител€; ол¬”паковке;ѕрЌац÷ена;ѕрЌацќпт÷ена;ѕрЌац рќпт÷ена';
+  FieldLinkList := '√руппа;ѕроизводитель;¬алюта¬х÷ена;¬алюта÷ена;¬алютаќпт÷ена;¬алюта рќпт÷ена; атегори€;√руппа–азмеров';
+  cbActive.Checked := MasterData.јктивность;
+  cbShowOnSite.Enabled := VarAsBool(MasterData.јктивность);
+  PriceTypes := Constants.“ипы÷ен;
+  if StrLength(PriceTypes) > 0 then
+    for i := 1 to StrLength(PriceTypes) do
+      begin
+        ctrlTemp := Form.FindComponent('pnPrice' + PriceTypes[i]);
+        if not IsNil(ctrlTemp) then
+         (ctrlTemp as TO4Panel).Visible := true;
+      end;
+end;
+
+procedure eName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(eName.Text), '');
+end;
+
+procedure ChangeGood(MasterData,GoodsDic:ICDictionary; SizesStr:string);
+var Comment, ColorName: String;
+begin
+ Comment := ' орректировка карточки модели';
+ ChangePrice(GoodsDic, MasterData.¬алюта¬х÷ена, MasterData.¬х÷ена, '¬х÷ена', Comment, 'EditInDoc');
+ ChangePrice(GoodsDic, MasterData.¬алюта÷ена, MasterData.÷ена, '÷ена', Comment, 'EditInDoc');
+ ChangePrice(GoodsDic, MasterData.¬алютаќпт÷ена, MasterData.ќпт÷ена, 'ќпт÷ена', Comment, 'EditInDoc');
+ ChangePrice(GoodsDic, MasterData.¬алюта рќпт÷ена, MasterData. рќпт÷ена, ' рќпт÷ена', Comment, 'EditInDoc');
+ GoodsDic.Edit;
+ GoodsDic.AssignFields('≈д»зм;√руппа;ѕроизводитель; ол¬”паковке; одѕроизводител€;ѕрЌац÷ена;ѕрЌацќпт÷ена;ѕрЌац рќпт÷ена; атегори€', MasterData);
+ ColorName := '';
+ if UseColorDet and ColorTbl.IsFocused then
+   begin
+     if VarAsStr(ColorTbl.Ќазвание) <> '' then
+       ColorName := ' ' + VarAsStr(ColorTbl.Ќазвание);
+     GoodsDic. од÷вета := VarAsStr(ColorTbl. од);
+     GoodsDic.÷вет := VarAsStr(ColorTbl.Ќазвание);
+   end;
+ if UseSizeDet and SizesTbl.IsFocused then
+   begin
+     SizesStr := ' р.'+ VarAsStr(SizesTbl.Ќазвание);
+     GoodsDic.–азмер := VarAsStr(SizesTbl.Ќазвание);
+   end;
+
+ GoodsDic.Ќазв“овара := MasterData.Ќазвание + ' ' + StrCopy(StrLowerCase(MasterData.√руппа.Ќазвание), 1, 4) + '.' + SizesStr +
+                          ' (' + MasterData.ѕроизводитель.Ќазвание + ' ' + MasterData. одѕроизводител€  + ColorName + ')';
+ if VarAsBool(Cat.IsFocused) then
+   GoodsDic.SetParent(Cat);
+ GoodsDic.Post;
+ GoodsDic.ApplyUpdates;
+end;   
+
+procedure AppendGood(MasterData,GoodsDic:ICDictionary; SizesStr:string);
+var Comment, ColorName, BarCodeStr: String;
+begin
+ Comment := 'ƒобавление карточки товаров';
+ GoodsDic.Append;
+ GoodsDic.јртикул := GetNextNumberForField('—правочники.“овары', 'јртикул', false, '');
+ GoodsDic. од := GetCode(GoodsDic.јртикул);
+ GoodsDic.AssignFields('≈д»зм;¬алюта¬х÷ена;¬алюта÷ена;¬алютаќпт÷ена;¬алюта рќпт÷ена;¬х÷ена;÷ена;ќпт÷ена; рќпт÷ена;√руппа;ѕроизводитель; ол¬”паковке; одѕроизводител€;ѕрЌац÷ена;ѕрЌацќпт÷ена;ѕрЌац рќпт÷ена; атегори€',MasterData);
+ GoodsDic.ћодель := MasterData;
+
+ ColorName := '';
+ if UseColorDet and ColorTbl.IsFocused then
+   begin
+     if VarAsStr(ColorTbl.Ќазвание) <> '' then
+       ColorName := ' ' + VarAsStr(ColorTbl.Ќазвание);
+     GoodsDic. од÷вета := VarAsStr(ColorTbl. од);
+     GoodsDic.÷вет := VarAsStr(ColorTbl.Ќазвание);
+   end;
+ if UseSizeDet and SizesTbl.IsFocused then
+   begin
+     SizesStr := ' р.'+ VarAsStr(SizesTbl.Ќазвание);
+     GoodsDic.–азмер := VarAsStr(SizesTbl.Ќазвание);
+   end;
+ GoodsDic.Ќазв“овара := MasterData.Ќазвание + ' ' + StrCopy(StrLowerCase(MasterData.√руппа.Ќазвание), 1, 4) + '.' + SizesStr +
+                          ' (' + MasterData.ѕроизводитель.Ќазвание + ' ' + MasterData. одѕроизводител€  + ColorName + ')';
+ if VarAsBool(Cat.IsFocused) then
+   GoodsDic.SetParent(Cat);
+ GoodsDic.Post;
+ GoodsDic.ApplyUpdates;
+ //****************************************
+ //        Ў“–»’- ќƒџ
+ BarCodeStr := GetCode(GoodsDic.јртикул);
+ BarCodeDic.UseMaster(Null);
+ if BarCodeDic.FindByCode(BarCodeStr,false) then
+   begin
+     BarCodeDic.Edit;
+     BarCodeDic.SetMaster(GoodsDic);
+     BarCodeDic.Post;
+     BarCodeDic.ApplyUpdates;
+   end
+ else
+   begin
+     BarCodeDic.UseMaster(GoodsDic);
+     BarCodeDic.Append;
+     BarCodeDic. од := BarCodeStr;
+     BarCodeDic. оличество := 1;
+     BarCodeDic.јктивность := true;
+     BarCodeDic.»дентификатор := '0';
+     BarCodeDic.Post;
+     BarCodeDic.ApplyUpdates;
+   end;
+ //****************************************
+ ChangePrice(GoodsDic, MasterData.¬алюта¬х÷ена, MasterData.¬х÷ена, '¬х÷ена', Comment, 'EditInGoodDic');
+ ChangePrice(GoodsDic, MasterData.¬алюта÷ена, MasterData.÷ена, '÷ена', Comment, 'EditInGoodDic');
+ ChangePrice(GoodsDic, MasterData.¬алютаќпт÷ена, MasterData.ќпт÷ена, 'ќпт÷ена', Comment, 'EditInGoodDic');
+ ChangePrice(GoodsDic, MasterData.¬алюта рќпт÷ена, MasterData. рќпт÷ена, ' рќпт÷ена', Comment, 'EditInGoodDic');
+end;
+
+procedure MDS_Validate(Sender: TObject);
+var
+  Collect, SizesStr: String;
+  Comment: String;
+  AddCnt, EdCnt, i: Integer;
+  GoodsDic: ICDictionary;
+  Change: Boolean;
+  ColorName, PackCnt: String;
+begin
+  if not VarAsBool(MasterData.@ атегори€.IsFocused) then
+    raise('”кажите категорию');
+  if SizesTbl.LineCount <> VarAsInt(MasterData. ол¬”паковке) then
+    Raise(' -во размеров должно совпадать с к-вом в упаковке');
+  if UseSizeDet and (SizesTbl.LineCount=0) then
+    raise('“аблица размеров не заполнена!');
+  if UseColorDet and (ColorTbl.LineCount=0) then
+    raise('“аблица цветов не заполнена!');
+  Collect := edCollect.Text;
+  ChangeCollection(Collection, MasterData, Collect); //расчеты
+  MasterData.÷ветовой–€д := WritePropsToBlob(ColorTbl);
+  MasterData.–азмерный–€д := WritePropsToBlob(SizesTbl);  
+  MasterData.ѕолноеЌазвание := MasterData.ѕроизводитель.Ќазвание + ' ' + MasterData. одѕроизводител€;
+  MasterData.Params['add'] := true;
+  SetLocalization(MasterData, Form);
+  if VarAsBool(Constants.»зменение“оваров“олько„ерезћодели) and (UseSizeDet or UseColorDet) and
+     (MessageDlg('ќбновить товары?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then  // ≈сли используетьс€ детализаци€ либо по цветам либо по размерам
+  try
+    Cursor := WaitCursorStart;
+    Cat.Find(MasterData.@ атегори€);
+    GoodsDic := CreateObject('—правочники.“овары');
+    GoodsDic.SetFieldFilter('ћодель','=',MasterData,'','',Null);
+    Change := Append;
+    if not Change then
+      for i := 1 to WordCount(FieldList,';') do
+        if (MasterData._Default[ExtractWord(i,FieldList,';')] <> Values[i-1]) then
+          begin
+            Change := true;
+            break;
+          end;
+    if not Change then
+      for i := 1 to WordCount(FieldLinkList,';') do
+        if IsObjEQ(MasterData._Default[ExtractWord(i,FieldLinkList,';')], ValuesLink[i-1], false) then
+          begin
+            Change := true;
+            break;
+          end;  
+    SizesStr := '';
+    if SizesTbl.SelectFirst then
+      SizesStr := ' р.' +SizesTbl.Ќазвание;
+    if SizesTbl.SelectLast then
+      SizesStr := SizesStr + '-'+ SizesTbl.Ќазвание;
+
+    ColorTbl.DisableControls;
+    SizesTbl.DisableControls;
+    if UseSizeDet and UseColorDet then // »спользуетьс€ детализаци€ по цветам и по размерам
+      begin
+        ColorTbl.Select;
+        while ColorTbl.SelectNext do
+          begin
+            GoodsDic.SetFieldFilter(' од÷вета','=',ColorTbl. од,'','',null);
+            SizesTbl.Select;
+            While SizesTbl.SelectNext do
+              begin
+                GoodsDic.SetFieldFilter('–азмер','=',SizesTbl.Ќазвание,'','',null);
+                if GoodsDic.Select then
+                  begin
+                    if Change then
+                      While GoodsDic.SelectNext do
+                        begin
+                          ChangeGood(MasterData,GoodsDic,SizesStr);
+                          inc(EdCnt);
+                        end
+                  end
+                else
+                  begin
+                    AppendGood(MasterData,GoodsDic,SizesStr);
+                    inc(AddCnt);
+                  end;
+              end;
+          end;
+      end
+    else
+    if UseSizeDet then // »спользуетьс€ детализаци€ по размерам
+      begin
+        SizesTbl.Select;
+        While SizesTbl.SelectNext do
+          begin
+            GoodsDic.SetFieldFilter('–азмер','=',SizesTbl.Ќазвание,'','',null);
+            if GoodsDic.Select then
+              begin   
+                if Change then
+                  While GoodsDic.SelectNext do
+                    begin
+                      ChangeGood(MasterData,GoodsDic,SizesStr);
+                      inc(EdCnt);
+                    end;
+              end
+            else
+              begin
+                AppendGood(MasterData,GoodsDic,SizesStr);
+                inc(AddCnt);
+              end;
+          end;
+
+      end
+    else
+    if UseColorDet then // »спользуетьс€ детализаци€ по цветам
+      begin
+        ColorTbl.Select;
+        while ColorTbl.SelectNext do
+          begin
+            GoodsDic.SetFieldFilter(' од÷вета','=',ColorTbl. од,'','',null);
+            if GoodsDic.Select then
+              begin
+               if Change then
+                 While GoodsDic.SelectNext do
+                   begin
+                     ChangeGood(MasterData,GoodsDic,SizesStr);
+                     inc(EdCnt);
+                   end
+              end
+            else
+              begin
+                AppendGood(MasterData,GoodsDic,SizesStr);
+                inc(AddCnt);
+              end;
+          end;
+      end;
+
+  finally
+    ColorTbl.EnableControls;
+    SizesTbl.EnableControls; 
+    WaitCursorFinish(Cursor);
+  end;
+  Comment := '';
+  if AddCnt > 0 then
+    Comment := 'ƒобавлено: '+ VarAsStr(AddCnt) + ' ';
+  if EdCnt > 0 then
+    Comment := Comment + '»зменено: '+ VarAsStr(EdCnt) + ' ';
+  if (AddCnt > 0) or (EdCnt > 0) then
+    ShowMessage(Comment +  'записей в справочнике готовой продукции');
+
+end;
+
+procedure tbRefresh_Click(Sender: TObject);
+begin
+  if VarAsBool(MasterData.@√руппа–азмеров.IsFocused) then
+    begin
+      SizesTbl.Clear;
+      SizesDic.SetFieldFilter('Ќом√руппы','=',MasterData.√руппа–азмеров.Ќом√руппы,'','',Null);
+      SizesDic.Select;
+      while SizesDic.SelectNext do
+        if SizesDic.Ќомѕозиции > 0 then
+          begin
+            SizesTbl.Append;
+            SizesTbl.AssignFields('Ќомѕозиции;Ќазвание',SizesDic);
+            SizesTbl.Post;
+          end;
+      SizesDic.CancelFieldFilter('Ќом√руппы'); 
+      MasterData. ол¬”паковке := SizesTbl.LineCount;
+    end;
+end;
+
+procedure eSizeGroup_ActionClear(Sender: TObject);
+begin
+  SizesTbl.Clear;
+end;
+
+procedure miDel_Click(Sender: TObject);
+begin
+  if SizesTbl.IsFocused and (MessageDlg('”далить запись?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrYes) then
+    SizesTbl.Delete;
+end;
+
+procedure RefreshColorTbl;
+begin
+  ColorTbl.SortBy('ѕолноеЌазвание');
+  ColorTbl.DoNumbering('јртикул',1,1);
+  ColorTbl.SortBy('јртикул');
+  ColorTbl.Select;
+  while ColorTbl.SelectNext do
+    begin
+      ColorTbl.Edit;
+      ColorTbl. од := FormatFloat('00', ColorTbl.јртикул);
+      ColorTbl.ѕолноеЌазвание := FormatFloat('00', ColorTbl.јртикул) + ' ' + VarAsStr(ColorTbl.Ќазвание);
+      ColorTbl.Post;
+    end;
+end;    
+
+procedure tbAdd_Click(Sender: TObject);
+var DefName : string;
+begin
+  if ColorDic.SelectInForm('',DefName,Null) then
+    try
+      ColorTbl.DisableControls;
+      if ColorTbl.Locate('Ќазвание',DefName) then
+        ShowMessage('“акой цвет уже есть в списке!')
+      else
+        begin
+          ColorTbl.Append;
+          ColorTbl.Ќазвание := DefName;
+          ColorTbl.ѕолноеЌазвание := 'zzzzzzz'; // ƒл€ сортировки
+          ColorTbl.Post;
+          RefreshColorTbl;
+        end;
+    finally
+      ColorTbl.EnableControls;
+    end;
+end;
+
+procedure EditColor_Click(Sender: TObject);
+var DefName, OldColor: String;
+    RecID : Double;
+begin
+  if ColorTbl.IsFocused then
+    try
+      ColorTbl.DisableControls;
+      OldColor := VarAsStr(ColorTbl.Ќазвание);
+      RecID := ColorTbl.RecID;
+      if ColorDic.SelectInForm('',DefName,Null) and (DefName<>OldColor) then
+        begin
+         if ColorTbl.Locate('Ќазвание',DefName) then
+           ShowMessage('“акой цвет уже есть в списке!')
+         else
+           begin  
+             if ColorTbl.FindByRecID(RecID) then
+               begin
+                 ColorTbl.Edit;
+                 ColorTbl.Ќазвание := DefName;
+                 ColorTbl.Post;
+                 RefreshColorTbl;
+               end;
+           end;
+        end;
+    finally    
+      ColorTbl.FindByRecID(RecID);
+      ColorTbl.EnableControls;
+    end;
+end;
+
+procedure tbDelColor_Click(Sender: TObject);
+var
+  GoodsDic: ICDictionary;
+begin
+  if ColorTbl.IsFocused and (MessageDlg('”далить запись?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrYes) then
+    begin
+      GoodsDic := CreateObject('—правочники.“овары');
+      GoodsDic.SetFieldFilter('ћодель','=',MasterData,'','',null);
+      GoodsDic.SetFieldFilter(' од÷вета','=',ColorTbl. од,'','',null);
+      GoodsDic.Select;
+      if GoodsDic.SelectNext then
+        MessageDlg('Ќельз€ удалить цвет, так как есть товары, которые на него ссылаютс€!',mtWarning,ArrayOf(mbOk))
+      else 
+        begin             
+          ColorTbl.UseDataSource(0);
+          ColorTbl.Delete;
+          RefreshColorTbl;
+          ColorTbl.UseDataSource(CtrlToVar(TVSColors));
+        end;
+    end;
+end;
+
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  MasterData.ApplyUpdates;
+end;
+
+procedure ToolButton4_Click(Sender: TObject);
+begin
+  MasterData.Ѕирка := '';
+  Image1.Visible := true;
+  Image2.Visible := false;
+  tbAddTabs.Visible := true;
+  tbEditTabs.Visible := false;
+  tbPrint.Enabled := false;
+end;
+
+procedure MDS_Append(Sender: TObject);
+var
+  CopyFrom, Currency: ICDictionary;
+  v : Variant;
+  i: Integer;
+begin
+  Append := true;
+  Currency := CreateObject('—правочники.¬алюты');
+  v := MasterData.Params['CopyFrom'];
+  if MasterData.HasParam('CopyFrom') and (not IsNull(v)) then
+    begin
+      CopyFrom := MasterData.Params['CopyFrom'];
+      MasterData.AssignFields('Ќазвание;ѕолноеЌазвание;÷ветовой–€д;–азмерный–€д;¬алюта¬х÷ена;¬алюта÷ена;'+
+                               '¬алютаќпт÷ена;¬алюта рќпт÷ена;¬х÷ена;÷ена;ќпт÷ена; рќпт÷ена;ѕрЌац÷ена;ѕрЌацќпт÷ена;ѕрЌац рќпт÷ена;≈д»зм;'+
+                              '“аблицаЋокализаций;»нформаци€;√руппа;ќтображатьЌа—айте;јктивность;ѕроизводитель;'+
+                              ' одѕроизводител€; ол¬”паковке; атегори€;√руппа–азмеров;', CopyFrom);
+      MasterData.јртикул := GetNextNumberForField('—правочники.ћодели√отовойѕродукции', 'јртикул', false, '');
+      MasterData. од := GetCode(MasterData.јртикул);
+    end
+  else
+    begin
+      MasterData.¬алюта¬х÷ена := GetNatCurrency(Currency);  
+
+      if IsObjFocused(Constants.¬алюта÷ена”молч) then
+        MasterData.¬алюта÷ена := Constants.¬алюта÷ена”молч
+      else
+        MasterData.¬алюта÷ена := Currency;
+
+      if IsObjFocused(Constants.¬алютаќпт÷ена”молч) then
+        MasterData.¬алютаќпт÷ена := Constants.¬алютаќпт÷ена”молч
+      else
+        MasterData.¬алютаќпт÷ена := Currency;
+
+      if IsObjFocused(Constants.¬алюта рќпт÷ена”молч) then
+        MasterData.¬алюта рќпт÷ена := Constants.¬алюта рќпт÷ена”молч
+      else
+        MasterData.¬алюта рќпт÷ена := Currency;
+
+      MasterData.јртикул := GetNextNumberForField('—правочники.ћодели√отовойѕродукции', 'јртикул', false, '');
+      MasterData. од := GetCode(MasterData.јртикул);    
+      MasterData.јктивность := 1;  
+
+      if VarAsBool(Constants.»спќбщЌаценки) then
+        begin
+          MasterData.ѕрЌац÷ена := Constants.ѕрЌац÷ена;
+          MasterData.ѕрЌацќпт÷ена := Constants.ѕрЌацќпт÷ена;
+          MasterData.ѕрЌац рќпт÷ена := Constants.ѕрЌац рќпт÷ена;
+        end;
+
+    end;
+end;
+
+
+procedure tcLocal_Change(Sender: TObject);
+begin
+  ChangeLocalization(Form);
+end;
+
+procedure cbShowOnSite_Click(Sender: TObject);
+begin
+  MasterData.ќтображатьЌа—айте := cbShowOnSite.Checked;
+end;
+
+procedure cbActive_Click(Sender: TObject);
+begin
+  MasterData.јктивность := Abs(VarAsInt(cbActive.Checked));
+  if MasterData.јктивность = 0 then
+    begin
+      MasterData.ќтображатьЌа—айте := false;
+      cbShowOnSite.Checked := false;
+      cbShowOnSite.Enabled := false;
+      ShowMessage('ћодель не будет отображатс€ на сайте!');
+    end
+  else
+    cbShowOnSite.Enabled := true;
+end;
+
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Panel3:TO4Panel
+lbTitle:TO4Label
+Panel4:TO4Panel
+LinkImage1:TO4LinkImage
+PageControl1:TO4PageControl
+tsMain:TTabSheet
+Panel5:TO4Panel
+Label2:TO4Label
+Label1:TO4Label
+Image1:TO4Image
+Image2:TO4Image
+Label4:TO4Label
+Label6:TO4Label
+Label7:TO4Label
+Label3:TO4Label
+lbPackCnt:TO4Label
+Label11:TO4Label
+Label5:TO4Label
+Label14:TO4Label
+eCode:TO4DBEdit
+eName:TO4DBEdit
+ToolBar1:TO4ToolBar
+tbAddTabs:TO4ToolButton
+tbEditTabs:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbPrint:TO4ToolButton
+deUnitName:TO4DBEdit
+edCollect:TO4Edit
+ToolBar3:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelColor:TO4ToolButton
+dbgColors:TO4DBGrid
+eGroup:TO4DBEdit
+cbActive:TO4CheckBox
+eManufacturer:TO4DBEdit
+ePackCnt:TO4DBEdit
+eCodeManufacturer:TO4DBEdit
+dbgData:TO4DBGrid
+ToolBar2:TO4ToolBar
+tbRefresh:TO4ToolButton
+tbDel:TO4ToolButton
+eSizeGroup:TO4DBEdit
+eCtg:TO4DBEdit
+tsPrice:TTabSheet
+Panel6:TO4Panel
+lbCurPriceTitle:TO4Label
+lbCurName:TO4Label
+Label8:TO4Label
+pnInPrice:TO4Panel
+Label9:TO4Label
+dbePriceIn:TO4DBEdit
+dbeCurrencyIn:TO4DBEdit
+pnPrice0:TO4Panel
+lbPriceName1:TO4Label
+dbePrice1:TO4DBEdit
+dbeCurrency1:TO4DBEdit
+dbePrecent1:TO4DBEdit
+pnPrice1:TO4Panel
+lbPriceName2:TO4Label
+dbePrice2:TO4DBEdit
+dbeCurrency2:TO4DBEdit
+dbePrecent2:TO4DBEdit
+pnPrice2:TO4Panel
+lbPriceName3:TO4Label
+dbePrice3:TO4DBEdit
+dbeCurrency3:TO4DBEdit
+dbePrecent3:TO4DBEdit
+tsInfo:TTabSheet
+dmNotes:TO4DBMemo
+tsSite:TTabSheet
+tcLocal:TO4TabControl
+Label12:TO4Label
+Label13:TO4Label
+eDescrLang:TO4Memo
+eTitleLang:TO4Edit
+cbShowOnSite:TO4CheckBox
+Panel2:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSizes:TO4PopupMenu
+miDel:TO4MenuItem
+TVS:TO4TableValueSource
+TVSColors:TO4TableValueSource
+pmTag:TO4PopupMenu
+MenuItem5:TO4MenuItem
+MenuItem6:TO4MenuItem
+MenuItem7:TO4MenuItem
+pmColors:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem3:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem8:TO4MenuItem
+MenuItem9:TO4MenuItem
+MenuItem10:TO4MenuItem
+MenuItem11:TO4MenuItem

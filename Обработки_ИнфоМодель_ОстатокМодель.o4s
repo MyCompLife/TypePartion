@@ -1,0 +1,112 @@
+interface
+
+uses
+ System, DispIntf, Reports, ConstNames;
+
+
+implementation
+
+var
+ AccsGood, AccsPartGood : ISAccs;
+ TblPartGood, GoodsTbl, StoreTbl : ISValueTable;
+ PartGoodList,PartList, GoodsList : ISValueList;
+ Partner, Store : Variant;
+ Date : DateTime;
+ ShowCodeUnitname : boolean;
+ DetPart, UseLevel, GroupModel : boolean;
+ Items, Currency : ISDictionary;  
+ Model : string;
+
+procedure CreateSrvObjects; server;
+begin
+ Currency := CreateObject('Справочники.Валюты');
+ AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+ AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+ TblPartGood := CreateObject('ТаблицаЗначений');
+ TblPartGood.Close();
+ TblPartGood.AddColumn('DimensionID', lftFloat, 0);
+
+ TblPartGood.Open();
+ PartList := CreateObject('СписокЗначений');
+ PartGoodList := CreateObject('СписокЗначений');
+end;
+
+function SetFilters : boolean;
+begin
+  Result := true;
+  AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Склад;КолОбщ=Количество;СумВх=СуммаВх', GoodsTbl);
+  GoodsTbl.GroupBy('Склад;Товар','Количество;Сумма;СуммаВх');
+  GoodsTbl.DoGetLinks('Цена=Товар.ОптЦена');
+  GoodsTbl.DoCalculation('Сумма','Цена*Количество');
+end;
+
+procedure SetGoods(Doc:ISProcessing; var Accept : boolean);
+var
+ Dims: Double;
+ b: boolean;
+ MotionID: Integer;
+ ЗначенияПрихода, ЗначенияОтпуска: String;
+begin
+ AccsGood.ClearFieldBuffers();
+ AccsGood.ClearFieldFilters();
+ AccsPartGood.ClearFieldBuffers();
+ AccsPartGood.ClearFieldFilters();
+ PartList.Clear();
+
+ Date := RoundDate(Date, rdDay, true);
+
+ GoodsTbl.Clear();
+ GoodsTbl.SortBy(''); 
+ StoreTbl.Clear();
+ StoreTbl.SortBy('');
+
+ if SetFilters then begin
+   // отправка сообщения клиенту
+   Doc.NotifyClient(RestsView, 1, 50);
+   if Doc.Terminated then
+     exit;
+   GoodsTbl.SortBy('Товар');
+ end;
+ GoodsTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;Модель=Товар.Код');
+
+ //удаляем 0-вые позиции, добавлено 16.09.02, замедляет выполнение отчета
+ GoodsTbl.Select;
+ GoodsTbl.SelectFirst;
+ while not GoodsTbl.EOF do begin
+   if ((GoodsTbl.Количество <> 0) or (RoundDec(GoodsTbl.Сумма,2) <> 0) or (RoundDec(GoodsTbl.СуммаВх,2) <> 0))
+        and (StrCopy(GoodsTbl.Код,1,4) = Model)
+   then GoodsTbl.SelectNext
+   else GoodsTbl.Delete;
+ end;
+//
+ if GroupModel then
+   begin
+     GoodsTbl.DoCalculation('Код','Модель');
+     GoodsTbl.GroupBy('Склад;Код;ЕдИзм','Количество;Сумма;СуммаВх');
+     GoodsTbl.DoCalculation('Цена','Сумма/Количество');
+   end;
+ GoodsTbl.CopyTo('Склад;Код;ЕдИзм;Количество;Сумма;Цена;СуммаВх', StoreTbl);
+ StoreTbl.GroupBy('Склад', 'Количество;Сумма;СуммаВх');
+ StoreTbl.SortBy('Склад');
+ GoodsTbl.SortBy('Код');
+ AddTotalRow(GoodsTbl, 'Код', 'Количество;Сумма;СуммаВх');
+ Accept := True;
+end;
+
+function GetRunReportEP(GoodsTbls, StoreTbls : ISValueTable; Models : string; GoodLists : ISValueList;
+                        ShowCodeUnitnames, UseLevels : boolean;
+                        AItems : ISDictionary;
+                        Dates : DateTime; GroupModels: boolean) : Variant; server;
+begin
+ GoodsTbl := GoodsTbls; 
+ StoreTbl := StoreTbls;
+ Model := Models;
+ GoodsList := GoodLists;
+ Date := Dates;
+ ShowCodeUnitname := ShowCodeUnitnames;
+ UseLevel := UseLevels;
+ Items := AItems;
+ GroupModel := GroupModels;
+ Result := EntryPoint(SetGoods);
+end;
+end.

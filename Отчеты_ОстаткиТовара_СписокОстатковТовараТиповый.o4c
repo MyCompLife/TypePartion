@@ -1,0 +1,285 @@
+interface
+
+uses
+  System, DispIntf, »нтерфейс, –асчеты, ConstNames, Reports;
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  Stores, GoodList : ICValueList;
+  S, UrPartner, ManPartner, Partner, Store, GoodDict : ICDictionary;
+  GoodsTbl, StoreTbl, GoodsTblG, GoodsTblAll : ICValueTable;
+  V: ICReport;
+  IsDate : DateTime;
+
+procedure SetGoodsTblColumns(GoodsTbl : ICValueTable; DoOpen : boolean = true);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn(' од', lftString, 20);
+  GoodsTbl.AddColumn('“овар', lftLink, 0);
+  GoodsTbl.AddColumn('≈д»зм', lftLink, 0);
+  GoodsTbl.AddColumn(' оличество', vtcFft, 7);
+  GoodsTbl.AddColumn('÷ена¬¬ал', vtcFft, 7);
+  GoodsTbl.AddColumn('—умма¬¬ал', vtcFft, 7);
+  GoodsTbl.AddColumn('¬алюта', lftLink, 0);
+  GoodsTbl.AddColumn(' урс', vtcFft, 2);
+  GoodsTbl.AddColumn('÷ена', vtcFft, 7);
+  GoodsTbl.AddColumn('—умма', vtcFft, 7);
+  GoodsTbl.AddColumn('÷енаќпт¬¬ал', vtcFft, 7);
+  GoodsTbl.AddColumn('—уммаќпт¬¬ал', vtcFft, 7);
+  GoodsTbl.AddColumn('÷енаќпт', vtcFft, 7);
+  GoodsTbl.AddColumn('—уммаќпт', vtcFft, 7);
+  GoodsTbl.AddColumn('ѕарти€', lftFloat, 0);
+  GoodsTbl.AddColumn('—клад', lftLink, 0);
+  if DoOpen then GoodsTbl.Open();
+end;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+  Stores := CreateObject('—писок«начений');
+  Store := CreateObject('—правочники.—клады');
+  S := CreateObject('—правочники.—клады');
+  Stores.AddValue(Trans('¬се склады'),Null);
+  S.Select;
+  if S.FindByField('јктивность', True, False) then
+    Stores.AddValue(S.Ќазвание,S);                 //????    (мое предположение : активный склад должен быть первым)
+  S.Select;
+  while S.SelectNext do
+    if not S.јктивность = True then
+      Stores.AddValue(S.Ќазвание,S); // или ('',S)
+  Stores.UseControl(CtrlToVar(eStores));
+  Stores.CurIndex := 0;
+  GoodsTbl := CreateObject('“аблица«начений');
+  SetGoodsTblColumns(GoodsTbl,False);
+  GoodsTbl.Open;
+  SetGoodsTblColumnsFormat(GoodsTbl);
+  StoreTbl := CreateObject('“аблица«начений');
+  StoreTbl.Close();
+  StoreTbl.AddColumn(' од', lftString, 20);
+  StoreTbl.AddColumn('“овар', lftLink, 0);
+  StoreTbl.AddColumn('≈д»зм', lftLink, 0);
+  StoreTbl.AddColumn(' оличество', vtcFft, 7);
+  StoreTbl.AddColumn('÷ена¬¬ал', vtcFft, 7);
+  StoreTbl.AddColumn('—умма¬¬ал', vtcFft, 7);
+  StoreTbl.AddColumn('¬алюта', lftLink, 0);
+  StoreTbl.AddColumn(' урс', vtcFft, 2);
+  StoreTbl.AddColumn('÷ена', vtcFft, 7);
+  StoreTbl.AddColumn('—умма', vtcFft, 7);
+  StoreTbl.AddColumn('÷енаќпт¬¬ал', vtcFft, 7);
+  StoreTbl.AddColumn('—уммаќпт¬¬ал', vtcFft, 7);
+  StoreTbl.AddColumn('÷енаќпт', vtcFft, 7);
+  StoreTbl.AddColumn('—уммаќпт', vtcFft, 7);
+  StoreTbl.AddColumn('ѕарти€', lftFloat, 0);
+  StoreTbl.AddColumn('—клад', lftLink, 0);
+ // GoodsTbl.CopyColumnsTo(StoreTbl);
+  StoreTbl.Open();
+  SetGoodsTblColumnsFormat(StoreTbl);
+  UrPartner := CreateObject('—правочники.ёрѕартнеры');
+  ManPartner := CreateObject('—правочники.‘изЋица');
+ //категории
+  GoodDict := CreateObject('—правочники.“овары');
+  GoodList := CreateObject('—писок«начений');
+  GoodsTblG := CreateObject('“аблица«начений');
+  GoodsTblAll := CreateObject('“аблица«начений');
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  CreateObjects;
+  Server.CreateSrvObjects;
+  GoodDict.OpenFormInplace(' атегории“оваров', CtrlToVar(pGoodsCtg));
+  eDate.Text := DateToStr(CurrentDate);
+  IsDate := StrToDate(eDate.text);
+  XGrid.AddSection('Hed');
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var i,j: Integer;
+begin
+  try
+    CursorVis := WaitCursorStart;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    GetStore(Stores, Store);
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer;
+    StoreTbl.Clear;
+    StoreTbl.CopyDataToServer;
+ // категории
+    if not VarAsBool(GoodDict.Params['UseLevel']) then
+      GoodDict.AssignSelectParamsOnSrv(Null)
+    else
+      begin
+        GoodDict.GetCheckLevelsAsValueList(GoodList);
+        if GoodDict.InteractiveUseLevels and (GoodList.Count = 0) then
+           begin
+             ShowMessage(CheckCtg);
+             exit;
+           end;
+      end;
+    GoodList.CopyDataToServer();
+ //
+    V.RunThreadProcess(Server.GetRunReportEP(GoodsTbl.SrvMean, StoreTbl.SrvMean, GoodList.SrvMean,
+                              Partner, Store, VarAsBool(Options.GetServerPrm(ShowCodeUnitName)),
+                              GoodDict.Params['UseLevel'], GoodDict.SrvMean,
+                              IsDate, cbDetPart.Checked, ePriceType.Text ),
+       ReportRunning);
+    GoodsTbl.CopyDataFromServer;
+    StoreTbl.CopyDataFromServer;
+    StoreTbl.Select;
+    i := 1;
+    GoodsTbl.SortBy('—клад;“овар; од');
+    while StoreTbl.SelectNext do begin
+      StoreTbl.AddToXGrid(CtrlToVar(XGrid), 'Store', ' од;;;;;;;;;—умма;;;;—уммаќпт' , i, 1);
+      GoodsTbl.SetRange(StoreTbl.—клад,StoreTbl.—клад);
+      GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Det', '-' , 0, 0);
+      inc(i);
+    end;
+    GoodsTbl.SortBy(' од');
+    GoodsTbl.SetRange(lblTotal, lblTotal);
+    GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Total', ' од;;;;;;;;;—умма;;;;—уммаќпт' , 0, 0);
+///////////////
+        GoodsTbl.CopyColumnsTo(GoodsTblG);
+        GoodsTbl.GroupTo('¬алюта','—умма¬¬ал;—умма;—уммаќпт¬¬ал;—уммаќпт',GoodsTblG);
+        GoodsTbl.CopyColumnsTo(GoodsTblAll);
+        GoodsTblG.Select;
+        while GoodsTblG.SelectNext do
+          begin
+            GoodsTblAll.Append;
+            if VarAsBool(GoodsTblG.¬алюта.IsFocused) then
+              GoodsTblAll. од := GoodsTblG.¬алюта. од;
+            GoodsTblAll.—умма¬¬ал := RoundDec(GoodsTblG.—умма¬¬ал,2);
+            GoodsTblAll.—умма := RoundDec(GoodsTblG.—умма,2);
+            GoodsTblAll.—уммаќпт¬¬ал := RoundDec(GoodsTblG.—уммаќпт¬¬ал,2);
+            GoodsTblAll.—уммаќпт := RoundDec(GoodsTblG.—уммаќпт,2);
+            GoodsTblAll.Post;
+          end;
+          GoodsTblAll.SortBy('- од');
+          GoodsTblAll.SelectFirst;
+          GoodsTblAll.AddToXGrid(CtrlToVar(XGrid), 'CurrSum', '; од;;;;—умма¬¬ал;;;;—умма;;—уммаќпт¬¬ал;;—уммаќпт', 0, GoodsTblAll.LineCount-1);
+///////////////
+    XGrid.Cells(3,1,XGrid.RowCount,3).AdjustColWidths(0);
+    XGrid.FixedColCount := 3;
+    if XGrid.RowCount>4 then XGrid.FixedRowCount := 4;
+    XGrid.Cell(1,1).Value := XGrid.Cell(1,1).Value + ' ' + DateToStr(IsDate);
+  finally
+    SetCursor(CursorVis);
+  end;
+  tbPrint.Enabled := true;
+end;
+
+procedure ePartner_ActionExecute(Sender : TObject);
+var
+  PartName : string;
+begin
+  PartName := ePartner.Text;
+  case VarAsInt(ePartnerType.ItemIndex) of
+    0 : begin
+      if UrPartner.SelectInForm('¬ыборѕартнера', PartName, Null) then begin
+        ePartner.Text := PartName;
+        Partner := UrPartner;
+      end;
+    end;
+    1 : begin
+      if ManPartner.SelectInForm('¬ыбор‘изЋица', PartName, Null) then begin
+        ePartner.Text := PartName;
+        Partner := ManPartner;
+      end;
+    end;
+  end;
+end;
+
+procedure ePartner_ActionClear(Sender : TObject);
+begin
+  Partner := Null;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(V.GetActiveFormComment(), True);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  IsDate := StrToDate(eDate.text);
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible
+   then tbXTools.ImageIndex := 98 else tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+Panel2:TO4Panel
+GroupBox2:TO4GroupBox
+eStores:TO4Edit
+Panel3:TO4Panel
+GroupBox3:TO4GroupBox
+ePartnerType:TO4Edit
+ePartner:TO4Edit
+cbDetPart:TO4CheckBox
+GroupBox1:TO4GroupBox
+ePriceType:TO4Edit
+XGrid:TO4XGrid
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel4:TO4Panel
+lDateFrom:TO4Label
+eDate:TO4Edit
+pGoodsCtg:TO4Panel
+Label1:TO4Label
+TableValueSource1:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

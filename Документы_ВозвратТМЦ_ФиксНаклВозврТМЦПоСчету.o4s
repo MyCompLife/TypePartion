@@ -1,0 +1,205 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация;
+
+implementation
+
+var
+  AccsGood, AccPartGood, AccsGoodByInvoice, AccsGoodResp, AccsGoodCurrent : ISAccs;
+  OverMinObj : ISValueTable;
+  Date : DateTime;
+  Constants : IS4VPAConst;
+
+procedure ApplyTblToAccs(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+  PartGoodID : Double;
+  Sum, SumNt, InSumNT, Col, CurSum, Tax, InTax, OverSum : Decimal;
+  HasResp : Boolean;
+begin
+  Count := 1;
+  Total := Doc.LinesCount();
+  Constants := GetConstants;
+  HasResp := VarAsBool(Doc.@Ответственный.IsFocused);
+  Doc.SelectLines();
+  while Doc.SelectNextLine() do
+    begin
+      Col := Doc.Количество;
+      PartGoodID := Doc.Партия;
+      СуммаНДС(Doc, Sum, SumNT, Tax, Col); //отпускная сумма с НДС и отп. сумма без НДС
+      InSumNT := VarAsDec(Doc.ВхЦенаБезНДС) * Col; //сумма по вх. цене без НДС
+      if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+        InSumNT := RoundFloat(InSumNT, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС);
+      InTax := InSumNT * Doc.СтавкаНДС / 100;
+      OverSum := SumNT - InSumNT; //наценка
+      CurSum := Doc.ЦенаВВалюте * Col;
+      // партии товаров
+      if RestructureExistedConsg(Doc, AccPartGood, amtIncome) then
+        PartGoodID := Doc.Партия
+      else
+        PartGoodID := AppendGoodsConsignAtIncome(Doc, AccPartGood);
+      //Остатки товаров
+      MakeGoodMotion(AccsGood, Doc, PartGoodID, midIncome,
+        ArrayOf(Col, InSumNT, InTax, Sum, Tax, OverSum, CurSum, CurSum));
+
+      //oстатки товара на сегодня
+      MakeGoodMotionCurrent(AccsGoodCurrent, Doc, midIncome, Col);
+
+      //остатки товара на ответственном
+      if HasResp then
+        begin
+          AccsGoodResp.ClearFieldBuffers();
+          AccsGoodResp.Ответственный := Doc.@Ответственный;
+          AccsGoodResp.Товар := Doc.@Товар;
+          AccsGoodResp.Партия := PartGoodID;
+          AccsGoodResp.Тип := midIncome;
+          AccsGoodResp.СумОтп := Sum;
+          AccsGoodResp.КолОбщ := Col;
+          AccsGoodResp.СумВх := InSumNt;
+          AccsGoodResp.Outcome(Doc, Doc.GetDate(), Doc.НомСтроки);
+        end;
+      //остатки товара на счетах
+      AccsGoodByInvoice.ClearFieldBuffers();
+      AccsGoodByInvoice.Счет := Doc.Owner;
+      AccsGoodByInvoice.Товар := Doc.@Товар;
+      AccsGoodByInvoice.Партия := PartGoodID;
+      AccsGoodByInvoice.Тип := midOutcome;
+      AccsGoodByInvoice.КолОбщ := Col;
+      AccsGoodByInvoice.СумОбщ := InSumNT;
+      AccsGoodByInvoice.СумОбщОтп := Sum;
+      AccsGoodByInvoice.Outcome(Doc, Doc.GetDate(), Doc.НомСтроки);
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+  //взаиморасчеты с партнерами
+  //AccsPart.ClearFieldFilters();
+  //AccsPart.AssignFields('Партнер;СумПрих=Сумма;СумОбщ=Сумма',Doc);
+  //AccsPart.Income(Doc, Doc.GetDate(), 0);
+
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGoodResp := CreateObject('Аккумуляторы.ОстаткиТМЦНаОтвет');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  Result := EntryPoint(ApplyTblToAccs);
+end;
+
+procedure CreateOrderMinTbl(Data : ISDocuments; var Accept : Boolean);
+var
+  Order : ISDocuments;
+begin
+  if not Data.IsFocused then
+    exit;
+  Data.SaveContents('', OverMinObj);
+  OverMinObj.Select();
+  while OverMinObj.SelectNext do
+    begin
+      AccsGoodByInvoice.CalcGroupRestDirect(Date, ArrayOf(Data.Owner, OverMinObj.@Товар, OverMinObj.Партия));
+      OverMinObj.Edit;
+      OverMinObj.AssignFields('НаличиеТовара=КолОбщ', AccsGoodByInvoice);
+      OverMinObj.Post;
+    end;
+  if OverMinObj.SelectFirst() then
+    while not OverMinObj.EOF() do
+      if OverMinObj.Количество <= OverMinObj.НаличиеТовара then
+        OverMinObj.Delete()
+      else
+        if not OverMinObj.Selectnext() then
+          break;
+  Accept := not Data.Terminated
+end;
+
+function GetOrdMinTblEP(OverMinObjs : ISValueTable) : Variant; server;
+begin
+  Date := CurrentDate + 1;
+  OverMinObj := OverMinObjs;
+  OverMinObj.Close;
+  OverMinObj.AddColumn('Код', lftString, 20);
+  OverMinObj.AddColumn('Товар', lftLink, 0);
+  OverMinObj.AddColumn('ЕдИзм', lftLink, 0);
+  AddFFtColumnsList(OverMinObj, 'Цена;Количество');
+  OverMinObj.AddColumn('НаличиеТовара', lftFFT, 5);
+  OverMinObj.Open;
+  AccsGoodByInvoice := CreateObject('Аккумуляторы.ОстаткиТоваровТМЦпоСчетам');
+  Result := EntryPoint(CreateOrderMinTbl);
+end;
+
+procedure CanChangeStateUp(Data : ISDocuments; var Accept : Boolean);
+begin
+  Accept := True;
+  case Data.GetDocState of
+    0 :
+      begin
+        Date := CurrentDate + 1;
+        OverMinObj := CreateObject('ТаблицаЗначений');
+        OverMinObj.AddColumn('Код', lftString, 20);
+        OverMinObj.AddColumn('Товар', lftLink, 0);
+        OverMinObj.AddColumn('ЕдИзм', lftLink, 0);
+        OverMinObj.AddColumn('Цена', lftFFT, 7);
+        OverMinObj.AddColumn('Количество', lftFFT, 5);
+        OverMinObj.AddColumn('НаличиеТовара', lftFFT, 5);
+        OverMinObj.Open;
+        AccsGoodByInvoice := CreateObject('Аккумуляторы.ОстаткиТоваровТМЦпоСчетам');
+        CreateOrderMinTbl(Data, Accept);
+      end;
+    1 :
+      ;
+  end;
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+        AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+        AccsGoodResp := CreateObject('Аккумуляторы.ОстаткиТМЦНаОтвет');
+        ApplyTblToAccs(Doc, Accept);
+      end;
+    2 : 
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  SumNt, SumInNt : Decimal;
+begin
+  case StrLowerCase(Synonym) of
+    'суммастрокибезндс' :
+      begin
+        SumNt := Doc.ЦенаБезНДС * (1 + Doc.ПроцентОбщий / 100) * Doc.Количество;
+        if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+          Value := RoundFloat(SumNt, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС)
+        else
+          Value := SumNt;
+      end;
+    'суммастроки' :
+      Value := Doc.ЦенаБезНДС * (1 + Doc.ПроцентОбщий / 100) * Doc.Количество * (1 + Doc.СтавкаНДС / 100);
+    'суммандсстроки' :
+      Value := Doc.ЦенаБезНДС * (1 + Doc.ПроцентОбщий / 100) * Doc.Количество * Doc.СтавкаНДС / 100;
+  end
+end;  
+
+end.

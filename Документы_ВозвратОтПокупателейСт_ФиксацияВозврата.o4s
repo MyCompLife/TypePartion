@@ -1,0 +1,141 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, ФиксацияПрибылиИЗатрат;
+
+implementation
+
+var
+  AccGood, AccPartGood, AccReserv, AccPartner, AccsPart, AccsGoodCurrent, AccsInOutCome : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  HasReserv : Boolean;
+  DocDate : DateTime;
+  PartGoodID : Double;
+  Count, Total : Integer;
+  Sum, SumNT, Tax, Col, InCurSum, CurSum, OverSum, InSumNT, InTax : Decimal;  
+  Resources, Dimensions, Fields : Variant;
+begin
+  DocDate := Doc.GetDate;
+  HasReserv := False;
+  Doc.SelectLines;  
+  Count := 1;
+  Total := Doc.LinesCount;
+  Constants := GetConstants;
+  while Doc.SelectNextLine do
+    begin
+      if not VarAsBool(Doc.Товар.Услуга) then
+        begin
+          СуммаНДС(Doc, Sum, SumNT, Tax, Col); //отпускная сумма с НДС и отп. сумма без НДС
+          InSumNT := VarAsDec(Doc.ВхЦенаБезНДС) * Col; //сумма по вх. цене без НДС
+          if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+            InSumNT := RoundFloat(InSumNT, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС);
+
+          if AccPartGood.SelectDimID(Doc.Партия) then
+            CalcTaxPrice(AccPartGood.СтавкаНДС, InSumNT, InTax)
+          else
+            CalcTaxPrice(Doc.СтавкаНДС, InSumNT, InTax);
+          OverSum := SumNT - InSumNT; //наценка
+          CurSum := Doc.ЦенаВВалюте * Col;
+          InCurSum := Doc.ВхЦенаВал * Col;
+          AccPartGood.ClearFieldBuffers;
+          AccGood.ClearFieldBuffers;
+          // партии товаров
+          if RestructureExistedConsg(Doc, AccPartGood, amtIncome) then
+            PartGoodID := Doc.Партия
+          else
+            PartGoodID := AppendGoodsConsignAtIncome(Doc, AccPartGood);
+          //oстатки товаров
+          MakeGoodMotion(AccGood, Doc, PartGoodID, midRetBuyer,
+            ArrayOf(Col, InSumNT, InTax, Sum, Tax, OverSum, InCurSum, CurSum));
+          //oстатки товара на сегодня
+          MakeGoodMotionCurrent(AccsGoodCurrent, Doc, midIncome, Col);
+          //  прибыль/расход
+          AppendRecAccsInOutCome(Doc,Null);
+        end;
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+  //взаиморасчеты с партнерами
+  AccsPart.ClearFieldFilters;
+  AccsPart.AssignFields('Партнер;СумРасхВал=СуммаВВалюте;СумОбщВал=СуммаВВалюте;Валюта', Doc);
+  AccsPart.Outcome(Doc, Doc.GetDate, 0);
+
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  AccsInOutCome := CreateObject('Аккумуляторы.ДоходыРасходы');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  AccPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');  
+  AccsInOutCome := CreateObject('Аккумуляторы.ДоходыРасходы');
+  case Doc.GetDocState of
+    1 :
+      ChangeStateUp(Doc, Accept);
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  tbl : ISValueTable;
+  SumNt : Decimal;
+begin
+  case StrLowerCase(Synonym) of
+    'суммастрокибезндс' :
+      begin
+        SumNt := Doc.ЦенаБезНДС * (1 + Doc.ПроцентОбщий / 100) * Doc.Количество;
+        if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+          Value := RoundFloat(SumNt, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС) - Doc.КоррекцияСтрокиБезНДС
+        else
+          Value := SumNt;
+      end;
+    'суммастроки' :
+      Value := Doc.ЦенаБезНДС * (1 + Doc.ПроцентОбщий / 100) * Doc.Количество * (1 + Doc.СтавкаНДС / 100);
+    'суммандсстроки' :
+      Value := Doc.ЦенаБезНДС * (1 + Doc.ПроцентОбщий / 100) * Doc.Количество * Doc.СтавкаНДС / 100;
+    'вхсуммабезндс' :
+      Value := Doc.ВхЦенаБезНДС * Doc.Количество;
+    'наценка' :
+      begin
+        tbl := CreateObject('ТаблицаЗначений');
+        Doc.SaveContents('количество;ценабезндс;вхценабезндс;цена', tbl);
+        tbl.DoCalculation('цена', 'количество*(ценабезндс-вхценабезндс)');
+        Value := VarAsDec(Tbl.Total('цена')) * (1 + VarAsDec(Doc.ПроцентОбщий) / 100);
+      end;
+    //Value := VarAsDec(Doc.Наценка)*(1 + VarAsDec(Doc.ПроцентОбщий)/100);//с 08.02.2005 для новых документов
+    'наценкастроки' :
+      Value := (Doc.ЦенаБезНДС - Doc.ВхЦенаБезНДС) * Doc.Количество;
+  end
+end;
+
+end.

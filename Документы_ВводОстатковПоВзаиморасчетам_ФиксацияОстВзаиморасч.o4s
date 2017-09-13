@@ -1,0 +1,95 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€;
+
+implementation
+
+var
+  AccPart : ISAccs;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  Count, Total : Integer;
+begin
+  Doc.SelectLines();
+  Count := 1;
+  Total := Doc.LinesCount;
+  while Doc.SelectNextLine() do
+    begin
+      //взаиморасчеты с партнерами
+      AccPart.ClearFieldBuffers();
+      AccPart.ѕартнер := Doc.@ѕартнер;
+      AccPart.¬алюта := Doc.@¬алюта;
+      AccPart.—умќбщ¬ал := Doc.—умма¬¬алюте;
+      case VarAsInt(Doc.ƒолг) of
+        0 :
+          begin //нам должны
+            AccPart.—умѕрих¬ал := Doc.—умма¬¬алюте;
+            if VarAsBool(Doc.@јналитика¬заиморасчета.IsFocused) then
+              AccPart.јналитика¬заиморасчета := Doc.@јналитика¬заиморасчета;
+            AccPart.Income(Doc, Doc.ƒата–асчетов, Doc.Ќом—троки);
+          end;
+        -1 :
+          begin //мы должны
+            AccPart.—ум–асх¬ал := Doc.—умма¬¬алюте;   
+            if VarAsBool(Doc.@јналитика¬заиморасчета.IsFocused) then
+              AccPart.јналитика¬заиморасчета := Doc.@јналитика¬заиморасчета;
+            AccPart.Outcome(Doc, Doc.ƒата–асчетов, Doc.Ќом—троки);
+          end;
+      end;
+      // отправка сообщени€ клиенту
+      if Count mod 10 = 0 then     
+        begin
+          Doc.NotifyClient(msgProceed, Count, Total);
+          if Doc.Terminated then
+            break;
+        end;
+      inc(Count);
+    end;
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Result := EntryPoint(ChangeStateUp);
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  //
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+begin
+  case StrLowerCase(Synonym) of
+    'кредитор' :
+      if Doc.ƒолг = 0 then
+        Value := False
+      else
+        Value := True
+  end;
+end;
+
+end.

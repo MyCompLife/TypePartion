@@ -1,0 +1,32 @@
+interface
+
+uses
+  System, DispIntf;
+Var
+  PaysOut : ISJournal;
+
+implementation
+
+procedure OrderCalcFields(Order : ISJournal);
+var
+  v : Variant;
+begin
+//  Order.ƒолжны := Order.—уммаќпт - Order.ќплачено;
+  Order.ƒолжны¬ал := Order.—умма¬¬алќпт - Order.ќплачено¬ал;
+end;
+
+function GetCalcEP(Order : ISJournal) : Variant; server;
+begin
+  PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+//Order.SetCalcFieldInDBServer(ArrayOf(PaysOut), ArrayOf('ќплачено', '—умма'), ArrayOf('1;2'));
+  Order.SetCalcFieldInDBServer(ArrayOf(PaysOut), ArrayOf('ќплачено¬ал', '—умма¬¬алюте'), ArrayOf('1;2'));
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := Data.Total('—умма¬¬алќпт');
+end;
+
+end.

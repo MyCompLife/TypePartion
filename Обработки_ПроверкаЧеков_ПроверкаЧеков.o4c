@@ -1,0 +1,37 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var CheckTbl: ICValueTable;
+
+procedure tbRun_Click(Sender: TObject);
+begin
+  CheckTbl.UseDataSource(0);
+  CheckTbl.Clear;
+  CheckTbl.CopyDataToServer;
+  Server.Check(CheckTbl.SrvMean);
+  CheckTbl.CopyDataFromServer;
+  CheckTbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  CheckTbl := CreateObject('ТаблицаЗначений');
+  CheckTbl.AddColumn('ДатаДокумента',vtcDateTime,0);
+  CheckTbl.AddColumn('НомерДокумента',lftString,20);
+  CheckTbl.AddColumn('Кассир',vtcLink,0);
+  CheckTbl.AddColumn('Партнер',vtcLink,0);
+  CheckTbl.AddColumn('Сумма',vtcFFT,2);
+  CheckTbl.Open;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+DBGrid1:TO4DBGrid
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+TVS:TO4TableValueSource

@@ -1,0 +1,22 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation
+
+procedure GetReportData(PartionTbl: ISValueTable; Good: Variant; DateFrom, DateTo: DateTime); server;
+var
+  Count, TotalCount : Integer;
+  AccsEditPriceGood: ISAccs;
+begin
+  AccsEditPriceGood := CreateObject('Аккумуляторы.ИзмОтпЦенСпрТовара');
+  AccsEditPriceGood.ClearFieldBuffers;
+  AccsEditPriceGood.ClearFieldFilters;
+  AccsEditPriceGood.IncludeZeroRest := true;
+  AccsEditPriceGood.SetFieldFilter('Товар',Good);
+  AccsEditPriceGood.AppendGroupMotionToValueTable(DateFrom, DateTo, amtBoth,
+                                                  'Date;Товар;Валюта;ТипЦены;Цена;Основание;Пользователь', -1, PartionTbl);
+end;
+
+end.

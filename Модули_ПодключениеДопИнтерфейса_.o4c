@@ -1,0 +1,208 @@
+interface
+
+uses
+  System, DispIntf;
+
+const
+  prmnAdditInitParams = 'AdditInitParams';
+  prmnInitObjModeInvoker = 'InitObjModeInvoker';
+  prmnInterfaceType = 'InterfaceType';
+  //
+  prmnModeID = 'AdditionalInterfaceModeID'; // один интерфейс в одном режиме может открыть разные формы
+  //
+  errAdditInterfaceWasDisconnected = 'Дополнительный интерфейс %s был отключен';
+
+function InitAdditionalInterfaceInMode(IntfID, FormID : string; ctrlActivation : Variant;
+  ObjModeInvoker : IObject; AdditInitParams : Variant = ''; InterfaceType :
+  T_Enum {TInterfaceFormType} = 0 {itMainForm}) : Boolean;
+procedure DefaultInterfaceInitOnPanel(IntfID, FormID : string; pnActivation : To4Panel;
+  ObjModeInvoker : IObject; AdditInitParams : Variant = '';
+  InterfaceType : T_Enum {TInterfaceFormType} = 0 {itMainForm});
+procedure DefaultInterfaceInitOnNewPage(IntfID, FormID : string; ctrlAct, SubControl : TWinControl;
+  ObjModeInvoker : IObject; ActivePageName : string = ''; AdditInitParams : Variant = '';
+  InterfaceType : T_Enum {TInterfaceFormType} = 0 {itMainForm});
+function InvokeAIFunction(ctrlInvokeFrom : Variant; ProcID : string;
+  InParams, DefValue : Variant = '') : Variant;
+procedure DoneAIInterface(ctrlsList : string);
+procedure AfterMakeInterfaceOnAdditForm(Form : To4CustomForm; tbrList : string);
+procedure FitToolBarParentForAIForm(frmAdditionalInterface : To4CustomForm;
+  tbAdditInterface : To4ToolBar);
+procedure DefaultAIInitOnPanelAndToolButtons(IntfID, FormID : string; pnActivation : To4Panel;
+  tbDelimiter, tbMain : To4ToolButton;
+  ObjModeInvoker : IObject; AdditInitParams : Variant = '';
+  InterfaceType : T_Enum {TInterfaceFormType} = 0 {itMainForm});
+
+implementation
+
+//******************************************************************************
+// работа с менеджером подключений дополнительного интерфейса
+// менеджер подключений разработан в целях инкапсуляции работы с дополнительными к режимам интерфейсами
+
+var
+  LstAdditInterfaceManager : ICValueList;
+  AdditInterfacesModeCount : Integer; // счетчик режимов с дополнительными подключенными интерфейсами
+
+function CreateInstanceUnderManager(ctrlActivation : Variant; AdditInterfaceID : string) : IObject;
+begin
+  if IsNil(LstAdditInterfaceManager) then
+    begin
+      LstAdditInterfaceManager := CreateObject('ValueList');
+      server.PassManagerToServer(LstAdditInterfaceManager);
+    end;
+  if CheckObjectExists(AdditInterfaceID) then
+    Result := CreateObject(AdditInterfaceID)
+  else
+    Result := Null;
+  if IsObject(Result) then
+    // добавить интерфейс дополнительного функционала в счетчик таких интерфейсов
+    LstAdditInterfaceManager.Params[VarAsStr(ctrlActivation)] := Result; //  + '.' + AdditInterfaceID
+end;
+
+function FreeInstanceUnderManager(ctrlActivationList : string) : IObject; // ; AdditInterfacesID : String = ''
+var
+  i : Integer;
+begin
+  if not IsNil(LstAdditInterfaceManager) then
+    for i := 1 to WordCount(ctrlActivationList, ';') do
+      LstAdditInterfaceManager.Params[ExtractWord(i, ctrlActivationList, ';')] := Null; //  + '.' + ExtractWord(i, AdditInterfacesID, ';')
+end;
+
+function GetAdditInterfaceFromManager(ctrlActivation : Variant) : ICProcessing;
+begin
+  if IsNil(LstAdditInterfaceManager) then
+    Result := Null
+  else
+    Result := LstAdditInterfaceManager.Params[VarAsStr(ctrlActivation)];
+end;
+
+//******************************************************************************
+
+// инициализация интерфейса в режиме. Предполагается, что дополнительный интерфейс
+// находится в форме обработки
+
+function InitAdditionalInterfaceInMode(IntfID, FormID : string; ctrlActivation : Variant;
+  ObjModeInvoker : IObject; AdditInitParams : Variant = ''; InterfaceType :
+  T_Enum {TInterfaceFormType} = 0 {itMainForm}) : Boolean;
+var
+  PrcAdditInterface : ICProcessing;
+begin
+  PrcAdditInterface := CreateInstanceUnderManager(ctrlActivation, 'Processings.' + IntfID);
+  Result := not IsNil(PrcAdditInterface);
+  if not Result then
+    exit;
+  PrcAdditInterface.Params[prmnAdditInitParams] := AdditInitParams;
+  PrcAdditInterface.Params[prmnInitObjModeInvoker] := ObjModeInvoker;
+  PrcAdditInterface.Params[prmnInterfaceType] := InterfaceType;
+  try
+    PrcAdditInterface.OpenFormInplace(FormID, ctrlActivation);
+  finally
+    PrcAdditInterface.Params[prmnInitObjModeInvoker] := Null; // интерфейс главного режима должен быть освобожден как параметр инетерфейса подчиненного режима
+    PrcAdditInterface.Params[prmnAdditInitParams] := Null; // для корректного освобождения
+  end;
+end;
+
+// инициализация по умолчанию - добавление на панель
+
+procedure DefaultInterfaceInitOnPanel(IntfID, FormID : string; pnActivation : To4Panel;
+  ObjModeInvoker : IObject; AdditInitParams : Variant = '';
+  InterfaceType : T_Enum {TInterfaceFormType} = 0 {itMainForm});
+begin
+  pnActivation.Visible := InitAdditionalInterfaceInMode(IntfID, FormID, CtrlToVar(pnActivation),
+    ObjModeInvoker, AdditInitParams, InterfaceType);
+end;
+
+// инициализация по умолчанию - добавление на страницу постраничной компоненты
+
+procedure DefaultInterfaceInitOnNewPage(IntfID, FormID : string; ctrlAct, SubControl : TWinControl;
+  ObjModeInvoker : IObject; ActivePageName : string = ''; AdditInitParams : Variant = '';
+  InterfaceType : T_Enum {TInterfaceFormType} = 0 {itMainForm});
+begin
+  case ctrlAct.ClassName of
+    'TO4Notebook' : //  SubControl должна быть типа TO4TabSet, что контролирует страницы в ctrlAct
+      if not InitAdditionalInterfaceInMode(IntfID, FormID,
+        CtrlToVar((ctrlAct as TO4NoteBook).PageClass[(ctrlAct as TO4NoteBook).Pages.IndexOf(ActivePageName)]),
+        ObjModeInvoker, AdditInitParams, InterfaceType) then
+        (SubControl as TO4TabSet).Tabs.Delete((ctrlAct as TO4NoteBook).Pages.IndexOf('EKKA'));
+    'TTabSheet' :
+      (ctrlAct as TTabSheet).TabVisible := InitAdditionalInterfaceInMode(IntfID,
+        FormID, CtrlToVar(ctrlAct), ObjModeInvoker, AdditInitParams, InterfaceType)
+  end;
+end;
+
+procedure DoneAIInterface(ctrlsList : string);
+begin
+  FreeInstanceUnderManager(ctrlsList);
+end;
+
+// вызов процедур дополнительного интерфейса
+
+function InvokeAIFunction(ctrlInvokeFrom : Variant; ProcID : string;
+  InParams, DefValue : Variant = '') : Variant;
+var
+  PrcAdditInterface : ICProcessing;
+begin
+  PrcAdditInterface := GetAdditInterfaceFromManager(ctrlInvokeFrom);
+  if IsNil(PrcAdditInterface) then
+    Result := DefValue
+  else
+    begin
+      Result := Null;
+      PrcAdditInterface.ExecProc(Null, ProcID, InParams, Result);
+    end;
+end;
+
+procedure AfterMakeInterfaceOnAdditForm(Form : To4CustomForm; tbrList : string);
+var
+  tbCurrent : To4ToolBar;
+  i : Integer;
+begin
+  // подгонка ToolBars
+  if tbrList <> '' then
+    for i := 1 to WordCount(tbrList, ';') do
+      begin
+        tbCurrent := Form.FindComponent(ExtractWord(i, tbrList, ';')) as To4ToolBar;
+        tbCurrent.EdgeInner := esNone;
+        tbCurrent.EdgeOuter := esNone;
+      end;
+end;
+
+procedure FitToolBarParentForAIForm(frmAdditionalInterface : To4CustomForm;
+  tbAdditInterface : To4ToolBar);
+
+var
+  ctrlActivation : TWinControl;
+begin
+  ctrlActivation := frmAdditionalInterface.Parent.Parent;
+  tbAdditInterface.Height := ctrlActivation.Height; // ширина будет зависеть от MakeInterface
+  ctrlActivation.Width := tbAdditInterface.Width;
+end;
+
+// инициализация по умолчанию - добавление на панель с подключением ф-ций PopupMenu
+// ко второй кнопке на ToolBar (первая - разделитель для неё)
+
+procedure DefaultAIInitOnPanelAndToolButtons(IntfID, FormID : string; pnActivation : To4Panel;
+  tbDelimiter, tbMain : To4ToolButton;
+  ObjModeInvoker : IObject; AdditInitParams : Variant = '';
+  InterfaceType : T_Enum {TInterfaceFormType} = 0 {itMainForm});
+var
+  i : Integer;
+  cmAI : TComponent;
+  pmAdditIntf : To4PopupMenu;
+begin
+  pnActivation.Visible := InitAdditionalInterfaceInMode(IntfID, FormID,
+    CtrlToVar(pnActivation), ObjModeInvoker, AdditInitParams, InterfaceType);
+  // подключение к ToolButtons
+  // разделитель
+  tbDelimiter.Visible := pnActivation.Visible;
+  // главная кнопка
+  tbMain.Visible := pnActivation.Visible;
+  if (tbMain.Visible) and (tbMain.Style = tbsDropDown) then // следует подсоединить меню
+    begin
+      cmAI := (pnActivation.Controls[0] as TWinControl).FindComponent('Form'); // форма доп. интерфейса
+      // поиск меню
+      pmAdditIntf := (cmAI as To4CustomForm).FindComponent('pmMain') as To4PopupMenu;
+      tbMain.DropdownMenu := pmAdditIntf;
+    end;
+end;
+
+end.

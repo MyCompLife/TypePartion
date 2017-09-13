@@ -1,0 +1,150 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+Var
+  Goods : ICDictionary;
+  CalcNum,  FirstNum : Integer;
+  V: ICProcessing;
+  AnyOwnKeyPress : Boolean;
+  ActiveEditObj, CodeNum : String;
+
+implementation
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+  Goods := V.Params['Good'];
+  if IsObjFocused(Goods) then
+  begin
+    pnInfoCode.Visible := false;
+    CodePanel.Visible := false;
+    lbGoodName.Caption := Goods.НазвТовара;
+    pnInfoCnt.Align := alTop;
+    pnNum.Align := alTop;
+    pnButtons.Align := alTop;
+    Form.Height := 180;
+    Form.ActiveControl := edCntTablo;
+  end;
+  FirstNum := V.Params['CalcNum'];
+  edCntTablo.text := FormatFloat('### ### ###',FirstNum);
+  AnyOwnKeyPress := false;
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+ if AnyOwnKeyPress then
+   V.Params['CalcNum'] := CalcNum
+ else
+   V.Params['CalcNum'] := FirstNum;
+end;
+
+procedure bt_Click(Sender: TObject);
+Var
+  TOper : Integer;
+begin
+  AnyOwnKeyPress := true;
+  case ActiveEditObj of
+    'edCntTablo' :
+    begin
+      TOper := (Sender as TO4Button).Tag;
+      Case TOper of
+        10 :  CalcNum := 0
+      else
+        CalcNum := VarAsInt(VarAsStr(CalcNum)+ VarAsStr(TOper));
+      end;
+      edCntTablo.text := FormatFloat('### ### ###',CalcNum);
+    end;
+    'edGoodsTop' :
+    begin
+      TOper := (Sender as TO4Button).Tag;
+      Case TOper of
+        10 :  CodeNum := ''
+      else
+        CodeNum := CodeNum + VarAsStr(TOper);
+      end;
+      edGoodsTop.text := CodeNum;//FormatFloat('',CodeNum);
+    end;
+  end;
+end;
+
+procedure tbFind_Click(Sender: TObject);
+var FieldName: String;
+begin
+  if isNil(Goods) then
+    Goods := CreateObject('Справочники.Товары');   
+  if StrLength(edGoodsTop.Text) > 8 then
+      FieldName := 'ШтрихКод'
+    else
+      FieldName := 'Код';
+  if Goods.FindByField(FieldName,edGoodsTop.Text, false) then
+    begin
+      V.Params['Good'] := Goods;
+      lbGoodName.Caption := Goods.НазвТовара;
+    end
+  else
+  ShowMessage('Товар с данным кодом не найден.')
+end;
+
+
+procedure ed_Exit(Sender: TObject);
+begin
+  ActiveEditObj := (Sender as TO4Edit).Name;
+end;
+
+procedure edGoods_ActionExecute(Sender: TObject);
+Var
+  Gooddict : ICDictionary;
+  G: Variant;
+  GoodName : string;
+begin
+  GoodName := edGoods.Text;
+  if not IsObjFocused(Gooddict) then
+    begin
+      Gooddict  := CreateObject('Справочники.Товары');
+    end;
+  if Gooddict.SelectInForm('ВыборТовараЧекКПК',GoodName,Null) then
+    begin
+      V.Params['Good'] := Gooddict;
+      edGoodsTop.Text := Gooddict.Код;
+      lbGoodName.Caption := GoodName;
+    end;
+end;
+
+procedure edGoods_ActionClear(Sender: TObject);
+begin
+  V.Params['Good'] := null;
+  edGoodsTop.Text := '';             
+  lbGoodName.Caption := '';
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnButtons:TO4Panel
+bt0:TO4Button
+bt1:TO4Button
+bt2:TO4Button
+bt3:TO4Button
+btOk:TO4Button
+bt6:TO4Button
+bt5:TO4Button
+bt4:TO4Button
+bt7:TO4Button
+bt8:TO4Button
+bt9:TO4Button
+btMin:TO4Button
+pnGoodName:TO4Panel
+lbGoodName:TO4Label
+pnNum:TO4Panel
+edCntTablo:TO4Edit
+CodePanel:TO4Panel
+Label1:TO4Label
+edGoods:TO4Edit
+edGoodsTop:TO4Edit
+ToolBar1:TO4ToolBar
+tbFind:TO4ToolButton
+pnInfoCnt:TO4Panel
+pnInfoCode:TO4Panel
+TableValueSource1:TO4TableValueSource

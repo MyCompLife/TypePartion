@@ -1,0 +1,71 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+
+implementation
+
+var
+  AccsBalance : ISAccs;
+  TblPartGood, GoodsTbl, AllGoodsTbl : ISValueTable;
+  PartList, PartGoodList, GoodsList : ISValueList;
+  Region, ArticleDic : Variant;
+  DateFrom, DateTo : DateTime;
+  ShowCodeUnitname, OnlyMoving, UseLevel : Boolean;
+  Items : ISDictionary;   
+  TypeGroup : integer;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsBalance := CreateObject('Аккумуляторы.ДоходыРасходы');
+end;
+
+procedure SetGoods(Doc : ISReport; var Accept : Boolean);
+var
+  Ctg, Child, Goods : ISDictionary;
+  CtgName : string;
+  MotionID : Integer;
+  ЗначенияПрихода, ЗначенияОтпуска : string;
+begin
+  AccsBalance.ClearFieldBuffers();
+  AccsBalance.ClearFieldFilters();
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+  GoodsTbl.Clear();
+  AccsBalance.SetFieldFilter('Регион',Region);
+  AccsBalance.SetFieldFilter('Статья',ArticleDic);
+  AccsBalance.AppendMotionToValueTable(DateFrom, DateTo, 0,
+     'MotionSign;Document;Партнер;ТоварУслуга;Сумма=СуммаВВал;СуммаГрн=Сумма;Валюта;Количество', -1, GoodsTbl);
+  GoodsTbl.DoCalculation('СуммаВВал', 'СуммаВВал*MotionSign');
+  GoodsTbl.DoCalculation('Количество', 'Количество*MotionSign');
+  GoodsTbl.DoCalculation('Сумма', 'Сумма*MotionSign');
+  GoodsTbl.CopyTo('',AllGoodsTbl);
+  if TypeGroup = 0 then
+    GoodsTbl.GroupBy('ТоварУслуга;Валюта;Курс','Количество;Сумма;СуммаВВал');
+  if TypeGroup = 1 then
+    GoodsTbl.GroupBy('Партнер;Валюта;Курс','Сумма;СуммаВВал');
+  if TypeGroup = 2 then 
+    begin
+      GoodsTbl.DoGetLinks('ДатаДокумента=Document.ДатаДокумента');
+      GoodsTbl.GroupBy('Document;Валюта;Курс;Аналитика;ДатаДокумента','Сумма;СуммаВВал');
+    end;
+  GoodsTbl.DoCalculation('Курс','Сумма/СуммаВВал');
+  Accept := True;
+end;
+
+function GetRunReportEP(GoodsTbls, AllGoodsTbls : ISValueTable;
+  Regions, ArticleDics : Variant; TypeGroups : integer;
+  DateFroms, DateTos : DateTime) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;        
+  AllGoodsTbl := AllGoodsTbls;
+  Region := Regions;
+  ArticleDic := ArticleDics;
+  TypeGroup := TypeGroups;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  Result := EntryPoint(SetGoods);
+end;
+
+end.

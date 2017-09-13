@@ -1,0 +1,114 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 364
+  Height = 300
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'pmiDontUseLevel.Caption'
+    0
+    #1'-1'#1'Просмотр без учета категорий'
+    'pmiDontUseLevel.Hint'
+    0
+    #1'-1'#1'Просмотр без учета категорий'
+    'pmiUseLevel.Caption'
+    0
+    #1'-1'#1'Просмотр с учетом категорий'
+    'pmiUseLevel.Hint'
+    0
+    #1'-1'#1'Просмотр с учетом категорий'
+    'pmiUseNoLevel.Caption'
+    0
+    #1'-1'#1'Просмотр не принадлежащих к категориям')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnClose.EventName = 'Form_Close'
+  VPAOnExecProc.EventName = 'Form_ExecProc'
+  object dbtCtg: TO4DBTreeView
+    Left = 0
+    Top = 0
+    Width = 364
+    Height = 300
+    Align = alClient
+    AutoExpand = False
+    BaseImageIndex = 18
+    BorderStyle = bsSingle
+    ChangeDelay = 0
+    Color = clWindow
+    HideSelection = False
+    HotTrack = False
+    Images = ImagesHolder.Bmp16x16
+    Indent = 19
+    PopupMenu = pmCtg
+    ReadOnly = True
+    RightClickSelect = False
+    RowSelect = False
+    ShowButtons = True
+    ShowLines = True
+    ShowRoot = True
+    SortType = stText
+    TabOrder = 0
+    TabStop = False
+    ToolTips = True
+    O4MDSource = MDS
+    UseChecks = True
+    DragEnabled = False
+  end
+  object pmCtg: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 169
+    Top = 95
+    object pmiUseLevel: TO4MenuItem
+      Caption = 'Просмотр с учетом категорий'
+      Hint = 'Просмотр с учетом категорий'
+      ShortCut = 117
+      Visible = False
+      VPAOnClick.EventName = 'pmiUseLevel_Click'
+      VPABeforeActionClick.EventName = 'pmiUseLevel_VPABeforeActionClick'
+      O4Action = actUseLevel
+      SortMenuParent = False
+    end
+    object pmiDontUseLevel: TO4MenuItem
+      Caption = 'Просмотр без учета категорий'
+      Hint = 'Просмотр без учета категорий'
+      ShortCut = 118
+      Visible = False
+      VPAOnClick.EventName = 'pmiUseLevel_Click'
+      VPABeforeActionClick.EventName = 'pmiDontUseLevel_VPABeforeActionClick'
+      O4Action = actDontUseLevel
+      SortMenuParent = False
+    end
+    object pmiUseNoLevel: TO4MenuItem
+      Caption = 'Просмотр не принадлежащих к категориям'
+      ShortCut = 119
+      Visible = False
+      VPAOnClick.EventName = 'pmiUseNoLevel_Click'
+      VPABeforeActionClick.EventName = 'pmiUseNoLevel_VPABeforeActionClick'
+      O4Action = actUseNoLevel
+      SortMenuParent = False
+    end
+  end
+  object MDS: TO4DataSource
+    VPAAfterScroll.EventName = 'MDS_VPAAfterScroll'
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 146
+    Top = 162
+  end
+end

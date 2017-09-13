@@ -1,0 +1,315 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 464
+  Height = 245
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'dbeCard.Hint'
+    0
+    #1'-1'#1'Название карточки'
+    'dbePartner.Hint'
+    0
+    #1'-1'#1'Партнер, которому отгружается товар на реализацию'
+    'Label1.Caption'
+    0
+    #1'-1'#1'Реализатор'#1'1058'#1'Реалізатор'
+    'Label3.Caption'
+    0
+    #1'-1'#1'Телефон'
+    'miCancel.Caption'
+    0
+    #1'-1'#1'Отменить изменения'
+    'miSave.Caption'
+    0
+    #1'-1'#1'Записать'
+    'miSaveAdd.Caption'
+    0
+    #1'-1'#1'Записать и добавить'
+    'rgState.Caption'
+    0
+    #1'-1'#1'Состояние карточки'
+    'rgState.Items[  0]'
+    0
+    #1'-1'#1'Активная'
+    'rgState.Items[  1]'
+    0
+    #1'-1'#1'Закрытая')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = (
+    0
+    
+      #1'-1'#1'Партнер, которому отгружается товар на реализацию'#1'1058'#1'Партн' +
+      'ер, якому відвантажується товар на реалізацію'
+    0
+    #1'-1'#1'Реализатор'#1'1058'#1'Реалізатор')
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object ImagePanel: TO4Panel
+    Left = 0
+    Top = 24
+    Width = 112
+    Height = 192
+    Align = alLeft
+    AutoSize = True
+    BevelSides = [sdTop, sdRight, sdBottom]
+    BorderSides = []
+    Caption = 'ImagePanel'
+    TabOrder = 0
+    Transparent = False
+    object LinkImage: TO4LinkImage
+      Left = 1
+      Top = 1
+      Width = 110
+      Height = 190
+      AutoSize = True
+      Picture = ImagesHolder.PhonesHC
+      Align = alClient
+    end
+  end
+  object MainPanel: TO4Panel
+    Left = 112
+    Top = 24
+    Width = 352
+    Height = 192
+    Align = alClient
+    Alignment = taLeftJustify
+    BevelSides = [sdLeft, sdTop, sdBottom]
+    BorderSides = []
+    TabOrder = 1
+    Transparent = False
+    object Label1: TO4Label
+      Left = 7
+      Top = 47
+      Width = 60
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Реализатор'
+    end
+    object Label2: TO4Label
+      Left = 20
+      Top = 72
+      Width = 47
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Карточка'
+    end
+    object Label3: TO4Label
+      Left = 22
+      Top = 97
+      Width = 45
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Телефон'
+    end
+    object Label4: TO4Label
+      Left = 7
+      Top = 24
+      Width = 60
+      Height = 13
+      Alignment = taRightJustify
+      Caption = '№ карточки'
+    end
+    object dbePartner: TO4DBEdit
+      Left = 72
+      Top = 44
+      Width = 268
+      Height = 21
+      Hint = 'Партнер, которому отгружается товар на реализацию'
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 1
+      Lock = False
+      O4FieldName = 'Партнер'
+      O4MDSource = MDS
+      FastFindIndex = 0
+      VPAOnChange.EventName = 'dePartner_Change'
+    end
+    object dbeCard: TO4DBEdit
+      Left = 72
+      Top = 69
+      Width = 268
+      Height = 21
+      Hint = 'Название карточки'
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 2
+      Lock = False
+      O4FieldName = 'ПолноеНазвание'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object rgState: TO4RadioGroup
+      Left = 72
+      Top = 124
+      Width = 268
+      Height = 39
+      Caption = 'Состояние карточки'
+      Columns = 2
+      Items.Strings = (
+        'Активная'
+        'Закрытая')
+      TabOrder = 4
+      VPAOnClick.EventName = 'rgState_Click'
+    end
+    object dbePhone: TO4DBEdit
+      Left = 72
+      Top = 94
+      Width = 268
+      Height = 21
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 3
+      Lock = False
+      O4FieldName = 'Телефон'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object dbeCardNumber: TO4DBEdit
+      Left = 72
+      Top = 21
+      Width = 268
+      Height = 21
+      Hint = 'Номер карточки'
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 0
+      Lock = False
+      O4FieldName = 'Номер'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+  end
+  object TitlePanel: TO4Panel
+    Left = 0
+    Top = 0
+    Width = 464
+    Height = 24
+    Align = alTop
+    BevelSides = [sdBottom]
+    BorderSides = []
+    BorderWidth = 1
+    TabOrder = 2
+    Transparent = False
+    object lbTitle: TO4Label
+      Left = 2
+      Top = 2
+      Width = 460
+      Height = 20
+      Align = alClient
+      Color = clBtnShadow
+      Font.Charset = RUSSIAN_CHARSET
+      Font.Color = clWhite
+      Font.Height = -16
+      Font.Name = 'Times New Roman'
+      Font.Style = [fsBold]
+      ParentColor = False
+      ParentFont = False
+    end
+  end
+  object BottomPanel: TO4Panel
+    Left = 0
+    Top = 216
+    Width = 464
+    Height = 29
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    TabOrder = 3
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 288
+      Top = 1
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 14
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actSave
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object pmSaveRecord: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 54
+    Top = 70
+    object miSave: TO4MenuItem
+      Caption = 'Записать'
+      ImageIndex = 5
+      ShortCut = 16467
+      O4Action = actSave
+      SortMenuParent = False
+    end
+    object miSaveAdd: TO4MenuItem
+      Caption = 'Записать и добавить'
+      ImageIndex = 0
+      ShortCut = 16462
+      O4Action = actAdd
+      SortMenuParent = False
+    end
+    object MenuItem1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miCancel: TO4MenuItem
+      Caption = 'Отменить изменения'
+      ImageIndex = 2
+      ShortCut = 32776
+      VPAOnClick.EventName = 'miCancel_Click'
+      O4Action = actCancel
+      SortMenuParent = False
+    end
+  end
+  object MDS: TO4DataSource
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    VPAOnFieldChange.EventName = 'MDS_FieldChange'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 61
+    Top = 117
+  end
+end

@@ -1,0 +1,211 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, InitColors, –асчеты, –абота—ƒокументами¬∆урналах, –абота—ѕеременными, 
+  ѕользователи, ƒополнительный‘ункционал;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  PrintList : ICValueList;    
+  PrintFormsTbl: ICValueTable;
+  PreView : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+var
+  i : Integer;
+  Strs : Variant;
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  Options := GetOptions;
+  SetColors(Constants);
+end;
+
+procedure GetPrintersList(var PrintList: ICValueList; var edPrinters: TO4Edit);
+var
+  Prints, Print : String;
+  PCnt: Integer;
+  PrinterName: String;
+begin
+  PrintList := CreateObject('—писок«начений');
+  Prints := GetPrinterNames;
+  for PCnt := 1 to WordCount(Prints ,#10) do
+    PrintList.AddValue(ExtractWord(PCnt,Prints,#10),null);
+  for PCnt := 0 to PrintList.Count-1 do
+    begin
+      Print := PrintList.GetStr(PCnt);
+      PrintList.SetStr(PCnt, ReplaceOneStrWithAnother(Print, #13,''));
+    end;
+  PrintList.SortByStr(true);
+  PrintList.UseControl(CtrlToVar(edPrinters));
+  PrinterName := VarAsStr(Options.GetServerPrm('јктивныйѕринтер' + MasterData.GetSign + Form.Caption));
+  PrintList.CurIndex := PrintList.FindByStr(PrinterName);
+end;
+
+procedure PrintOnUserDevice(ProcName, FormName, PrinterName: String; Data: Variant; Preview: Boolean; PrintOnlyFixDoc: Boolean  = false);
+var
+  V : ICProcessing;
+begin
+  if not VarAsBool(Data.IsFocused) then
+    exit;
+  if PrintOnlyFixDoc and (Data.GetDocState = 0) then
+    begin
+      MessageDlg('¬ам запрещено печатать неутвержденный чек!',mtWarning,mbOk);
+      exit;
+    end;
+  SetActivePrinter(PrinterName);
+  V := CreateObject(ProcName);
+  V.PrintForm(FormName, Preview, Data.GetDoc);
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;                
+  ItemMenu : TO4MenuItem;
+begin
+  MakeInterface(tbrData, Nobody, dbgData);
+
+  MakeUserInterface(MasterData.GetSign, pPrint, PreView, PrintFormsTbl);
+  if not isNil(PrintFormsTbl) then
+    begin
+      if PrintFormsTbl.LineCount = 0 then
+        btnPrint.Enabled := false; //если не указана печ.форма или не спозиционирован документ, тогда блокируетс€ кнопка печати
+      PrintFormsTbl.DoNumbering('Ќом—троки',1,1);
+      PrintFormsTbl.Select;
+      while PrintFormsTbl.SelectNext do
+        begin
+          ItemMenu := form.FindComponent('miPrinForm' + VarAsStr(PrintFormsTbl.Ќом—троки)) as TO4MenuItem;
+          ItemMenu.Caption := PrintFormsTbl.ѕеч‘орма;
+          ItemMenu.Hint := PrintFormsTbl.ѕеч‘орма;
+          ItemMenu.Visible := true;
+          ItemMenu.Tag := PrintFormsTbl.Ќом—троки;
+          if PrintFormsTbl.Ќом—троки = 1 then
+            begin
+              ItemMenu.Default := true; 
+              btnPrint.Hint :=  PrintFormsTbl.ѕеч‘орма;
+            end;
+          miSelPrinter.Hint := miSelPrinter.Hint +  VarAsStr(PrintFormsTbl.ѕеч‘орма)+';';
+        end;
+      if (StrLength(miSelPrinter.Hint)>0) and (StrCopy(miSelPrinter.Hint,StrLength(miSelPrinter.Hint),1)=';') then
+        miSelPrinter.Hint := StrCopy(miSelPrinter.Hint,1,StrLength(miSelPrinter.Hint)-1);
+    end;
+end;
+
+procedure miPrintActive_Click(Sender : TObject);
+begin
+  // MasterData.PrintForm('', false, 0, Null)
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+end;
+
+
+procedure btnPrint_Click(Sender: TObject);  
+var
+  V : ICProcessing;
+  PrintForm, OldPrintName, PrintName: String;
+begin
+  if MasterData.IsFocused then
+    try
+      OldPrintName := GetActivePrinterName;
+      Case Sender.ClassName of
+        'TO4ToolButton':
+            PrintForm := (Sender as TO4ToolButton).Hint;
+        'TO4MenuItem':
+            PrintForm := (Sender as TO4MenuItem).Hint;
+      end;
+
+      PrintName := GetPrintNameForCurPrintForm(PrintForm);
+      if PrintName = '' then
+        begin
+          ShowMessage('”кажите принтер дл€ текущей печатной формы');
+          exit;
+        end;
+      if OldPrintName<>PrintName then
+        SetActivePrinter(PrintName);
+      V := CreateObject('ќбработки.ѕечатьЎтрих одов—÷енами');
+//      V.PrintForm(PrintForm, false, MasterData.GetDoc);
+      V.PrintForm(PrintForm, Preview, MasterData.GetDoc);
+      //not VarAsBool(Options.GetServerPrm(DirectPrint))
+    finally
+      if OldPrintName<>PrintName then
+        SetActivePrinter(OldPrintName);
+    end;
+end;
+
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh();
+end;
+
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  Options.SetServerPrm('јктивныйѕринтер' + MasterData.GetSign + Form.Caption, PrinterName);
+end;
+
+
+procedure miSelPrinter_Click(Sender: TObject);
+Var
+  V: ICProcessing;
+  PrintForm: String;
+begin
+  PrintForm := (Sender as TO4MenuItem).Hint;
+  V := CreateObject('ќбработки.ѕечать„ека');
+  V.Execute('¬ыборѕринтераƒл€ѕеч‘ормы', PrintForm);
+end;
+
+procedure DBMemo1_Exit(Sender: TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+btnPrint:TO4ToolButton
+tbParam:TO4ToolButton
+pPrint:TO4Panel
+DBMemo1:TO4DBMemo
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+miSort:TO4MenuItem
+MDS:TO4DataSource
+pmPrintForms:TO4PopupMenu
+miSelPrinter:TO4MenuItem
+miPrinForm1:TO4MenuItem
+miPrinForm2:TO4MenuItem
+miPrinForm3:TO4MenuItem
+miPrinForm4:TO4MenuItem
+miPrinForm5:TO4MenuItem
+miPrinForm6:TO4MenuItem
+miPrinForm7:TO4MenuItem
+miPrinForm8:TO4MenuItem
+miPrinForm9:TO4MenuItem
+miPrinForm10:TO4MenuItem

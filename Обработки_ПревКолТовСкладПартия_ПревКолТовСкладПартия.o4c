@@ -1,0 +1,118 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation     
+
+const
+  msgLabelStateDown1 = 'при расфиксации';
+  msgLabelStateDown2 = 'расфиксации';
+  msgLabelDel1 = 'при удалении';
+  msgLabelDel2 = 'удалении';
+  msgLabelDel3 = 'удаления';
+  msgButtonStateDown = 'Расфиксировать';
+  msgButtonDel = 'Удалить';
+  msgHeader1 = 'В документе есть товар, количество которого';
+  msgHeader2 = 'будет отрицательное. Этот товар показан ниже в списке.';
+  msgOK = 'Вы настаиваете на';
+  msgCancel = 'Вы отказываетесь от';
+  msgOKCancel = 'накладной с товаром, количество которого превышает количество в наличии!';
+
+var
+  MasterData : ICValueTable;
+  TmpPartGood, TmpStoreGood : ICValueTable;
+  UseConst : IC4VPAConst;
+  Action : integer;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      UseConst := GetConstants;
+      MasterData := Params;
+      TmpStoreGood := MasterData.Params['TmpStoreGood'];
+      TmpPartGood := MasterData.Params['TmpPartGood'];
+      Action := MasterData.Params['Action'];
+      case Action of
+        actStateDown :
+          begin
+            btOK.Caption := trans(msgButtonStateDown);
+            lbHeader.Caption := Trans(msgHeader1) + ' ' + Trans(msgLabelStateDown1) + ' ' + Trans(msgHeader2);
+            lbOK.Caption := Trans(msgOK) + ' ' + Trans(msgLabelStateDown2) + ' ' + Trans(msgOKCancel);
+            lbCancel.Caption := Trans(msgCancel) + ' ' + Trans(msgLabelStateDown2) + ' ' + Trans(msgOKCancel);
+          end;
+        actDel :
+          begin
+            btOK.Caption := trans(msgButtonDel);
+            lbHeader.Caption := Trans(msgHeader1) + ' ' + Trans(msgLabelDel1) + ' ' + Trans(msgHeader2);
+            lbOK.Caption := Trans(msgOK) + ' ' + Trans(msgLabelDel2) + ' ' + Trans(msgOKCancel);
+            lbCancel.Caption := Trans(msgCancel) + ' ' + Trans(msgLabelDel3) + ' ' + Trans(msgOKCancel);
+          end;
+      end;
+      MasterData.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+      MasterData.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+      MasterData.SetColumnFormat('КолОст', UseConst.ФорматКол);
+      MasterData.UseDataSource(CtrlToVar(TVSGood));
+      TmpStoreGood.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+      TmpStoreGood.SetColumnFormat('КолОст', UseConst.ФорматКол);
+      TmpStoreGood.UseDataSource(CtrlToVar(TVSStoreGood));
+      TmpPartGood.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+      TmpPartGood.SetColumnFormat('КолОст', UseConst.ФорматКол);
+      TmpPartGood.UseDataSource(CtrlToVar(TVSPartGood));
+    end;
+  nbChange.PageIndex := 0;
+  if MasterData.LineCount() > 0 then
+    tsChange.TabIndex := 0
+  else
+    if TmpStoreGood.LineCount() > 0 then
+      tsChange.TabIndex := 1
+    else
+      if TmpPartGood.LineCount() > 0 then
+        tsChange.TabIndex := 2
+      else
+        tsChange.TabIndex := 0
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  MasterData.SortBy('Код;Товар;Склад');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  MasterData.SortBy('Товар;Код;Склад');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure tsChange_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbChange.PageIndex := NewTab;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbHeader:TO4Label
+Panel1:TO4Panel
+Panel2:TO4Panel
+lbCancel:TO4Label
+Panel5:TO4Panel
+btCancel:TO4Button
+Panel3:TO4Panel
+lbOK:TO4Label
+Panel4:TO4Panel
+btOK:TO4Button
+nbChange:TO4Notebook
+dbgGoods:TO4DBGrid
+dbgStoreGood:TO4DBGrid
+dbgPartGood:TO4DBGrid
+tsChange:TO4TabSet
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+TVSStoreGood:TO4TableValueSource
+TVSPartGood:TO4TableValueSource

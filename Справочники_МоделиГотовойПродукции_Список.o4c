@@ -1,0 +1,535 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками,
+  РаботаСТаблицамиЗначенийCL, РаботаСоСправочникамиCL;
+
+implementation
+
+var
+  MasterData, ICtg, GoodsDic : ICDictionary;
+  UseLevels : Boolean;
+  Opt : ICOptions;
+  Cursor: TCursor;
+  FieldName : String;
+  UseConst : IC4VPAConst;
+  GoodsTbl : ICValueTable;
+
+procedure CheckControls;
+begin
+  if MasterData.IsFocused then
+    begin
+      if MasterData.Активность = 0 then
+        begin
+          SetPropertyForComponentList(ptEnabled, Form, 'miShowOnSite;miNotShowOnSite;miUnActive', false);
+          SetPropertyForComponentList(ptEnabled, Form, 'miActive', true);
+        end
+      else
+        begin
+          SetPropertyForComponentList(ptEnabled, Form, 'miUnActive', true);
+          SetPropertyForComponentList(ptEnabled, Form, 'miActive', false);
+          if VarAsBool(MasterData.ОтображатьНаСайте) then
+            begin
+              SetPropertyForComponentList(ptEnabled, Form, 'miShowOnSite', false);
+              SetPropertyForComponentList(ptEnabled, Form, 'miNotShowOnSite;', true);
+            end
+          else
+            begin
+              SetPropertyForComponentList(ptEnabled, Form, 'miShowOnSite', true);
+              SetPropertyForComponentList(ptEnabled, Form, 'miNotShowOnSite;', false);
+            end
+        end;
+    end
+  else
+    SetPropertyForComponentList(ptEnabled, Form, 'miShowOnSite;miNotShowOnSite;miUnActive;miActive', false);
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;  
+  UseConst := GetConstants;   
+  server.CreateSrvObjects;
+  if VarAsBool(UseConst.ПоказыватьЦеныГрн) then
+    MasterData.SetSrvOnCalcFields(server.SrvCalcFieldsEP);
+  ICtg := CreateObject('Справочники.Товары');
+  ICtg.IncludeOnlyLevels(true);
+  ICtg.Params['ChildJournal'] := MasterData;
+  ICtg.IncludeOnlyLevels(True);
+  ICtg.OpenFormInplace('КатегорииТоваровДляМоделей', CtrlToVar(pCtg));
+  GoodsDic := CreateObject('Справочники.Товары');
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.AddColumn('Код',vtcString,20);
+  GoodsTbl.AddColumn('Self',vtcLink,0);
+  GoodsTbl.AddColumn('Цвет',vtcString,50);  
+  GoodsTbl.AddColumn('Размер',vtcString,50);
+  GoodsTbl.Open; 
+  GoodsTbl.SortBy('Self');
+  GoodsTbl.UseDataSource(CtrlToVar(TVSGoods));
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itInPlaceForMain;
+  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+  MasterData.SetFieldFilter('Активность','=',1,'','',Null);
+  MasterData.Refresh;
+  CheckControls;
+  tsFilter.Down := GetFilterPanel(MasterData.GetSign);
+  pFilter.Visible := tsFilter.Down; 
+  FieldName := 'Название';
+  pnGoods.Height := VarAsInt(Opt.GetServerPrm('ModelspnGoods'),125);
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender: TObject);
+begin
+ CheckControls;
+ if MasterData.IsFocused and MasterData.SetSrvToClientPos then
+  try
+    GoodsTbl.DisableControls;
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer;
+    server.FillGoodsByModel(GoodsTbl.SrvMean, MasterData.SrvMean);
+    GoodsTbl.CopyDataFromServer;
+    GoodsTbl.SortBy('Self');
+  finally
+    GoodsTbl.EnableControls;
+  end
+else
+  GoodsTbl.Clear;
+end; 
+
+procedure tbRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+  CheckControls;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+  Opt.SetServerPrm('ModelspnGoods',pnGoods.Height);
+end;
+
+procedure miPrint_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      V := CreateObject('Обработки.ПечВводОстатков');
+      V.PrintForm('ПечатьСоставаТермопринтер25х70', not VarAsBool(Opt.GetServerPrm(DirectPrint)), MasterData);
+    end;
+end;
+
+
+procedure miShowOnSite_Click(Sender: TObject);
+var
+  cnt: Integer;
+  Dic: ICDictionary;
+begin
+  Cursor := WaitCursorStart;
+  cnt := 0;
+  Dic := CreateObject('Справочники.МоделиГотовойПродукции');
+  MasterData.SelectBookmarks;
+  while MasterData.SelectNextBookmark do
+    begin
+      if MasterData.Активность = 0 then
+        begin
+          ShowMessage('Модели из архива нельзя отображать на сайте!');
+          break;
+        end;
+      Dic.Find(MasterData);
+      Dic.Edit;
+      Dic.ОтображатьНаСайте := true;
+      Dic.Post;
+      Dic.ApplyUpdates;
+
+      GoodsDic.SetFieldFilter('Модель','=',Dic,'','',null);
+      GoodsDic.Select;
+      while GoodsDic.SelectNext do
+        begin
+          inc(cnt);
+          GoodsDic.Edit;
+          GoodsDic.AssignFields('ОтображатьНаСайте',Dic);
+          GoodsDic.Post;
+          GoodsDic.ApplyUpdates;
+        end;
+    end;
+  MasterData.Refresh;
+  WaitCursorFinish(Cursor);
+  if cnt > 0 then
+    ShowMessage('Изменено: '+ VarAsStr(cnt) + ' записей в справочнике готовой продукции');
+end;
+
+procedure miNotShowOnSite_Click(Sender: TObject);
+var
+  cnt: Integer;
+  Dic: ICDictionary;
+begin
+  Cursor := WaitCursorStart;
+  cnt := 0;
+  Dic := CreateObject('Справочники.МоделиГотовойПродукции');
+  MasterData.SelectBookmarks;
+  while MasterData.SelectNextBookmark do
+    begin
+      Dic.Find(MasterData);
+      Dic.Edit;
+      Dic.ОтображатьНаСайте := false;
+      Dic.Post;
+      Dic.ApplyUpdates;
+      GoodsDic.SetFieldFilter('Модель','=',Dic,'','',null);
+      GoodsDic.Select;
+      while GoodsDic.SelectNext do
+        begin
+          inc(cnt);
+          GoodsDic.Edit;
+          GoodsDic.AssignFields('ОтображатьНаСайте',Dic);
+          GoodsDic.Post;
+          GoodsDic.ApplyUpdates;
+        end;
+    end;
+  MasterData.Refresh;
+  WaitCursorFinish(Cursor);
+  if cnt > 0 then
+    ShowMessage('Изменено: '+ VarAsStr(cnt) + ' записей в справочнике готовой продукции');
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if MasterData.IsFocused and VarAsBool(MasterData.ОтображатьНаСайте) then
+    Index1 := 162;
+end;
+{$D+}
+
+procedure tsState_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  if NewTab = 0 then
+    MasterData.SetFieldFilter('Активность','=',1,'','',Null)
+  else
+    MasterData.SetFieldFilter('Активность','=',0,'','',Null);
+  MasterData.Refresh;
+  CheckControls;
+end;
+
+procedure miActive_Click(Sender: TObject);
+  var
+  cnt: Integer;
+  Dic: ICDictionary;
+begin
+  Cursor := WaitCursorStart;
+  cnt := 0;
+  Dic := CreateObject('Справочники.МоделиГотовойПродукции');
+  MasterData.SelectBookmarks;
+  while MasterData.SelectNextBookmark do
+    begin
+      Dic.Find(MasterData);
+      case (Sender as TO4MenuItem).Tag of
+        0: begin
+          Dic.Edit;
+          Dic.Активность := 1;
+          Dic.Post;
+          Dic.ApplyUpdates;
+        end;
+        1: begin
+          Dic.Edit;
+          Dic.Активность := 0;
+          Dic.ОтображатьНаСайте := false;
+          Dic.Post;
+          Dic.ApplyUpdates;
+          GoodsDic.SetFieldFilter('Модель','=',Dic,'','',null);
+          GoodsDic.Select;
+          while GoodsDic.SelectNext do
+            begin
+              inc(cnt);
+              GoodsDic.Edit;
+              GoodsDic.AssignFields('ОтображатьНаСайте',Dic);
+              GoodsDic.Post;
+              GoodsDic.ApplyUpdates;
+            end;
+        end;
+      end;
+    end;
+  MasterData.Refresh;
+  WaitCursorFinish(Cursor);
+  if cnt > 0 then
+    ShowMessage('Изменено: '+ VarAsStr(cnt) + ' записей в справочнике готовой продукции');
+end;
+
+
+
+
+function GetCode(Article : Integer): String;
+var
+  i : integer;
+begin
+  i := StrLength(VarAsStr(Article));
+  case i of
+    1 : result := '0000' + VarAsStr(Article);
+    2 : result := '000' + VarAsStr(Article);
+    3 : result := '00' + VarAsStr(Article);
+    4 : result := '0' + VarAsStr(Article);
+    5 : result := VarAsStr(Article);
+  end;
+end;
+
+procedure RefreshColorTbl(ColorTbl: ICValueTable);
+begin
+  ColorTbl.SortBy('ПолноеНазвание');
+  ColorTbl.DoNumbering('Артикул',1,1);
+  ColorTbl.SortBy('Артикул');
+  ColorTbl.Select;
+  while ColorTbl.SelectNext do
+    begin
+      ColorTbl.Edit;
+      ColorTbl.Код := FormatFloat('00', ColorTbl.Артикул);
+      ColorTbl.ПолноеНазвание := FormatFloat('00', ColorTbl.Артикул) + ' ' + VarAsStr(ColorTbl.Название);
+      ColorTbl.Post;
+    end;
+end;
+
+procedure Button2_Click(Sender: TObject);
+var
+  ModelDic, GroupDic, ManufactDic, Goods: ICDictionary;
+  ColorTbl: ICValueTable;
+  GoodCode: String;
+  i : Integer;
+begin
+  ModelDic := CreateObject('Справочники.МоделиГотовойПродукции');
+  ModelDic.Select;
+  ManufactDic := CreateObject('Справочники.Производители');
+  ManufactDic.Select;
+  GroupDic := CreateObject('Справочники.ГруппыТоваров');
+  Goods := CreateObject('Справочники.Товары');
+  Goods.Select;
+  while Goods.SelectNext do
+    begin
+      inc(i);
+      StatusText(VarAsStr(i));
+      GoodCode := '';
+      if not ModelDic.FindByField('ПолноеНазвание', Goods.Производитель.Название + ' ' + Goods.КодПроизводителя, false) then
+        begin
+          ColorTbl := CreateObject('ValueTable');
+          ColorTbl.AddColumn('Артикул',vtcInteger,0);
+          ColorTbl.AddColumn('Код',vtcString,2);
+          ColorTbl.AddColumn('Название',vtcString,200);
+          ColorTbl.AddColumn('ПолноеНазвание',vtcString,200);
+          ColorTbl.Open;
+          ModelDic.Append;
+          ModelDic.Артикул := GetNextNumberForField('Справочники.МоделиГотовойПродукции', 'Артикул', false, '');
+          ModelDic.Код := GetCode(ModelDic.Артикул);
+          ModelDic.AssignFields('Производитель;КодПроизводителя;КолВУпаковке;Валюта;Цена;ОптЦена;КрОптЦена',Goods);
+          ModelDic.Название := Goods.НазвТовара;
+          ModelDic.ПолноеНазвание := Goods.Производитель.Название + ' ' + Goods.КодПроизводителя;
+          //добавление цвета
+          ColorTbl.Append;
+          ColorTbl.Артикул := 1;
+          ColorTbl.Код := FormatFloat('00', ColorTbl.Артикул);
+          ColorTbl.ПолноеНазвание := FormatFloat('00', ColorTbl.Артикул) + ' ' + VarAsStr(ColorTbl.Название);
+          ColorTbl.Название := Goods.Цвет;
+          ColorTbl.Post;
+          GoodCode := ColorTbl.Код;
+          ModelDic.ЦветовойРяд := Null;
+          ModelDic.ЦветовойРяд := WritePropsToBlob(ColorTbl);
+          //----------------------
+          ModelDic.Post;
+          ModelDic.ApplyUpdates;
+          Goods.Edit;
+          Goods.Модель := ModelDic;
+          Goods.Код := ModelDic.Код + GoodCode;
+          Goods.КодЦвета := GoodCode;
+          Goods.Post;
+          Goods.ApplyUpdates;
+        end
+      else
+        begin
+          ColorTbl := CreateTblFromBLOB(ModelDic.ЦветовойРяд);
+          if IsNil(ColorTbl) then
+            begin
+              ColorTbl := CreateObject('ValueTable');
+              ColorTbl.AddColumn('Артикул',vtcInteger,0);
+              ColorTbl.AddColumn('Код',vtcString,2);
+              ColorTbl.AddColumn('Название',vtcString,200);
+              ColorTbl.AddColumn('ПолноеНазвание',vtcString,200);
+              ColorTbl.Open;
+            end;
+          //добавление цвета
+          ColorTbl.Append;
+          ColorTbl.ПолноеНазвание := 'zzzzzzz'; // Для сортировки
+          ColorTbl.Название := Goods.Цвет;
+          ColorTbl.Post;
+          RefreshColorTbl(ColorTbl);
+          GoodCode := ColorTbl.Код;
+          ModelDic.Edit;
+          ModelDic.ЦветовойРяд := Null;
+          ModelDic.ЦветовойРяд := WritePropsToBlob(ColorTbl);
+          ModelDic.Post;
+          ModelDic.ApplyUpdates;
+          //----------------------
+          Goods.Edit;
+          Goods.Модель := ModelDic;
+          Goods.Код := ModelDic.Код + GoodCode;
+          Goods.КодЦвета := GoodCode;
+          Goods.Post;
+          Goods.ApplyUpdates;
+        end;
+    end;
+end;
+
+procedure miCopy_VPABeforeActionClick(Sender: TObject);
+var
+  CopyFrom : ICDictionary;
+begin
+  CopyFrom := CreateObject('Справочники.МоделиГотовойПродукции');
+  if CopyFrom.Find(MasterData) then
+    MasterData.Params['CopyFrom'] := CopyFrom
+  else
+    MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure tbAdd_Click(Sender: TObject);
+begin
+   MasterData.Params['CopyFrom'] := Null;
+   MDS_VPATimedAfterScroll(Form);
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  Case eFieldFilter.Text of
+        'Название' : FieldName := 'ПолноеНазвание';
+        'Название модели' : FieldName := 'Название';
+  else
+    FieldName := eFieldFilter.Text;
+  end;
+  MasterData.SetFieldFilter(FieldName,'Like', '%' + eGoodsFilter.Text + '%','','',Null);
+  MasterData.Refresh;
+  form.ActiveControl := dbgData;
+end;
+
+procedure eGoodsFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if key=13 then
+    begin
+      tbFilterApply_Click(Form);
+    end;
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+end;
+
+procedure miFocusOnFilter_Click(Sender: TObject);
+begin
+  form.ActiveControl := eGoodsFilter;
+end;
+
+procedure tsFilter_Click(Sender: TObject);
+begin
+  pFilter.Visible := tsFilter.Down;
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+  SetFilterPanel(MasterData.GetSign, tsFilter.Down);
+end;
+
+
+
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+  case StrLowerCase(ProcID) of
+    'dontuselevel' :
+      begin
+        MasterData.CancelFieldFilter('Категория');
+        MasterData.Refresh;
+      end;
+    'levelchanged', 'usenolevel' :
+      begin
+        if not IsNil(InParams) and VarAsBool(InParams.IsType('ValueList')) and (InParams.Count = 0) then
+          begin
+            MasterData.CancelFieldFilter('Категория');
+            MasterData.Refresh;
+            exit;
+          end;
+        MasterData.SetFieldFilter('Категория', '=', InParams, '', '', Null);
+        MasterData.Refresh;
+      end;
+  end
+end;
+
+
+procedure dbgGoods_DblClick(Sender: TObject);
+begin
+ if GoodsTbl.IsFocused and GoodsDic.Find(GoodsTbl.@Self) then
+   GoodsDic.EditInForm('',1);
+end;
+
+procedure tbEdit_Click(Sender: TObject);
+begin
+ MDS_VPATimedAfterScroll(Form);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Splitter1:TO4Splitter
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+ToolButton2:TO4ToolButton
+ToolButton3:TO4ToolButton
+tsFilter:TO4ToolButton
+dbgData:TO4DBGrid
+pFilter:TO4Panel
+CodePanel:TO4Panel
+eGoodsFilter:TO4Edit
+eFieldFilter:TO4Edit
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+pnGoods:TO4Panel
+Label1:TO4Label
+tsState:TO4TabSet
+dbgGoods:TO4DBGrid
+pCtg:TO4Panel
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miCopy:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+MenuItem1:TO4MenuItem
+miShowOnSite:TO4MenuItem
+miNotShowOnSite:TO4MenuItem
+MenuItem4:TO4MenuItem
+miActive:TO4MenuItem
+miUnActive:TO4MenuItem
+TVSGoods:TO4TableValueSource

@@ -1,0 +1,55 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation  
+
+var
+  V: ICProcessing;  
+  Driver: OleVariant;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  PlaySound('Ding');
+  V.Params['Sum'] := StrToDec(edGivenSum.Text);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);  
+var CurName:string;
+begin
+  V := Mean;
+  edSum.Text := DecToStr(Params,2);   
+  if StrToDec(edGivenSum.Text) <> StrToDec(edSum.Text)  then
+    btOk.Enabled := false
+  else
+    btOk.Enabled := true;  
+  if V.HasParam('CurrencyName') then
+    begin
+      CurName := ' '+ VarAsStr(V.Params['CurrencyName']);
+      Panel4.Caption := Panel4.Caption + CurName;
+      Panel10.Caption := Panel10.Caption + CurName;
+    end;
+end;
+
+procedure edGivenSum_Change(Sender: TObject);
+begin  
+  if StrToDecDef(edGivenSum.Text,0) <> StrToDec(edSum.Text) then
+    btOk.Enabled := false
+  else
+    btOk.Enabled := true;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel8:TO4Panel
+Panel9:TO4Panel
+edGivenSum:TO4Edit
+Panel10:TO4Panel
+Panel2:TO4Panel
+Panel4:TO4Panel
+Panel5:TO4Panel
+edSum:TO4Edit
+btOk:TO4Button
+Button1:TO4Button

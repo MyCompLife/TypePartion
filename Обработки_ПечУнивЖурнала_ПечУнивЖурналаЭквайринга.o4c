@@ -1,0 +1,86 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData, MDS : ICJournal;
+  Tbl : ICValueTable;
+  s1, s2, s3 : Decimal;
+  UseConst : IC4VPAConst;
+  OutCome : Boolean;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MDS := Form.GetParams; //Form.GetMean;
+  if VarAsBool(MDS.IsFocused) then
+    MasterData := CreateObject('Журналы.' + MDS.GetSign())
+  else
+    MasterData := CreateObject('Журналы.ЖурналНакладных');
+  MasterData.AssignSelectParams(MDS);
+  MasterData.SrvAssignClientSelectParams(); //AssignSelectParams(MDS);
+  Tbl := CreateObject('ТаблицаЗначений');
+  server.GetTable(Tbl.SrvMean, MasterData.SrvMean, s1, s2, s3);
+  Tbl.CopyDataFromServer;
+  Tbl.SrvMean.Clear;
+  Tbl.SortBy('ДатаДокумента');
+  UseConst := GetConstants;
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := Tbl.SelectFirst()
+  else
+    Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := Tbl.НомерДокумента;
+      Value['Date'] := Tbl.ДатаДокумента;
+      Value['Partner'] := Tbl.Название;
+      Value['Summa'] := Tbl.Сумма;    
+      Value['SummaKom'] := Tbl.Комиссия;
+      Value['SummaZar'] := Tbl.СуммаЗарах;
+      Value['TypeDoc'] := Tbl.Документ;
+      Value['Currency'] := Tbl.Валюта;
+    end;
+end;
+
+procedure Band3_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  lbAllSumma.Caption := FormatFloat(UseConst.ФорматСумГРН, s1);  
+  Label6.Caption := FormatFloat(UseConst.ФорматСумГРН, s3);
+  Label7.Caption := FormatFloat(UseConst.ФорматСумГРН, s2);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band2:TRBBand
+hdTypeDoc:TRBLabel
+hdTax:TRBLabel
+hdSumNT:TRBLabel
+hdDate:TRBLabel
+hdNumber:TRBLabel
+hdPartner:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Band1:TRBBand
+Label4:TRBLabel
+DetailBand1:TRBDetailBand
+lbPartner:TRBLabel
+lbTax:TRBLabel
+lbSumNT:TRBLabel
+lbDate:TRBLabel
+lbNumber:TRBLabel
+lbTypeDoc:TRBLabel
+Label3:TRBLabel
+Label5:TRBLabel
+Band3:TRBBand
+lbAllSumma:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Structure1:TRBStructure

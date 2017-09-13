@@ -1,0 +1,27 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+
+procedure FillTblDocS(Doc: Variant; TblDetailDoc: ISValueTable; DateFrom, DateTo : DateTime);server;
+var    
+  AccsState : ISAccs;
+  UniqDics : ISDictionary;
+begin  
+  AccsState:= CreateObject('Аккумуляторы.ЖурналИзменений');
+  UniqDics := CreateObject('Справочники.ИдентификаторДокумента');
+  UniqDics.UseMaster(Doc);
+  UniqDics.Select;
+  if UniqDics.SelectNext then
+    begin
+      AccsState.SetFieldFilter('Идентификатор', UniqDics);
+      AccsState.SaveMotionToValueTable(DateFrom, DateTo, amtIncome,-1, TblDetailDoc);
+    end
+  else           
+    TblDetailDoc.Clear;
+end;
+
+end.

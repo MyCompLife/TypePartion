@@ -1,0 +1,152 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, Пользователи;
+
+implementation
+
+var
+  Regions, MasterData : ICDictionary;
+  UseLevels : Boolean;
+  Opt : ICOptions;
+  RegionsList : ICValueList;   
+  FieldName : string;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+Var
+  ActiveRegion : ICDictionary;
+begin
+  MasterData := MDS.GetMean;
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+  RegionsList := CreateObject('СписокЗначений');
+  Regions := CreateObject('Справочники.Регионы');
+  RegionsList.AddValue(Trans('Все регионы'), Null);
+  Regions.Select;
+  while Regions.SelectNext do
+    RegionsList.AddValue(Regions.Название, Regions); // или ('',S)
+  RegionsList.UseControl(CtrlToVar(eRegion));
+  RegionsList.CurIndex := 0;
+  eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+  ActiveRegion := GetUsersField('Регион');
+  if not IsNil(ActiveRegion) then
+    RegionsList.CurIndex := RegionsList.FindByValue(ActiveRegion)
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itSelectForm;
+  MakeStandartInterface(MasterData, Form, '', '');
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure miPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null);
+end;
+
+procedure eRegion_Change(Sender: TObject);
+begin
+  if RegionsList.CurIndex > 0 then
+    begin
+      MasterData.CancelFieldFilter('Регион');
+      MasterData.SetFieldFilter('Регион','=',RegionsList.GetValue(RegionsList.CurIndex),'','',null);
+    end
+   else
+     MasterData.CancelFieldFilter('Регион');
+  MasterData.Refresh;
+end;
+
+procedure ePartFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  FieldName := 'ПолноеНазвание';
+  if key=13 then
+    begin
+      MasterData.SetFieldFilter(FieldName,'Like', '%' + ePartFilter.Text + '%','','',Null);
+      MasterData.Refresh;
+      form.ActiveControl := dbgData;
+    end;
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  FieldName := 'ПолноеНазвание';
+  MasterData.SetFieldFilter(FieldName,'Like', '%' + ePartFilter.Text + '%','','',Null);
+  MasterData.Refresh;
+  form.ActiveControl := dbgData;
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  ePartFilter.Text := '';
+end;
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+dbtCtg:TO4DBTreeView
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+Panel2:TO4Panel
+Label2:TO4Label
+eRegion:TO4Edit
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+pFilter:TO4Panel
+CodePanel:TO4Panel
+Label1:TO4Label
+ePartFilter:TO4Edit
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton

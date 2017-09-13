@@ -1,0 +1,92 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  DocsNum : ICValueTable;
+  Act : ICDocuments;
+  Ar : Variant;
+  CountDoc : Integer;
+  CursorVis : TCursor;
+
+procedure AddDoc(DocName : string);
+begin
+  DocsNum.Append;
+  Act := CreateObject(DocName);
+  DocsNum.Документ := Act.GetName;
+  DocsNum.Номер := Act.DefaultNum;
+  DocsNum.Post;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  i, j : Integer;
+  DocName : string;
+  Doc, TmpDoc : ICDocuments;
+begin
+  CursorVis := WaitCursorStart;
+  Doc := CreateObject('Документы.РасходСРасчСчета');
+  edDoc.Items.Text := Doc.GetListDocsForAutoNum;
+  CountDoc := edDoc.Items.Count - 1;
+  DocsNum := CreateObject('ТаблицаЗначений');
+  DocsNum.AddColumn('Документ', vtcString, 128);
+  DocsNum.AddColumn('Номер', vtcInteger, 0);
+  DocsNum.AddColumn('Сортировка', vtcInteger, 0);
+  DocsNum.Open;
+  ArrayCreate(Ar, [0, CountDoc], ICDocuments);
+  j := 0;
+  for i := 0 to CountDoc do
+    if CheckObjectExists('Документы.' + edDoc.Items.Strings[i]) then
+      begin
+        DocName := 'Документы.' + edDoc.Items.Strings[i];
+        TmpDoc := CreateObject(DocName);
+        Ar[j] := TmpDoc;
+        DocsNum.Append;
+        DocsNum.Документ := Trans(Ar[j].GetName);
+        DocsNum.Номер := Ar[j].DefaultNum;
+        DocsNum.Сортировка := j;
+        DocsNum.Post;
+        inc(j);
+      end;
+  DocsNum.SortBy('Документ');
+  DocsNum.SelectFirst;
+  DocsNum.UseDataSource(CtrlToVar(TVS));
+  //  CursorVis := WaitCursorFinish;
+  SetCursor(CursorVis);
+end;
+
+procedure SaveDocNum;
+var
+  i : Integer;
+  V : Variant;
+begin
+  i := 0;
+  DocsNum.SortBy('Сортировка');
+  DocsNum.Select;
+  while DocsNum.SelectNext do
+    begin
+      V := Ar[i];
+      if IsObject(V) then
+        Ar[i].DefaultNum := DocsNum.Номер;
+      i := i + 1;
+    end;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  SaveDocNum;
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+dbgData:TO4DBGrid
+edDoc:TO4Edit
+TVS:TO4TableValueSource

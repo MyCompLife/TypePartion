@@ -1,0 +1,2227 @@
+interface
+
+uses
+  System, DispIntf, ”становка онстант;
+
+implementation
+
+procedure Form_Open(Sender : TObject);
+var
+  Users : ICDictionary;
+  J : ICJournal;
+  V: ICProcessing;
+begin
+  DefaultConstants;
+  DefaultOptions;
+  if IsNil(Users) then Users := CreateObject('—правочники.ѕользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    begin
+      if VarAsBool(Users.ќткрыть∆урнал) then
+      begin
+        Case VarAsInt(Users.∆урнал) of
+          0: begin
+               J := CreateObject('∆урналы.∆урнал„еков');
+               J.OpenForm('—писок„еков');
+             end;
+          1: begin
+               J := CreateObject('∆урналы.∆урнал„еков');
+               J.OpenForm('—писок„ековѕѕ ');
+             end;
+          2: begin
+               J := CreateObject('∆урналы.∆урнал„еков');
+               J.OpenForm('—писок„еков ѕ ');
+             end;
+          3: begin
+               V := CreateObject('ќбработки.–абочеећесто ассираCL');
+               V.OpenForm('–абочеећесто ассира');
+             end;  
+          4: begin
+               J := CreateObject('∆урналы.∆урналѕеремещени€“овара');
+               J.OpenForm('—писокѕеремещени€“овара');
+             end;
+          5: begin
+               V := CreateObject('ќбработки.–абота—¬есами');
+               V.OpenForm('–абћесто¬есы');
+             end;
+        end;
+      end;
+    end;
+end;
+
+procedure miMarketUroPart_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ёрѕартнеры');
+  V.OpenForm('ёрѕартнеры');
+end;
+
+procedure miMarketManPart_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.‘изЋица');
+  V.OpenForm('‘изЋица');
+end;
+
+procedure miDictPhone_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“елефоны');
+  V.OpenForm('“елефоны');
+end;
+
+procedure miDictBank_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.Ѕанки');
+  V.OpenForm('Ѕанки');
+end;
+
+procedure miDictTown_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.√орода');
+  V.OpenForm('√орода');
+end;
+
+procedure miDictEmail_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.Email');
+  V.OpenForm('Email');
+end;
+
+
+procedure miAboutAboutConf_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ќ');
+  V.Execute('ќ онфиг', Unassigned);
+end;
+
+procedure miDictGood_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“овары');
+  V.Params['CardType'] := (Sender as TO4MenuItem).Tag;
+  V.OpenForm('“овары' + VarAsStr((Sender as TO4MenuItem).Tag,'0'));
+end;
+
+procedure miDictCurrency_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.¬алюты');
+  V.OpenForm('¬алюты');
+end;
+
+procedure miPersonnelEmploy_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.—лужащие');
+  V.OpenForm('—лужащие');
+end;
+
+procedure miOptionsConst_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.«начени€¬ажных онстант');
+  V.Execute('«начени€¬ажных онстант', Null);
+end;
+
+procedure miOptionsMyFirm_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.¬ашеѕредпри€тие');
+  V.OpenForm('—писокѕредпри€тий');
+end;
+
+procedure miWorkOrderBuy_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал—четовЌа«акупку');
+  V.OpenForm('—писок—четов');
+end;
+
+procedure miWorkInvoice_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЌакладныхѕрихода');
+  V.OpenForm('—писокЌакладных');
+end;
+
+procedure miOptionsUser_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ѕараметрыЌастройки');
+  V.Execute('ѕараметрыЌастройки', Null);
+end;
+
+procedure miFtpParams_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.FTPЌастройки');
+  V.OpenForm('—писокFTP');
+end;
+
+procedure miWorkOrderSale_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал—четовЌаѕродажу');
+  V.OpenForm('—писок—четов');
+end;
+
+procedure miStoreDict_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.—клады');
+  V.OpenForm('—клады');
+end;
+
+procedure miStoreGood_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“овары');
+  V.Params['cardType'] := (Sender as TO4MenuItem).tag;
+  V.OpenForm('“оварыЌа—кладах' + VarAsStr((Sender as TO4MenuItem).tag,'0'));
+end;
+
+procedure miFinBank_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЅанковскихѕлатежей');
+  V.OpenForm('—писокЅанковскихѕлатежей');
+end;
+
+procedure miFinCash_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал ассовыхѕлатежей');
+  V.OpenForm('—писок ассовыхѕлатежей');
+end;
+
+procedure miFinCashBlack_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЋичных‘инансов');
+  V.OpenForm('—писокЋичных‘инансов');
+end;
+     
+procedure miFinRest_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ќстаткиЅанк асса');
+  V.Execute('ќстЅанк асса', Null);
+end;
+
+procedure miCashRest_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ќстаткиЅанк асса');
+  V.Execute('ќстатки асса', Null);
+end;
+
+procedure miFinPayments_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕлатежей');
+  V.OpenForm('—писокѕлатежей');
+end;
+
+procedure miWorkRetFromPart_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал¬озвратовќтѕокупател€');
+  V.OpenForm('—писок¬озвратов');
+end;
+
+procedure miWorkRetToPart_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал¬озвратовѕоставщикам');
+  V.OpenForm('—писок¬озвратов');
+end;
+
+procedure miStoreSpResIn_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал¬водовќстатков');
+  V.OpenForm('—писок¬водовќстатков');
+end;
+
+procedure miWorkTaxIn_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы. нига”четаѕокупок');
+  V.OpenForm('—писокѕокупок');
+end;
+
+procedure miWorkTaxOut_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы. нига”четаѕродаж');
+  V.OpenForm('—писокѕродаж');
+end;
+
+procedure miStoreDiscOut_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал—писаний“оваров');
+  V.OpenForm('∆урнал—писаний“овара');
+end;
+
+procedure miStoreOut_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕеремещени€“овара');
+  V.OpenForm('—писокѕеремещени€“овара');
+end;
+
+procedure miStoreReserv_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал–езерва“оваров');
+  V.OpenForm('∆урнал–езерва“оваров');
+end;
+
+procedure miRealization_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.–еализаторы');
+  V.OpenForm(' арточки–еализаторов');
+end;
+
+procedure miDemand_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал«аказов');
+  V.OpenForm('—писок«аказов');
+end;
+
+procedure miOptionsRules_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ѕравила');
+  V.OpenForm('ѕравила');
+end;
+
+procedure miOptionsCnv_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки. онвертаци€');
+  V.Execute(' онвертаци€23', Null);
+end;
+
+procedure pmiInRealiz_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ѕостЌа–еализацию');
+  V.OpenForm(' арточкиѕостЌа–еал');
+end;
+
+procedure MenuItem23_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал—четовЌаќказание”слуг');
+  V.OpenForm('—писок—четов');
+end;
+
+procedure MenuItem22_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал—четовЌаѕолучение”слуг');
+  V.OpenForm('—писок—четовЌаѕолучение”слуг');
+end;
+
+procedure MenuItem31_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал¬водовќстѕо¬заиморасч');
+  V.OpenForm('—писокќст¬заимо–асч');
+end;
+
+procedure miMoveGood_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќбор“овараѕо–еал');
+  V.OpenForm('ќбор“овараѕо–еал');
+end;
+
+procedure miFinReport_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.‘инќтчет');
+  V.OpenForm('‘инќтчет');
+end;
+
+procedure miRepGoodGeneral_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овара');
+  V.OpenForm('ќборот“овара');
+end;
+
+procedure miRepGoodSmall_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овара_ раткий');
+  V.OpenForm('ќборот“овара_ раткий');
+end;
+
+procedure miMovePostGood_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овѕоѕостЌа–еал');
+  V.OpenForm('ќборот“овѕоѕостЌа–еал');
+end;
+
+procedure miSummReal_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот—уммѕо–еализаторам');
+  V.OpenForm('ќборот—уммѕо–еализаторам');
+end;
+
+procedure miRevision_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал–евизий“овара');
+  V.OpenForm('—писок–евизий');
+end;
+
+procedure miSummPostReal_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот—уммѕоѕостЌа–еал');
+  V.OpenForm('ќборот—уммѕоѕостЌа–еал');
+end;
+
+procedure miChangePrice_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕереоценки');
+  V.OpenForm('∆урналѕереоценки');
+end;
+
+procedure miDictCol_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки. оллекции');
+  V.OpenForm(' оллекции');
+end;
+
+procedure miRepGoodAnal_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.јналитические арточки');
+  V.OpenForm('јналитические арточки');
+end;
+
+procedure MenuItem24_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.¬заиморасчетыѕо атегори€м');
+  V.OpenForm('¬заиморасчетыѕо атегори€м');
+end;
+
+procedure miPartReport_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоѕартнерам');
+  V.OpenForm('ќтчетѕоѕартнерам');
+end;
+
+procedure MenuItem27_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌакладным');
+  V.Params['FormName'] := 0;
+  V.OpenForm('ќтчетѕоЌакладным');
+end;
+
+procedure MenuItem32_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌакладным');
+  V.Params['FormName'] := 1;
+  V.OpenForm('ќтчетѕоЌакладным');
+end;
+
+procedure miGoodsServMoney_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ƒвижение“оваровƒенег');
+  V.OpenForm('ƒвижение“оваровƒенег');
+end;
+
+procedure MenuItem40_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌаѕродажу');
+  V.OpenForm('ќтчетѕо—четамЌаѕродажу');
+end;
+
+procedure MenuItem56_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌа”слугићы');
+  V.OpenForm('ќтчетѕо—четамЌа”слугићы');
+end;
+
+procedure MenuItem58_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌа”слугиЌам');
+  V.OpenForm('ќтчетѕо—четамЌа”слугиЌам');
+end;
+
+procedure MenuItem45_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчет“овар¬–езерве');
+  V.OpenForm('ќтчет“овар¬–езерве');
+end;
+
+procedure MenuItem41_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌа«акупку');
+  V.OpenForm('ќтчетѕо—четамЌа«акупку');
+end;
+
+procedure MenuItem43_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌаѕродажуƒет');
+  V.OpenForm('ќтчетѕо—четамЌаѕродажуƒет');
+end;
+
+procedure MenuItem44_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌа«акупкуƒет');
+  V.OpenForm('ќтчетѕо—четамЌа«акупкуƒет');
+end;
+
+procedure miRepGoodStore_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овара¬–азрезе—клад“овар');
+  V.OpenForm('ќборот“овара¬–азрезе—клад“овар');
+end;
+
+procedure MenuItem47_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овараƒетализированный');
+  V.OpenForm('ќборот“овараƒетализированный');
+end;
+
+procedure MenuItem48_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овара—группѕоѕартнерам');
+  V.OpenForm('ќборот“овара—группѕоѕартнерам');
+end;
+
+procedure MenuItem50_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕревышениећин«апаса');
+  V.OpenForm('ќтчетѕревышениећин«апаса');
+end;
+
+procedure MenuItem51_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот—кладƒокумент');
+  V.OpenForm('ќборот—кладƒокумент');
+end;
+
+procedure MenuItem52_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетќтпуск–еал—клад');
+  V.OpenForm('ќтчетќтпуск–еал—клад');
+end;
+
+procedure miDepJour_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  V.OpenForm('—писокѕодчиненныхѕлатежей');
+end;
+
+procedure miAccPlan_Click(Sender : TObject);
+var
+  V : ICPlan;
+begin
+  V := CreateObject('ѕланы—четов.ѕлан—четов');
+  V.OpenForm('ѕлан—четов');
+end;
+
+procedure miBuhJourn_Click(Sender : TObject);
+var
+  V : Variant;
+begin
+  V := CreateObject('Ѕухќперации.ќперации');
+  V.OpenForm('∆урнал');
+end;
+
+procedure miBuhEntries_Click(Sender : TObject);
+var
+  V : Variant;
+begin
+  V := CreateObject('Ѕухќперации.ќперации');
+  V.OpenProvJournal('—писокѕроводок');
+end;
+
+procedure miBuhDocsJournal_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.ƒокументыЅухгалтерии');
+  V.OpenForm('—писок');
+end;
+
+procedure miTypeEntries_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.ƒокументы“иповыхќпераций');
+  V.OpenForm('∆урнал“иповыхќпераций');
+end;
+
+procedure miBuhWizard_Click(Sender : TObject);
+var
+  V : Variant;
+begin
+  V := CreateObject('Ѕухучет.Ѕухучет').CreateWizard;
+  V.OpenDesignForm;
+end;
+
+procedure miRepRealGood_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овараѕо–еализаторам');
+  V.OpenForm('ќборот“овараѕо–еализаторам');
+end;
+
+procedure miBuhChess_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ЅухЎахматка');
+  V.Params['MenuNumber'] := (Sender as TO4MenuItem).Tag;
+  V.OpenForm('Ўахматка');
+end;
+
+procedure miBuhOSV_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ѕухќборотно—альдова€');
+  V.Params['MenuNumber'] := (Sender as TO4MenuItem).Tag;
+  V.OpenForm('ќборотно—альдова€');
+end;
+
+procedure miBuhSVOD_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ѕух—водныеѕроводки');
+  V.Params['MenuNumber'] := (Sender as TO4MenuItem).Tag;
+  V.OpenForm('—водныеѕроводки');
+end;
+
+procedure miJournOrd_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.∆урналќрдер');
+  V.OpenForm('∆урналќрдер');
+end;
+
+procedure miJournOrdV_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.∆урналќрдер');
+  V.OpenForm('∆урналќрдерЌовый');
+end;
+
+procedure miOSAcc_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ѕухќборот—альдѕо—чету');
+  V.OpenForm('ќборот—альдѕо—чету');
+end;
+
+procedure miChessAO_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ЅухЎахматка—“оваром');
+  V.Params['MenuNumber'] := (Sender as TO4MenuItem).Tag;
+  V.OpenForm('ЅухЎахматка—“оваром');
+end;
+
+procedure miMainBook_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.√лавна€ нига');
+  V.Params['MenuNumber'] := (Sender as TO4MenuItem).Tag;
+  V.OpenForm('√лавна€ нига');
+end;
+
+procedure miCnv30_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки. онвертаци€');
+  V.Execute(' онвертаци€30', Null);
+end;
+
+procedure miDocNum_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ќумераци€ƒокументов');
+  V.Execute('Ќумераци€ƒокументов', Null);
+end;
+
+procedure miProd_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЌакладныхѕроизводства');
+  V.OpenForm('—писокќтпускаЌаќбъект');
+end;
+
+procedure miActServiceOut_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугам');
+  V.Params['FormName'] := 0;
+  V.OpenForm('ќтчетѕо”слугам');
+end;
+
+procedure miNaklServOut_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугам');
+  V.Params['FormName'] := 1;
+  V.OpenForm('ќтчетѕо”слугам');
+end;
+
+procedure miActServiceIn_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугам');
+  V.Params['FormName'] := 2;
+  V.OpenForm('ќтчетѕо”слугам');
+end;
+
+procedure miPayRespons_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоѕлатежам—ƒетѕоќтвет');
+  V.OpenForm('ќтчетѕоѕлатежамƒет');
+end;
+
+procedure miServiceIn_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугамƒетѕојктам');
+  V.Params['FormName'] := 1;
+  V.OpenForm('ќтчетѕо”слугамƒетѕојктам');
+end;
+
+procedure miServiceOut_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугамƒетѕојктам');
+  V.Params['FormName'] := 0;
+  V.OpenForm('ќтчетѕо”слугамƒетѕојктам');
+end;
+
+procedure miBuhAccount_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.јнализ—чета');
+  V.OpenForm('јнализ—чета');
+end;
+
+procedure miRealizFarm_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.–еализаторы');
+  V.OpenForm(' арточки–еализаторов');
+end;
+
+procedure miRepNaklInFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌакладным‘арм');
+  V.Params['FormName'] := 0;
+  V.OpenForm('ќтчетѕоЌакладным');     
+end;
+
+procedure miRepNaklOutFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌакладным‘арм');
+  V.Params['FormName'] := 1;
+  V.OpenForm('ќтчетѕоЌакладным');  
+end;
+
+procedure miRepNaklInDetFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌакладнымƒет‘арм');
+  V.Params['FormName'] := 0;
+  V.OpenForm('ќтчетѕоЌакладнымƒет');
+end;
+
+procedure miRepNaklOutDetFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌакладнымƒет‘арм');
+  V.Params['FormName'] := 1;
+  V.OpenForm('ќтчетѕоЌакладнымƒет');
+end;
+
+procedure miRepStoreDocFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот—кладƒокумент‘арм');
+  V.OpenForm('ќборот—кладƒокумент');
+end;
+
+procedure miRepOrderOutFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌаѕродажу‘арм');
+  V.OpenForm('ќтчетѕо—четамЌаѕродажу');
+end;
+
+procedure miRepOrderServOutFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌа”слугићы‘арм');
+  V.OpenForm('ќтчетѕо—четамЌа”слугићы');
+end;
+
+procedure miRepOrderInFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌа«акупку‘арм');
+  V.OpenForm('ќтчетѕо—четамЌа«акупку');
+end;
+
+procedure miRepOrderOutDetFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌаѕродажуƒет‘арм');
+  V.OpenForm('ќтчетѕо—четамЌаѕродажуƒет');
+end;
+
+procedure miRepOrderInDetFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌа«акупкуƒет‘арм');
+  V.OpenForm('ќтчетѕо—четамЌа«акупкуƒет');
+end;
+
+procedure miActServiceOutFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугам‘арм');
+  V.Params['FormName'] := 0;
+  V.OpenForm('ќтчетѕо”слугам');
+end;
+
+procedure miNaklServOutFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугам‘арм');
+  V.Params['FormName'] := 1;
+  V.OpenForm('ќтчетѕо”слугам');
+end;
+
+procedure miActServiceInFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугам‘арм');
+  V.Params['FormName'] := 2;
+  V.OpenForm('ќтчетѕо”слугам');
+end;
+
+procedure miServiceInFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугамƒетѕојктам‘арм');
+  V.Params['FormName'] := 1;
+  V.OpenForm('ќтчетѕо”слугамƒетѕојктам');
+end;
+
+procedure miServiceOutFarm_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо”слугамƒетѕојктам‘арм');
+  V.Params['FormName'] := 0;
+  V.OpenForm('ќтчетѕо”слугамƒетѕојктам');
+end;
+
+procedure miClients_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники. лиенты');
+  V.OpenForm(' лиенты');
+end;
+
+procedure miZakaz_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал«аказовЌаƒоставку');
+  V.OpenForm('—писок«аказовЌаƒоставку');
+end;
+
+procedure miMoveByCard_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овараѕојналит арт');
+  V.OpenForm('ќборот“овараѕојналит арт');
+end;
+
+procedure miMagazinFarm_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“орговые“очки');
+  V.OpenForm('“орговые“очки');
+end;
+
+procedure miAlcoTabakOld_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.јлкоголь»“абак');
+  V.OpenForm('јлкоголь»“абак');
+end;
+
+procedure miRepGoodRealAnal_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.јналитические арточки–еал');
+  V.OpenForm('јналитические арточки');
+end;
+
+procedure miOrderComplect_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕо—четамЌа омплект');
+  V.OpenForm('ќтчетѕо—четамЌа омплект');
+end;
+
+procedure miCashBook_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы. ассова€ нига');
+  V.OpenForm(' ассова€ нига');
+end;
+
+procedure miBalans_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЅухќтчетов');
+  V.OpenForm('—писокЅухќтчетов');
+end;
+
+procedure miRTax_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал–еестрЌакладныхЌƒ—');
+  V.OpenForm('—писокЌалоговыхЌакладных');
+end;
+
+procedure miDictEKKA_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.Ё  ј');
+  V.OpenForm('ѕросмотрЁ  ј');
+end;
+
+procedure miScales_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.¬есы');
+  V.OpenForm('—писок¬есов');
+end;
+
+procedure miProxyCards_Click(Sender : TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналƒоверенностей');
+  V.OpenForm('—писокƒоверенностей');
+end;
+
+procedure miRepGoodProdAnal_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.јналитические арточкиѕроизводство');
+  V.OpenForm('јналитические арточки');
+end;
+
+procedure miRepGoodPostAnal_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.јналитические арточкиѕостЌа–еал');
+  V.OpenForm('јналитические арточки');
+end;
+
+procedure miRepGoodMagAnal_Click(Sender : TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.јналитические арточкићагазин');
+  V.OpenForm('јналитические арточки');
+end;
+
+procedure miCloseMonth_Click(Sender : TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.«акрытиећес€ца');
+  V.OpenForm('«акрытиећес€ца');
+end;
+
+procedure miCheckJourn_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал„еков');
+  V.OpenForm('—писок„еков');
+end;
+
+procedure miRealCheckJourn_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал„еков');
+  V.OpenForm('—писок„еков–еализатора');
+end;
+
+procedure miCheckJournKPK_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал„еков');
+  V.OpenForm('—писок„еков ѕ ');
+end;
+
+procedure miCheckJournPPK_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал„еков');
+  V.OpenForm('—писок„ековѕѕ ');
+end;
+
+procedure miCassaSettings_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.ѕараметрыЌастройки ассы');
+  V.Execute('ѕараметрыЌастройки ассы',Null);
+end;
+
+procedure miPayJourn_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЌачислений');
+  V.OpenForm('—писокЌачислений');
+end;
+
+procedure miPrib_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.–еализаци€“оваров”слуг');
+  V.OpenForm('–еализаци€“оваров”слуг');
+end;
+
+procedure miCards_Click(Sender : TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ƒисконт арточки');
+  V.OpenForm('—писокƒисконт арточек');
+end;
+
+
+procedure miDocsOut_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕродаж');
+  V.OpenForm('—писокѕродаж');
+end;
+
+procedure miRepBalans_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.Ѕаланс');
+  V.OpenForm('Ѕаланс');
+end;
+
+procedure MenuItem8_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоƒоходам«атратам');
+  V.OpenForm('ќтчетѕоƒоходам«атратам');
+
+end;
+
+procedure MenuItem14_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.—татьиƒоходов»«атрат');
+  V.OpenForm('ѕросмотр—таттей');
+end;
+
+procedure miRepGoodStores_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќстатки“овара');
+  V.OpenForm('—писокќстатков“овара');
+end;
+
+procedure miDocBalans_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал»тогов');
+  V.OpenForm('—писок»тогов');
+end;
+
+procedure miActIn_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналјктов');
+  V.OpenForm('—писокјктовЌаѕолучение”слуг');
+end;
+
+procedure miActOut_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналјктов');
+  V.OpenForm('—писокјктовЌаќказание”слуг');
+end;
+
+
+procedure miExpSite_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ёкспорт»мпорт——айтом');
+  V.Execute('Ёкспорт¬‘айл',Null);
+end;
+
+procedure miExpSiteToExcel_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.≈кспорт—правочников¬Excel');
+  V.Execute('≈кспорт—правочника“оваров',Null);
+end;
+
+procedure miImpSite_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ёкспорт»мпорт——айтом');
+  V.Execute('»мпорт»з‘айлаXml',Null);
+end;
+
+procedure miStructure_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ёкспорт»мпорт——айтом');
+  V.Execute('—труктура‘айлов',Null);
+end;
+
+procedure miUsers_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ѕользователи');
+  V.OpenForm('—писокѕользователей');
+end;
+
+procedure miPrintBarCodes_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕечатиЎтрих одов');
+  V.OpenForm('—писокƒокументов');
+end;
+
+procedure miDicRegion_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.–егионы');
+  V.OpenForm('–егионы');
+end;
+
+
+procedure miUniNumDocs_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.”никальныйЌумераторƒокументов');
+  V.OpenForm('—писокЌомеровƒокументов');
+end;
+
+procedure miStoreDictLite_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“овары');
+  V.OpenForm('“оварыЌа—кладахƒл€ ассиров');
+end;
+
+procedure miGoodsStore_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал орректировки');
+  V.OpenForm('—писок орќст“ов');
+end;
+
+procedure miExpXMLSite_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ёкспорт»мпорт——айтом');
+  V.Execute('Ёкспорт¬‘айлXML',Null);
+end;
+
+procedure miStoreInOutPPK_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕеремещени€“овара');
+  V.OpenForm('—писокѕеремещени€“овараѕѕ ');
+end;
+
+procedure MenuItem33_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.–егистраци€–абочего¬ремени');
+  V.OpenForm('∆урнал–егистрации');
+end;
+
+procedure MenuItem34_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“абель–абочего¬ремени');
+  V.OpenForm('“абель–абочего¬ремени');
+end;
+
+procedure MenuItem35_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЌачислений«ѕ');
+  V.OpenForm('—писокЌачислений');
+end;
+
+procedure miTehnologiJourn_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал“ехнологий');
+  V.OpenForm('—писок“ехнологий');
+end;
+
+procedure miOrderJourn_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЌар€д«аказов');
+  V.OpenForm('—писокЌар€д«аказов');
+end;
+
+procedure miOperation_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ќперации');
+  V.OpenForm('—писокќпераций');
+end;
+
+procedure miCardJourn_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЋиц арт');
+  V.OpenForm('—писокЋиц арт');
+end;
+
+procedure miTabJourn_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал“абелей');
+  V.OpenForm('—писок“абелей');
+end;
+
+procedure miDayType_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“ип–абƒн€');
+  V.OpenForm('—писок“ипов');
+end;
+
+procedure miTimeTable_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.—хемы–аб¬ремени');
+  V.OpenForm('—писок—хем');
+end;
+
+procedure MenuItem10_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЋиц артам');
+  V.OpenForm('ќтчетѕоЋиц артам');
+end;
+
+procedure MenuItem21_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ќбработкаќбъектов');
+  V.OpenForm('√лавна€');
+end;
+
+procedure miFaceCards_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЋиц артам');
+  V.OpenForm('ќтчетѕоЋиц артам');
+end;
+
+procedure miSalary_Click(Sender: TObject);  
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЌачислени€«арплаты');
+  V.OpenForm('—писокЌачислений«арплаты');
+{var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌачислению«ѕ');
+  V.OpenForm('ќтчетѕоЌачислению«ѕ');  }
+end;
+
+procedure miEmplTime_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌачислению«ѕ');
+  V.OpenForm('ќтчетѕо¬ремени');
+end;
+
+procedure miEmplWork_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.—лужащие');
+  V.OpenForm('—писок—лужащие');
+end;
+
+procedure miCalcList_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал алкЋистов');
+  V.OpenForm('∆урнал алкЋистов');
+end;
+
+procedure miAllSumm_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЌар€д«аказу');
+  V.OpenForm('ќтчетќбщ—уммы');
+end;
+
+procedure miDicAnalog_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.јналоги“оваров');
+  V.OpenForm('—писокјналогов');
+end;
+
+procedure miSizesTbl_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“аблица–азмеров');
+  V.OpenForm('—писок');
+end;
+
+procedure miModels_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ћодели√отовойѕродукции');
+  V.OpenForm('—писок');
+end;
+
+
+procedure miProdParams_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ќастройкиѕроизводство');
+  V.Execute('Ќастройки', Null);
+end;
+
+procedure miPartBonus_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналЌачисление¬ознаграждени€');
+  V.OpenForm('—писокЌачислений');
+end;
+
+procedure miStoreMove_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ƒвижение“овараѕо—кладам');
+  V.OpenForm('ѕеремещение“овараѕо—кладам');
+end;
+
+procedure miRepMoutionGoodsStores_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборот“овара¬–азрезе—клад“овар');
+  V.OpenForm('ќборот“овара');
+end;
+
+procedure miInfoGoods_Click(Sender: TObject);
+var
+ V: ICProcessing;
+begin
+ V := CreateObject('ќбработки.»нфоћодель');
+ V.Execute('ќстатокћодель',Null);
+end;
+
+procedure miGoodRest_Click(Sender: TObject);
+var
+ V: ICProcessing;
+begin
+ V := CreateObject('ќбработки.»нфоћодель');
+ V.Execute('ќстатокћодель',Null);
+end;
+
+procedure miGoodMove_Click(Sender: TObject);
+var
+ V: ICProcessing;
+begin
+ V := CreateObject('ќбработки.»нфоћодель');
+ V.Execute('ќборотћодель',Null);
+end;
+
+procedure miSiteSettings_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ёкспорт»мпорт——айтом');
+  V.Execute('Ќастройки',Null);
+end;
+
+procedure miJournActions_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал”становки—кидок');
+  V.OpenForm('—писок—кидок');
+end;
+
+procedure miCardsReport_Click(Sender: TObject);
+var
+ V: ICReport;
+begin
+ V := CreateObject('ќтчеты.ќтчетѕоЋиц артам');
+ V.OpenForm('ќтчетѕоЋиц артам');
+end;
+
+procedure miProtokol_Click(Sender: TObject);
+Var V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕротоколовќбмена');
+  V.OpenForm('—писокѕротоколов');
+end;
+
+procedure miWorkPlace_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.–абочеећесто ассираCL');
+  V.OpenForm('–абочеећесто ассира');
+end;
+
+procedure miChangeJourn_Click(Sender: TObject);
+Var V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал—мен');
+  V.OpenForm('—писок—мен');
+end;
+
+procedure miDiscount_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ƒисконтные арты');
+  V.OpenForm('ѕросмотрƒисконтных арт');
+end;  
+
+procedure miBarCode_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.Ўтрих оды“оваров');
+  V.OpenForm('ѕросмотрЎтрих одов');
+end;
+
+procedure MenuItem36_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.«наменательныеƒаты');
+  V.OpenForm('—пискиѕартнеров');
+end;
+
+procedure miPartGoods_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоѕартнерам');
+  V.OpenForm('ќтчетѕоѕартнерам“овары');
+end;
+
+procedure miSalesJourn_Click(Sender: TObject);
+Var V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урнал«аказовЌаѕродажу');
+  V.OpenForm('—писок«аказов');
+end;
+
+procedure miRegReport_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ќтчетѕо–ег—обытий');
+  V.OpenForm('ќтчетѕо–ег—обытий');
+
+end;
+
+procedure miDiscountLimit_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ќграничение—кидок');
+  V.OpenForm('—писокќграничений—кидок');
+end;
+procedure miContractPayCards_Click(Sender: TObject);
+Var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналƒоговоровЁквайринга');
+  V.OpenForm('—писокƒоговоров');
+end;
+
+
+procedure miPaysCards_Click(Sender: TObject);
+Var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕлатежейЁквайринга');
+  V.OpenForm('—писокѕлатежей');
+end;
+
+procedure miBanks_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.Ѕанки');
+  V.OpenForm('Ѕанки');
+end;
+
+procedure miPOSTerminals_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“ерминалы');
+  V.OpenForm('“ерминалы');
+end;
+
+procedure miProvidersGood_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ѕоставщики“оваров');
+  V.OpenForm('ѕоставщики');
+end;
+
+procedure miFillFields_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.«аполнениеѕолей');
+  V.Execute('«аполнениеѕолей', Null);
+end;
+
+procedure miCommercialAgents_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“орговыејгенты');
+  V.OpenForm('ѕросмотр“орговыхјгентов');
+end;
+
+procedure miCommercialAgentsGroups_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.√руппы“ј');
+  V.OpenForm('ѕросмотр√руппы“орговыхјгентов');
+
+end;
+
+procedure miPocketImportExportProtocol_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕротоколовќбмена— ѕ ');
+  V.OpenForm('—писокѕротоколовќбмена— ѕ ');
+end;
+
+procedure miRoute_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналћаршрутов');
+  V.OpenForm('—писокћаршрутов');
+end;
+
+procedure miVisit_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕосещений');
+  V.OpenForm('—писокѕосещений');
+end;
+
+procedure miPriceType_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.“ипы÷ен');
+  V.OpenForm('ѕросмотр“ипов÷ен');
+end;
+
+procedure miVisitResultTypes_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.–езультатыѕосещений');
+  V.OpenForm('ѕросмотр–езультатовѕосещений');
+end;
+
+procedure miSettKPK_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.Ќастройка ѕ ');
+  V.Execute('Ќастройка ѕ ', Null);
+end;
+
+procedure miAndroidPocketSettings_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.Ќастройкиƒл€Android');
+  V.OpenForm('ѕросмотрЌастроекƒл€Android');
+end;
+
+
+
+procedure miAndrDoc_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.”никальностьƒокументовAndroid');
+  V.OpenForm('—писокƒокументов');
+end;
+
+procedure miColors_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.÷вета');
+  V.OpenForm('÷вета');
+end;
+
+procedure miWorkRegion_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.–абота—–егионами');
+  V.OpenForm('–абота—–егионами');
+end;
+
+
+procedure miGroupWeightGood_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.√руппы¬есового“овара');
+  V.OpenForm('√руппы');
+end;
+
+procedure miWorkPlaceWeight_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.–абота—¬есами');
+  V.OpenForm('–абћесто¬есы');
+end;
+
+procedure miAction_Click(Sender: TObject);
+Var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналјкций');
+  V.OpenForm('—писокјкций');
+end;
+
+procedure miGroopsDiscount_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.√руппы—кидок');
+  V.OpenForm('ѕросмотр√руппы—кидок');
+end;
+
+
+procedure miFiscalPrintWork_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.–абота—‘ѕ');
+  V.Execute('–абота—‘ѕƒл€ ассира',Null);
+end;
+
+procedure miWeightGood_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.¬ессовой“овар');
+  V.OpenForm('“овары¬есовой“овар');
+
+end;
+
+procedure miAlkoGoodsMove_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќборотјлкогольныхЌапитков');
+  V.OpenForm('ќборотјлко');
+
+end;
+
+procedure miRecalcPricesCtgGoods_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕересчет÷ен атегории“оваров');
+  V.OpenForm('—писокѕересчет÷ен');
+end;
+
+procedure miDevelopProc_Click(Sender: TObject);
+Var
+ V: ICProcessing;
+begin
+ V := CreateObject('ќбработки.ќбработкаќбъектов');
+ V.OpenForm('√лавна€');
+end;
+
+
+procedure miDelAllDoc_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.”даление¬сехƒокументов');
+  V.Execute('”даление¬сехƒокументов',Null);
+end;
+
+procedure miPrintBarCodesAndPrice_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕечатиЎтрих одов»÷ен');
+  V.OpenForm('—писокѕечатиЎтрих одов»÷ен');
+end;
+
+procedure miOpenLog_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.Ћог–абочегоћеста');
+  V.OpenForm('Ћог');
+
+end;
+
+procedure miLogWorkPlaceJep_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоЋогу–абочегоћеста');
+  V.OpenForm('Ћог');
+
+end;
+
+procedure miAktRecon_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналјктов—верки');
+  V.OpenForm('—писокјктов—верки');
+end;
+
+
+procedure miSMSDoc_Click(Sender: TObject);
+var
+  V: ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналSMS–ассылок');
+  V.OpenForm('—писокSMS–ассылок');
+end;
+
+
+
+procedure miSMSReport_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоSMS–ассылкам');
+  V.OpenForm('ќтчетѕоSMS–ассылкам');
+end;
+
+
+procedure miSMSOptions_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.SMSЌастройки');
+  V.OpenForm('—писокSMS');
+end;
+
+procedure miExportPriceList_Click(Sender: TObject);
+Var
+  V : IcProcessing;
+begin
+  V := CreateObject('ќбработки.ѕрайсЋист');
+  V.Execute('Ёкспортѕрайса',Null);
+
+end;
+
+procedure miImportDicFromExcel_Click(Sender: TObject);
+Var
+  V : IcProcessing;
+begin
+  V := CreateObject('ќбработки.»мпорт—правочников»зExcel');
+  V.OpenForm('»мпорт—правочников»зExcel');
+end;
+
+procedure miPartOrder_Click(Sender: TObject);
+Var
+  V : IcProcessing;
+begin
+  V := CreateObject('ќбработки.«аказ“овара');
+  V.OpenForm('«аказ“овара');
+
+end;
+
+procedure miHistoryDocs_Click(Sender: TObject);
+var
+ V: ICProcessing;
+begin
+ V := CreateObject('ќбработки.»нфо»зменений');
+ V.OpenForm('ќтчет»нфо»зменений');
+end;
+
+procedure miRepSale_Click(Sender: TObject);
+var
+  V : ICReport;
+begin
+  V := CreateObject('ќтчеты.ќтчетѕоѕродажам');
+  V.OpenForm('ќтчетѕоѕродажам');
+end;
+
+
+procedure miMoveBase_Click(Sender: TObject);
+var
+ V: ICProcessing;
+begin
+ V := CreateObject('ќбработки.ѕереносЅазы');
+ V.Execute('ѕереносЅазы',Null);
+end;
+
+procedure miPaysNaklByRoute_Click(Sender: TObject);
+Var
+  V : IcProcessing;
+begin
+  V := CreateObject('ќбработки.ѕроплатаѕоЌакладным');
+  V.OpenForm('ѕроплатаѕоЌакладным');
+end;
+
+procedure miPaysJournlByRoute_Click(Sender: TObject);
+var
+  V : ICJournal;
+begin
+  V := CreateObject('∆урналы.∆урналѕроплатѕоћаршруту');
+  V.OpenForm('—писокѕроплат');
+end;
+
+procedure miPredstav_Click(Sender: TObject);
+var
+  V : ICDictionary;
+begin
+  V := CreateObject('—правочники.ѕредставители');
+  V.OpenForm('ѕросмотрѕредставителей');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4MenuForm
+PopupMenu1:TO4PopupMenu
+MenuItem4:TO4MenuItem
+miWorkPlace:TO4MenuItem
+miChangeJourn:TO4MenuItem
+miSalesJourn:TO4MenuItem
+MenuItem40:TO4MenuItem
+miWorkPlaceWeight:TO4MenuItem
+miFiscalPrintWork:TO4MenuItem
+MenuItem45:TO4MenuItem
+miCheckJourn:TO4MenuItem
+miRealCheckJourn:TO4MenuItem
+miCheckJournKPK:TO4MenuItem
+miCheckJournPPK:TO4MenuItem
+MenuItem28:TO4MenuItem
+miStoreInOutPPK:TO4MenuItem
+MenuItem10:TO4MenuItem
+miCassaSettings:TO4MenuItem
+MenuItem22:TO4MenuItem
+miStoreDictLite:TO4MenuItem
+miWork:TO4MenuItem
+miWorkRegion:TO4MenuItem
+miPrintBarCodes:TO4MenuItem
+miPrintBarCodesAndPrice:TO4MenuItem
+MenuItem20:TO4MenuItem
+miWorkOrderBuy:TO4MenuItem
+miWorkOrderSale:TO4MenuItem
+MenuItem11:TO4MenuItem
+miWorkInvoice:TO4MenuItem
+miRecalcPricesCtgGoods:TO4MenuItem
+MenuItem2:TO4MenuItem
+miActIn:TO4MenuItem
+miActOut:TO4MenuItem
+MenuItem17:TO4MenuItem
+miWorkRetFromPart:TO4MenuItem
+miWorkRetToPart:TO4MenuItem
+miPaysNaklByRoute:TO4MenuItem
+miPaysJournlByRoute:TO4MenuItem
+MenuItem12:TO4MenuItem
+miPocket:TO4MenuItem
+miCommercialAgents:TO4MenuItem
+miCommercialAgentsGroups:TO4MenuItem
+miPocketImportExportProtocol:TO4MenuItem
+miRoute1:TO4MenuItem
+miRoute:TO4MenuItem
+miVisit:TO4MenuItem
+MenuItem55:TO4MenuItem
+miPriceType:TO4MenuItem
+miVisitResultTypes:TO4MenuItem
+MenuItem58:TO4MenuItem
+miSettKPK:TO4MenuItem
+miAndroidPocketSettings:TO4MenuItem
+miAndrDoc:TO4MenuItem
+MenuItem43:TO4MenuItem
+miDocBalans:TO4MenuItem
+MenuItem32:TO4MenuItem
+miJournActions:TO4MenuItem
+MenuItem51:TO4MenuItem
+MenuItem33:TO4MenuItem
+MenuItem34:TO4MenuItem
+MenuItem35:TO4MenuItem
+MenuItem54:TO4MenuItem
+miSMSRoot:TO4MenuItem
+miSMSReport:TO4MenuItem
+miSMSDoc:TO4MenuItem
+MenuItem60:TO4MenuItem
+miSMSOptions:TO4MenuItem
+miFin:TO4MenuItem
+miFinCash:TO4MenuItem
+miFinBank:TO4MenuItem
+MenuItem67:TO4MenuItem
+miCashRest:TO4MenuItem
+miFinRest:TO4MenuItem
+MenuItem41:TO4MenuItem
+miContractPayCards:TO4MenuItem
+miPaysCards:TO4MenuItem
+miPOSTerminals:TO4MenuItem
+miMarket:TO4MenuItem
+miMarketUroPart:TO4MenuItem
+MenuItem30:TO4MenuItem
+miPartBonus:TO4MenuItem
+MenuItem31:TO4MenuItem
+miAktRecon:TO4MenuItem
+MenuItem47:TO4MenuItem
+miAction:TO4MenuItem
+miGroopsDiscount:TO4MenuItem
+miPersonnel:TO4MenuItem
+miPersonnelEmploy:TO4MenuItem
+MenuItem15:TO4MenuItem
+miUsers:TO4MenuItem
+miStore:TO4MenuItem
+miStoreDict:TO4MenuItem
+MenuItem48:TO4MenuItem
+miStoreGood0:TO4MenuItem
+miStoreGood1:TO4MenuItem
+miStoreGood2:TO4MenuItem
+MenuItem7:TO4MenuItem
+miPartOrder:TO4MenuItem
+MenuItem3:TO4MenuItem
+miGoodsStore:TO4MenuItem
+MenuItem24:TO4MenuItem
+miStoreOut:TO4MenuItem
+miStoreDiscOut:TO4MenuItem
+MenuItem19:TO4MenuItem
+miChangePrice:TO4MenuItem
+miRevision:TO4MenuItem
+MenuItem18:TO4MenuItem
+miStoreSpResIn:TO4MenuItem
+MenuItem56:TO4MenuItem
+miExportPriceList:TO4MenuItem
+miDict:TO4MenuItem
+miDictGood0:TO4MenuItem
+miDictGood1:TO4MenuItem
+miDiscountLimit:TO4MenuItem
+miDictGood2:TO4MenuItem
+MenuItem36:TO4MenuItem
+miGroupWeightGood:TO4MenuItem
+miScales:TO4MenuItem
+miWeightGood:TO4MenuItem
+MenuItem44:TO4MenuItem
+miModels:TO4MenuItem
+miSizesTbl:TO4MenuItem
+miColors:TO4MenuItem
+MenuItem38:TO4MenuItem
+miDictCurrency:TO4MenuItem
+miBanks:TO4MenuItem
+MenuItem1:TO4MenuItem
+miDictPhone:TO4MenuItem
+miDictTown:TO4MenuItem
+miDictEmail:TO4MenuItem
+miDiscount:TO4MenuItem
+miBarCode:TO4MenuItem
+MenuItem29:TO4MenuItem
+MenuItem14:TO4MenuItem
+MenuItem16:TO4MenuItem
+miDicRegion:TO4MenuItem
+miProvidersGood:TO4MenuItem
+MenuItem21:TO4MenuItem
+miUniNumDocs:TO4MenuItem
+MenuItem42:TO4MenuItem
+miImportDicFromExcel:TO4MenuItem
+miRep:TO4MenuItem
+miPartReport:TO4MenuItem
+miPartGoods:TO4MenuItem
+miHappy:TO4MenuItem
+MenuItem6:TO4MenuItem
+miRepGood:TO4MenuItem
+miRepGoodSmall:TO4MenuItem
+miRepGoodStores:TO4MenuItem
+miRepMoutionGoodsStores:TO4MenuItem
+miStoreMove:TO4MenuItem
+MenuItem49:TO4MenuItem
+MenuItem50:TO4MenuItem
+miAlkoGoodsMove:TO4MenuItem
+MenuItem53:TO4MenuItem
+miRepSale:TO4MenuItem
+MenuItem37:TO4MenuItem
+miRepBalans:TO4MenuItem
+MenuItem8:TO4MenuItem
+MenuItem52:TO4MenuItem
+miRegReport:TO4MenuItem
+miLogWorkPlaceJep:TO4MenuItem
+miHistoryDocs:TO4MenuItem
+miOptions:TO4MenuItem
+miOptionsMyFirm:TO4MenuItem
+MenuItem5:TO4MenuItem
+miOptionsConst:TO4MenuItem
+miOptionsUser:TO4MenuItem
+miDocNum:TO4MenuItem
+MenuItem39:TO4MenuItem
+miFtpParams:TO4MenuItem
+miProtokol:TO4MenuItem
+miFillFields:TO4MenuItem
+miAbout:TO4MenuItem
+miAboutAboutConf:TO4MenuItem
+MenuItem9:TO4MenuItem
+miDevelopProc:TO4MenuItem
+miDelAllDoc:TO4MenuItem
+miOpenLog:TO4MenuItem
+miMoveBase:TO4MenuItem
+miExchSite:TO4MenuItem
+miSiteSettings:TO4MenuItem
+MenuItem46:TO4MenuItem
+miExpSiteToExcel:TO4MenuItem
+miExpSite:TO4MenuItem
+miExpXMLSite:TO4MenuItem
+miImpSite:TO4MenuItem
+MenuItem13:TO4MenuItem
+miStructure:TO4MenuItem
+MenuItem27:TO4MenuItem
+miPredstav:TO4MenuItem

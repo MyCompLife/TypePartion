@@ -1,0 +1,326 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 472
+  Height = 404
+  HelpContext = 23130
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'dbgListData.PosColumns[  1].Title.Caption'
+    0
+    #1'-1'#1'Р/с (касса)'#1'1058'#1'Р/рах (каса)'
+    'dbgListData.PosColumns[  2].Title.Caption'
+    0
+    #1'-1'#1'Валюта'
+    'dbgListData.PosColumns[  4].Title.Caption'
+    0
+    #1'-1'#1'Расч. сумма'#1'1058'#1'Розр.сума'
+    'dbgListData.PosColumns[  5].Title.Caption'
+    0
+    #1'-1'#1'Сумма'
+    'Label1.Caption'
+    0
+    #1'-1'#1'Дата'
+    'Label2.Caption'
+    0
+    #1'-1'#1'Номер'
+    'Label26.Caption'
+    0
+    #1'-1'#1'Ответственный'
+    'tbDelete.Caption'
+    1
+    'Удалить'
+    'tbDelete.Hint'
+    1
+    '')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = (
+    0
+    #1'-1'#1'Р/с (касса)'#1'1058'#1'Р/рах (каса)'
+    0
+    #1'-1'#1'Расч. сумма'#1'1058'#1'Розр.сума')
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  HelpFile = 'pays'
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  VPAOnCloseQuery.EventName = 'Form_CloseQuery'
+  object Panel4: TO4Panel
+    Left = 0
+    Top = 0
+    Width = 472
+    Height = 52
+    Align = alTop
+    Alignment = taLeftJustify
+    BorderSides = []
+    BevelOuter = bvNone
+    ParentCtl3D = False
+    TabOrder = 0
+    Transparent = False
+    object Label1: TO4Label
+      Left = 58
+      Top = 5
+      Width = 26
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Дата'
+    end
+    object Label2: TO4Label
+      Left = 241
+      Top = 5
+      Width = 34
+      Height = 13
+      Caption = 'Номер'
+    end
+    object Label26: TO4Label
+      Left = 6
+      Top = 30
+      Width = 79
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Ответственный'
+    end
+    object eData: TO4DBEdit
+      Left = 87
+      Top = 1
+      Width = 150
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '26.02.2002'
+      TabOrder = 0
+      Lock = False
+      O4FieldName = 'ДатаДокумента'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object eNumber: TO4DBEdit
+      Left = 278
+      Top = 1
+      Width = 121
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '26.02.2002'
+      TabOrder = 1
+      Lock = False
+      O4FieldName = 'НомерДокумента'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object eRespons: TO4DBEdit
+      Left = 87
+      Top = 26
+      Width = 312
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '26.02.2002'
+      TabOrder = 2
+      Lock = False
+      O4FieldName = 'Ответственный'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+  end
+  object BottomPanel: TO4Panel
+    Left = 0
+    Top = 376
+    Width = 472
+    Height = 28
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    BevelOuter = bvNone
+    ParentCtl3D = False
+    TabOrder = 1
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 318
+      Top = 0
+      Width = 154
+      Height = 28
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      ParentCtl3D = False
+      TabOrder = 0
+      Transparent = False
+      object Panel8: TO4Panel
+        Left = 0
+        Top = 0
+        Width = 154
+        Height = 28
+        Align = alBottom
+        BorderSides = []
+        BevelOuter = bvNone
+        ParentCtl3D = False
+        TabOrder = 0
+        Transparent = False
+        object btOK: TO4Button
+          Left = 2
+          Top = 1
+          Width = 75
+          Height = 25
+          Caption = 'OK'
+          ModalResult = 1
+          TabOrder = 0
+          WordWrap = False
+          O4MDSource = MDS
+          O4Action = actSave
+        end
+        object btCancel: TO4Button
+          Left = 77
+          Top = 1
+          Width = 75
+          Height = 25
+          Caption = 'Отмена'
+          ModalResult = 2
+          TabOrder = 1
+          WordWrap = False
+          O4MDSource = MDS
+          O4Action = actNone
+        end
+      end
+    end
+  end
+  object dbgListData: TO4DBGrid
+    Left = 0
+    Top = 74
+    Width = 472
+    Height = 302
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    Images = ImagesHolder.Bmp16x16
+    DragDisabled = False
+    Options = [dgEditing, dgTitles, dgColumnResize, dgColLines, dgRowLines, dgAlwaysShowSelection, dgMultiSelect]
+    O4MDSource = TDS
+    TabOrder = 2
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'НомСтроки'
+        Title.Caption = '№'
+        Width = 34
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '26.02.2002'
+      end
+      item
+        O4FieldName = 'СчетКасса'
+        Title.Caption = 'Р/с (Касса)'
+        Width = 170
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '08.10.2012'
+      end
+      item
+        O4FieldName = 'Валюта'
+        ReadOnly = True
+        Title.Caption = 'Валюта'
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '26.02.2002'
+      end
+      item
+        O4FieldName = 'Курс'
+        Title.Caption = 'Курс'
+        Width = 31
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '26.02.2002'
+      end
+      item
+        O4FieldName = 'РасчСумма'
+        ReadOnly = True
+        Title.Caption = 'Расч. сумма'
+        Width = 78
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '26.02.2002'
+      end
+      item
+        O4FieldName = 'СуммаВВалюте'
+        Font.Charset = RUSSIAN_CHARSET
+        Font.Color = clNavy
+        Font.Height = -11
+        Font.Name = 'MS Sans Serif'
+        Font.Style = []
+        Title.Caption = 'Сумма'
+        Width = 85
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '26.02.2002'
+      end>
+  end
+  object ToolBar1: TO4ToolBar
+    Left = 0
+    Top = 52
+    Width = 472
+    Height = 22
+    AutoSize = True
+    ButtonWidth = 70
+    Caption = 'ToolBar1'
+    EdgeInner = esNone
+    EdgeOuter = esNone
+    Flat = True
+    Images = ImagesHolder.Bmp16x16
+    List = True
+    ParentShowHint = False
+    ShowCaptions = True
+    ShowHint = True
+    TabOrder = 3
+    Wrapable = False
+    O4MDSource = TDS
+    object tbDelete: TO4ToolButton
+      Left = 0
+      Top = 0
+      Caption = 'Удалить'
+      ImageIndex = 2
+      O4Action = actDel
+    end
+    object tbParam: TO4ToolButton
+      Left = 70
+      Top = 0
+      Caption = 'tbParam'
+      ImageIndex = 48
+      O4Action = actGridParam
+    end
+  end
+  object TDS: TO4DocContentsSource
+    VPAOnFieldChange.EventName = 'TDS_FieldChange'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 300
+    Top = 217
+  end
+  object MDS: TO4DataSource
+    VPAOnAppend.EventName = 'MDS_Append'
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    VPAAfterPost.EventName = 'MDS_VPAAfterPost'
+    VPAOnFieldChange.EventName = 'MDS_FieldChange'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 329
+    Top = 217
+  end
+end

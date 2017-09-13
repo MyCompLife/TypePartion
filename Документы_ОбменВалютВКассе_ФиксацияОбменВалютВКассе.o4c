@@ -1,0 +1,66 @@
+interface
+
+uses System, ConstNames, DispIntf, Расчеты, Фиксация, РаботаСЖурналомИзменений;
+
+implementation
+
+var FullName: String;
+
+procedure CanChangeStateUp(Data: Variant; var Accept: boolean);
+begin
+  FullName := CanFixDel(Data, Accept, DecBank, UniFix, FixAck);
+end;
+
+procedure RecieveEvent(Sender : ICDocuments; CenterName, FromUserName : string;
+                       Param : Variant);
+begin
+//
+end;
+
+procedure DoChangeStateUp(Doc:ICDocuments);
+var Options: ICOptions;
+begin
+  Options := GetOptions;
+  case Doc.GetDocState of
+    1: begin
+        if not Doc.RunThreadProcess(Server.GetChangeStateUpEP(Doc.SrvMean), UniFixProgress+FullName) then
+           raise (emsgFixFail); 
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.RegEventReceiver(evCash, EntryPoint(RecieveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+        Doc.SendEvent(evCash, Unassigned, false);
+       end;
+    2: ;
+  end;
+end;
+
+procedure CanChangeStateDown(Data: Variant; var Accept: boolean);
+begin
+  FullName := CanFixDel(Data, Accept, DecBank, UniUnFix, FixAck);
+end;
+
+procedure DoChangeStateDown(Doc: Variant);
+var Options: ICOptions;
+begin       
+  ChangeDoc(clmtStateDown, Doc);
+  Options := GetOptions;
+  Doc.RegEventReceiver(evCash, EntryPoint(RecieveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+  Doc.SendEvent(evCash, Unassigned, false);
+end;
+
+procedure CanDelete(Data: Variant; var Accept: boolean);
+begin
+  FullName := CanFixDel(Data, Accept, DecBank, UniDel, DelAck); 
+  if Accept then
+    ChangeDoc(clmtDelete, Data);
+end;
+
+procedure DoDelete(Doc: Variant);
+var Options: ICOptions;
+begin   
+  Options := GetOptions;
+  Doc.RegEventReceiver(evCash, EntryPoint(RecieveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+  Doc.SendEvent(evCash, Unassigned, false);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

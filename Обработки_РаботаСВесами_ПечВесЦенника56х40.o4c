@@ -1,0 +1,112 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  Options : ICOptions;
+  Constants : IC4VPAConst;
+  MasterData : ICDocuments;
+  BarCodeDic, CurrencyDic, GoodDic : ICDictionary;
+  
+  PriceRoundAfterComma: Integer;
+  InParams : Variant;
+  Weight : Integer;
+  TypePrice : String;
+  Price : Decimal;
+  OnePrint : Boolean;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  Options := GetOptions;
+  Constants := GetConstants;
+  Form.Page.TopMargin := VarAsInt(Options.GetLocalPrm('WorkPlacePrintFormTopMargin'),0);
+  Form.Page.LeftMargin := VarAsInt(Options.GetLocalPrm('WorkPlacePrintFormLeftMargin'),0);
+  Form.Refresh;
+  GoodDic := CreateObject('Справочники.Товары');
+  CurrencyDic := CreateObject('Справочники.Валюты');
+  BarCodeDic := CreateObject('Справочники.ШтрихКодыТоваров');
+
+  InParams := Form.GetParams;
+  if IsArray(InParams) then
+    begin
+      GoodDic.Select;
+      GoodDic.Find(InParams[0]);
+      Weight := VarAsInt(InParams[1]);
+//      TypePrice := VarAsStr(InParams[5]);
+    end;
+
+  if TypePrice='' then
+    TypePrice := 'Цена';
+  OnePrint := True; 
+  lbZapDate.Caption := DateToStr(CurrentDate);
+  lbZapTime.Caption := TimeToStr(CurrentTime);
+  if VarAsInt(GoodDic.СрокПридатности)>0 then
+    lbPrudDate.Caption := DateToStr(CurrentDate +VarAsInt(GoodDic.СрокПридатности))
+  else
+    begin
+      lbPrudDate.Visible:=false;
+      lbPrudName.Visible:=false;
+    end;
+
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+var
+  GoodName, BarCodeStr, WeightStr, BarCodeAll : String;
+  i : Integer;
+begin
+  Accept := OnePrint;     
+  OnePrint := False;
+  if not Accept then exit;
+  if not VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров) then
+    BarCodeStr := VarAsStr(GoodDic.ШтрихКод)
+  else
+    begin
+      BarCodeDic.UseMasterAndSelect(GoodDic);
+      BarCodeDic.FindByField('Активность',True,False);
+      BarCodeStr := VarAsStr(BarCodeDic.Код);
+    end;
+  WeightStr := IntToStr(Weight);
+  for i := StrLength(WeightStr)+1 to 6 do
+    WeightStr :='0'+WeightStr;
+  BarCodeAll := '201'+BarCodeStr+WeightStr;
+  if (StrLength(BarCodeAll) mod 2) >0 then
+    BarCodeAll := '0'+BarCodeAll;
+  BarCode.Text := BarCodeAll;
+  lbCode.Caption := BarCodeAll;
+
+  if CurrencyDic.Find(GoodDic._Default['Валюта'+TypePrice]) then
+    with Table do
+      begin
+        Value['Name'] := GoodDic.NameField;
+        Value['Weight'] := (Weight/1000);
+        Price :=  GoodDic._Default[TypePrice];
+        Price := RoundDec(Price *CurrencyDic.GetTimedValue('КурсНаличный', CurrentDate),2);
+        Value['Price'] := Price;
+        Value['Summa'] := Price*(Weight/1000);
+      end;
+end;
+
+end.
+
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+lbGoodName:TRBLabel
+BarCode:TRBBarCode
+lbPriceTitle:TRBLabel
+lbPrice:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+lbCode:TRBLabel
+Label5:TRBLabel
+lbPrudName:TRBLabel
+lbPrudDate:TRBLabel
+lbZapDate:TRBLabel
+lbZapTime:TRBLabel
+Structure1:TRBStructure

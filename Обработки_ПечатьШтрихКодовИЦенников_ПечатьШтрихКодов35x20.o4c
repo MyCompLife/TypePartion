@@ -1,0 +1,143 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  Tbl  : ICValueTable;
+  i,j,k,x: Integer;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  IsCountDlg : Boolean;
+  FindGood, CurrencyDic : ICDictionary;
+  PriceRoundAfterComma: integer;
+  PrintPrice, IsRoundPrice, IsRoundPriceTo5Cop, PriceInCurrency : boolean;
+  TypePrice : String;
+  Price : Decimal;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  Constants := GetConstants;
+  Options := GetOptions;
+
+  PriceRoundAfterComma :=  VarAsInt(Constants.ќкругление÷ен√рн);
+  IsRoundPrice := VarAsBool(Constants.ќкругл€ть÷ены√рн);  
+  IsRoundPriceTo5Cop := VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп);
+  PriceInCurrency := VarAsBool(Constants.ѕечатьЁтикетки÷ена¬¬алюте);
+  PrintPrice := VarAsBool(Constants.ѕечатьЁтикетки÷ена);
+  TypePrice := VarAsStr(Constants.ѕечатьЁтикетки“ип÷ены);
+  if TypePrice='' then
+    TypePrice := '÷ена';
+
+
+  PrintForm.Page.LeftMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('LeftMargin ѕечатьЎтрих одов35x20')), 4);
+  PrintForm.Page.TopMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('TopMargin ѕечатьЎтрих одов35x20')), 9);
+  FindGood := CreateObject('—правочники.“овары');
+  CurrencyDic := CreateObject('—правочники.¬алюты');
+  Tbl := CreateObject('“аблица«начений');
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('“овар',' оличество');
+  Tbl.SortBy('“овар');
+  Tbl.Select;
+  Tbl.SelectFirst;
+  StdInpInt('ѕропустить штрихкодов:',k);
+  x := 1;
+  StdInpInt('”кажите множитель к количеству штрихкодов:', x);
+
+
+  lbPriceTitle.Visible := PrintPrice;
+  lbPrice.Visible := PrintPrice;
+
+  i := Tbl. оличество*x;
+  IsCountDlg := Bits(MessageDlg('¬ыводить все позиции по документу?', mtConfirmation,ArrayOf(mbYes,mbNo))) and Bits(mrYesToAll,mrYes) <> 0;
+  if not IsCountDlg and FindGood.Find(Tbl.@“овар) then
+    if not StdInpInt(VarAsStr(FindGood.Ќазв“овара) + '  ' + VarAsStr(FindGood. од),i) then
+      i:=0;//Exit;
+  i:=i+k;
+  j:=0;
+//  if VarAsInt(Constants.ќтстЋевѕечЎтрих од) <> 0 then Form.Page.LeftMargin := VarAsInt(Constants.ќтстЋевѕечЎтрих од);
+//  if VarAsInt(Constants.ќтст¬ерхѕечЎтрих од) <> 0 then Form.Page.TopMargin := VarAsInt(Constants.ќтст¬ерхѕечЎтрих од);
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if j < i then
+    begin
+      Accept := true;
+      j := j+1;
+    end
+  else
+    begin
+      Repeat
+        Accept := Tbl.SelectNext();
+        i := Tbl. оличество*x;
+        if not Accept then Exit;
+        if not IsCountDlg then
+          if not StdInpInt(VarAsStr(Tbl.“овар.Ќазв“овара) + '  ' + VarAsStr(Tbl.“овар. од),i) then
+            i := 0;//Exit;
+        j := 1;
+      until i <> 0;
+    end;
+  begin
+    if k <> 0 then
+      begin
+        bndDET.Frame.Color := clWhite;
+        Image.Transparent := false;
+        k := k-1;
+      end
+    else
+      begin
+        bndDET.Frame.Color:=clBlack;
+        Image.Transparent:=true;
+      end;   
+    if FindGood.Find(Tbl.@“овар) then
+      begin
+        BarCode.Text := FindGood. од;
+        with Table do
+          begin
+            Value['Code'] := FindGood. од;
+            Value['Name'] := FindGood.Ќазв“овара;
+            Value['BCode'] := FindGood. од;
+            if PrintPrice and CurrencyDic.Find(FindGood._Default['¬алюта'+TypePrice]) then
+              begin
+                Price :=  FindGood._Default[TypePrice];
+                if PriceInCurrency then
+                  begin
+                    Value['Price'] := Price;
+                    lbPriceTitle.Caption := 'ц≥на, '+CurrencyDic.CodeField;
+                  end
+                else
+                  begin
+                    if IsRoundPrice then
+                      begin
+                        if IsRoundPriceTo5Cop then
+                          Value['Price'] := RoundTo5Cop(Price *CurrencyDic.GetTimedValue(' урсЌаличный', CurrentDate))
+                        else
+                          Value['Price'] := RoundDec(Price *CurrencyDic.GetTimedValue(' урсЌаличный', CurrentDate),PriceRoundAfterComma)
+                      end
+                    else
+                      Value['Price'] := Price *CurrencyDic.GetTimedValue(' урсЌаличный', CurrentDate);
+                    lbPriceTitle.Caption := 'ц≥на, √–Ќ';
+                  end;
+              end;
+
+          end;
+      end;
+  end;
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+Label5:TRBLabel
+BarCode:TRBBarCode
+Label4:TRBLabel
+lbPrice:TRBLabel
+lbPriceTitle:TRBLabel
+Image:TRBImage
+Structure1:TRBStructure

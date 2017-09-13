@@ -1,0 +1,80 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData, TWN : ICDictionary;
+  Pk : Integer;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := CreateObject('Справочники.Телефоны');
+  Pk := Form.GetPrintKind;
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  MD : ICDictionary;
+begin
+  if Index = 0 then
+    if Pk = 0 then
+      begin
+        MasterData := Form.GetMean;
+        MasterData.SelectBookmarks;
+        MasterData.SortByName;
+      end
+    else
+      begin
+        if Pk = pkWindow then
+          MasterData.AssignSelectParams(Form.GetMean);
+        MasterData.SortByName;
+        MasterData.Select;
+      end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Owner'] := MasterData.ВладелецТел;
+      Value['Number'] := MasterData.Номер;
+      if VarAsBool(MasterData.Тип.IsFocused) then
+        Value['Type'] := MasterData.Тип.Value;
+      if VarAsBool(MasterData.@Город.IsFocused) then
+        begin
+          TWN := MasterData.Город;
+          Value['Code'] := TWN.ТелКод;
+          Value['Town'] := TWN.Название;
+          MD := GetRootParent(TWN);
+          if MD.IsFocused then
+            Value['Country'] := MD.Название;
+        end;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label14:TRBLabel
+DetailBand1:TRBDetailBand
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+SysData1:TRBSysData
+Structure1:TRBStructure

@@ -1,0 +1,217 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 1
+  Width = 372
+  Height = 244
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    136
+    424)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'Label1.Caption'
+    0
+    #1'-1'#1'Название'
+    'miCancel.Caption'
+    0
+    #1'-1'#1'Отменить изменения'
+    'miSave.Caption'
+    0
+    #1'-1'#1'Записать'
+    'miSaveAdd.Caption'
+    0
+    #1'-1'#1'Записать и добавить')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  PopupMenu = pmSaveRecord
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object Panel1: TO4Panel
+    Left = 0
+    Top = 24
+    Width = 372
+    Height = 191
+    Align = alClient
+    BevelSides = [sdBottom]
+    BorderSides = []
+    ParentCtl3D = False
+    TabOrder = 0
+    Transparent = False
+    object Label1: TO4Label
+      Left = 122
+      Top = 11
+      Width = 50
+      Height = 13
+      Caption = 'Название'
+    end
+    object Panel5: TO4Panel
+      Left = 1
+      Top = 1
+      Width = 110
+      Height = 189
+      Align = alLeft
+      BorderSides = []
+      BevelOuter = bvNone
+      Caption = 'Panel5'
+      ParentCtl3D = False
+      TabOrder = 1
+      Transparent = False
+      object LinkImage1: TO4LinkImage
+        Left = 0
+        Top = 0
+        Width = 110
+        Height = 189
+        Picture = ImagesHolder.CateroryHC
+        Align = alClient
+      end
+    end
+    object dbeName: TO4DBEdit
+      Left = 122
+      Top = 27
+      Width = 230
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '14.02.2002'
+      TabOrder = 0
+      Lock = False
+      O4FieldName = 'Группа'
+      O4MDSource = MDS
+      FastFindIndex = 0
+      VPAOnChange.EventName = 'dbeName_Change'
+    end
+  end
+  object Panel4: TO4Panel
+    Left = 0
+    Top = 0
+    Width = 372
+    Height = 24
+    Align = alTop
+    BevelSides = [sdBottom]
+    BorderSides = []
+    BevelOuter = bvNone
+    BorderWidth = 1
+    Color = clInactiveCaption
+    ParentCtl3D = False
+    TabOrder = 1
+    Transparent = False
+    object lbTitle: TO4Label
+      Left = 1
+      Top = 1
+      Width = 370
+      Height = 22
+      Align = alClient
+      Color = clBtnShadow
+      Font.Charset = RUSSIAN_CHARSET
+      Font.Color = clWhite
+      Font.Height = -16
+      Font.Name = 'Times New Roman'
+      Font.Style = [fsBold]
+      ParentColor = False
+      ParentFont = False
+    end
+  end
+  object BottomPanel: TO4Panel
+    Left = 0
+    Top = 215
+    Width = 372
+    Height = 29
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    ParentCtl3D = False
+    TabOrder = 2
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 196
+      Top = 1
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      ParentCtl3D = False
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 15
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        O4MDSource = MDS
+        O4Action = actSave
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object MDS: TO4DataSource
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 46
+    Top = 139
+  end
+  object pmSaveRecord: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 54
+    Top = 70
+    object miSave: TO4MenuItem
+      Caption = 'Записать'
+      ImageIndex = 5
+      ShortCut = 16467
+      O4Action = actSave
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miSaveAdd: TO4MenuItem
+      Caption = 'Записать и добавить'
+      ImageIndex = 0
+      ShortCut = 16462
+      O4Action = actAdd
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object MenuItem1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miCancel: TO4MenuItem
+      Caption = 'Отменить изменения'
+      ImageIndex = 2
+      ShortCut = 32776
+      VPAOnClick.EventName = 'miCancel_Click'
+      O4Action = actCancel
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+  end
+end

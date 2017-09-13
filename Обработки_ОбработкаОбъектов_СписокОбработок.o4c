@@ -1,0 +1,195 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+Var
+ MasterData : ICProcessing;
+
+implementation
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  MasterData := Mean;
+end;
+
+procedure btAddAcumStore_Click(Sender : TObject);
+begin
+  if MasterData.RunThreadProcess(Server.ConvertationAcc,
+     DateTimeToStr(CurrentDateTime)+Trans(' - Заполнение аккумулятора'))
+  then
+    ShowMessage(trans('Заполнение аккумулятора успешно завершено'))
+  else
+    ShowMessage(trans('Заполнение аккумулятора прошло с ошибками.' + #13 +
+                      'См.файл ErrorCnv.log в корневом каталоге сервера АБ ОФИС'))
+end;
+
+
+procedure btEditDocs_Click(Sender: TObject);
+begin
+  if MasterData.RunThreadProcess(Server.EditDocs,
+     DateTimeToStr(CurrentDateTime)+Trans(' - Изменение документов'))
+  then
+    ShowMessage(trans('Изменение документов успешно завершено'))
+end;
+
+procedure Button1_Click(Sender: TObject);
+begin
+  if MasterData.RunThreadProcess(Server.ConvertationAcc,
+     DateTimeToStr(CurrentDateTime)+Trans(' - Заполнение аккумулятора'))
+  then
+    ShowMessage(trans('Заполнение аккумулятора успешно завершено'))
+  else
+    ShowMessage(trans('Заполнение аккумулятора прошло с ошибками.' + #13 +
+                      'См.файл ErrorCnv.log в корневом каталоге сервера АБ ОФИС'))
+end;
+
+procedure btCheckActivePhone_Click(Sender: TObject);
+var
+  PhoneDic, PartDic: ICDictionary;
+  i : integer;
+begin
+  PhoneDic := CreateObject('Справочники.Телефоны');
+  PartDic := CreateObject('Справочники.ЮрПартнеры');
+  PartDic.Select;
+  while PartDic.SelectNext do
+    begin
+      PhoneDic.UseMasterAndSelect(PartDic);
+      if PhoneDic.SelectNext then
+        begin
+          if not PhoneDic.FindByField('Активность', true, false) then
+            begin
+              PhoneDic.Edit;
+              PhoneDic.Активность := true;
+              PhoneDic.Post;
+              PhoneDic.ApplyUpdates;
+              inc(i);
+            end;
+        end;
+    end;  
+  ShowMessage('Установленно активных телефонов:' + IntToStr(i));
+end;
+
+procedure tbCancelAktiveBarCode_Click(Sender: TObject);
+begin
+  MasterData.RunThreadProcess(Server.CancelBarcodesEp,'Снятие штрих-кодов');
+end;
+
+procedure btSetLengthBarCode8_Click(Sender: TObject);
+begin
+  MasterData.RunThreadProcess(server.SetLengthBarCode8Ep,'Изменение штрих-кодов');
+end;
+
+procedure btSetLengthBarCode6_Click(Sender: TObject);
+begin
+  MasterData.RunThreadProcess(server.SetLengthBarCode6Ep,'Изменение штрих-кодов');
+end;
+
+procedure btDelAllDoc_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('Обработки.УдалениеВсехДокументов');
+  V.Execute('УдалениеВсехДокументов',Null);
+end;
+
+procedure miFillRound5kop_Click(Sender: TObject);
+begin
+  if MessageDlg('Заполнить поле "Округлять цены"?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+    begin
+     if MasterData.RunThreadProcess(server.FillRound5CopEP,  'Заполнение поля Округление до 5 коп.') then
+       ShowMessage('Поле "Округлять цены" заполнено!')
+     else
+       ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+    end;
+end;
+
+procedure btFillInPricesByLastIncome_Click(Sender: TObject);
+var LogList : ICValueList;
+    P : ICProcessing;
+begin
+  if MessageDlg('Заполнить Вх.Цены по последнему приходу товара?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+    begin
+      LogList := CreateObject('СписокЗначений');
+      LogList.CopyDataToServer;
+     if MasterData.RunThreadProcess(server.FillInPricesByLastIncomeEP(LogList.SrvMean,
+                   MessageDlg('Учитавать ввод остатков?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes),  'Заполнение Вх.Цен по последнему приходу товара') then
+       begin
+
+         LogList.CopyDataFromServer;
+         if LogList.Count>0 then
+           begin
+             P := CreateObject('обработки.Диалоги');
+             P.Execute('ПросмотрЛога',ArrayOf(LogList.ComaStr[#13],'c:\Log.txt'));
+           end
+         else
+           ShowMessage('Товаров которым нужно изменять Вх.цену не найдены!')
+       end
+     else
+       ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+    end;
+end;
+
+procedure btGetFieldCategory_Click(Sender: TObject);
+begin
+ MasterData.RunThreadProcess(server.GetFieldCategoryEP,  'Заполнение поля "Категория"');
+end;
+
+procedure btFillPriceCurrency_Click(Sender: TObject);
+var P : ICProcessing;
+begin
+  P := CreateObject('Обработки.ЗаполнениеПолей');  
+  P.Execute('ЗаполнениеВалютЦенТоваров',Null);
+end;
+
+procedure btFillPriceFromMargePrecent_Click(Sender: TObject);
+var LogList : ICValueList;
+    P : ICProcessing;
+begin
+  if MessageDlg('Пересчитать отпускные цены справочника согласно %наценки?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+    begin
+      LogList := CreateObject('СписокЗначений');
+      LogList.CopyDataToServer;
+      if MasterData.RunThreadProcess(server.FillPriceFromMargePrecentEP(LogList.SrvMean),'Пересчет отпускных цен справочника согласно %наценки') then
+       begin
+         LogList.CopyDataFromServer;
+         if LogList.Count>0 then
+           begin
+             P := CreateObject('обработки.Диалоги');
+             P.Execute('ПросмотрЛога',ArrayOf(LogList.ComaStr[#13],'c:\Log.txt'));
+           end
+         else
+           ShowMessage('Товаров которым нужно изменять цены не найдены!')
+       end
+     else
+       ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+    end;
+end;
+
+procedure btFillIdentificator_Click(Sender: TObject);
+begin
+  if MasterData.RunThreadProcess(Server.FillIdentificatorS,
+     DateTimeToStr(CurrentDateTime)+Trans(' - Заполнение идентификаторов'))
+  then
+    ShowMessage(trans('Заполнение аккумулятора успешно завершено'))
+  else
+    ShowMessage(trans('Заполнение идентификаторов прошло с ошибками.'))
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+btAddAcumStore:TO4Button
+btEditDocs:TO4Button
+btEditDics:TO4Button
+Button1:TO4Button
+btCheckActivePhone:TO4Button
+tbCancelAktiveBarCode:TO4Button
+btSetLengthBarCode8:TO4Button
+btSetLengthBarCode6:TO4Button
+btDelAllDoc:TO4Button
+miFillRound5kop:TO4Button
+btFillInPricesByLastIncome:TO4Button
+btGetFieldCategory:TO4Button
+btFillPriceCurrency:TO4Button
+btFillPriceFromMargePrecent:TO4Button
+btFillIdentificator:TO4Button

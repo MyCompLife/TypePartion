@@ -1,0 +1,167 @@
+interface
+
+uses
+  System,DispIntf;
+
+implementation        
+
+Var PrintPartner,PDocsTbl,PDocsTypeTbl,AttrPartTbl,PGoodsTbl,
+    StoreTbl,RealTbl,ProdTbl,KassaTbl,BankTbl,DebTbl,KredTbl:ICValueTable;
+    NotIsGroup,HasDet:Boolean;
+    PrintAttr,Datalize:Boolean;
+
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+ PrintPartner:=Form.GetParams[0];
+ Label36.Caption := VarAsStr(Form.GetParams[1]);
+ Label37.Caption := VarAsStr(Form.GetParams[1]);
+ Label38.Caption := VarAsStr(Form.GetParams[2]+Form.GetParams[3]+Form.GetParams[4]+Form.GetParams[5]+Form.GetParams[6]+Form.GetParams[7]);
+ Label39.Caption := VarAsStr(Form.GetParams[2]);
+ Label19.Caption := Label19.Caption + VarAsStr(Form.GetParams[9]);
+ Label42.Caption := VarAsStr(Form.GetParams[5]);
+ Label43.Caption := VarAsStr(Form.GetParams[6]);
+ Label44.Caption := VarAsStr(Form.GetParams[7]);
+ Label45.Caption := VarAsStr(Form.GetParams[8]);
+ Label46.Caption := VarAsStr(Form.GetParams[8]);
+ StoreTbl:=PrintPartner.Params['PStoreTbl']; 
+
+
+ KassaTbl:=PrintPartner.Params['PKassaTbl'];
+ BankTbl:=PrintPartner.Params['PBankTbl'];
+ DebTbl:=PrintPartner.Params['PDebTbl'];
+ KredTbl:=PrintPartner.Params['PKredTbl'];
+end;
+
+procedure Structure1_RT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  StoreTbl.SortBy('—умќбщ');
+  if Index=0 then Accept := StoreTbl.SelectFirst()
+             else Accept := StoreTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   Value['Name'] := StoreTbl.—клад;
+   Value['SUMMAHD'] := StoreTbl.—умќбщ¬ал;
+   Value['CurrName'] := StoreTbl.¬алюта. од;
+   Value['SUMMA'] := StoreTbl.—умќбщ;
+  end;
+end;
+
+procedure Structure1_Kassa_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin     
+  KassaTbl.SortBy('—умќбщ');
+  if Index=0 then Accept := KassaTbl.SelectFirst()
+             else Accept := KassaTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   Value['Name'] := KassaTbl.¬алютаDet;  
+   Value['SUMMAHD'] := KassaTbl.—умќбщ;
+   Value['CurrValue'] := KassaTbl. урс;
+   Value['SUMMA'] := KassaTbl.—ум¬ал;
+  end;
+end;
+
+procedure Structure1_Bank_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  BankTbl.SortBy('—умќбщ');
+  if Index=0 then Accept := BankTbl.SelectFirst()
+             else Accept := BankTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   Value['Name'] := BankTbl.–асч—четDet;
+   Value['SUMMAHD'] := BankTbl.—умќбщ;
+   Value['CurrName'] := BankTbl.¬алюта. од;
+   Value['SUMMA'] := BankTbl.—ум¬ал;
+  end;
+end;
+
+procedure Structure1_Deb_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin                 
+  DebTbl.SortBy('—умќбщ');
+  if Index=0 then Accept := DebTbl.SelectFirst()
+             else Accept := DebTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   Value['Name'] := DebTbl.ѕартнерDet;
+   Value['SUMMAHD'] := DebTbl.—умќбщ;
+   Value['CurrName'] := DebTbl.¬алюта. од;
+   Value['SUMMA'] := DebTbl.—ум¬ал;
+  end;
+end;
+
+procedure Structure1_Cred_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin      
+  KredTbl.SortBy('—умќбщ');
+  if Index=0 then Accept := KredTbl.SelectFirst()
+             else Accept := KredTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   Value['Name'] := KredTbl.ѕартнерDet;
+   Value['SUMMAHD'] := KredTbl.—умќбщ;
+   Value['CurrName'] := KredTbl.¬алюта. од;
+   Value['SUMMA'] := KredTbl.—ум¬ал;
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label3:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Band2:TRBBand
+Label4:TRBLabel
+Label5:TRBLabel
+Label38:TRBLabel
+Band3:TRBBand
+Label6:TRBLabel
+Label7:TRBLabel
+Label39:TRBLabel
+DetailBand1:TRBDetailBand
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Band6:TRBBand
+Label18:TRBLabel
+Label19:TRBLabel
+Label42:TRBLabel
+DetailBand4:TRBDetailBand
+Label20:TRBLabel
+Label21:TRBLabel
+Label53:TRBLabel
+Label54:TRBLabel
+Band7:TRBBand
+Label22:TRBLabel
+Label23:TRBLabel
+Label43:TRBLabel
+DetailBand5:TRBDetailBand
+Label24:TRBLabel
+Label25:TRBLabel
+Label51:TRBLabel
+Label52:TRBLabel
+Band8:TRBBand
+Label26:TRBLabel
+Label27:TRBLabel
+Label44:TRBLabel
+DetailBand6:TRBDetailBand
+Label28:TRBLabel
+Label29:TRBLabel
+Label47:TRBLabel
+Label48:TRBLabel
+DetailBand7:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label49:TRBLabel
+Label50:TRBLabel
+Band9:TRBBand
+Label31:TRBLabel
+Label30:TRBLabel
+Label45:TRBLabel
+Band10:TRBBand
+Label32:TRBLabel
+Label33:TRBLabel
+Label46:TRBLabel
+Structure1:TRBStructure

@@ -1,0 +1,58 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData, Operations : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(MasterData.Название), '');
+end;
+
+procedure eName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(eName.Text), '');
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  MasterData.Params['add'] := true;
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+  if MasterData.HasParam('code') then
+    begin
+      MasterData.НомГруппы := MasterData.Params['code'][0]; 
+      MasterData.НомПозиции := MasterData.Params['code'][1];
+      MasterData.Код := MasterData.Params['code'][2];
+      MasterData.НомСтроки := MasterData.Params['code'][3];
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+LinkImage1:TO4LinkImage
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+eName:TO4DBEdit
+Panel3:TO4Panel
+lbTitle:TO4Label
+eMemo:TO4DBMemo
+eCode:TO4DBEdit
+Panel2:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource

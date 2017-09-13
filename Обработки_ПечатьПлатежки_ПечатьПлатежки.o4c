@@ -1,0 +1,30 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  JPays, Param : Variant;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  JPays := Params;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  Param := ArrayOf(rgCountForReport.ItemIndex, cbPDV.checked);
+  JPays.PrintForm('ПлатежноеПоручение', True, Param)
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel4:TO4Panel
+rgCountForReport:TO4RadioGroup
+cbPDV:TO4CheckBox
+Panel2:TO4Panel
+Panel3:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button

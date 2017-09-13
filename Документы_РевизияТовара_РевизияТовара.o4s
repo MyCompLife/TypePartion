@@ -1,0 +1,232 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, ПодключениеДопИнтерфейса;
+
+implementation
+var
+  Store : ISDictionary;
+  Date : DateTime;
+  DateDoc: DateTime;
+  StoreRev : ISDictionary;
+  TblDic, TblContents: ISValueTable;
+  Rule: ISDictionary;
+  OnlyMin: Boolean;
+  CtgList : ISValueList;
+  TypePrice : string;
+
+procedure ChangePriceTbl(TblContent:ISValueTable; OnDate:DateTime; TypePrice:string); server;
+var CurrencyDic, GoodDic : ISDictionary;
+    Constants : IS4VPAConst;
+    Total, Count : integer;
+    CourseTbl : ISValueTable;
+begin
+ Constants := GetConstants;
+ GoodDic := CreateObject('Справочники.Товары');
+ CurrencyDic := CreateObject('Справочники.Валюты');
+ CourseTbl := CreateObject('ТаблицаЗначений');
+ FillCurrencyCoursesTbl(CurrencyDic, CourseTbl, OnDate);
+ TblContent.Select;
+ Total := TblContent.LineCount;
+ Count := 0;
+ While TblContent.SelectNext do
+  if GoodDic.Find(TblContent.@Товар) then
+   begin
+     TblContent.Edit;
+     if CourseTbl.Locate('Валюта',GoodDic._Default['Валюта'+TypePrice]) then
+       TblContent.Цена := GoodDic._Default[TypePrice]*VarAsDec(CourseTbl.Курс)
+     else
+       TblContent.Цена := VarAsDec(GoodDic._Default[TypePrice]);
+     if VarAsBool(Constants.ОкруглятьЦеныГрн) then   
+       if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+         TblContent.Цена := RoundTo5Cop(TblContent.Цена)
+       else
+         TblContent.Цена := RoundDec(TblContent.Цена, VarAsInt(Constants.ОкруглениеЦенГрн));
+     TblContent.Post;
+     inc(Count);
+     if Count mod 10 = 0 then
+       SysProgress(0,Total,Count,'Заполнение цен');
+   end;
+ SysProgress(0,0,0,'');
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure TblDic_Fill(Doc : ISDocuments; var Success : Boolean);server;
+var
+  Goods, CurrencyDic: ISDictionary;
+  AccsGoods : ISAccs;
+  ByCtg, Accept: Boolean;
+  RecCnt, LstCnt, Total : Integer;
+  CtgName, TotalStr : String;
+  CourseTbl : ISValueTable;
+  Constants : IS4VPAConst;
+begin
+  Success := true; 
+  Constants := GetConstants;
+//----------Заполнение рабочей таблицы---------------------------
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  Goods := CreateObject('Справочники.Товары');
+  Goods.SortByName;
+  ByCtg :=  CtgList.Count > 0;
+  if ByCtg then
+    for LstCnt := 0 to CtgList.Count - 1 do
+      begin
+        CtgName := CtgList.GetValue(LstCnt).НазвТовара;
+        Goods.UseParent(CtgList.GetValue(LstCnt));
+        Goods.Select;
+        Total := Goods.RecordCount;
+        TotalStr := IntToStr(Total);
+        RecCnt := 0;
+        While Goods.SelectNext do
+          begin
+            AccsGoods.CalcGroupRestDirect(DateDoc, ArrayOf(Goods, StoreRev));
+            if AccsGoods.КолОбщ <> 0 then
+              begin
+                TblDic.Append;
+                TblDic.Товар := Goods;
+                TblDic.Категория := CtgList.GetValue(LstCnt).НазвТовара;//Goods.GetParent;
+                TblDic.КоличествоПосле := 0;
+                TblDic.КоличествоДо := AccsGoods.КолОбщ;
+                TblDic.Количество := TblDic.КоличествоПосле - TblDic.КоличествоДо;
+                TblDic.Post;
+              end;
+            Inc(RecCnt);
+            Doc.NotifyClient(msgProceed + 'из категории - ' + CtgName + ': ' + IntToStr(RecCnt) + ':' + TotalStr, RecCnt, Total);
+            if Doc.Terminated then
+              begin
+                Success := false;
+                break;
+              end;
+          end;
+      end;
+  TblDic.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;ШтрихКод=Товар.ШтрихКод;Цена=Товар.'+TypePrice);
+  CurrencyDic := CreateObject('Справочники.Валюты');
+  CourseTbl := CreateObject('ТаблицаЗначений');
+  FillCurrencyCoursesTbl(CurrencyDic, CourseTbl, DateDoc);
+  TblDic.Select;
+  Total := TblDic.LineCount;
+  RecCnt := 0;
+  Goods.UseParent(Null);  
+  Goods.Select;
+  While TblDic.SelectNext do
+    if Goods.Find(TblDic.@Товар) and CourseTbl.Locate('Валюта',Goods._Default['Валюта'+TypePrice]) then
+      begin  
+        TblDic.Edit;  
+        TblDic.Цена :=VarAsDec(TblDic.Цена) * VarAsDec(CourseTbl.Курс);
+        if VarAsBool(Constants.ОкруглятьЦеныГрн) then   
+          if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+            TblDic.Цена := RoundTo5Cop(TblDic.Цена)
+          else
+            TblDic.Цена := RoundDec(TblDic.Цена, VarAsInt(Constants.ОкруглениеЦенГрн));
+        TblDic.Post;
+        Inc(RecCnt);
+        Doc.NotifyClient('Пересчет цен', RecCnt, Total);
+        if Doc.Terminated then
+          begin
+            Success := false;
+            break;
+          end;
+      end;
+end;
+
+function TblDicS(TblDicS: ISValueTable; DateDocS: DateTime; StoreS: ISDictionary; CtgListS: ISValueList; TypePriceS:string): Variant;server;
+begin
+  TblDic := TblDicS;
+  DateDoc := DateDocS;
+  StoreRev := StoreS;
+  CtgList := CtgListS;    
+  TypePrice := TypePriceS;
+  Result := EntryPoint(TblDic_Fill)
+end;
+
+procedure SaveCtgListToCtgTbl(CtgTbl: ISValueTable; CtgList: ISValueList);server;
+Var
+  Ctg : ISDictionary;
+  RecCnt : Integer;
+begin
+  Ctg := CreateObject('Справочники.Товары');
+  Ctg.IncludeOnlyLevels(true);
+  for RecCnt := 0 to CtgList.Count - 1 do
+  begin
+    CtgTbl.Append;
+    CtgTbl.Str := CtgList.GetStr(RecCnt);
+    if Ctg.Find(CtgList.GetValue(RecCnt)) then
+      begin
+        CtgTbl.ValueStrID := FloatToHexStr(Ctg.GetUniID);
+        CtgTbl.Код := Ctg.Код;
+        CtgTbl.Категория := Ctg;
+      end;
+    CtgTbl.Post;
+  end;
+end;
+
+procedure CheckCtgTbl(CtgTbl: ISValueTable; var ErrorStr: String);server;
+Var
+  Ctg : ISDictionary;
+  RecCnt : Integer;
+begin
+  Ctg := CreateObject('Справочники.Товары');
+  Ctg.IncludeOnlyLevels(true);
+  CtgTbl.Select;
+  While CtgTbl.SelectNext do
+  begin
+    if not VarAsBool(CtgTbl.Категория.IsFocused) then
+      if Ctg.FindByCode(CtgTbl.Код, false) then
+        begin
+          CtgTbl.Edit;
+          CtgTbl.ValueStrID := FloatToHexStr(Ctg.GetUniID);
+          CtgTbl.Код := Ctg.Код;
+          CtgTbl.Категория := Ctg;
+          CtgTbl.Post;
+        end
+      else
+        begin
+          if ErrorStr = '' then
+            ErrorStr := 'Категория с кодом: ' + CtgTbl.Код + ' не найдена'
+          else
+            ErrorStr := ErrorStr + #13 + 'Категория с кодом: ' + CtgTbl.Код + ' не найдена';
+          CtgTbl.Edit;
+          CtgTbl.ValueStrID := 0;
+          CtgTbl.Категория := Null;
+          CtgTbl.Post;
+        end;
+  end;
+end;
+
+procedure FillCountBefore(MasterData:Variant; ContentTbl : ISValueTable); server;
+var AccsGoods : ISAccs;
+    Count, Total : integer;
+    OnDate : DateTime;
+    Store : ISDictionary;
+begin
+ OnDate := VarAsDate(MasterData.ДатаДокумента);
+ Store := MasterData.СкладПоУмолч;
+ AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+ AccsGoods.SetFieldFilter('Склад',MasterData.@СкладПоУмолч);
+ ContentTbl.Select;
+ Count := 0;
+ Total :=  ContentTbl.LineCount;
+ While ContentTbl.SelectNext do
+   begin
+     AccsGoods.CalcGroupRestDirect(OnDate,ArrayOf(ContentTbl.@Товар, Store));
+     ContentTbl.Edit;
+     ContentTbl.КоличествоДо := VarAsDec(AccsGoods.КолОбщ, 0);
+     ContentTbl.Количество := ContentTbl.КоличествоПосле - ContentTbl.КоличествоДо;
+     ContentTbl.Post;
+     inc(count);
+     if count mod 10 = 0 then
+       SysProgress(0,Total,Count,'Обновление кол-во до');
+   end;
+ SysProgress(0,0,0,'');
+end;
+
+end.

@@ -1,0 +1,125 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation  
+
+var
+  V: ICProcessing;  
+  Driver: OleVariant;
+  CalcRest : boolean;
+  Constants: IC4VPAConst;
+
+procedure btnClick(Sender: TObject);
+Var
+  TOper : Integer;
+begin
+  PlaySound('Ding');
+  TOper := (Sender as TO4Button).Tag;
+  case TOper of
+    10: edGivenSum.Text := edGivenSum.Text + ',';
+    11: edGivenSum.Text := '';
+    12: edGivenSum.Text := StrCopy(edGivenSum.Text, 0, StrLength(edGivenSum.Text) - 1);
+    else
+      edGivenSum.Text := edGivenSum.Text + VarAsStr(TOper);
+  end;           
+  if CalcRest and ((StrToDec(edGivenSum.Text) - StrToDec(edSum.Text)) > 0) then
+    edRest.Text := DecToStr(StrToDec(edGivenSum.Text) - StrToDec(edSum.Text),2)
+  else
+    edRest.Text := '0,00';
+end;
+
+procedure btOk_Click(Sender: TObject);
+var DocSum, PaySum, RestSum, GivenSum: Decimal;
+begin
+  PlaySound('Ding');
+  if (StrToDec(edGivenSum.Text)<StrToDec(edSum.Text)) and
+     (MessageDlg('Сумма оплаты МЕНЬШЕ суммы документа!'+#13+'Все равно закрыть окно?',mtInformation, ArrayOf(mbYes,mbNo))<>mrYes) then
+    exit
+  else
+  if (not CalcRest) and (StrToDec(edGivenSum.Text)>StrToDec(edSum.Text)) and
+     (MessageDlg('Сумма оплаты БОЛЬШЕ суммы документа!'+#13+'Все равно закрыть окно?',mtInformation, ArrayOf(mbYes,mbNo))<>mrYes) then
+    exit;  
+  DocSum := StrToDec(edSum.Text);
+  GivenSum := StrToDec(edGivenSum.Text);
+  PaySum := GivenSum;
+  if CalcRest then
+    begin   
+       RestSum := GivenSum-DocSum;
+       if RestSum<0 then RestSum := 0;
+       V.Params['SumRest'] := RestSum;  
+       if GivenSum>DocSum then
+        PaySum := DocSum;
+    end;
+  V.Params['SumPay'] := PaySum;
+  V.Params['Sum'] := GivenSum;
+   StrToDec(edRest.Text);
+  Form.ModalResult := mrOK;
+  Form.Close;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant); 
+var CurName : string;
+begin
+  V := Mean;
+  Constants := GetConstants;
+  edSum.Text := DecToStr(Params,2);
+  if V.HasParam('CurrencyName') then
+    begin
+      CurName := ' '+ VarAsStr(V.Params['CurrencyName']);
+      pnToPaySum.Caption := pnToPaySum.Caption + CurName;
+      pnRestTitle.Caption := pnRestTitle.Caption + CurName;
+      pnPaySum.Caption := pnPaySum.Caption + CurName;
+    end;
+ CalcRest := VarAsBool(Constants.РасчетСдачи);
+ pnRestUnion.Visible := CalcRest;
+end;
+
+
+
+procedure edGivenSum_Change(Sender: TObject);
+begin
+  if (edGivenSum.Text<>'') and (StrToDecDef(edGivenSum.Text,-1)<0) then
+    ShowMessage('Не верно введена сумма!');
+  if (StrToDecDef(edGivenSum.Text,0) - StrToDec(edSum.Text)) > 0 then
+    edRest.Text := DecToStr(StrToDec(edGivenSum.Text) - StrToDec(edSum.Text),2)
+  else
+    edRest.Text := '0,00';
+  if ((StrToDec(edRest.Text) > 0) and V.HasParam('Bank')) or (StrToDecDef(edGivenSum.Text,-1)<0) then
+    btOk.Enabled := false
+  else
+    btOk.Enabled := true;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel8:TO4Panel
+Panel9:TO4Panel
+edGivenSum:TO4Edit
+pnPaySum:TO4Panel
+pnRestUnion:TO4Panel
+pnRestTitle:TO4Panel
+pnRest:TO4Panel
+edRest:TO4Edit
+Panel2:TO4Panel
+pnToPaySum:TO4Panel
+Panel5:TO4Panel
+edSum:TO4Edit
+Panel1:TO4Panel
+bt7:TO4Button
+bt8:TO4Button
+bt9:TO4Button
+btMin:TO4Button
+bt4:TO4Button
+bt5:TO4Button
+bt6:TO4Button
+btBack:TO4Button
+bt1:TO4Button
+bt2:TO4Button
+bt3:TO4Button
+bt0:TO4Button
+btPoint:TO4Button
+btOk:TO4Button

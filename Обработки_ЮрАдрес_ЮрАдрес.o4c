@@ -1,0 +1,28 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+procedure Button1_Click(Sender : TObject);
+var
+  Address : ICDictionary;
+begin
+  Address := CreateObject('Справочники.Адреса');
+  Address.Select;
+  while Address.SelectNext do
+    begin
+      if VarAsBool(Address.Активность) then
+        begin
+          Address.Edit;
+          Address.Юридический := True;
+          Address.Post;
+          Address.ApplyUpdates;
+        end;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Button1:TO4Button

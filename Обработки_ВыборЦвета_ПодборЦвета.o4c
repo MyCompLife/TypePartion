@@ -1,0 +1,31 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСДокументамиВЖурналах;
+
+implementation
+
+var
+  Tbl : ICValueTable;    
+  V : Variant;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+  Tbl := Params;
+  edName.Text := Tbl.Params['FieldsNameTbl'];
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  Tbl.Params['FieldsNameTbl'] := edName.Text;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+Label1:TO4Label
+edName:TO4Edit

@@ -1,0 +1,70 @@
+interface
+
+uses
+  System, DispIntf;
+
+const
+  // Order types
+  clmtAppend = 'Добавлен';
+  clmtEdit = 'Изменён';
+  clmtDelete = 'Удалён';
+  clmtStateUp = 'Зафиксирован';
+  clmtStateDown = 'Расфиксирован';
+  clmtRegister = 'Зарегистрирован';
+  clmtConfirmed = 'Подтвержден';
+  clmtCancelConfirmed = 'Отмена подтверждения';
+
+procedure ChangeDoc(Тип: String; Doc: ICDocuments);
+
+implementation
+
+Var AccsCheckDoc: ICAccs;
+
+procedure ChangeDoc(Тип: String; Doc: ICDocuments);
+var
+  Respons : ICDictionary;
+  TblHead, TblData : ICValueTable;
+  UnicDic : ICDictionary;
+begin
+  Respons := CreateObject('Справочники.Служащие');
+  AccsCheckDoc := CreateObject('Аккумуляторы.ЖурналИзменений');
+  TblData := CreateObject('ValueTable');
+  if not isNil(Doc) then
+    begin
+      AccsCheckDoc.ТипДокумента := Doc.GetSign;
+      AccsCheckDoc.ТипДействия := Тип;
+      AccsCheckDoc.Док := Doc;
+      if Respons.FindByField('ПолноеНазвание', GetUserName, False) then
+        AccsCheckDoc.Ответственный := Respons;
+      AccsCheckDoc.Состояние := Doc.GetDocState;
+      AccsCheckDoc.Логин := GetUserLogin;
+      AccsCheckDoc.ДатаДокумента := Doc.ДатаДокумента;
+      AccsCheckDoc.НомерДокумента := Doc.НомерДокумента; 
+
+      if Doc.HasHeaderField('Сумма') then
+        AccsCheckDoc.Сумма := Doc.Сумма;
+      if Doc.HasHeaderField('КолОбщ') then
+        AccsCheckDoc.КолОбщ := Doc.КолОбщ;
+      if Doc.HasHeaderField('Партнер') then
+        AccsCheckDoc.Партнер := Doc.Партнер;
+
+      UnicDic :=CreateObject('Справочники.ИдентификаторДокумента');
+      UnicDic.UseMaster(Doc);
+      if not (UnicDic.Select and UnicDic.SelectNext) then
+        begin
+          UnicDic.Append;
+          UnicDic.CodeField := Doc.НомерДокумента;
+          UnicDic.NameField := Doc.GetSign;
+          UnicDic.Post;
+          UnicDic.ApplyUpdates;
+        end;
+      AccsCheckDoc.Идентификатор := UnicDic;
+
+      AccsCheckDoc.Движение := 1; //для правильной проводки
+      AccsCheckDoc.Income(Null, CurrentDateTime, 0);
+    end
+  else
+    Raise('Документ не найден');
+end;
+
+end.

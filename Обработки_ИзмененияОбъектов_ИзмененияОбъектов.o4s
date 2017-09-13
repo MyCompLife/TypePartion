@@ -1,0 +1,24 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure FillRepTbl(RepTbl : ISValueTable; TypeChange:string; MasterData:Variant;
+                     UsePeriod:boolean; DateFrom, DateTo : DateTime); server;
+var RegChangeObjAccs : ISAccs;
+begin
+ RegChangeObjAccs := CreateObject('Аккумуляторы.РегистрацияИзмененийОбъектов');
+ RegChangeObjAccs.SetFieldFilter('Объект',MasterData);
+ if TypeChange<>'' then
+  RegChangeObjAccs.SetFieldFilter('ТипСобытия',TypeChange);
+ if not UsePeriod then
+   begin
+    DateFrom := 0;
+    DateTo := 400000;
+   end; 
+ RegChangeObjAccs.AppendMotionToValueTable(DateFrom, RoundDate(DateTo,rdDay,true), amtBoth,'Date;ТипСобытия;Значение;Ответственный;Комментарий',-1,RepTbl);
+end;
+
+end.

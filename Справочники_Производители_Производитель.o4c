@@ -1,0 +1,107 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками, УстановкаВажныхОбъектов,
+  ПечатьИВыводНаЭкран, Печать, РаботаССайтом;
+
+implementation
+
+var
+  MasterData : ICDictionary; 
+  ChangeLock: Boolean;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeMailAdr.Text), ''); 
+  GetLocalization(MasterData, Form);
+end;
+
+procedure dbeMailAdr_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeMailAdr.Text), '');
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+  MasterData.Код := GetNextNumberForField('Справочники.Производители','Код', false);
+  case StrLength(MasterData.Код) of
+    1 : MasterData.Код := '00' + MasterData.Код;
+    2 : MasterData.Код := '0' + MasterData.Код;
+
+  end;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  if ChangeLock then
+    exit;
+  try
+    try
+      ChangeLock := True;
+      case StrLowerCase(FieldName) of
+        'назвавние':
+          begin
+            if MasterData.Назвавние_ru = '' then
+              MasterData.Название_ru := MasterData.Название;
+          end;
+      end;
+    except
+    end;
+  finally
+    ChangeLock := False;
+  end;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  SetLocalization(MasterData, Form);
+end;
+
+procedure tcLocal_Change(Sender: TObject);
+begin
+  ChangeLocalization(Form);
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  MasterData.ApplyUpdates;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+MainPanel:TO4Panel
+PageControl1:TO4PageControl
+tsMain:TTabSheet
+Label5:TO4Label
+Label7:TO4Label
+dbeMailAdr:TO4DBEdit
+eTitle:TO4DBEdit
+tsSite:TTabSheet
+tcLocal:TO4TabControl
+Label12:TO4Label
+Label13:TO4Label
+eDescrLang:TO4Memo
+eTitleLang:TO4Edit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnTitle:TO4Panel
+lbTitle:TO4Label
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

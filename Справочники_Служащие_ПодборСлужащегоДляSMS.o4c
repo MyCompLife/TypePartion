@@ -1,0 +1,253 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData,  TelDic : ICDictionary;
+  UseLevels : Boolean;
+  Opt : ICOptions;
+  TelTbl : ICValueTable;
+  Doc : ICDocuments;
+  CursorVis : TCursor;
+
+  
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+ if IsObjFocused(Params) and (StrLowerCase(Params.GetSign)='smsрассылка') then
+  Doc := Params;
+end;
+
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+Var
+  ActiveRegion : ICDictionary;
+begin
+  MasterData := MDS.GetMean;
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+  if IsNil(TelDic) then
+   TelDic := CreateObject('Справочники.Телефоны');
+  if IsNil(TelTbl) then
+   begin
+    TelTbl := CreateObject('ТаблицаЗначений');  
+    TelTbl.AddColumn('Партнер',vtcLink,0);
+    TelTbl.AddColumn('Телефон',vtcLink,0);
+    TelTbl.AddColumn('ВладелецТел',vtcString,50);
+    TelTbl.AddColumn('Номер',vtcString,20);
+    TelTbl.AddColumn('Активность',vtcInteger,0);
+    TelTbl.AddColumn('SMSРассылка',vtcBoolean,0);
+    TelTbl.Open;
+   end; 
+end;
+
+procedure FillTelTbl;
+begin
+ if not VarAsBool(MasterData.Isfocused) then
+  exit;    
+ TelDic.UseMaster(MasterData);
+ MDS.AfterScrollLock := true;
+ TelTbl.DisableControls;
+ TelTbl.UseDataSource(0);
+ TelTbl.Clear;
+ TelTbl.CopyDataToServer;
+ MasterData.SetSrvToClientPos;
+ server.GetPartTel(TelTbl.SrvMean, MasterData.SrvMean, tbOnlySMSTel.Down);
+ TelTbl.CopyDataFromServer;
+ TelTbl.UseDataSource(CtrlToVar(TVSTel));
+ TelTbl.EnableControls;
+ MDS.AfterScrollLock := false;
+end;
+
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels; 
+  FillTelTbl;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itDropForm;
+  MakeStandartInterface(MasterData, Form, '', '');
+  FillTelTbl;   
+  if not IsObjFocused(Doc) then
+   tbAddAllPart.Visible := false;
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure miPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null);
+end;
+
+
+procedure tbOnlySMSTel_Click(Sender: TObject);
+begin
+  FillTelTbl;
+end;
+
+procedure tbRefreshTel_Click(Sender: TObject);
+begin
+  FillTelTbl;
+end;
+
+procedure tbEditTel_Click(Sender: TObject);
+begin
+ if TelDic.Find(TelTbl.Телефон) then
+  begin
+   TelDic.EditInForm('Телефон',1);  
+   FillTelTbl;
+  end;
+end;
+
+
+procedure tbAddTel_Click(Sender: TObject);
+begin
+  TelDic.Select;
+  TelDic.EditInForm('Телефон',0);
+ FillTelTbl;
+end;
+
+
+procedure miOnlySMS_Click(Sender: TObject);
+begin
+ tbOnlySMSTel.Down := not tbOnlySMSTel.Down;
+ miOnlySMS.Checked := not miOnlySMS.Checked;
+ FillTelTbl;
+end;
+
+procedure tbAddAllPart_Click(Sender: TObject);
+var OutParams : Variant;
+begin
+ if MessageDlg('Вы действительно хотите вставить всех партнеров?',mtInformation,ArrayOf(mbYes,mbNo))=mrYes then
+  begin
+   CursorVis := WaitCursorStart;
+   //MasterData.DisableControls;
+   MDS.AfterScrollLock := true;
+   TelTbl.DisableControls;
+   TelTbl.UseDataSource(0);
+   if VarAsBool(MasterData.Select) then
+    While MasterData.SelectNext do    // перебор всех партнеров
+     begin
+      StatusText('Вставка телефонов клиента: '+VarAsStr(MasterData.NameField));
+      TelDic.UseMaster(MasterData);
+      TelTbl.Clear;
+      TelTbl.CopyDataToServer;
+      MasterData.SetSrvToClientPos;
+      server.GetPartTel(TelTbl.SrvMean, MasterData.SrvMean, true);
+      TelTbl.CopyDataFromServer;
+      TelTbl.Select;
+      While TelTbl.SelectNext do    // перебор всех телефонов партнера
+       Doc.ExecProc(Masterdata,'append',ArrayOf(TelTbl.Номер,MasterData),OutParams);
+     end; // перебор всех партнеров
+   //MasterData.EnableControls;
+   MDS.AfterScrollLock := false;
+   if VarAsBool(Doc.SelectLines, false) then
+    Doc.LastLine;
+   StatusText('');
+   FillTelTbl;
+   SetCursor(CursorVis);
+
+  end;
+end;
+
+{$D-}
+procedure dbgTel_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+ if VarAsBool(TelTbl.SMSРассылка,false) then
+  index1:=26;
+ if VarAsBool(TelTbl.Активность,false) then
+  index2:=36;
+end;
+{$D+}
+
+procedure dbgTel_DblClick(Sender: TObject);
+begin
+ if not IsObjFocused(Doc) then
+  begin
+   MasterData.Params['SMSTel'] := TelTbl.Номер;
+   Form.ModalResult := mrOk;
+   Form.Close;
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+dbtCtg:TO4DBTreeView
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+Splitter2:TO4Splitter
+Panel2:TO4Panel
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbAddAllPart:TO4ToolButton
+tbSettings:TO4ToolButton
+dbgData:TO4DBGrid
+dbgTel:TO4DBGrid
+tbTel:TO4ToolBar
+tbAddTel:TO4ToolButton
+tbEditTel:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbRefreshTel:TO4ToolButton
+tbOnlySMSTel:TO4ToolButton
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+TVSTel:TO4TableValueSource
+pmTel:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem10:TO4MenuItem
+miOnlySMS:TO4MenuItem

@@ -1,0 +1,59 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+VAr
+  TblGoods : IsValueTable;
+  Constants: IS4VPAConst;
+  AccGood, AccPart : ISAccs;
+  TypePrice : String;
+  TypeInPrice : Integer;
+  DiapFrom ,DiapTo : Decimal;
+
+Procedure GetBarCodesError(V : IsProcessing; var Acc : Boolean);
+VAr
+  GoodDic, BarCodeDic : IsDictionary;
+  Count, Total, SimvolCount : Integer; 
+  TmpTbl : IsValueTable;
+begin
+  TmpTbl := CreateObject('ValueTable');
+  TmpTbl.Open;
+  TblGoods.CopyColumnsTo(TmpTbl);
+
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccPart := CreateObject('Аккумуляторы.ПартииТоваров');
+  Case TypeInPrice of
+    0: begin
+      AccGood.AppendGroupRestToValueTable(RoundDate(CurrentDate,rdDay,True),'Товар;КолОбщ',TmpTbl);
+      TmpTbl.DoGetLinks('ВхЦенаБезНДС=Товар.ВхЦена;Цена=Товар.'+TypePrice);
+    end;
+    1: begin
+      AccGood.AppendGroupRestToValueTable(RoundDate(CurrentDate,rdDay,True),'Товар;Склад;Партия;КолОбщ',TmpTbl); 
+      TmpTbl.Select;
+      AccPart.AssignFieldsByDimIDTo('Партия','ДатаПр;ВхЦенаБезНДС',TmpTbl);
+      TmpTbl.DoGetLinks('Цена=Товар.'+TypePrice);
+//      TmpTbl.DoCalculation('ВхЦена','СумОбщ/КолОбщ');
+
+    end;
+  end;
+  TmpTbl.DoCalculation('Наценка','(Цена/ВхЦенаБезНДС-1)*100');
+  TmpTbl.SortBy('Наценка');
+  TmpTbl.SetRange(DiapFrom,DiapTo);
+  TmpTbl.Select;
+  TmpTbl.AppendTo('',TblGoods);
+  TblGoods.DoGetLinks('Код=Товар.Код');
+end;
+
+function GetBarCodesErrorEp(TblGoodsS : IsValueTable; TypePriceS : String; TypeInPriceS : Integer; DiapFromS ,DiapToS : Decimal ): Variant;Server;
+Begin
+  TblGoods := TblGoodsS;
+  TypePrice := TypePriceS;
+  TypeInPrice := TypeInPriceS;
+  DiapFrom := DiapFromS;
+  DiapTo := DiapToS;
+  Result := EntryPoint(GetBarCodesError);
+end;
+
+end.

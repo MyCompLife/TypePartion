@@ -1,0 +1,201 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСДокументамиВЖурналах;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Options : ICOptions;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Options := GetOptions;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;
+begin
+  Options := GetOptions;
+  miDocMove.Visible := GetUDASet('viewdocmove');  
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+  MasterData.Refresh;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечУнивЖурнала');
+  V.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    if MasterData.GetDocSign = 'РасходСРасчСчета' then
+      begin
+        dialog := CreateObject('Обработки.ПечатьПлатежки');
+        dialog.Execute('ПечатьПлатежки', MasterData.GetDoc);
+      end
+    else
+      MasterData.GetDoc.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), Null);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      case StrLowerCase(MasterData.GetDocSign) of
+        'приходнарасчсчет' :
+          Index1 := 13;
+        'расходсрасчсчета' :
+          Index1 := 14;
+        'приходвкассу' :
+          Index1 := 15;
+        'расходизкассы' :
+          Index1 := 16;
+        'трансферсрасчсчета' :
+          Index1 := 17;
+        'трансфернарасчсчет' :
+          Index1 := 18;
+        'приходличфинансов' :
+          Index1 := 19;
+        'расходличфинансов' :
+          Index1 := 20;
+      end;
+      if MasterData.GetDocState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9;
+    end;
+end;
+
+procedure dbgData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if MasterData.IsFocused and (MasterData.Сумма < 0) then
+    if Highlight then
+      DrawFont.Color := clWhite
+    else
+      DrawFont.Color := clRed;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case StrLowerCase(ProcID) of
+    'dontuselevel' :
+      begin
+        MasterData.CancelFieldFilter('Категория');
+        MasterData.Refresh;
+      end;
+    'levelchanged', 'usenolevel' :
+      begin
+        MasterData.SetFieldFilter('Категория', '=', InParams, '', Null, '');
+        MasterData.Refresh;
+      end;
+  end
+end;
+
+procedure pmiCopyDoc_Click(Sender : TObject);
+begin
+  AddDocByTemplate(MasterData);
+end;
+
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure dmNotes_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData, 'Комментарий');
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel4:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tsState:TO4TabSet
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+miCopyDoc:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+pmiExportExcel:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiRefresh:TO4MenuItem
+pmiDetail:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem

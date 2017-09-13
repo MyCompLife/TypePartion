@@ -1,0 +1,79 @@
+interface
+
+uses
+  System, ConstNames, DispIntf, –асчеты, ‘иксаци€,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений;
+
+implementation
+
+var
+  AccPart, AccsInOutCome : ISAccs;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  Partner, Currency : ISDictionary;
+  J : ISJournal;
+  DocCurrentOwner : ISDocuments;
+  Course: Decimal;
+  Dimensions, Fields, Resources: Variant;
+begin
+  DocDate := Doc.GetDate;
+  AccPart.ClearFieldBuffers();
+  Partner := Doc.ѕартнер;
+
+  //взаиморасчеты с партнерами
+  AccPart.ѕартнер := Partner; 
+  AccPart.—ум–асх¬ал := Doc.—умма¬¬алюте;
+  AccPart.—умќбщ¬ал := Doc.—умма¬¬алюте;
+  AccPart.¬алюта := Doc.¬алюта; 
+  if VarAsBool(Doc.@јналитика¬заиморасчета.IsFocused) then
+    AccPart.јналитика¬заиморасчета := Doc.@јналитика¬заиморасчета;
+  AccPart.Income(Doc, DocDate, 0);
+
+  //взаиморасчеты с банком
+  Partner := Doc.ЅанкЁквайрер;
+  Currency := CreateObject('—правочники.¬алюты');
+  Currency := GetNatCurrency(Currency);
+  Course := 1;
+  AccPart.ѕартнер := Partner;
+  AccPart.—ум–асх¬ал := Doc.—умма«ачислени€;
+  AccPart.—умќбщ¬ал := Doc.—умма«ачислени€;
+  AccPart.¬алюта := Currency;
+  AccPart.Outcome(Doc, DocDate, 0);
+
+  //  прибыль/расход
+  AccsInOutCome.ClearFieldBuffers();
+  Dimensions := ArrayOf(null,Doc.ЅанкЁквайрер, Doc.—тать€, Currency, Doc.–егион);
+  Resources  := ArrayOf(Doc.—умма омиссии, 0, Doc.—умма омиссии);
+  Fields     := ArrayOf(Course);
+  AccsInOutCome.IncomeDirect(Doc, Doc.ƒатаƒокумента, 0, Dimensions, Resources, Fields);
+
+  Accept := true;
+end;
+
+function GetChangeStateUpEP(Doc : ISDocuments) : Variant; server;
+begin
+  AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  AccsInOutCome := CreateObject('јккумул€торы.ƒоходы–асходы');
+  Result := EntryPoint(ChangeStateUp);
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+        AccsInOutCome := CreateObject('јккумул€торы.ƒоходы–асходы');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.

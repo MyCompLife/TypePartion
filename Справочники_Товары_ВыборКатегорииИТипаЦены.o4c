@@ -1,0 +1,87 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL;
+
+implementation
+var MasterData : ICDictionary;
+    Constants : IC4VPAConst;
+    PriceTypes : string;
+    TypePriceTbl : ICValueTable;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);    
+var i,code : integer;
+begin
+  MasterData := MDS.GetMean;  
+  MasterData.IncludeOnlyLevels(true);
+  MasterData.Params[prmInterfaceType] := itCategoryMain;
+  Constants := GetConstants;
+  TypePriceTbl := CreateObject('ТаблицаЗначений');
+  TypePriceTbl.AddColumn('Код',vtcInteger,0);
+  TypePriceTbl.AddColumn('ТипЦены',vtcString,20);
+  TypePriceTbl.AddColumn('Название',vtcString,20);
+  TypePriceTbl.Open;
+  TypePriceTbl.TblName := 'TypePrice';
+  PriceTypes := Constants.ТипыЦен;
+  if StrLength(PriceTypes) > 0 then
+    for i:= 1 to StrLength(PriceTypes) do
+      begin
+        code := StrToIntDef(PriceTypes[i],-1);
+        case code of
+          0:
+           begin
+             TypePriceTbl.Append;
+             TypePriceTbl.Код := code;
+             TypePriceTbl.ТипЦены := 'Цена';
+             TypePriceTbl.Название := 'Цена';
+           end;
+          1:
+           begin
+             TypePriceTbl.Append;
+             TypePriceTbl.Код := code;
+             TypePriceTbl.ТипЦены := 'ОптЦена';
+             TypePriceTbl.Название := 'Опт.Цена';
+           end;
+          2:
+           begin
+             TypePriceTbl.Append;
+             TypePriceTbl.Код := code;
+             TypePriceTbl.ТипЦены := 'КрОптЦена';
+             TypePriceTbl.Название := 'Кр.Опт.Цена';
+           end;
+        end;    
+      end;
+  TypePriceTbl.SortBy('Код');
+  TypePriceTbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+
+
+procedure TVS_VPATimedAfterScroll(Sender: TObject);
+begin
+ if TypePriceTbl.IsFocused then
+   MasterData.Params['TypePrice'] := VarAsStr(TypePriceTbl.ТипЦены);
+end;
+
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+ if ProcID='usectg' then
+   pnCtg.Visible := VarAsBool(InParams);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnTypePrice:TO4Panel
+Label1:TO4Label
+dbgTypePrice:TO4DBGrid
+pnCtg:TO4Panel
+Label2:TO4Label
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+TVS:TO4TableValueSource

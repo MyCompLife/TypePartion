@@ -1,0 +1,124 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация;
+
+implementation
+
+var
+  AccsGood, AccsGoodByInv, AccGoodRes, AccsGoodResp : ISAccs;
+  ApplyTbl, MinTbl : ISValueTable;
+  UseRes : Boolean;
+
+procedure CreateApplyTable(Doc : ISDocuments; var Accept : Boolean);
+begin
+  // отправка сообщения клиенту
+  Doc.NotifyClient(CheckAboutOverflow, 1, 2);
+  CreateApplyTableExternal(Doc, AccsGood, ApplyTbl, MinTbl);
+  Accept := not Doc.Terminated
+end;
+
+procedure ApplyTblToAccs(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+  HasResp : Boolean;
+begin
+  Count := 1;
+  HasResp := VarAsBool(Doc.@Ответственный.IsFocused);
+  Total := ApplyTbl.LineCount;
+  AccsGood.ClearFieldFilters();
+  ApplyTbl.Select;
+  while ApplyTbl.SelectNext do
+    begin
+      //остатки товара на ответственном
+      if HasResp then
+        begin
+          AccsGoodResp.ClearFieldBuffers();
+          AccsGoodResp.Ответственный := Doc.@Ответственный;
+          AccsGoodResp.Товар := ApplyTbl.@Товар;
+          AccsGoodResp.Партия := ApplyTbl.Партия;
+          AccsGoodResp.Тип := midInputRest;
+          AccsGoodResp.КолОбщ := ApplyTbl.КолОбщ;
+          AccsGoodResp.СумОтп := ApplyTbl.СумОтп - ApplyTbl.СумОтпНДС;
+          AccsGoodResp.СумВх := ApplyTbl.СумВх;
+          AccsGoodResp.Income(Doc, Doc.GetDate(), ApplyTbl.НомСтроки);
+        end;
+      //аккумулятор товаров по счетам
+      AccsGoodByInv.ClearFieldBuffers();
+      AccsGoodByInv.Счет := Doc.Owner;
+      AccsGoodByInv.Товар := ApplyTbl.@Товар;
+      AccsGoodByInv.Партия := ApplyTbl.Партия;
+      AccsGoodByInv.Тип := midInputRest;
+      AccsGoodByInv.КолОбщ := ApplyTbl.КолОбщ;
+      AccsGoodByInv.СумОбщ := ApplyTbl.СумВх;
+      AccsGoodByInv.СумОбщОтп := ApplyTbl.СумОтп;
+      AccsGoodByInv.Income(Doc, Doc.GetDate(), ApplyTbl.НомСтроки);
+      if UseRes then
+        begin
+          AccGoodRes.ClearFieldBuffers();
+          AccGoodRes.Товар := ApplyTbl.@Товар;
+          AccGoodRes.ВРезерв := ApplyTbl.КолОбщ;
+          AccGoodRes.КолОбщ := ApplyTbl.КолОбщ;
+          AccGoodRes.Income(Doc, Doc.GetDate(), ApplyTbl.НомСтроки);
+        end;
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP(AccsGoods : ISAccs; ApplyTbls : ISValueTable; UR : Boolean) : Variant; server;
+begin
+  AccsGood := AccsGoods;
+  ApplyTbl := ApplyTbls;
+  AccGoodRes := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  UseRes := UR;
+  //AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  AccsGoodResp := CreateObject('Аккумуляторы.ОстаткиТМЦНаОтвет');
+  AccsGoodByInv := CreateObject('Аккумуляторы.ОстаткиТоваровТМЦпоСчетам');
+  Result := EntryPoint(ApplyTblToAccs);
+end;
+
+procedure CanChangeStateUp(Data : ISDocuments; var Accept : Boolean);
+begin
+  Accept := True;
+  case Data.GetDocState of
+    0 :
+      begin
+        AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+        ApplyTbl := CreateObject('ТаблицаЗначений');
+        MinTbl := CreateObject('ТаблицаЗначений');
+        AccsGoodResp := CreateObject('Аккумуляторы.ОстаткиТМЦНаОтвет');
+        AccsGoodByInv := CreateObject('Аккумуляторы.ОстаткиТоваровТМЦпоСчетам');
+        CreateApplyTable(Data, Accept);
+      end;
+    1 :
+      ;
+  end;
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        //AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+        AccGoodRes := CreateObject('Аккумуляторы.ТоварыВРезерве');
+        UseRes := True;
+        ApplyTblToAccs(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.
+

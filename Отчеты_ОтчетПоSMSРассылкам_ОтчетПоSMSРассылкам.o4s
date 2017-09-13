@@ -1,0 +1,90 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsSMS : ISAccs;
+  ReportTbl,HistoryTbl: ISValueTable;
+  DateFrom, DateTo : DateTime;
+
+
+
+
+procedure ReportLinePost;
+begin
+
+end;
+
+procedure GetRunReport(Doc:ISProcessing; var Accept : boolean);
+var i,cnt : integer;
+begin
+  if IsNil(AccsSMS) then
+   AccsSMS := CreateObject('Аккумуляторы.SMSРассылки');
+
+  AccsSMS.ClearFieldFilters();
+  AccsSMS.ClearFieldBuffers();
+  // отправка сообщения клиенту
+  Doc.NotifyClient('Отбор данных из аккумулятора.', 1, 50);
+  if Doc.Terminated then exit;
+  Accept := True;
+  ReportTbl.Clear;
+  HistoryTbl.Clear;
+  //-------Отбор данных из аккумулятора---------------------------------------
+  AccsSMS.SetFieldFilter('КодСтатусаСообщения',0);
+  AccsSMS.AppendMotionToValueTable(DateFrom, DateTo, amtIncome, 'Document;Date;Партнер;ПолноеНазваниеПартнера;НомерТелефона;MessageID;КодСтатусаСообщения;СтатусСообщения;КоличествоSMS;Сумма', -1, ReportTbl);
+  ReportTbl.GroupBy('Document;Date;Партнер;ПолноеНазваниеПартнера;НомерТелефона;MessageID;КодСтатусаСообщения;СтатусСообщения','КоличествоSMS;Сумма');
+  // Отбор истории по SMS-сообщениям
+  AccsSMS.ClearFieldFilters();
+  AccsSMS.ClearFieldBuffers();
+  ReportTbl.Select;
+  i := 0;
+  cnt := ReportTbl.LineCount;
+  While ReportTbl.SelectNext do
+   begin
+    AccsSMS.SetFieldFilter('MessageID',ReportTbl.MessageID);
+    AccsSMS.AppendMotionToValueTable(0, 400000, amtIncome, 'Document;Date;Партнер;ПолноеНазваниеПартнера;НомерТелефона;MessageID;КодСтатусаСообщения;СтатусСообщения;КоличествоSMS;Сумма', -1, HistoryTbl);
+    inc(i);
+    if (i mod 10) = 0 then
+       Doc.NotifyClient('Отбор истории по SMS-сообщениям', i, cnt);
+    if Doc.Terminated then exit;
+   end;        
+  // Определение текущего состояния SMS-сообщений
+  ReportTbl.SortBy('Date');
+  HistoryTbl.SortBy('MessageID;Date');
+  ReportTbl.Select;
+  i := 0;
+  cnt := ReportTbl.LineCount;
+  While ReportTbl.SelectNext do
+   begin  
+    HistoryTbl.SetRange(ArrayOf(ReportTbl.MessageID,0),
+                     ArrayOf(ReportTbl.MessageID,400000));
+    if HistoryTbl.SelectLast then
+     begin
+      ReportTbl.Edit;
+      ReportTbl.AssignFields('КодСтатусаСообщения;СтатусСообщения',HistoryTbl);
+      ReportTbl.КоличествоSMS :=  HistoryTbl.Total('КоличествоSMS');
+      ReportTbl.Сумма :=  HistoryTbl.Total('Сумма');
+      ReportTbl.Post;
+     end;
+    inc(i);
+    if (i mod 10) = 0 then
+       Doc.NotifyClient('Определение текущего состояния SMS-сообщений', i, cnt);
+    if Doc.Terminated then exit;
+   end; 
+   HistoryTbl.CancelRange;
+  Accept := True;
+end;
+
+function GetRunReportEP(ReportTbls,HistoryTbls : ISValueTable; DateFroms, DateTos : DateTime) : Variant; server;
+begin
+  ReportTbl := ReportTbls; 
+  HistoryTbl := HistoryTbls;
+  DateFrom := RoundDate(DateFroms, rdDay, False);
+  DateTo := RoundDate(DateTos, rdDay, True);
+  Result := EntryPoint(GetRunReport);
+end;
+
+end.

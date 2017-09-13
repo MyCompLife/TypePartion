@@ -1,0 +1,163 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, Пользователи, РаботаСПеременными, РаботаСОбъектами,РаботаСТаблицамиЗначений,
+  XMLИмпортЭкспорт, РаботаСТаблицамиЗначенийCL, ПодключениеДопИнтерфейса, НумерацияДокументов,   РаботаСДокументамиCL,
+   РаботаСоСправочниками, КПК;
+
+implementation
+
+const
+  odExportFileFilter = 'Все файлы|*.*';
+  odExportFileName = '*.*';
+  odExportFileTitle = 'Определите путь к папке экспорта на ПК';
+
+var
+  MasterData : ICDictionary;
+  Constants : IC4VPAConst;
+  OldImportExportPath : string;
+  ChangeLock : Boolean;
+
+procedure dbeExportPC_Exit(Sender : TObject);
+begin
+  if (dbeExportPC.Text <> '') and (dbeExportPC.Text[StrLength(dbeExportPC.Text)] <> '\') then
+    dbeExportPC.Text := dbeExportPC.Text + '\';
+end;
+
+procedure btBrowsePC_Click(Sender : TObject);
+begin
+  with OpenDialog do
+    begin
+      Filter := odExportFileFilter;
+      FileName := odExportFileName;
+      Title := odExportFileTitle;
+      if Execute then
+        MasterData.ПутьЭкспортаПК := ExtractFilePath(FileName);
+    end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  if (VarAsStr(Constants.ПутьКПапкеОбменаДляКПК) = '') or
+    (not DirectoryExists(VarAsStr(Constants.ПутьКПапкеОбменаДляКПК))) then
+    raise(Trans(errImportExportPath))
+end;
+
+function GetPath(MasterData : ICDictionary; Constants : IC4VPAConst; rbType : TO4RadioGroup) : string;
+var
+  GroupPath : string;
+begin
+  Result := '';
+  case VarAsInt(rbType.ItemIndex) of
+    0 :
+      GroupPath := 'System\';
+    1 :
+      GroupPath := 'Goods\';
+    2 :
+      GroupPath := 'Partners\';
+  end;
+  Result := Constants.ПутьКПапкеОбменаДляКПК + 'Groups\' + GroupPath + MasterData.Название + '\';
+end;
+
+procedure MDS_Validate(Sender : TObject);
+var 
+  CommercialAgents : ICDictionary;
+begin
+  if VarAsInt(MasterData.Код) <> 0 then
+    CheckForUnique('Код', 'Код', MasterData, Null);
+  MasterData.Тип := rbType.ItemIndex;
+  if VarAsInt(MasterData.Тип) = 0 then
+    CheckForUnique('Тип', 'Тип', MasterData, Null);
+  CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+  CommercialAgents.SetRangeByField('ОперационнаяСистема', osWindowsMobile, osWindowsMobile);
+  if CommercialAgents.Select then
+    if OldImportExportPath <> MasterData.ПутьЭкспортаПК then
+      MakeDir(MasterData.ПутьЭкспортаПК)
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+  rbType.ItemIndex := MasterData.Тип;
+  OldImportExportPath := MasterData.ПутьЭкспортаПК; 
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  ChangeLock := True;
+  try
+    if MasterData.HasParam('CopyFrom') and (not IsNull(MasterData.Params['CopyFrom'])) then
+      MasterData.AssignFields('Название;ПутьЭкспортаПК;Тип', MasterData.Params['CopyFrom']);
+  finally
+    ChangeLock := False;
+  end;
+  MasterData.Код := GetNextNumberForField('Справочники.ГруппыТА', 'Код');
+end;
+
+procedure tsMain_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbMain.PageIndex := NewTab;
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  if ChangeLock then
+    exit;
+  ChangeLock := True;
+  try
+    case FieldName of
+      'Название' :
+        MasterData.ПутьЭкспортаПК := GetPath(MasterData, Constants, rbType);
+    end;
+  finally
+    ChangeLock := False;
+  end;
+end;
+
+procedure rbType_Exit(Sender : TObject);
+begin
+  MasterData.ПутьЭкспортаПК := GetPath(MasterData, Constants, rbType)
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Panel5:TO4Panel
+LinkImage1:TO4LinkImage
+Panel2:TO4Panel
+tsMain:TO4TabSet
+nbMain:TO4Notebook
+Label1:TO4Label
+Label3:TO4Label
+dbeName:TO4DBEdit
+dbeCode:TO4DBEdit
+rbType:TO4RadioGroup
+gbPC:TO4GroupBox
+Label9:TO4Label
+dbeExportPC:TO4DBEdit
+btBrowsePC:TO4Button
+Panel4:TO4Panel
+lbTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+OpenDialog:TO4OpenDialog

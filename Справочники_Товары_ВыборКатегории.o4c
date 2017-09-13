@@ -1,0 +1,37 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var MasterData : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+ MasterData := MDS.GetMean; 
+ MasterData.SortByName;
+end;
+
+procedure miRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+tbrCtg:TO4ToolBar
+tbAddLevel:TO4ToolButton
+tbEditLevel:TO4ToolButton
+tbDelLevel:TO4ToolButton
+dbtCtg:TO4DBTreeView
+MDS:TO4DataSource
+pmCtg:TO4PopupMenu
+miAddLevel:TO4MenuItem
+miAddSubLevel:TO4MenuItem
+miEditLevel:TO4MenuItem
+miDelLevel:TO4MenuItem

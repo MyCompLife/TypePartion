@@ -1,0 +1,68 @@
+interface
+
+uses
+  System, DispIntf, Пользователи, Интерфейс, Расчеты;
+
+implementation  
+
+var 
+  EmplFrom, EmplTo : ICDictionary;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  EmplFrom := Params;
+  if EmplFrom.IsFocused then
+    eLoginFrom.Text := EmplFrom.Логин
+  else
+    nil(EmplFrom);
+end;
+
+procedure eLoginTo_ActionClear(Sender: TObject);
+begin
+  nil(EmplTo);
+  eLoginTo.Text := '';
+end;
+
+procedure eLoginTo_ActionExecute(Sender: TObject);
+var
+  EmplToName : string;
+begin
+  EmplTo := CreateObject('Справочники.Пользователи');
+  EmplTo.FindByName(eLoginTo.Text, False);
+  if EmplTo.SelectInForm('ВыборПользователя', EmplToName, Null) then
+    eLoginTo.Text := EmplTo.Логин;
+end;
+
+procedure btOK_Click(Sender: TObject);
+var 
+  StrFields : string;
+  ChangeUserDic : ICDictionary;
+begin   
+ ChangeUserDic := CreateObject('справочники.Пользователи');
+ if IsObjFocused(EmplFrom) and  ChangeUserDic.Find(EmplTo) and not IsObjEQ(EmplFrom,ChangeUserDic) then
+   begin
+     EmplFrom.SetSrvToClientPos;
+     server.GetColumnName(EmplFrom.SrvMean,StrFields);
+     ChangeUserDic.Edit;
+     ChangeUserDic.AssignFields(StrFields,EmplFrom);
+     ChangeUserDic.Post;
+     ChangeUserDic.ApplyUpdates;
+     EmplFrom.Params['Id'] := ChangeUserDic.UniID;
+     Form.ModalResult := mrOK;
+   end
+ else
+   ShowMessage('Нужно выбрать разных пользователей');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+GroupBox6:TO4GroupBox
+Label3:TO4Label
+Label4:TO4Label
+eLoginFrom:TO4Edit
+eLoginTo:TO4Edit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button

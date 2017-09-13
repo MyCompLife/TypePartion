@@ -1,0 +1,40 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  AccGood : ISAccs;
+  DocDate : DateTime;
+
+procedure GetResCount(Doc : ISValueTable); server;
+begin
+  Doc.Select;
+  while Doc.SelectNext() do
+    begin
+      Doc.Edit;
+      AccGood.CalcGroupRestDirect(DocDate, Doc.@Товар);
+      Doc.КолВРезерве := AccGood.КолОбщ;
+      Doc.Post;
+    end;
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+  if not VarAsBool(Doc.@Товар.IsFocused) then
+    exit;
+  AccGood.CalcGroupRestDirect(DocDate, Doc.@Товар);
+  Doc.КолВРезерве := AccGood.КолОбщ;
+end;
+
+function GetCalcParams(DT : DateTime) : Variant; server;
+begin
+  AccGood := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  DocDate := RoundDate(DT, rdDay, True);
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+end.

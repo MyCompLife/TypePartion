@@ -1,0 +1,299 @@
+interface
+
+uses
+  System, DispIntf;
+
+procedure ExcelImportToXGrid(FileName : String; InXGrid : TO4XGrid; ProgressBar : TO4ProgressBar);
+procedure OpenOfficeImportToXGrid(FileName : String; InXGrid : TO4XGrid; ProgressBar : TO4ProgressBar);
+
+
+implementation
+
+procedure ExcelImportToXGrid(FileName : String; InXGrid : TO4XGrid; ProgressBar : TO4ProgressBar);
+var  Excel : OLEVariant;
+     WorkSheet, MargeRange : Variant;
+     i,j:integer;
+     CelsMargeCount, RowsMargeCount, ColumnsMargeCount, RowMarge, ColMarge  : Integer;
+     MergeCells : Boolean;
+     RangeTbl : ICValueTable;
+     Accept : Boolean;
+     Znach: Variant;
+begin
+   RangeTbl := CreateObject('ValueTable');
+   RangeTbl.AddColumn('Col1',vtcInteger,0);
+   RangeTbl.AddColumn('Col2',vtcInteger,0);
+   RangeTbl.AddColumn('Row1',vtcInteger,0);
+   RangeTbl.AddColumn('Row2',vtcInteger,0);
+   RangeTbl.Open;
+   RangeTbl.SortBy('Row1;Row2;Col1;Col2');
+
+  try
+    Excel :=  CreateOleObject('Excel.Application');
+    Excel.Visible := false;
+    Excel.Application.Workbooks.Open(FileName);
+    WorkSheet := Excel.Workbooks[1].ActiveSheet;
+    InXGrid.Visible := false;
+    InXGrid.ClearAll;
+    InXGrid.RowCount := VarAsInt(WorkSheet.Cells.SpecialCells(11).Row);
+    InXGrid.ColCount := VarAsInt(WorkSheet.Cells.SpecialCells(11).Column);
+    if (InXGrid.ColCount>0) and (InXGrid.RowCount>0) then
+      begin
+        ProgressBar.Position := 0;
+        ProgressBar.Max := InXGrid.RowCount;
+
+        InXGrid.Cell(1,1).RowHeight := Trunc(VarAsFloat(WorkSheet.Cells(1,1).RowHeight)*1.5);
+        InXGrid.Cell(1,1).ColWidth := Trunc(VarAsFloat(WorkSheet.Cells(1,1).ColumnWidth)*7);
+        for i := 1 to InXGrid.RowCount do
+          InXGrid.Cell(i,1).RowHeight := Trunc(VarAsFloat(WorkSheet.Cells(i,1).RowHeight)*1.5);
+        for j := 1 to InXGrid.ColCount do
+          InXGrid.Cell(1,j).ColWidth := Trunc(VarAsFloat(WorkSheet.Cells(1,j).ColumnWidth)*7);
+
+        for i := 1 to InXGrid.RowCount do
+          begin
+            for j := 1 to InXGrid.ColCount do
+              begin
+                MergeCells := WorkSheet.Cells(i,j).MergeCells;
+                if MergeCells then
+                  begin
+                    MargeRange := WorkSheet.Cells(i,j).MergeArea;
+                    RowMarge := MargeRange.Row;
+                    ColMarge := MargeRange.Column;
+                    RowsMargeCount := MargeRange.Rows.Count-1;
+                    ColumnsMargeCount := MargeRange.Columns.Count-1;
+
+                    RangeTbl.CancelRange;
+                    RangeTbl.SetRange(ArrayOf(RowMarge,RowMarge+RowsMargeCount, ColMarge,ColMarge+ColumnsMargeCount),
+                    ArrayOf(RowMarge,RowMarge+RowsMargeCount, ColMarge,ColMarge+ColumnsMargeCount));
+                    RangeTbl.Select;
+                    if RangeTbl.LineCount=0 then
+                      Accept:=true
+                    else
+                      Accept:=False;
+                  end
+                else
+                  Accept:=true;
+
+              if Accept then
+
+              begin
+
+                if MergeCells then
+                  begin
+
+                    InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).GroupCells;
+                    InXGrid.Cell(i,j).Value := WorkSheet.Cells(i,j).Value;
+
+                    RangeTbl.Append;
+                    RangeTbl.Row1 := RowMarge;
+                    RangeTbl.Row2 := RowMarge+RowsMargeCount;
+                    RangeTbl.Col1 := ColMarge;
+                    RangeTbl.Col2 := ColMarge+ColumnsMargeCount;
+                    RangeTbl.Post;
+
+
+                    if VarAsInt(MargeRange.Borders(9).LineStyle)=1 then
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).BorderBottom := 1;
+                    if VarAsInt(MargeRange.Borders(8).LineStyle)=1 then
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).BorderTop := 1;
+                    if VarAsInt(MargeRange.Borders(7).LineStyle)=1 then
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).BorderLeft := 1;
+                    if VarAsInt(MargeRange.Borders(10).LineStyle)=1 then
+                    InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).BorderRight := 1;
+                    InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).FontColor := MargeRange.Font.Color;
+                    InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).FontName := MargeRange.Font.Name;
+                    InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).FontSize := MargeRange.Font.Size;
+                    if VarAsBool(MargeRange.Font.Bold) then
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).FontStyle := 1;
+                    InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).WordWrap := MargeRange.WrapText;
+
+                    case VarAsInt(MargeRange.HorizontalAlignment) of
+                     -4131 : InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).Alignment := 0; // left
+                     -4152 : InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).Alignment := 1; // right
+                     -4108 : InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).Alignment := 2; // Center
+                    end;
+
+                  end
+                else
+                  begin
+                    InXGrid.Cell(i,j).Value := WorkSheet.Cells(i,j).Value;
+                    if VarAsInt(WorkSheet.Cells(i,j).Borders(9).LineStyle)=1 then
+                      InXGrid.Cell(i,j).BorderBottom := 1;
+                    if VarAsInt(WorkSheet.Cells(i,j).Borders(8).LineStyle)=1 then
+                      InXGrid.Cell(i,j).BorderTop := 1;
+                    if VarAsInt(WorkSheet.Cells(i,j).Borders(7).LineStyle)=1 then
+                      InXGrid.Cell(i,j).BorderLeft := 1;
+                    if VarAsInt(WorkSheet.Cells(i,j).Borders(10).LineStyle)=1 then
+                    InXGrid.Cell(i,j).BorderRight := 1;
+                    InXGrid.Cell(i,j).FontColor := WorkSheet.Cells(i,j).Font.Color;
+                    InXGrid.Cell(i,j).FontName := WorkSheet.Cells(i,j).Font.Name;
+                    InXGrid.Cell(i,j).FontSize := WorkSheet.Cells(i,j).Font.Size;
+                    if VarAsBool(WorkSheet.Cells(i,j).Font.Bold) then
+                      InXGrid.Cell(i,j).FontStyle := 1;
+                    InXGrid.Cell(i,j).WordWrap := WorkSheet.Cells(i,j).WrapText;
+
+                    case VarAsInt(WorkSheet.Cells(i,j).HorizontalAlignment) of
+                     -4131 : InXGrid.Cell(i,j).Alignment := 0; // left
+                     -4152 : InXGrid.Cell(i,j).Alignment := 1; // right
+                     -4108 : InXGrid.Cell(i,j).Alignment := 2; // Center
+                    end;
+                  end;
+
+              end;
+              end;
+            ProgressBar.Position := i;
+          end;
+        ProgressBar.Position := 0;
+      end
+    else
+      ShowMessage('Документ пустой!');
+  finally
+    Excel.Application.Quit;
+    Nil(Excel);
+    InXGrid.Visible := true;
+  end;
+end;
+ 
+
+function FileNameToURL(s:string):string;
+var i:integer;
+begin
+ Result := 'file:'+'/'+'/'+'/';
+ if StrLength(s)>0 then
+   for i:=1 to StrLength(s) do
+     if s[i]='\' then
+       Result := Result + '/'
+     else
+       Result := Result + s[i];
+end;
+function ConvertColor(Cl:integer):integer;
+begin
+  Result := (cl and $FF000000)+((cl and $000000FF)*$10000)+(cl and $0000FF00)+((cl and $00FF0000) div $10000);
+end;
+
+procedure OpenOfficeImportToXGrid(FileName : String; InXGrid : TO4XGrid; ProgressBar : TO4ProgressBar);
+var  OpenCalc : OLEVariant;
+     WorkSheet,Sheets, Cell : Variant;
+     i,j, mergeRow, EndMergeRow, EndMergeColumn:integer;
+     CellAcept : boolean;
+     Desktop, VariantArray, Document, PropertyValue, CoreReflection, oCursor, oEndAdr, MergeRange: Variant;
+     MergeTbl : ICValueTable;
+begin
+  try
+   OpenCalc :=  CreateOleObject('com.sun.star.ServiceManager');
+   Desktop := OpenCalc.CreateInstance('com.sun.star.frame.Desktop');
+   ArrayCreate(VariantArray,[0,0], Variant);
+   CoreReflection := OpenCalc.CreateInstance('com.sun.star.reflection.CoreReflection');
+   CoreReflection.forName('com.sun.star.beans.PropertyValue').createObject(PropertyValue);
+   PropertyValue.Name := 'Hidden';
+   PropertyValue.Value := true;
+   VariantArray[0] := PropertyValue;
+   Document := Desktop.loadComponentFromURL(FileNameToURL(FileName), '_blank', 0, VariantArray);
+   Sheets := Document.GetSheets;
+   WorkSheet := Sheets.getByIndex(0);
+   MergeTbl := CreateObject('ValueTable');
+   MergeTbl.AddColumn('Row',vtcInteger,0);
+   MergeTbl.AddColumn('ColB',vtcInteger,0);
+   MergeTbl.AddColumn('ColE',vtcInteger,0);
+   MergeTbl.Open;
+   MergeTbl.SortBy('Row;ColB;ColE');
+   InXGrid.Visible := false;
+   InXGrid.ClearAll;
+   oCursor := WorkSheet.createCursor;
+   oCursor.gotoEndOfUsedArea(true);
+   oEndAdr := oCursor.getRangeAddress;
+
+   InXGrid.RowCount := VarAsInt(oEndAdr.EndRow)+1;
+   InXGrid.ColCount := VarAsInt(oEndAdr.Endcolumn)+1;
+   if (InXGrid.ColCount>0) and (InXGrid.RowCount>0) then
+     begin
+       ProgressBar.Position := 0;
+       ProgressBar.Max := InXGrid.RowCount;
+       InXGrid.Cell(1,1).ColWidth := Trunc(VarAsInt(WorkSheet.getCellByPosition(0,0).getColumns.getByIndex(0).Width)/25);
+       InXGrid.Cell(1,1).RowHeight := Trunc(VarAsInt(WorkSheet.getCellByPosition(0,0).getRows.getByIndex(0).Height)/25);
+       for i := 1 to InXGrid.RowCount do
+         InXGrid.Cell(i,1).RowHeight := Trunc(VarAsInt(WorkSheet.getCellByPosition(0,i-1).getRows.getByIndex(0).Height)/25);
+       for j := 1 to InXGrid.ColCount do
+         InXGrid.Cell(1,j).ColWidth := Trunc(VarAsInt(WorkSheet.getCellByPosition(j-1,0).getColumns.getByIndex(0).Width)/25);
+       for i := 1 to InXGrid.RowCount do
+         begin
+           for j := 1 to InXGrid.ColCount do
+             begin
+               Cell := WorkSheet.getCellByPosition(j-1,i-1);
+               CellAcept := true;
+               if VarAsBool(Cell.isMerged) then
+                 begin
+                   ocursor := WorkSheet.createCursorbyrange(Cell);
+                   ocursor.collapseToMergedArea;
+                   oEndAdr := oCursor.getRangeAddress;
+                   EndMergeRow :=VarAsInt(oEndAdr.EndRow)+1;
+                   EndMergeColumn := VarAsInt(oEndAdr.Endcolumn)+1;
+                   InXGrid.Cells(i,j,EndMergeRow,EndMergeColumn).GroupCells;
+                   for mergeRow := i to EndMergeRow do
+                     begin
+                       MergeTbl.CancelRange;
+                       MergeTbl.Append;
+                       MergeTbl.Row := mergeRow;
+                       MergeTbl.ColB := j;
+                       MergeTbl.ColE :=EndMergeColumn;
+                       MergeTbl.Post;
+                     end;
+                 end
+               else
+                 begin
+                   MergeTbl.SetRange(i,i);
+                   MergeTbl.Select;
+                   While MergeTbl.SelectNext do
+                     if (VarAsInt(MergeTbl.ColB)<=j) and (VarAsInt(MergeTbl.ColE)>=j) then
+                       begin
+                         CellAcept := false;
+                         break;
+                       end;
+                 end;
+               if not CellAcept then continue;
+
+               case VarAsInt(Cell.getType) of
+                 1,3: InXGrid.Cell(i,j).Value := Cell.getValue;
+                 2: InXGrid.Cell(i,j).Value := Cell.String;
+               end;
+               InXGrid.Cell(i,j).FontColor := ConvertColor(Cell.charColor);
+               InXGrid.Cell(i,j).FontName := Cell.charFontName;
+               InXGrid.Cell(i,j).FontSize := Cell.charHeight;
+               if VarAsInt(Cell.charWeight)=150 then
+                 InXGrid.Cell(i,j).FontStyle := 1;
+               InXGrid.Cell(i,j).WordWrap := VarAsBool(Cell.isTextWrapped);
+
+               if VarAsInt(Cell.bottomBorder.outerLineWidth)>=1 then
+                 InXGrid.Cell(i,j).BorderBottom := 1;
+               if VarAsInt(Cell.topBorder.outerLineWidth)>=1 then
+                 InXGrid.Cell(i,j).BorderTop := 1;
+               if VarAsInt(Cell.leftBorder.outerLineWidth)>=1 then
+                 InXGrid.Cell(i,j).BorderLeft := 1;
+              if VarAsInt(Cell.rightBorder.outerLineWidth)>=1 then
+               InXGrid.Cell(i,j).BorderRight := 1;
+
+               case VarAsInt(Cell.HoriJustify) of
+                1 : InXGrid.Cell(i,j).Alignment := 0; // left
+                2 : InXGrid.Cell(i,j).Alignment := 2; // Center
+                3 : InXGrid.Cell(i,j).Alignment := 1; // right
+               end;
+             end;
+           ProgressBar.Position := i;
+         end;
+       ProgressBar.Position := 0;
+     end
+   else
+     ShowMessage('Документ пустой!');
+  finally
+   Document.Close(True);
+   Document:=Unassigned;
+
+   OpenCalc := Unassigned;
+   Nil(Document);
+   Nil(OpenCalc);
+   InXGrid.Visible := true;
+
+  end;
+end;
+
+
+end.

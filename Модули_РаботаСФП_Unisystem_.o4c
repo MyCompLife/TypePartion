@@ -1,0 +1,555 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+var MiniFP:Variant;
+function StrWithoutSemicolon(s:string):string;
+function SumToStr(Sum:Decimal; AfterComma:integer=2):string;
+function ExtractAnswerCode(s:string):integer;
+function GetStrErrorByCode(ErrCode:integer):string;
+function OpenMiniFP(FPDic:ICDictionary; quiet:boolean=false):Boolean;
+function CloseMiniFP:Boolean;
+function LineFeedMiniFP(Cnt:integer):Boolean;
+function PrintDocMiniFP(FPDic:ICDictionary; Doc:ICDocuments; TypeDoc:string='0'; CashPay, CardPay:Decimal=0):Boolean;
+ // TypeDoc=0-продажа; TypeDoc=1-возврат
+
+function XReportMiniFP(FPDic:ICDictionary):boolean;
+function ZReportMiniFP(FPDic:ICDictionary):boolean;
+function CashInMiniFP(FPDic:ICDictionary; Sum:Decimal):boolean;
+function CashOutMiniFP(FPDic:ICDictionary; Sum:Decimal):boolean;
+function PrintZeroReceiptMiniFP(FPDic:ICDictionary):boolean;
+function PrintLastReceiptCopyMiniFP(FPDic:ICDictionary):boolean;
+function CancelReceiptMiniFP(FPDic:ICDictionary):boolean;
+function GetStatusStrMiniFP(FPDic:ICDictionary):string;
+
+implementation
+
+function StrWithoutSemicolon(s:string):string;
+var i:integer;
+begin
+ Result := '';
+ if StrLength(S)>0 then
+   for i:=1 to StrLength(S) do
+    if CharToByte(s[i])>=32 then
+      begin
+        if s[i]=';' then
+          Result := Result + '\;'
+        else 
+          Result := Result + s[i];
+      end;
+end;
+
+function SumToStr(Sum:Decimal; AfterComma:integer=2):string;
+var i:integer;
+begin
+  Result := DecToStr(Sum,AfterComma);
+  for i:=1 to StrLength(Result) do
+    if Result[i]=',' then Result[i]:='.';
+end;
+
+function ExtractAnswerCode(s:string):integer;
+var i:integer;
+begin
+ Result := 9999;
+ if StrLength(s)>0 then
+   begin
+     s := StrTrim(s);
+     for i:=1 to StrLength(s) do
+       if (s[i]<'0') or (s[i]>'9') then
+         break;
+      Result := StrToIntDef(StrCopy(s,1,i-1),9999);
+   end;
+end;
+
+function GetStrErrorByCode(ErrCode:integer):string;
+begin
+ case ErrCode of
+   0  : Result := 'Нет ошибки';
+   1  : Result := 'нет возможности запустить команду';
+   2  : Result := 'невозможно обработать команду';
+   3  : Result := 'код команды отсутствует';
+   4  : Result := 'много данных в команде';
+   5  : Result := 'недостаточно данных в команде';
+   6  : Result := 'ошибка при приеме данных';
+   7  : Result := 'недопустимый идентификатор команды';
+   8  : Result := 'невозможно выполнить команду';
+   10 : Result := 'Ошибка ввода';
+   11 : Result := 'необходимо снять z1 отчет';
+   12 : Result := 'скидки/наценки запрещены';
+   13 : Result := 'переполнение по чеку';
+   14 : Result := 'команда запрещена';
+   15 : Result := 'кассир не зарегистрирован';
+   16 : Result := 'отрицательная сумма';
+   17 : Result := 'количество товара отрицательное';
+   18 : Result := 'время смены исчерпано';
+   19 : Result := 'неверный тип оплаты';
+   20 : Result := 'неправильная или отсутствующая цена';
+   21 : Result := 'неверный параметр на входе команды';
+   22 : Result := 'товар находится в открытом чеке, нельзя редактировать';
+   23 : Result := 'некорректно запрограммированный товар';
+   24 : Result := 'неверный или отсутствующий штрих-код товара';
+   27 : Result := 'неверный или отсутствующий код товара';
+   28 : Result := 'товар не весовой(штучный)';
+   29 : Result := 'ФП почти заполнена';
+   30 : Result := 'ФП заполнена';
+   31 : Result := 'память инициализаций заполнена';
+   32 : Result := 'есть отложенная операция, оплата запрещена';
+   33 : Result := 'карточка клиента не принята';
+   34 : Result := 'не хватает денег на сдачу';
+   35 : Result := 'запрещена комбинированная оплата';
+   36 : Result := 'неправильный номер кассира';
+   37 : Result := 'места недостаточно';
+   38 : Result := 'нет места в Журнале';
+   39 : Result := 'нет места в базе товаров';
+   40 : Result := 'нет места в Архиве';
+   41 : Result := 'запрещено, товар является комплексом';
+   42 : Result := 'код не принадлежит комплексу';
+   43 : Result := 'ЭККА занят и не может выполнить команду';
+   44 : Result := 'необходимо снять 501 отчет';
+   45 : Result := 'неправильный пароль кассира';
+   46 : Result := 'комплекс невозможно продать';
+   47 : Result := 'цена товара определена';
+   48 : Result := 'отмена запрещена';
+   49 : Result := 'продажа товара запрещена';
+   50 : Result := 'ошибка чтения ФП';
+   51 : Result := 'номер производителя неверен';
+   52 : Result := 'ошибка записи во флеш';
+   54 : Result := 'удаление товара запрещено';
+   55 : Result := 'нет данных в фискальной памяти';
+   56 : Result := 'неправильный пароль налогового инспектора';
+   57 : Result := 'не готов выполнить команду';
+   58 : Result := 'неправильный пароль администратора';
+   60 : Result := 'РРО заблокирован (72 часа не было передачи данных)';
+   61 : Result := 'РРО не персонализован';
+   70 : Result := 'отсутсвует вал термоголовки';
+   79 : Result := 'дата сервисного обслуживания превышена';
+   80 : Result := 'ошибка записи в ФП';
+   81 : Result := 'ошибка часов';
+   82 : Result := 'ошибка данных в интерфейсе';
+   86 : Result := 'отсутствует индикатор клиента';
+   97 : Result := 'отсутствует бумага';
+   300: Result := 'неверная команда';
+   301: Result := 'ошибка порта';
+   302: Result := 'неверные параметры';
+   303: Result := 'неверное количество параметров';
+   304: Result := 'ошибка данных';
+   305: Result := 'порт закрыт';
+   306: Result := 'нет данных';
+   307: Result := 'не поддерживается';
+   308: Result := 'касса не доступна';
+   309: Result := 'неизвестный код ошибки';
+   310: Result := 'запись запрещена';
+   311: Result := 'ошибка чтения';
+   312: Result := 'ошибка записи';
+   313: Result := 'неправильная запись НДС';
+   314: Result := 'операция отменена';
+   315: Result := 'неправильная модель кассового аппарата';
+   316: Result := 'данные не существуют';
+   317: Result := 'кассовый аппарат отключен';
+   318: Result := 'файл не найден';
+   319: Result := 'присутствует ошибка';
+   320: Result := 'неверные данные';
+   321: Result := 'команда отключена';
+   322: Result := 'будет доступно в следующих версиях';
+   323: Result := 'принтер не готов'
+   else
+     Result := 'Неизвестный код ошибки';
+ end;
+end; 
+
+
+
+function OpenMiniFP(FPDic:ICDictionary; quiet:boolean=false):Boolean;
+var CommandStr : WideString;
+begin
+ Result := false;
+ try
+   if IsNil(MiniFP) then
+     MiniFP := CreateOleObject('ecrmini.t400');
+   CommandStr := 'open_port;'+VarAsStr(FPDic.ComPort)+';'+VarAsStr(FPDic.Скорость)+';';
+   Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+ finally       
+   if not Result and not quiet then
+     begin
+      if IsNil(MiniFP) then
+        ShowMessage('Не удалось подключиться к драйверу фискального регистратора!')
+      else
+       ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);  
+     end;
+ end;
+end;
+
+function CloseMiniFP:Boolean;
+var CommandStr : WideString;
+begin
+ Result := false;
+ if not IsNil(MiniFP) then
+  begin 
+    CommandStr := 'close_port;';
+    Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+     if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+  end;
+end;
+
+function LineFeedMiniFP(Cnt:integer):Boolean;
+var CommandStr : WideString;
+begin 
+ Result := false;
+ if not IsNil(MiniFP) then
+   begin  
+     CommandStr := 'paper_feed;'+IntToStr(Cnt)+';';
+     Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+      if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+   end;
+end;
+
+function PrintDocMiniFP(FPDic:ICDictionary; Doc:ICDocuments; TypeDoc:string='0'; CashPay, CardPay:Decimal=0):Boolean;
+ // TypeDoc=0-продажа; TypeDoc=1-возврат
+var ContentsTbl : ICValueTable;
+    SaleAccept, PayAccept : boolean;
+    ErrorStr:string;
+    CommandStr : WideString;
+    Constants : IC4VPAConst;
+    PayJrn : ICJournal;
+begin
+  Result := false;  
+  if (CardPay=0) and (CashPay=0) then
+    begin
+      if TypeDoc='0' then
+        begin
+          PayJrn := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+          PayJrn.SetDocTypeRange('Документы.ПриходПоЭквайрингу');
+        end
+      else
+        begin
+          PayJrn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+          PayJrn.SetDocTypeRange('Документы.РасходПоЭквайрингу');
+        end;
+      PayJrn.SetDocMultiStateRange('1;2');
+      PayJrn.UseMaster(Doc);
+      PayJrn.Select;
+      While PayJrn.SelectNext do
+        CardPay := CardPay + AbsD(VarAsDec(PayJrn.Сумма));
+    end;
+  Constants := GetConstants;
+  ContentsTbl := CreateObject('ТаблицаЗначений');
+  ContentsTbl.AddColumn('НомСтроки',vtcInteger,0);
+  ContentsTbl.AddColumn('Товар',vtcLink,0);
+  ContentsTbl.AddColumn('Код',vtcInteger,0);
+  ContentsTbl.AddColumn('Название',vtcString,48);
+  ContentsTbl.AddColumn('Количество',vtcFFT,3);
+  ContentsTbl.AddColumn('Цена',vtcFFT,2);
+  ContentsTbl.AddColumn('НалоговаяГруппа',vtcInteger,0);
+  ContentsTbl.AddColumn('СуммаСтроки',vtcFFT,2);
+  ContentsTbl.Open;
+
+  Doc.AppendLinesTo('НомСтроки;Товар;Количество;Цена',ContentsTbl);
+  ContentsTbl.DoGetLinks('Код=Товар.Код;Название=Товар.Название;НалоговаяГруппа=Товар.НалоговаяГруппа');
+  ContentsTbl.Select;
+  While ContentsTbl.SelectNext do
+   if VarAsInt(ContentsTbl.НалоговаяГруппа)=0 then
+    begin
+      ContentsTbl.Edit;
+      ContentsTbl.НалоговаяГруппа := 1;
+      ContentsTbl.Post;
+    end;
+  ContentsTbl.DoCalculation('СуммаСтроки','Цена*Количество');
+  ContentsTbl.SortBy('НомСтроки');
+    try
+      if OpenMiniFP(FPDic) then
+        begin
+          // Регистрация кассира
+          CommandStr := 'cashier_registration;1;0;';
+          SaleAccept := VarAsBool(MiniFP.T400me(CommandStr));
+          if SaleAccept then
+            begin
+              // Регистрация товара
+              ContentsTbl.Select;
+              While ContentsTbl.SelectNext do
+                begin
+                  CommandStr := 'add_plu;'+IntToStr(ContentsTbl.Код)+';'+VarAsStr(ContentsTbl.НалоговаяГруппа)+';1;0;1;0;1;0.00;0;'+StrWithoutSemicolon(ContentsTbl.Название)+';0;';
+                  SaleAccept := VarAsBool(MiniFP.T400me(CommandStr));
+                  if not SaleAccept then
+                    begin
+                      ErrorStr :=#13+CommandStr+' '+GetStrErrorByCode(ExtractAnswerCode(CommandStr))+ #13+
+                                 'Товар "'+VarAsStr(ContentsTbl.Название)+'"';
+                      break;
+                    end;
+                end;
+            end;
+          if SaleAccept then
+            begin
+              CommandStr := 'open_receipt;'+TypeDoc;
+              SaleAccept := VarAsBool(MiniFP.T400me(CommandStr));
+              if SaleAccept then
+                begin
+                  ContentsTbl.Select;
+                  While ContentsTbl.SelectNext do
+                    begin
+                      CommandStr := 'sale_plu;0;0;1;'+SumToStr(ContentsTbl.Количество,3)+';'+IntToStr(ContentsTbl.Код)+';'+
+                                    SumToStr(ContentsTbl.Цена)+';';
+                      SaleAccept := VarAsBool(MiniFP.T400me(CommandStr));
+                      if not SaleAccept then
+                        begin
+                          ErrorStr :=#13+CommandStr+' '+GetStrErrorByCode(ExtractAnswerCode(CommandStr))+ #13+
+                                 'Товар "'+VarAsStr(ContentsTbl.Название)+'"';
+                          break;
+                        end;
+                    end;
+                  if SaleAccept then
+                    begin
+                      PayAccept := true;
+                      if (CashPay=0) and (CardPay=0) then
+                        CashPay := VarAsDec(Doc.Сумма)
+                      else
+                      if CardPay>VarAsDec(Doc.Сумма) then
+                       begin
+                        CardPay := VarAsDec(Doc.Сумма);
+                        CashPay := 0;
+                       end
+                      else
+                      if VarAsDec(Doc.Сумма)<>(CashPay+CardPay) then
+                        CashPay := VarAsDec(Doc.Сумма) - CardPay;
+
+
+                      if CardPay>0 then
+                        begin
+                          CommandStr := 'pay;2;'+SumToStr(CardPay)+';';
+                          PayAccept := VarAsBool(MiniFP.T400me(CommandStr));
+                        end;
+                      if not PayAccept then
+                        ErrorStr :=#13+ #13+CommandStr+' '+GetStrErrorByCode(ExtractAnswerCode(CommandStr));
+                      if PayAccept and (CashPay>0) then
+                        begin
+                          CommandStr := 'pay;0;'+SumToStr(CashPay)+';';
+                          PayAccept := VarAsBool(MiniFP.T400me(CommandStr));
+                        end;
+                      if not PayAccept then
+                        ErrorStr :=#13+ #13+CommandStr+' '+GetStrErrorByCode(ExtractAnswerCode(CommandStr));
+                      Result := PayAccept;
+                    end;
+                end
+              else
+                ErrorStr :=#13+CommandStr+' '+GetStrErrorByCode(ExtractAnswerCode(CommandStr)) ;
+            end;
+        end;
+    finally
+      if not Result then
+       begin
+         CommandStr := 'cancel_receipt;';
+         Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+         ShowMessage('Ошибка вывода документа на фискальный регистратор'+ErrorStr);
+       end;
+      CloseMiniFP;
+    end;
+end;
+
+
+
+function XReportMiniFP(FPDic:ICDictionary):boolean;
+var CommandStr : WideString;
+begin
+ Result := false;
+ try
+   if OpenMiniFP(FPDic) then
+     begin  
+       // Регистрация кассира
+       CommandStr := 'cashier_registration;1;0;';
+       Result := VarAsBool(MiniFP.T400me(CommandStr));
+         if Result then
+           begin
+             CommandStr := 'execute_x_report;'+IntToStr(VarAsInt(FPDic.ПарольInteger,0))+';';
+             Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+           end;
+       if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+     end;
+ finally
+   CloseMiniFP;
+ end;
+end;
+
+function ZReportMiniFP(FPDic:ICDictionary):boolean;
+var CommandStr : WideString;
+begin
+ Result := false;
+ try
+   if OpenMiniFP(FPDic) then
+     begin 
+       // Регистрация кассира
+       CommandStr := 'cashier_registration;1;0;';
+       Result := VarAsBool(MiniFP.T400me(CommandStr));
+       if Result then
+         begin
+            CommandStr := 'execute_z_report;'+IntToStr(VarAsInt(FPDic.ПарольInteger,0))+';';
+            Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+         end;
+       if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+
+     end;
+ finally
+   CloseMiniFP;
+ end;
+end;
+
+
+function CashInMiniFP(FPDic:ICDictionary; Sum:Decimal):boolean;
+var CommandStr : WideString;
+begin  
+ Result := false;
+ try
+   if OpenMiniFP(FPDic) then
+     begin    
+       // Регистрация кассира
+       CommandStr := 'cashier_registration;1;0;';
+       Result := VarAsBool(MiniFP.T400me(CommandStr));
+       if Result then
+         begin
+           CommandStr := 'in_out;0;0;0;0;'+SumToStr(AbsD(Sum))+';;;';
+           Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+         end;
+       if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+     end;
+
+ finally
+   CloseMiniFP;
+ end;
+end;
+
+function CashOutMiniFP(FPDic:ICDictionary; Sum:Decimal):boolean;
+var CommandStr : WideString;
+begin    
+ Result := false;
+ try
+   if OpenMiniFP(FPDic) then
+     begin  
+       // Регистрация кассира
+       CommandStr := 'cashier_registration;1;0;';
+       Result := VarAsBool(MiniFP.T400me(CommandStr));
+       if Result then
+         begin
+           CommandStr := 'in_out;0;0;0;1;'+SumToStr(AbsD(Sum))+';;;';
+           Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+         end;
+       if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+     end;
+
+ finally
+   CloseMiniFP;
+ end;
+end;
+
+function PrintZeroReceiptMiniFP(FPDic:ICDictionary):boolean;
+var CommandStr : WideString;
+begin  
+ Result := false;
+ try
+   if OpenMiniFP(FPDic) then
+     begin  
+       // Регистрация кассира
+       CommandStr := 'cashier_registration;1;0;';
+       Result := VarAsBool(MiniFP.T400me(CommandStr));
+       if Result then
+         begin
+           CommandStr := 'print_empty_receipt;';
+           Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+         end;
+       if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+     end;
+ finally
+   CloseMiniFP;
+ end;
+end;
+
+function PrintLastReceiptCopyMiniFP(FPDic:ICDictionary):boolean;
+var CommandStr : WideString;
+begin 
+ Result := false;
+ try
+   if OpenMiniFP(FPDic) then
+     begin  
+       // Регистрация кассира
+       CommandStr := 'cashier_registration;1;0;';
+       Result := VarAsBool(MiniFP.T400me(CommandStr));
+       if Result then
+         begin
+           CommandStr := 'print_receipt_copy;';
+           Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+         end;
+       if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+     end;
+
+ finally
+   CloseMiniFP;
+ end;
+end;
+
+function CancelReceiptMiniFP(FPDic:ICDictionary):boolean;
+var CommandStr : WideString;
+begin
+ Result := false;
+ try
+ if OpenMiniFP(FPDic) then
+  begin   
+    // Регистрация кассира
+  CommandStr := 'cashier_registration;1;0;';
+  Result := VarAsBool(MiniFP.T400me(CommandStr));
+  if Result then
+    begin
+      CommandStr := 'cancel_receipt;';
+      Result :=  VarAsBool(MiniFP.T400me(CommandStr));
+    end;
+    if not Result then ShowMessage(GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr);
+  end;
+ finally
+   CloseMiniFP;
+ end;
+end;
+
+function GetStatusStrMiniFP(FPDic:ICDictionary):string;
+var CommandStr : WideString; 
+    Accept : Boolean; 
+    NextDateBlock,NextTimeBlock, SendPacketCnt,AllPacketCnt : string;
+begin
+ Result := '';
+ try
+ if OpenMiniFP(FPDic, true) then
+  begin
+    CommandStr := 'get_status;0;';
+    Accept :=  VarAsBool(MiniFP.T400me(CommandStr));
+    if Accept then 
+      begin   
+        if ExtractWord(22,CommandStr,';')='1' then
+          Result := Result + 'Блокировка по причине не передачи данных в течение 72 часов; ';
+        if ExtractWord(23,CommandStr,';')='1' then
+          Result := Result + 'Блокировка по причине утсутствия персонализации; ';
+        if ExtractWord(11,CommandStr,';')='1' then
+          Result := Result + 'Длительность смены > 24 часа; '
+        else
+        if ExtractWord(10,CommandStr,';')='1' then
+          Result := Result + 'Длительность смены > 23 часа; ';
+        SendPacketCnt := ExtractWord(26,CommandStr,';');
+        AllPacketCnt  := ExtractWord(27,CommandStr,';');
+        if SendPacketCnt<>AllPacketCnt then
+          Result := Result + 'Передано '+SendPacketCnt+' из '+AllPacketCnt+' пакетов; ';
+        NextDateBlock := ExtractWord(24,CommandStr,';');
+        NextTimeBlock := ExtractWord(25,CommandStr,';');
+        if NextDateBlock<>'00.00.0000' then
+          Result := Result + 'Точка отсчета 72 часов до блокирования: '+NextDateBlock+' '+NextTimeBlock+'; ';  
+        if ExtractWord(2,CommandStr,';')='1' then
+          Result := Result+'Смена открыта '+ExtractWord(12,CommandStr,';')+' '+ExtractWord(13,CommandStr,';')+'; '
+        else
+          Result := Result+'Смена закрыта; ';
+        if StrLength(Result)>=2 then StrDelete(Result,StrLength(Result)-1,2);
+      end
+    else
+      Result := GetStrErrorByCode(ExtractAnswerCode(CommandStr))+#13+CommandStr;
+  end
+ else   
+   Result := 'ошибка подключения к фискальному принтеру';
+ finally
+   CloseMiniFP;
+ end;
+end;
+
+end.

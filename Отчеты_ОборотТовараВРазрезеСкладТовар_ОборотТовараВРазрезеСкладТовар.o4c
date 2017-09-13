@@ -1,0 +1,269 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  Stores, GoodList : ICValueList;
+  S, UrPartner, ManPartner, Partner, Store, GoodDict : ICDictionary;
+  GoodsTbl, StoreTbl : ICValueTable;
+  V : ICReport;
+  DateFrom, DateTo : DateTime;
+
+procedure SetGoodsTblColumnsFormat(GoodsTbl : ICValueTable);
+begin
+  SetFormatStdColumnsList(GoodsTbl, server.GetGoodLinksList);
+end;
+
+procedure SetGoodsTblColumns(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn('Код', lftString, 20);
+  GoodsTbl.AddColumn('Товар', lftLink, 0);
+  GoodsTbl.AddColumn('ЕдИзм', lftLink, 0);
+  AddFFtColumnsList(GoodsTbl, server.GetGoodLinksList);
+  GoodsTbl.AddColumn('Партия', lftFloat, 0);
+  GoodsTbl.AddColumn('Склад', lftLink, 0);
+  if DoOpen then
+    GoodsTbl.Open();
+end;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+  Stores := CreateObject('СписокЗначений');
+  Store := CreateObject('Справочники.Склады');
+  S := CreateObject('Справочники.Склады');
+  Stores.AddValue(Trans('Все склады'), Null);
+  S.Select;
+  if S.FindByField('Активность', True, False) then
+    Stores.AddValue(S.Название, S);
+  S.Select;
+  while S.SelectNext do
+    if not S.Активность = True then
+      Stores.AddValue(S.Название, S); // или ('',S)
+  Stores.UseControl(CtrlToVar(eStores));
+  Stores.CurIndex := 0;
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  SetGoodsTblColumns(GoodsTbl, False);
+  // GoodsTbl.AddColumn('НазвТовара',vtcString,70);
+  // GoodsTbl.AddColumn('ЕдИзмТекст',vtcString,20);
+  GoodsTbl.Open;
+  SetGoodsTblColumnsFormat(GoodsTbl);
+  StoreTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.CopyColumnsTo(StoreTbl);
+  StoreTbl.Open();
+  SetGoodsTblColumnsFormat(StoreTbl);
+  UrPartner := CreateObject('Справочники.ЮрПартнеры');
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  //категории
+  GoodDict := CreateObject('Справочники.Товары');
+  GoodList := CreateObject('СписокЗначений');
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  CreateObjects;
+  server.CreateSrvObjects;
+  GoodDict.OpenFormInplace('КатегорииТоваров', CtrlToVar(pGoodsCtg));
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  XGrid.AddSection('Hed');
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  i, j : Integer;
+begin
+  try
+    CursorVis := WaitCursorStart;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    GetStore(Stores, Store);
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer;
+    StoreTbl.Clear;
+    StoreTbl.CopyDataToServer;
+    // категории
+    if not VarAsBool(GoodDict.Params['UseLevel']) then
+      GoodDict.AssignSelectParamsOnSrv(Null)
+    else
+      begin
+        GoodDict.GetCheckLevelsAsValueList(GoodList);
+        if GoodDict.InteractiveUseLevels and (GoodList.Count = 0) then
+          begin
+            ShowMessage(CheckCtg);
+            exit;
+          end;
+      end;
+    GoodList.CopyDataToServer();
+    try
+      V.RunThreadProcess(server.GetRunReportEP(GoodsTbl.SrvMean, StoreTbl.SrvMean, GoodList.SrvMean,
+        Partner, Store, VarAsBool(Options.GetServerPrm(ShowCodeUnitName)),
+        GoodDict.Params['UseLevel'], GoodDict.SrvMean,
+        DateFrom, DateTo, cbMoving.Checked),
+        ReportRunning);
+      GoodsTbl.CopyDataFromServer;
+      StoreTbl.CopyDataFromServer;
+    finally
+      GoodList.SrvMean.Clear;
+      GoodsTbl.SrvMean.Clear;
+      StoreTbl.SrvMean.Clear;
+    end;
+    StoreTbl.Select;
+    i := 1;
+    GoodsTbl.SortBy('Склад;Товар;Код');
+    while StoreTbl.SelectNext do
+      begin
+        StoreTbl.AddToXGrid(CtrlToVar(XGrid), 'Store', '-', i, 1);
+        GoodsTbl.SetRange(StoreTbl.Склад, StoreTbl.Склад);
+        GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Det', '-', 0, 0);
+        inc(i);
+      end;
+    GoodsTbl.SortBy('Код');
+    GoodsTbl.SetRange(lblTotal, lblTotal);
+    GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Total', '-', 0, 0);
+    XGrid.Cells(3, 1, XGrid.RowCount, 3).AdjustColWidths(0);
+    XGrid.FixedColCount := 3;
+    if XGrid.RowCount > 4 then
+      XGrid.FixedRowCount := 4;
+    XGrid.Cell(1, 1).Value := XGrid.Cell(1, 1).Value + ' ' + DateToStr(DateFrom) + '-' + DateToStr(DateTo);
+  finally
+    SetCursor(CursorVis);
+  end;
+  tbPrint.Enabled := True;
+end;
+
+procedure ePartner_ActionExecute(Sender : TObject);
+var
+  PartName : string;
+begin
+  PartName := ePartner.Text;
+  case VarAsInt(ePartnerType.ItemIndex) of
+    0 :
+      if UrPartner.SelectInForm('ВыборПартнера', PartName, Null) then
+        begin
+          ePartner.Text := PartName;
+          Partner := UrPartner;
+        end;
+    1 :
+      if ManPartner.SelectInForm('ВыборФизЛица', PartName, Null) then
+        begin
+          ePartner.Text := PartName;
+          Partner := ManPartner;
+        end;
+  end;
+end;
+
+procedure ePartner_ActionClear(Sender : TObject);
+begin
+  Partner := Null;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(V.GetActiveFormComment(), True);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+Panel2:TO4Panel
+GroupBox2:TO4GroupBox
+eStores:TO4Edit
+Panel3:TO4Panel
+GroupBox3:TO4GroupBox
+ePartnerType:TO4Edit
+ePartner:TO4Edit
+cbMoving:TO4CheckBox
+XGrid:TO4XGrid
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel4:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+pGoodsCtg:TO4Panel
+Label1:TO4Label
+TableValueSource1:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

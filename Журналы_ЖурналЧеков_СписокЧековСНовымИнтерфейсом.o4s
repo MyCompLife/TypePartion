@@ -1,0 +1,98 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+Var
+  PaysIn, PaysOut : ISJournal; 
+  AccsPart: ISAccs;
+  Currency: ISDictionary;
+
+implementation        
+
+procedure InitSrvDate;server;
+begin
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');  
+  Currency := CreateObject('Справочники.Валюты');
+  if not Currency.FindByField('Активность', VarAsInt(true), false) then
+    begin
+      Currency.Select;
+      Currency.SelectNext;
+    end;
+end;
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := Data.Total('СуммаВал');
+end;
+ 
+procedure OrderCalcFields(Order : ISJournal);
+var
+  TmpDoc : ISDocuments;
+begin
+  PaysOut.UseMaster(Order);
+  Order.ОплаченоВал := PaysOut.Total('СуммаВВалюте');
+  PaysOut.UseMaster(Null);
+  Order.ДолжныВал := Order.СуммаВал - Order.ОплаченоВал;
+end;
+            
+function GetTotalPaySrv(Data : ISJournal) : Variant; server;
+Var
+  Sum : Decimal;
+begin
+  Data.Select;
+  While Data.SelectNext do
+    begin
+      PaysOut.UseMaster(Data);
+      Sum := Sum + PaysOut.Total('СуммаВВалюте');
+    end;
+  Result :=  Sum;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  PaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  PaysIn.SetDocMultiStateRange('1;2;');
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+procedure GetPaysTbl(PaysTbl: ISValueTable; Doc: ISDocuments; Var Sum: Decimal; Var CurrCode: String);server;
+var DocSum: Decimal;
+begin
+  AccsPart.ClearFieldBuffers;
+  AccsPart.ClearFieldFilters;
+  if Currency.IsFocused then
+    begin
+      AccsPart.CalcGroupRestDirect(400000, ArrayOf(Doc.@Партнер, Currency));
+      CurrCode := Currency.Код;
+    end
+  else
+    AccsPart.CalcGroupRestDirect(400000, ArrayOf(Doc.@Партнер));
+  Sum := AccsPart.СумОбщВал;
+  DocSum := Sum;
+  AccsPart.SetFieldFilter('Партнер',Doc.@Партнер);
+  AccsPart.AppendMotionToValueTable(0,400000,amtIncome,'Document=Документ;Date=Дата;СумОбщВал=СуммаДок',-1,PaysTbl);
+  PaysTbl.DoCalculation('Calc','0');
+  if DocSum <> 0 then
+    begin
+      PaysTbl.SortBy('-Дата');
+      PaysTbl.Select;
+      while PaysTbl.SelectNext do
+        if DocSum > 0 then
+          begin
+            PaysTbl.Edit;
+            DocSum := DocSum - PaysTbl.СуммаДок;
+            if DocSum >= 0 then
+              PaysTbl.Сумма := PaysTbl.СуммаДок;
+            if DocSum < 0 then
+              PaysTbl.Сумма := PaysTbl.СуммаДок + DocSum;
+            PaysTbl.Calc := 1;
+            PaysTbl.Post;
+          end
+        else
+          break;
+    end;
+end;
+
+end.

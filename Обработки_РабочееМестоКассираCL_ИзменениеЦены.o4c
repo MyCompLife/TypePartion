@@ -1,0 +1,123 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+var MasterData : ICProcessing;
+    precent, precentDiscount, price, priceCurrency :Decimal;
+    Currency : ICDictionary;
+    CurrencyName : string;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterData := Mean;
+  if IsArray(Params) then
+    begin                  
+      price := Params[0];
+      precent := Params[1];
+      priceCurrency := Params[2];
+      Currency := Params[3];
+      if (not IsObjFocused(Currency)) or VarAsBool(Currency.НацВалюта) then
+        rgTypeChange.Items.Delete(3)
+      else  
+        begin
+          CurrencyName := Currency.CodeField;
+          rgTypeChange.Items.Strings[3] := 'Цена в '+CurrencyName;
+        end;
+    end
+  else
+    begin
+      price := 0;
+      precent := 0; 
+      priceCurrency := 0; 
+      CurrencyName := 'ГРН';
+    end;  
+  if precent<0 then
+    begin
+      precentDiscount := AbsD(precent);
+      precent := 0;
+    end
+  else 
+    begin
+      precentDiscount := 0;
+      precent := AbsD(precent);
+    end;
+
+  Edit.Text := DecToStr(price,2);
+end;
+
+
+
+procedure rgTypeChange_Click(Sender: TObject);
+begin
+ case rgTypeChange.ItemIndex of
+  0:  begin
+        TypeChangeLabel.Caption := 'Введите % скидки:';
+        Edit.Text := DecToStr(precentDiscount,2);
+      end;  
+  1:  begin
+        TypeChangeLabel.Caption := 'Введите % надбавки:';
+        Edit.Text := DecToStr(precent,2);
+      end; 
+  2 : begin
+        TypeChangeLabel.Caption := 'Введите цену ГРН:';
+        Edit.Text := DecToStr(price,2);
+      end;  
+  3 : begin
+        TypeChangeLabel.Caption := 'Введите цену '+CurrencyName+' :';
+        Edit.Text := DecToStr(priceCurrency,2);
+      end;
+ end;
+end;
+
+procedure Edit_Change(Sender: TObject);
+begin
+ case rgTypeChange.ItemIndex of
+  0 : precentDiscount := AbsD(StrToDecDef(Edit.Text,0));
+  1 : precent := AbsD(StrToDecDef(Edit.Text,0));
+  2 : price := StrToDecDef(Edit.Text,0);  
+  3 : priceCurrency := StrToDecDef(Edit.Text,0);
+ end;
+end;
+
+procedure btOk_Click(Sender: TObject); 
+begin
+ if StrToDecDef(Edit.Text,-1)<0 then
+   ShowMessage('Значение введено не верно!')
+ else
+   begin
+     case rgTypeChange.ItemIndex of  
+      0 :
+        begin  // % скидки
+          MasterData.Params['TypeChange']:= 'Процент';
+          MasterData.Params['Value']:= - AbsD(StrToDecDef(Edit.Text,0));
+        end;
+      1 :
+        begin  // % надбавки
+          MasterData.Params['TypeChange']:= 'Процент';
+          MasterData.Params['Value']:= AbsD(StrToDecDef(Edit.Text,0));
+        end;
+      2 :
+        begin
+          MasterData.Params['TypeChange']:= 'Цена';
+          MasterData.Params['Value']:= StrToDecDef(Edit.Text,0);
+        end;   
+      3 :
+        begin
+          MasterData.Params['TypeChange']:= 'ЦенаВВалюте';
+          MasterData.Params['Value']:= StrToDecDef(Edit.Text,0);
+        end;
+     end;
+     Form.ModalResult := mrOk;
+     Form.Close;
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+TypeChangeLabel:TO4Label
+rgTypeChange:TO4RadioGroup
+Edit:TO4Edit
+btOk:TO4Button
+btCancel:TO4Button

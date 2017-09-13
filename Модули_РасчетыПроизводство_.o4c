@@ -1,0 +1,1987 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+const
+  FieldDelimiter = ';'; 
+  // Статьи для производства
+  stMaterialsOutcome = 'Расход материалов';
+  stMaterialsIncome = 'Возврат материалов';
+  stOverHeadOutcome = 'Общепроизводственные затраты';
+  stSallaryOutcome = 'Начисление зарплаты';
+  stServiceOutcome = 'Получение услуг';
+  stGoodIncome = 'Прием готовой продукции';
+
+procedure SetFldToApplyTbl(ApplyTbl: ICValueTable);
+function StdInpDecCalc(Message: String; var Count: Decimal; var CalcDoc: ICDocuments): Boolean;
+function IsObjFocused(Obj : Variant) : Boolean;
+function GetOptions : ICOptions;
+function GetConstants : IC4VPAConst;
+procedure ЦенаНДС(Data : Variant; FromNetto : Boolean = True);
+function GetTaxNetto(PriceNT, TaxRate : Decimal) : Decimal;
+function GetTaxFromBrutto(Price, TaxRate : Decimal) : Decimal;
+function CalcTaxPrice(TaxRate, PriceNT : Decimal; var Tax : Decimal) : Decimal;
+function CalcTaxPriceNT(TaxRate, Price : Decimal; var Tax : Decimal) : Decimal;
+procedure CalcLineSumma(Doc : ICDocuments);
+procedure CalcDocSumma(Data : ICDocuments);
+procedure CalcDocSimplSumma(Data : ICDocuments);
+procedure GetCalcValSumma(Doc : Variant);
+procedure SetCurSumma(Data : ICDocuments);
+procedure AddFFtColumnsList(ValTbl : ICValueTable; ColumnList : string);
+procedure SetFormatStdColumnsList(ValTbl : ICValueTable; ColumnList : string; Fmt : string = '');
+procedure SetDataValuesOrderOut(Source : ICDictionary; Data, Tbl : Variant;
+  Constants : IC4VPAConst);
+function FindDefStore(var Store : ICDictionary) : ICDictionary;
+procedure AppendGood(Data, PriceDoc : ICDocuments; OrderOwner : Integer; Source, Tbl : Variant;
+  Count : Decimal; Constants : IC4VPAConst; Options : ICOptions;
+  Currency : ICDictionary; Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+procedure CreateApplyTable(Source, Tbl, Stores : Variant; Data : ICDocuments;
+  Count : Decimal; Constants : IC4VPAConst; Currency : ICDictionary; Options : ICOptions;
+  Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+function CheckRule(Data : ICDocuments; Options : ICOptions) : ICDictionary;
+procedure Discard(Source, Tbl : Variant; var Count : Decimal;
+  TblPartGood : ICValueTable; Store : ICDictionary; DoAll : Boolean;
+  Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary;
+  Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+procedure GroupOnPage1(GoodTbl : ICValueTable; MasterData : ICDocuments; AccsGoods : ICAccs);
+procedure GroupOnPage2(Stores : ICValueList; GoodTbl : ICValueTable; MasterData : ICDocuments; AccsGoods : ICAccs);
+procedure SetGoodTblFormat(GoodTbl : ICValueTable);
+procedure GoodTDSFieldChange(MasterData : ICDocuments; FieldName : string; Value : Variant; var ChangeLock : Boolean; DropMode : Boolean);
+procedure CalcPrices(FieldName : string; Value : Variant; Data : Variant);
+procedure SetCurPrice(Data : Variant);
+procedure SetGrnPrice(Data : Variant);
+procedure GoodMDSFieldChange(MasterData : ICDocuments; FieldName : string; Value : Variant; var ChangeLock : Boolean);
+function GetNatCurrency(Currency : ICDictionary) : Variant;
+function GetEmplByName(EmplName : string; EmplEditCtrl : TO4DBEdit) : ICDictionary; 
+function GetEmplByNameShort(EmplName : string) : ICDictionary;
+procedure ChCourse(MD : ICDocuments; Tbl : ICValueTable);
+procedure ChCurrency(MasterData : ICDocuments; Tbl : ICValueTable);
+//возврат
+function GetAStore(Store : ICDictionary) : ICDictionary;
+function GetPriceNT(Price, TaxRate : Decimal) : Decimal; //вычислить цену без НДС
+function GetPrice(PriceNt, TaxRate : Decimal) : Decimal;
+function GetNextDate(DateFrom : DateTime; Constants : IC4VPAConst) : DateTime;
+//калькуляционные листы
+//procedure SetDataValuesOrderIn(Source : ICDictionary; Tbl, Data : Variant);
+procedure AppendGoodIn(Data : ICDocuments; Tbl : ICValueTable; Source, Store : ICDictionary; Count : Decimal);
+procedure AppendGoodInDict(Data : ICDocuments; Tbl : ICValueTable; Source, Store : ICDictionary; Count : Decimal);
+//списание использованных ТМЦ
+procedure CreateApplyTableProd(Source, Tbl, Stores : Variant; Data : ICDocuments;
+  Count : Decimal; Constants : IC4VPAConst; Currency : ICDictionary;
+  Options : ICOptions; Store : ICDictionary);
+procedure DiscardProd(Source, Tbl : Variant; var Count : Decimal;
+  TblPartGood : ICValueTable; object : ICDictionary; DoAll : Boolean;
+    Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary; Store : ICDictionary);
+
+procedure AddGood(Source, Tbl : Variant; Count, AllCnt, InPriceNT : Decimal;
+  Party : Double; Store : ICDictionary; Data : ICDocuments; Constants : IC4VPAConst;
+  Currency : ICDictionary; Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+procedure AddGoodProd(Source, Tbl : Variant; Count : Decimal; TblPartGood : ICValueTable;
+  Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary; Store : ICDictionary);
+procedure CreateApplyTableProdAll(Source, Tbl, Stores : Variant; Data : ICDocuments;
+  Count : Decimal; Constants : IC4VPAConst; Currency : ICDictionary;
+  Options : ICOptions; Store : ICDictionary);
+procedure DiscardProdAll(Source, Tbl : Variant; var Count : Decimal;
+  TblPartGood : ICValueTable; object : ICDictionary; DoAll : Boolean;
+    Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary; Store : ICDictionary; Options : ICOptions);
+
+procedure AddGoodProdAll(Source, Tbl : Variant; Count : Decimal; TblPartGood : ICValueTable;
+  Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary; Store : ICDictionary);
+procedure CreateApplyTableAll(Source, Tbl, Stores : Variant; Data : ICDocuments;
+  Count : Decimal; Constants : IC4VPAConst; Currency : ICDictionary; Options : ICOptions;
+  Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+procedure DiscardAll(Source, Tbl : Variant; var Count : Decimal;
+  TblPartGood : ICValueTable; Store : ICDictionary; DoAll : Boolean;
+  Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary;
+  Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs; Options : ICOptions);
+procedure AddGoodAll(Source, Tbl : Variant; Count, AllCnt, InPriceNT : Decimal;
+  Party : Double; Store : ICDictionary; Data : ICDocuments; Constants : IC4VPAConst;
+  Currency : ICDictionary; Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+procedure CreateProdTblAll;
+procedure CreateTblAll;
+procedure FillTmpCtxTbl(CalcDoc : ICDocuments; Source : ICValueTable; Count : Decimal; var tmpCtx : ICValueTable);
+function GetTimeStr(TimeTotal: Decimal): String;    
+procedure SetSums(FieldName : string; Value : Variant; Data : Variant; Tax : Decimal);
+
+implementation
+
+var
+  glbConstants : IC4VPAConst;
+  glbOptions : ICOptions;
+  Respons : ICDictionary;
+  AccGoodsConsgs : ICAccs;
+  ProdTblAll, TblAll : ICValueTable;
+
+procedure ProceedCertChange(DocEdited : ICDocuments; FieldName : string); forward;
+procedure FindAndFillDefaultCertificate(DocEdited : ICDocuments; DicGood : ICDictionary); forward;
+
+function GetOptions : ICOptions;
+begin
+  if IsNil(glbOptions) then
+    glbOptions := CreateObject('ОпцииКлиента');
+  Result := glbOptions;
+end;
+
+function GetConstants : IC4VPAConst;
+begin
+  if IsNil(glbConstants) then
+    glbConstants := CreateObject('Константы');
+  Result := glbConstants;
+end;
+
+procedure SetFldToApplyTbl(ApplyTbl: ICValueTable);
+begin
+  ApplyTbl.Close;
+  ApplyTbl.AddColumn('Товар',lftLink,0);
+  ApplyTbl.AddColumn('Склад',lftLink,0);
+  ApplyTbl.AddColumn('Партия',lftFloat,0);
+  ApplyTbl.AddColumn('НомСтроки',lftInteger,0);
+  ApplyTbl.AddColumn('ВалютаТовара',lftLink,0);
+  ApplyTbl.AddColumn('КурсТовара',lftFFt,6);
+  ApplyTbl.AddColumn('ДатаДокумента',lftDateTime,0);
+  AddFFtColumnsList(ApplyTbl, 'КолОбщ;СумВх;СумВхНДС;СумОтп;СумОтпНДС;СумНац;СумВалВх;СумВалОтп;СумВалНац');
+  ApplyTbl.Open;
+end;
+
+function StdInpDecCalc(Message: String; var Count: Decimal; var CalcDoc: ICDocuments): Boolean;
+var V: ICProcessing;
+begin               
+  V := CreateObject('Обработки.ВводЗначения');
+  V.Execute('ВводЗначенияКалк',ArrayOf(Message, Count, CalcDoc));
+  if V.HasParam('value') then
+    try
+      CalcDoc := V.Params['value'][0];
+      Count := V.Params['value'][1];
+      Result := true;
+    except          
+      Result := false;
+    end;
+end;
+
+function IsObjFocused(Obj : Variant) : Boolean;
+begin
+  Result := IsObject(Obj) and VarAsBool(Obj.IsFocused);
+end;
+
+function GetPriceNT(Price, TaxRate : Decimal) : Decimal;
+begin
+  if TaxRate <> -100 then
+    Result := Price / (1 + TaxRate / 100)
+  else
+    Result := 0;
+end;
+
+function GetPrice(PriceNT, TaxRate : Decimal) : Decimal;
+begin
+  Result := PriceNT * (1 + TaxRate / 100);
+end;
+
+function GetTaxNetto(PriceNT, TaxRate : Decimal) : Decimal;
+begin
+  Result := PriceNT * TaxRate / 100;
+end;
+
+function GetTaxFromBrutto(Price, TaxRate : Decimal) : Decimal;
+begin
+  if (TaxRate <> -100) and (TaxRate <> 0) then
+    Result := Price / (1 + 100 / TaxRate)
+  else
+    Result := 0;
+end;
+
+function CalcTaxPrice(TaxRate, PriceNT : Decimal; var Tax : Decimal) : Decimal;
+begin
+  Tax := GetTaxNetto(PriceNT, TaxRate);
+  Result := PriceNT + Tax;
+end;
+
+function CalcTaxPriceNT(TaxRate, Price : Decimal; var Tax : Decimal) : Decimal;
+begin
+  Tax := GetTaxFromBrutto(Price, TaxRate);
+  Result := Price - Tax;
+end;
+
+procedure CalcLineSumma(Doc : ICDocuments);
+var
+  Tax : Decimal;
+begin
+  Doc.СуммаСтрокиБезНДС := VarAsDec(Doc.Количество) * VarAsDec(Doc.ЦенаБезНДС);
+  Doc.СуммаСтроки := CalcTaxPrice(Doc.СтавкаНДС, Doc.СуммаСтрокиБезНДС, Tax);
+  Doc.НДССтроки := Tax;
+  if Doc.HasField('СуммаВВалютеСНДС') and Doc.HasField('ЦенаВВалюте') then
+    Doc.СуммаВВалютеСНДС := VarAsDec(Doc.ЦенаВВалюте) * VarAsDec(Doc.Количество);
+  if Doc.HasField('ПлощадьСтроки') and Doc.HasField('Площадь') then
+    Doc.ПлощадьСтроки := VarAsDec(Doc.Площадь) * VarAsDec(Doc.Количество);
+  if Doc.HasField('МассаСтроки') and Doc.HasField('Масса') then
+    Doc.МассаСтроки := VarAsDec(Doc.Масса) * VarAsDec(Doc.Количество);
+  if Doc.HasField('НаценкаСтроки') and Doc.HasField('ВхЦенаБезНДС') then
+    Doc.НаценкаСтроки := (VarAsDec(Doc.ЦенаБезНДС) - VarAsDec(Doc.ВхЦенаБезНДС)) * VarAsDec(Doc.Количество);
+end;
+
+function GetGoodSums(DocCurrent : ICDocuments; var FieldList : String) : Variant;
+var
+  TblDocContents : ICValueTable;
+begin
+  if IsNil(TblDocContents) then
+    TblDocContents := CreateObject('ValueTable')
+  else
+    TblDocContents.Close;
+  DocCurrent.SaveContents('', TblDocContents);;
+  FieldList := 'СуммаСтрокиБезНДС;НДССтроки';
+  if DocCurrent.HasField('Наценка') and DocCurrent.HasField('НаценкаСтроки') then
+    FieldList := FieldList + ';НаценкаСтроки';
+  if DocCurrent.HasField('ОбщаяМасса') and DocCurrent.HasField('МассаСтроки') then
+    FieldList := FieldList + ';МассаСтроки';
+  if DocCurrent.HasField('ОбщаяПлощадь') and DocCurrent.HasField('ПлощадьСтроки') then
+    FieldList := FieldList + ';ПлощадьСтроки';
+  if DocCurrent.HasField('Валюта') then
+    FieldList := FieldList + ';КурсТовара'; 
+  Result := TblDocContents.Total(FieldList);
+end;
+
+function GetGoodSumsForService(Data : Variant; UseService : Boolean = False) : Variant;
+var
+  Tbl : ICValueTable;
+begin
+  Tbl := CreateObject('ТаблицаЗначений');
+  Data.SaveContents('СуммаСтроки;СтавкаНДС;НДССтроки;Товар;Цена;ЦенаБезНДС', Tbl);
+  Tbl.DoGetLinks('Цена=Товар.Услуга');//Цена - поле для услуги
+  if UseService then
+    DeleteColumnsByCondition(Tbl, 'ЦенаБезНДС', 'Цена=0')//ЦенаБезНДС - поле для выполнения условия
+  else
+    DeleteColumnsByCondition(Tbl, 'ЦенаБезНДС', 'Цена<>0');
+  Tbl.GroupBy('СтавкаНДС', 'СуммаСтроки');
+  Tbl.DoCalculation('НДССтроки', 'СуммаСтроки*СтавкаНДС/(100+СтавкаНДС)');
+  Result := Tbl.Total('СуммаСтроки;НДССтроки');
+end;
+
+procedure CalcDocSumma(Data : ICDocuments);
+var
+  V : Variant;  
+  FieldList : String;
+begin
+  V := GetGoodSums(Data, FieldList);
+
+  //сумма по товару
+  Data.СуммаБезНДСТовара := V[0];
+  Data.СуммаНДСТовара := V[1];
+  if Data.HasField('СуммаМатериалы') and Data.HasField('Затраты') then
+    begin
+      Data.СуммаМатериалы := Data.СуммаБезНДСТовара;
+      Data.СуммаБезНДСТовара := Data.СуммаМатериалы + Data.Затраты;
+      Data.СуммаНДСТовара := Data.СуммаНДСТовара + Data.Затраты*GetConstants.ProcentPDV/100;
+    end;
+  Data.СуммаТовара := VarAsDec(Data.СуммаБезНДСТовара) + VarAsDec(Data.СуммаНДСТовара);
+  // масса, площадь
+  if Data.HasField('ОбщаяМасса') and Data.HasField('МассаСтроки') and (StrPos(';МассаСтроки', FieldList) > 0) then
+    Data.ОбщаяМасса := V[WordCount(StrCopy(FieldList, 1, StrPos(';МассаСтроки', FieldList)), ';') - 1];
+  if Data.HasField('ОбщаяПлощадь') and Data.HasField('ПлощадьСтроки') and (StrPos(';ПлощадьСтроки', FieldList) > 0) then
+    Data.ОбщаяПлощадь := V[WordCount(StrCopy(FieldList, 1, StrPos(';ПлощадьСтроки', FieldList)), ';') - 1];
+
+  case VarAsStr(Data.GetSign) of
+    'КалкЛист' :
+      begin
+        //общие суммы
+        Data.СуммаБезНДС := VarAsDec(Data.СуммаБезНДСТовара);
+        Data.СуммаНДС := VarAsDec(Data.СуммаНДСТовара);
+        Data.Сумма := VarAsDec(Data.СуммаТовара) + VarAsDec(Data.СуммаУслуг) + VarAsDec(Data.СуммаРасходов);
+      end;
+    'СписаниеСОбъекта' :
+      begin
+        //общие суммы
+        Data.СуммаБезНДС := VarAsDec(Data.СуммаБезНДСТовара) + VarAsDec(Data.СуммаБезНДСУслуг);
+        Data.СуммаНДС := VarAsDec(Data.СуммаНДСТовара) + VarAsDec(Data.СуммаНДСУслуг);
+        Data.Сумма := VarAsDec(Data.СуммаТовара) + VarAsDec(Data.СуммаУслуг);
+      end
+    else
+      begin
+        //общие суммы
+        Data.СуммаБезНДС := VarAsDec(Data.СуммаБезНДСТовара);
+        Data.СуммаНДС := VarAsDec(Data.СуммаНДСТовара);
+        Data.Сумма := VarAsDec(Data.СуммаТовара);
+      end;
+  end;
+  SetCurSumma(Data);
+end;
+
+procedure GetCalcValSumma(Doc : Variant);
+begin
+  if IsObjFocused(Doc) and VarAsBool(Doc.@Валюта.IsFocused) then
+    SetCurSumma(Doc);
+end;
+
+procedure SetCurSumma(Data : ICDocuments);
+begin
+  if VarAsDec(Data.Курс) <> 0 then
+    Data.СуммаВВалюте := Data.Сумма / Data.Курс;
+end;
+
+procedure ЦенаНДС(Data : Variant; FromNetto : Boolean = True);
+var
+  Tax : Decimal;
+begin
+  if FromNetto then
+    Data.Цена := CalcTaxPrice(Data.СтавкаНДС, Data.ЦенаБезНДС, Tax)
+  else
+    Data.ЦенаБезНДС := CalcTaxPriceNT(Data.СтавкаНДС, Data.Цена, Tax);
+  Data.НДС := Tax;
+end;
+
+procedure SetDataValuesOrderOut(Source : ICDictionary; Data, Tbl : Variant;
+  Constants : IC4VPAConst);
+var
+  Course : Decimal;
+  Currency : ICDictionary;
+  Good : Variant;
+begin
+  if IsObjFocused(Source) and IsObject(Tbl) then
+    begin
+      Good := Tbl.Params['Товар'];
+      if not IsObject(Good) then
+        Good := Tbl;
+      Data.ВалютаТовара := Good.@ВалютаТовара;
+      Data.КурсТовара := Good.КурсТовара;
+      Data.ЦенаВВалюте := Good.ЦенаВВалюте;
+      Data.Цена := Good.Цена;
+      if VarAsBool(Constants.НДСПроизв) then
+        Data.СтавкаНДС := Constants.ProcentPDV
+      else
+        Data.СтавкаНДС := 0;
+      //     Data.СтавкаНДС := Good.СтавкаНДС;
+      ЦенаНДС(Data, False);
+      if VarAsBool(Data.HasField('ПроцентСкидкиНадбавки')) then
+        Data.ЦенаБезСкидкиНадбавки := Data.Цена;
+      Data.Документ := Good.Документ;
+    end
+end;
+
+procedure AddFFtColumn(ValTbl : ICValueTable; ColumnName : string);
+var
+  Size : Integer;
+begin
+  if not IsNil(ValTbl) then
+    begin
+      if StrCopy(ColumnName, 1, 3) = 'Кол' then
+        Size := 5 //StrLength(GetConstants._Default['ФорматКол']) - StrPos('.',GetConstants._Default['ФорматКол'])
+      else
+        Size := 7; //StrLength(GetConstants._Default['ФорматЦеныГРН']) - StrPos('.',GetConstants._Default['ФорматЦеныГРН']);
+      ValTbl.AddColumn(ColumnName, lftFFt, Size);
+    end;
+end;
+
+procedure AddFFtColumnsList(ValTbl : ICValueTable; ColumnList : string);
+var
+  i : Integer;
+begin
+  if not IsNil(ValTbl) then
+    for i := 1 to WordCount(ColumnList, FieldDelimiter) do
+      AddFFtColumn(ValTbl, ExtractWord(i, ColumnList, FieldDelimiter));
+end;
+
+procedure SetFormatStdColumn(ValTbl : ICValueTable; ColumnName : string; Fmt : string = '');
+var
+  Cur : string;
+begin
+  if (not IsNil(ValTbl)) and (ValTbl.HasField(ColumnName)) then
+    begin
+      if Fmt = '' then
+        if StrCopy(ColumnName, 1, 3) = 'Кол' then
+          Fmt := GetConstants._Default['ФорматКол']
+        else
+          if StrPos('Курс', ColumnName) <> 0 then
+            Fmt := GetConstants._Default['ФорматКурс']
+          else
+            begin
+              if StrPos('Вал', ColumnName) <> 0 then
+                Cur := 'Вал'
+              else
+                Cur := 'ГРН';
+              if (StrPos('Цена', ColumnName) <> 0) or (ColumnName = 'НДС') then
+                Fmt := GetConstants._Default['ФорматЦены' + Cur]
+              else
+                Fmt := GetConstants._Default['ФорматСум' + Cur]
+            end;
+      ValTbl.SetColumnFormat(ColumnName, Fmt);
+    end;
+end;
+
+procedure SetFormatStdColumnsList(ValTbl : ICValueTable; ColumnList : string; Fmt : string = '');
+var
+  i : Integer;
+begin
+  if not IsNil(ValTbl) then
+    for i := 1 to WordCount(ColumnList, FieldDelimiter) do
+      SetFormatStdColumn(ValTbl, ExtractWord(i, ColumnList, FieldDelimiter), Fmt);
+end;
+
+procedure SetFldToTblPartGood(TblPartGood : ICValueTable);
+begin
+  TblPartGood.Close;
+  TblPartGood.AddColumn('Товар', lftLink, 0);
+  TblPartGood.AddColumn('Склад', lftLink, 0);
+  TblPartGood.AddColumn('Партнер', lftLink, 0);
+  TblPartGood.AddColumn('Партия', lftFloat, 0);
+  TblPartGood.AddColumn('Валюта', lftLink, 0);
+  TblPartGood.AddColumn('ВалютаТовара', lftLink, 0);
+  TblPartGood.AddColumn('Комиссия', lftInteger, 0);
+  TblPartGood.AddColumn('ДатаПр', lftDate, 0);
+  AddFFtColumnsList(TblPartGood, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал;Цена;ЦенаВВалюте;КурсТовара;СумОтп;СумВалОтп;СумВх;СумВалВх');
+  TblPartGood.Open;
+end;
+
+procedure CreateApplyTable(Source, Tbl, Stores : Variant; Data : ICDocuments;
+  Count : Decimal; Constants : IC4VPAConst; Currency : ICDictionary;
+  Options : ICOptions; Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+var
+  RulID : Integer;
+  Rule : ICDictionary;
+  sIdx : string;
+  Store, StoreDef : ICDictionary;
+  StInRul : Boolean;
+  TblPartGood, Temp : ICValueTable;
+begin
+  TblPartGood := CreateObject('ТаблицаЗначений');
+  Temp := CreateObject('ТаблицаЗначений');
+  SetFldToTblPartGood(TblPartGood);
+
+  TblPartGood.CopyDataToServer();
+  Source.SetSrvToClientPos();
+  Data.SetSrvToClientPos();
+  server.CreateApplyTableS(TblPartGood.SrvMean, Source.SrvMean, Data.SrvMean,
+    AccsGoods.SrvMean, AccsPartGood.SrvMean);
+  TblPartGood.CopyDataFromServer();
+
+  Data.SaveContents('', temp);
+  temp.SortBy('Товар');
+  temp.SetRange(Source, Source);
+  temp.DoCalculation('Количество', 'Количество*(-1)');
+  temp.AppendTo('Товар;Партия;Склад;Количество=КолОбщ', TblPartGood);
+  TblPartGood.GroupBy('Товар;Склад;Партия', 'КолОбщ;СумВх;СумВалВх');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;Комиссия;ДатаПр', TblPartGood);
+  if VarAsBool(Constants.УчетПоСреднейСтоим) then
+    begin
+      TblPartGood.DoCalculation('ВхЦенаБезНДС', 'СумВх/КолОбщ');
+      TblPartGood.DoCalculation('ВхЦенаВал', 'СумВалВх/КолОбщ');
+    end;
+
+  RulID := 0;
+  Rule := CheckRule(Null, Options);
+  if IsObjFocused(Rule) then
+    RulID := VarAsInt(Rule.Признак);
+  case RulID of
+    0 : 
+      sIdx := ';КолОбщ';
+    1 : 
+      sIdx := ';-КолОбщ';
+    2 :
+      sIDx := ';ВхЦенаВал';
+    3 : 
+      sIDx := ';-ВхЦенаВал';
+    4 : 
+      sIDx := ';ДатаПр';
+    5 : 
+      sIDx := ';-ДатаПр';
+    else
+      sIdx := '';
+  end;
+
+  if IsObjFocused(Stores) then
+    begin
+      TblPartGood.SortBy('Товар;Склад' + sIdx);
+      TblPartGood.SetRange(ArrayOf(Source, Stores),
+        ArrayOf(Source, Stores));
+      Discard(Source, Tbl, Count, TblPartGood, Stores, True, Data, Constants,
+        Currency, Tag, AccsGoods, AccsReserv, AccsPartGood);
+    end
+  else
+    begin
+      StInRul := False;
+      if IsObjFocused(Rule) then
+        begin
+          Store := Rule.@Склад;
+          if not Store.IsFocused then
+            Store := FindDefStore(StoreDef)
+          else
+            StInRul := True;
+        end
+      else
+        Store := FindDefStore(StoreDef);
+      if StInRul then
+        begin
+          TblPartGood.SortBy('Товар;Склад' + sIdx);
+          TblPartGood.SetRange(ArrayOf(Source, Store),
+            ArrayOf(Source, Store));
+          Discard(Source, Tbl, Count, TblPartGood, Store, False, Data, Constants, Currency,
+            Tag, AccsGoods, AccsReserv, AccsPartGood);
+        end;
+      if Count > 0 then
+        begin
+          TblPartGood.SortBy('Товар' + sIdx);
+          TblPartGood.SetRange(ArrayOf(Source),
+            ArrayOf(Source));
+          Discard(Source, Tbl, Count, TblPartGood, Store, True, Data, Constants, Currency,
+            Tag, AccsGoods, AccsReserv, AccsPartGood);
+        end;
+    end;
+end;
+
+procedure CreateTblAll;
+begin
+  TblAll := CreateObject('ТаблицаЗначений');
+  TblAll.AddColumn('Товар', lftLink, 0);
+  TblAll.AddColumn('Склад', lftLink, 0);
+  TblAll.AddColumn('Партнер', lftLink, 0);
+  TblAll.AddColumn('Партия', lftFloat, 0);
+  TblAll.AddColumn('Валюта', lftLink, 0);
+  TblAll.AddColumn('ВалютаТовара', lftLink, 0);
+  TblAll.AddColumn('Комиссия', lftInteger, 0);
+  TblAll.AddColumn('ДатаПр', lftDate, 0);
+  AddFFtColumnsList(TblAll, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал;Цена;ЦенаВВалюте;КурсТовара;СумОтп;СумВалОтп;СумВх;СумВалВх');
+  TblAll.Open;
+end;
+
+procedure CreateApplyTableAll(Source, Tbl, Stores : Variant; Data : ICDocuments;
+  Count : Decimal; Constants : IC4VPAConst; Currency : ICDictionary;
+  Options : ICOptions; Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+var
+  RulID : Integer;
+  Rule : ICDictionary;
+  sIdx : string;
+  Store, StoreDef, TmpGood : ICDictionary;
+  StInRul : Boolean;
+  TblPartGood, Temp : ICValueTable;
+begin
+  RulID := 0;
+  Rule := CheckRule(Null, Options);
+  if IsObjFocused(Rule) then
+    RulID := VarAsInt(Rule.Признак);
+  case RulID of
+    0 :
+      sIdx := ';КолОбщ';
+    1 :
+      sIdx := ';-КолОбщ';
+    2 :
+      sIDx := ';ВхЦенаВал';
+    3 :
+      sIDx := ';-ВхЦенаВал';
+    4 :
+      sIDx := ';ДатаПр';
+    5 :
+      sIDx := ';-ДатаПр';
+    else
+      sIdx := '';
+  end;
+  TblPartGood := CreateObject('ТаблицаЗначений');
+  Temp := CreateObject('ТаблицаЗначений');
+  SetFldToTblPartGood(TblPartGood);
+  TblPartGood.CopyDataToServer();
+  Source.Select;
+  while VarAsBool(Source.SelectNext) do
+    begin
+      TblAll.SortBy('Товар');
+      TblAll.Select;
+      if not TblAll.Find(Source.@Товар) then
+        begin
+          TmpGood := Source.Товар;
+          TmpGood.SetSrvToClientPos();
+          Data.SetSrvToClientPos();
+          server.CreateApplyTableS(TblPartGood.SrvMean, TmpGood.SrvMean, Data.SrvMean,
+            AccsGoods.SrvMean, AccsPartGood.SrvMean);
+          TblPartGood.CopyDataFromServer();
+          TblPartGood.SrvMean.Clear;
+          Data.SaveContents('', temp);
+          temp.SortBy('Товар');
+          temp.SetRange(Source, Source);
+          temp.DoCalculation('Количество', 'Количество*(-1)');
+          temp.AppendTo('Товар;Партия;Склад;Количество=КолОбщ', TblPartGood);
+          TblPartGood.GroupBy('Товар;Склад;Партия', 'КолОбщ;СумВх;СумВалВх');
+          AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;Комиссия;ДатаПр', TblPartGood);
+          if VarAsBool(Constants.УчетПоСреднейСтоим) then
+            begin
+              TblPartGood.DoCalculation('ВхЦенаБезНДС', 'СумВх/КолОбщ');
+              TblPartGood.DoCalculation('ВхЦенаВал', 'СумВалВх/КолОбщ');
+            end;
+          TblPartGood.SortBy('Товар');
+          TblPartGood.Select;
+          TblPartGood.AppendTo('', TblAll);
+          TblPartGood.Clear;
+        end;
+      Count := Source.Количество;
+      if IsObjFocused(Stores) then
+        begin
+          TblAll.SortBy('Товар;Склад' + sIdx);
+          TblAll.SetRange(ArrayOf(Source.@Товар, Stores),
+            ArrayOf(Source.@Товар, Stores));
+          DiscardAll(Source, Tbl, Count, null, Stores, True, Data, Constants,
+            Currency, Tag, AccsGoods, AccsReserv, AccsPartGood, Options);
+          TblAll.CancelRange;
+        end
+      else
+        begin
+          StInRul := False;
+          if IsObjFocused(Rule) then
+            begin
+              Store := Rule.@Склад;
+              if not Store.IsFocused then
+                Store := FindDefStore(StoreDef)
+              else
+                StInRul := True;
+            end
+          else
+            Store := FindDefStore(StoreDef);
+          if StInRul then
+            begin
+              TblAll.SortBy('Товар;Склад' + sIdx);
+              TblAll.SetRange(ArrayOf(Source.@Товар, Store),
+                ArrayOf(Source.@Товар, Store));
+              DiscardAll(Source, Tbl, Count, null, Store, False, Data, Constants, Currency,
+                Tag, AccsGoods, AccsReserv, AccsPartGood, Options);
+              TblAll.CancelRange;
+            end;
+          if Count > 0 then
+            begin
+              TblAll.SortBy('Товар' + sIdx);
+              TblAll.SetRange(ArrayOf(Source.@Товар),
+                ArrayOf(Source.@Товар));
+              DiscardAll(Source, Tbl, Count, Null, Store, True, Data, Constants, Currency,
+                Tag, AccsGoods, AccsReserv, AccsPartGood, Options);
+              TblAll.CancelRange;
+            end;
+        end;
+    end;
+end;
+
+//перенос товаров в накладную по партиям
+
+function FindDefStore(var Store : ICDictionary) : ICDictionary;
+begin
+  if IsNil(Store) then
+    begin
+      Store := CreateObject('Справочники.Склады');
+      if Store.FindByField('Активность', VarAsInt(True), False) then
+      else
+        begin
+          Store.Select();
+          if Store.SelectNext() then
+          else
+            begin
+              Store.Append();
+              Store.NameField := 'Склад 1';
+              Store.Активность := VarAsInt(True);
+              Store.Post();
+            end;
+        end;
+    end;
+  Result := Store;
+end;
+
+procedure AddGood(Source, Tbl : Variant; Count, AllCnt, InPriceNT : Decimal;
+  Party : Double; Store : ICDictionary; Data : ICDocuments; Constants : IC4VPAConst;
+  Currency : ICDictionary; Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+begin
+  Data.AppendLine;
+  Data.Товар := Source;
+  Data.AssignFields('Код;ЕдИзм', Source);
+  if Data.HasField('ОбщаяМасса') then
+    Data.Масса := Source.Масса;
+  if Data.HasField('ОбщаяПлощадь') then
+    Data.Площадь := Source.Площадь;
+  Data.Склад := Store;
+  Data.Партия := Party;
+  Data.Количество := Count;
+  if VarAsBool(Data.HasField('КоличествоУпаковок')) and VarAsBool(Data.@Упаковка.IsFocused)
+    and (VarAsDec(Data.Упаковка.Количество) <> 0) then
+    Data.КоличествоУпаковок := VarAsDec(Data.Количество) / Data.Упаковка.Количество;
+  if Data.GetSign <> 'КалкЛист' then
+    begin
+      Data.ВхЦенаБезНДС := InPriceNT;
+      //расчет калькулируемых полей количество на складе и резерв
+      Data.НаличиеТовара := AllCnt;
+      AccsReserv.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Data.@Товар);
+      Data.Резерв := AccsReserv.КолОбщ;
+      Data.НаличиеРезерв := Data.НаличиеТовара - Data.Резерв;
+      //
+    end;
+  case Tag of
+    -2 :
+      begin //добавить накладную отпуска по шаблону
+        Data.AssignFields('Цена;ЦенаБезНДС;НДС;СтавкаНДС;ПроцентСкидкиНадбавки;' +
+          'ЦенаБезСкидкиНадбавки;ВалютаТовара;КурсТовара;ЦенаВВалюте;Склад', Tbl);
+      end;
+    else
+      begin
+        if VarAsBool(Currency.IsFocused) then
+          begin
+            Data.ВалютаТовара := Currency;
+            Data.КурсТовара := Currency.GetTimedValue(Constants.UsedCurs, Data.ДатаДокумента);
+          end;
+        if VarAsBool(Constants.НДСПроизв) then
+          Data.СтавкаНДС := Constants.ProcentPDV
+        else
+          Data.СтавкаНДС := 0;
+        //     Data.СтавкаНДС := 0;//Data.Товар.СтавкаНДС;
+        Data.ЦенаБезНДС := InPriceNT;
+        ЦенаНДС(Data);
+        if Data.КурсТовара <> 0 then
+          Data.ЦенаВВалюте := Data.Цена / Data.КурсТовара;
+        if (VarAsBool(Tbl.IsType('ТаблицаЗначений'))) then
+          if (Tbl.TblName = 'tblDocs') or (Tbl.TblName = 'tblStoreCalc') or (Tbl.TblName = 'tblPartGoodCalc') then
+            SetDataValuesOrderOut(Source, Data, Tbl, Constants) //расчеты
+      end;
+  end;
+  Data.PostLine;
+end;
+
+procedure AddGoodAll(Source, Tbl : Variant; Count, AllCnt, InPriceNT : Decimal;
+  Party : Double; Store : ICDictionary; Data : ICDocuments; Constants : IC4VPAConst;
+  Currency : ICDictionary; Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+begin
+  Data.AppendLine;
+  Data.Товар := Source.@Товар;
+  Data.AssignFields('Код;ЕдИзм', Source.Товар);
+  if Data.HasField('ОбщаяМасса') then
+    Data.Масса := Source.Товар.Масса;
+  if Data.HasField('ОбщаяПлощадь') then
+    Data.Площадь := Source.Товар.Площадь;
+  Data.Склад := Store;
+  Data.Партия := Party;
+  Data.Количество := Count;
+  if Data.GetSign <> 'КалкЛист' then
+    begin
+      Data.ВхЦенаБезНДС := InPriceNT;
+      //расчет калькулируемых полей количество на складе и резерв
+      Data.НаличиеТовара := AllCnt;
+      AccsReserv.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Data.@Товар);
+      Data.Резерв := AccsReserv.КолОбщ;
+      Data.НаличиеРезерв := Data.НаличиеТовара - Data.Резерв;
+      //
+    end;
+  case Tag of
+    -2 :
+      begin //добавить накладную отпуска по шаблону
+        Data.AssignFields('Цена;ЦенаБезНДС;НДС;СтавкаНДС;ПроцентСкидкиНадбавки;' +
+          'ЦенаБезСкидкиНадбавки;ВалютаТовара;КурсТовара;ЦенаВВалюте', Tbl);
+      end;
+    else
+      begin
+        if VarAsBool(Currency.IsFocused) then
+          begin
+            Data.ВалютаТовара := Currency;
+            Data.КурсТовара := Currency.GetTimedValue(Constants.UsedCurs, Data.ДатаДокумента);
+          end;
+        if VarAsBool(Constants.НДСПроизв) then
+          Data.СтавкаНДС := Constants.ProcentPDV
+        else
+          Data.СтавкаНДС := 0;
+        //     Data.СтавкаНДС := 0;//Data.Товар.СтавкаНДС;
+        Data.ЦенаБезНДС := InPriceNT;
+        ЦенаНДС(Data);
+        if Data.КурсТовара <> 0 then
+          Data.ЦенаВВалюте := Data.Цена / Data.КурсТовара;
+        if (VarAsBool(Tbl.IsType('ТаблицаЗначений'))) then
+          if (Tbl.TblName = 'tblDocs') or (Tbl.TblName = 'tblStoreCalc') or (Tbl.TblName = 'tblPartGoodCalc') then
+            SetDataValuesOrderOut(Source, Data, Tbl, Constants) //расчеты
+      end;
+  end;
+  Data.PostLine;
+end;
+
+procedure AppendGood(Data, PriceDoc : ICDocuments; OrderOwner : Integer; Source, Tbl : Variant;
+  Count : Decimal; Constants : IC4VPAConst; Options : ICOptions;
+  Currency : ICDictionary; Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+var
+  CurrentStore, Store : Variant;
+begin
+  if (VarAsBool(Tbl.IsType('Справочники'))) or
+    (Tbl.TblName = 'tblPriceGood') or
+    (Tbl.TblName = 'tblGood') or (Tbl.TblName = 'tblDocs') then
+    begin
+      CurrentStore := Tbl.Params['ВыбранныйСклад'];
+      if IsObject(CurrentStore) then
+        Store := CurrentStore
+      else
+        Store := Null;
+      CreateApplyTable(Source, Tbl, Store, Data, Count, Constants, Currency, Options, 0,
+        AccsGoods, AccsReserv, AccsPartGood);
+    end
+  else
+    if ((Tbl.TblName = 'tblStore') or
+      (Tbl.TblName = 'tblPriceStore') or (Tbl.TblName = 'tblStoreCalc')) then
+      CreateApplyTable(Source, Tbl, Tbl.@Склад, Data, Count, Constants, Currency, Options,
+        Tag, AccsGoods, AccsReserv, AccsPartGood)
+    else
+      if ((Tbl.TblName = 'tblPricePartGood') or (Tbl.TblName = 'tblPartGood')
+        or (Tbl.TblName = 'tblPartGoodCalc')) then
+        AddGood(Source, Tbl, Count, tbl.КолОбщ, tbl.ВхЦенаБезНДС, tbl.Партия, tbl.@Склад,
+          Data, Constants, tbl.Валюта, Tag, AccsGoods, AccsReserv, AccsPartGood);
+end;
+
+function CheckRule(Data : ICDocuments; Options : ICOptions) : ICDictionary;
+var
+  Rule : Variant;
+  RuleName : string;
+begin
+  Rule := Options.GetServerPrm(AOSet);
+  if IsObjFocused(Data) then
+    begin
+      if Data.Партия = 0 then
+        begin
+          if IsObjFocused(Rule) then
+            Data.Правило := Rule
+          else
+            begin
+              RuleName := '';
+              Rule := CreateObject('Справочники.Правила');
+              if VarAsBool(Rule.SelectInForm('ВыборПравила', RuleName, Null)) then
+                begin
+                  Options.SetServerPrm(AOSet, Rule);
+                  Data.Правило := Rule;
+                end
+              else
+                begin
+                  ShowMessage(CheckRuleMessage);
+                  exit;
+                end;
+            end;
+        end;
+    end
+  else
+    begin
+      if IsObjFocused(Rule) then
+        Result := Rule //MasterData.Правило := Rule
+      else
+        begin
+          RuleName := '';
+          Rule := CreateObject('Справочники.Правила');
+          if VarAsBool(Rule.SelectInForm('ВыборПравила', RuleName, Null)) then
+            begin
+              Options.SetServerPrm(AOSet, Rule);
+              Result := Rule;
+            end
+          else
+            begin
+              ShowMessage(CheckRuleMessage);
+              exit;
+            end;
+        end;
+    end;
+end;
+
+procedure Discard(Source, Tbl : Variant; var Count : Decimal;
+  TblPartGood : ICValueTable; Store : ICDictionary; DoAll : Boolean;
+  Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary;
+  Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs);
+var
+  NoMove : Boolean;
+begin
+  if Count < 0 then
+    exit;
+  NoMove := True;
+  if not TblPartGood.SelectFirst then
+    begin
+      if DoAll then
+        begin
+          AddGood(Source, Tbl, Count, 0, Source.ВхЦенаБезНДС, 0, Null, Data, Constants, Source.ВалютаВхЦены, Tag,
+            AccsGoods, AccsReserv, AccsPartGood);
+          Count := 0;
+        end
+    end
+  else
+    while ((Count > 0) or NoMove) do
+      begin
+        if TblPartGood.КолОбщ >= Count then
+          begin
+            AddGood(Source, Tbl, Count, TblPartGood.КолОбщ, TblPartGood.ВхЦенаБезНДС, TblPartGood.Партия,
+              TblPartGood.@Склад, Data, Constants, TblPartGood.Валюта, Tag, AccsGoods, AccsReserv, AccsPartGood);
+            TblPartGood.Edit;
+            TblPartGood.КолОбщ := TblPartGood.КолОбщ - Count;
+            TblPartGood.Post;
+            Count := 0;
+            break;
+          end
+        else
+          if TblPartGood.КолОбщ > 0 then
+            begin
+              AddGood(Source, Tbl, TblPartGood.КолОбщ, TblPartGood.КолОбщ, TblPartGood.ВхЦенаБезНДС,
+                TblPartGood.Партия, TblPartGood.@Склад, Data, Constants, TblPartGood.Валюта,
+                Tag, AccsGoods, AccsReserv, AccsPartGood);
+              Count := Count - TblPartGood.КолОбщ;
+              TblPartGood.Edit;
+              TblPartGood.КолОбщ := 0;
+              TblPartGood.Post;
+            end;
+        NoMove := False;
+        if not TblPartGood.SelectNext then
+          begin
+            if DoAll and (Count > 0) then
+              begin
+                if Data.FindLineBy('Товар;Склад;Партия',
+                  ArrayOf(TblPartGood.@Товар, TblPartGood.@Склад, TblPartGood.Партия)) then
+                  begin
+                    Data.EditLine();
+                    Data.Количество := Data.Количество + Count;
+                    if VarAsBool(Data.HasField('КоличествоУпаковок')) and VarAsBool(Data.@Упаковка.IsFocused)
+                      and (VarAsDec(Data.Упаковка.Количество) <> 0) then
+                      Data.КоличествоУпаковок := VarAsDec(Data.Количество) / Data.Упаковка.Количество;
+                    Data.PostLine();
+                  end
+                else
+                  AddGood(Source, Tbl, Count, TblPartGood.КолОбщ, TblPartGood.ВхЦенаБезНДС,
+                    TblPartGood.Партия, TblPartGood.@Склад, Data, Constants, TblPartGood.Валюта,
+                    Tag, AccsGoods, AccsReserv, AccsPartGood);
+                Count := 0;
+              end;
+            break;
+          end;
+      end;
+end;
+
+procedure DiscardAll(Source, Tbl : Variant; var Count : Decimal;
+  TblPartGood : ICValueTable; Store : ICDictionary; DoAll : Boolean;
+  Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary;
+  Tag : Integer; AccsGoods, AccsReserv, AccsPartGood : ICAccs; Options : ICOptions);
+var
+  NoMove : Boolean;
+  CalcDoc : ICDocuments;
+  tmpCtx : ICValueTable;
+begin
+  if Count < 0 then
+    exit;
+  NoMove := True;
+  if not TblAll.SelectFirst then
+    begin
+      if DoAll then
+        begin
+          if VarAsBool(Source.@КалкЛист.IsFocused) then
+            begin
+              FillTmpCtxTbl(CalcDoc, Source, Count, tmpCtx);
+              CreateApplyTableAll(tmpCtx, tmpCtx, tmpCtx.@Склад, Data,
+                Count, Constants, Currency, Options, -1, AccsGoods, AccsReserv, AccsPartGood);
+            end
+          else
+            AddGoodAll(Source, Tbl, Count, 0, Source.ВхЦенаБезНДС, 0, Null, Data, Constants, Source.Товар.ВалютаВхЦены, Tag,
+              AccsGoods, AccsReserv, AccsPartGood);
+          Count := 0;
+        end
+    end
+  else
+    while ((Count > 0) or NoMove) do
+      begin
+        if VarAsBool(Source.@КалкЛист.IsFocused) then
+          begin
+            FillTmpCtxTbl(CalcDoc, Source, Count, tmpCtx);
+            CreateApplyTableAll(tmpCtx, tmpCtx, tmpCtx.@Склад, Data,
+              Count, Constants, Currency, Options, -1, AccsGoods, AccsReserv, AccsPartGood);
+            Count := 0;
+            NoMove := False;
+            break;
+          end //комплекты не списываються а всегда раскладываються
+        else
+          if TblAll.КолОбщ >= Count then
+            begin
+              AddGoodAll(Source, Tbl, Count, TblAll.КолОбщ, TblAll.ВхЦенаБезНДС, TblAll.Партия,
+                TblAll.@Склад, Data, Constants, TblAll.Валюта, Tag, AccsGoods, AccsReserv, AccsPartGood);
+              TblAll.Edit;
+              TblAll.КолОбщ := TblAll.КолОбщ - Count;
+              TblAll.Post;
+              Count := 0;
+              NoMove := False;
+              break;
+            end
+          else
+            if TblAll.КолОбщ > 0 then
+              begin
+                AddGoodAll(Source, Tbl, TblAll.КолОбщ, TblAll.КолОбщ, TblAll.ВхЦенаБезНДС,
+                  TblAll.Партия, TblAll.@Склад, Data, Constants, TblAll.Валюта,
+                  Tag, AccsGoods, AccsReserv, AccsPartGood);
+                Count := Count - TblAll.КолОбщ;
+                TblAll.Edit;
+                TblAll.КолОбщ := 0;
+                TblAll.Post;
+                NoMove := False;
+              end;
+        if not TblAll.SelectNext then
+          begin
+            if DoAll and (Count > 0) then
+              begin
+                //        if Data.FindLineBy('Товар;Склад;Партия',
+                //               ArrayOf(TblPartGood.Товар,TblPartGood.Склад,TblPartGood.Партия)) then
+                if VarAsBool(Source.@КалкЛист.IsFocused) then
+                  begin
+                    FillTmpCtxTbl(CalcDoc, Source, Count, tmpCtx);
+                    CreateApplyTableAll(tmpCtx, tmpCtx, tmpCtx.@Склад, Data,
+                      Count, Constants, Currency, Options, -1, AccsGoods, AccsReserv, AccsPartGood);
+                  end
+                else
+                  if not NoMove then
+                    begin
+                      Data.EditLine();
+                      Data.Количество := Data.Количество + Count;
+                      Data.PostLine();
+                    end
+                  else
+                    AddGoodAll(Source, Tbl, Count, TblAll.КолОбщ, TblAll.ВхЦенаБезНДС,
+                      TblAll.Партия, TblAll.@Склад, Data, Constants, TblAll.Валюта,
+                      Tag, AccsGoods, AccsReserv, AccsPartGood);
+                Count := 0;
+              end;
+            break;
+          end;
+      end;
+end;
+
+procedure SetGoodTblFormat(GoodTbl : ICValueTable);
+begin
+  GoodTbl.SetColumnFormat('Количество', '0.#####');
+  GoodTbl.SetColumnFormat('СуммаСтрокиБезНДС', '0.00##');
+  GoodTbl.SetColumnFormat('НДССтроки', '0.00##');
+  GoodTbl.SetColumnFormat('СуммаСтроки', '0.00##');
+  if GoodTbl.HasField('НаличиеТовара') then
+    GoodTbl.SetColumnFormat('НаличиеТовара', '0.#####');
+end;
+
+procedure GroupOnPage1(GoodTbl : ICValueTable; MasterData : ICDocuments; AccsGoods : ICAccs);
+begin
+  GoodTbl.UseDataSource(0);
+  MasterData.SaveContents('', GoodTbl);
+  GoodTbl.GroupBy('Товар;Код;ЕдИзм', 'Количество;СуммаСтроки;СуммаСтрокиБезНДС;НДССтроки');
+  GoodTbl.CopyDataToServer;
+  server.GetGoodCount(GoodTbl.SrvMean, RoundDate(MasterData.ДатаДокумента, rdDay, True), AccsGoods.SrvMean);
+  GoodTbl.CopyDataFromServer;
+  GoodTbl.SortBy('Товар');
+  SetGoodTblFormat(GoodTbl);
+end;
+
+procedure GroupOnPage2(Stores : ICValueList; GoodTbl : ICValueTable; MasterData : ICDocuments; AccsGoods : ICAccs);
+var
+  t : Integer;
+begin
+  Stores.UseControl(0);
+  GoodTbl.UseDataSource(0);
+  Stores.Clear;
+  MasterData.SaveContents('', GoodTbl);
+  GoodTbl.GroupBy('Товар;Код;ЕдИзм;Склад', 'Количество;СуммаСтроки;СуммаСтрокиБезНДС;НДССтроки');
+  GoodTbl.CopyDataToServer;
+  server.GetGoodCount(GoodTbl.SrvMean, RoundDate(MasterData.ДатаДокумента, rdDay, True), AccsGoods.SrvMean);
+  GoodTbl.CopyDataFromServer;
+  GoodTbl.GroupToList('Склад', Stores);
+  if Stores.ValidIndex(Stores.FindByStr(''))
+    {//and (Stores.CurIndex >= 0)} then
+    begin
+      t := Stores.FindByStr('');
+      if Stores.ValidIndex(t) then
+        Stores.SetStr(t, 'Правило');
+    end;
+  Stores.CurIndex := 0;
+  GoodTbl.SortBy('Склад;Товар');
+  SetGoodTblFormat(GoodTbl);
+end;
+
+procedure GoodTDSFieldChange(MasterData : ICDocuments; FieldName : string; Value : Variant; var ChangeLock : Boolean; DropMode : Boolean);
+begin
+  if (not (ChangeLock or DropMode)) and IsObjFocused(MasterData) then
+    try
+      ChangeLock := True;
+      CalcPrices(FieldName, Value, MasterData);
+      case StrLowerCase(FieldName) of
+        'количествоупаковок' :
+          if VarAsBool(MasterData.Упаковка.IsFocused) then
+            MasterData.Количество := VarAsDec(MasterData.Упаковка.Количество) * VarAsDec(MasterData.КоличествоУпаковок);
+        'валютатовара' :
+          begin
+            if VarAsBool(MasterData.@ВалютаТовара.IsFocused) then
+              MasterData.КурсТовара := MasterData.ВалютаТовара.GetTimedValue(GetConstants.UsedCurs, MasterData.ДатаДокумента);
+            SetCurPrice(MasterData);
+          end;
+        //      'курстовара' : SetCurPrice(MasterData);
+        'ценаввалюте', 'курстовара' :
+          SetGrnPrice(MasterData);
+        'количество' :
+          if VarAsBool(MasterData.Упаковка.IsFocused) and (VarAsDec(MasterData.Упаковка.Количество) <> 0) then
+            MasterData.КоличествоУпаковок := VarAsDec(MasterData.Количество) / MasterData.Упаковка.Количество;
+        else
+          begin
+            // при изменении одного из полей, что относятся к сертифицированию
+            ProceedCertChange(MasterData, FieldName);
+          end;
+      end;
+    finally
+      ChangeLock := False
+    end
+end;
+
+procedure CalcPrices(FieldName : string; Value : Variant; Data : Variant);
+var
+  v : Boolean;
+begin
+  v := False;
+  case StrLowerCase(FieldName) of
+    'ценабезндс' :
+      begin
+        ЦенаНДС(Data);
+        if VarAsDec(Data.КурсТовара) <> 0 then
+          Data.ЦенаВВалюте := VarAsDec(Data.Цена) / Data.КурсТовара;
+      end;
+    'ндс' :
+      begin
+        Data.ЦенаБезНДС := VarAsDec(Data.Цена) - VarAsDec(Value);
+        if VarAsDec(Data.КурсТовара) <> 0 then
+          Data.ЦенаВВалюте := VarAsDec(Data.Цена) / Data.КурсТовара;
+      end;
+    'цена' :
+      begin
+        ЦенаНДС(Data, False);
+        if VarAsDec(Data.КурсТовара) <> 0 then
+          Data.ЦенаВВалюте := VarAsDec(Data.Цена) / Data.КурсТовара;
+      end;
+    'ставкандс' :
+      begin
+        ЦенаНДС(Data, False);
+        if VarAsDec(Data.КурсТовара) <> 0 then
+          Data.ЦенаВВалюте := VarAsDec(Data.Цена) / Data.КурсТовара;
+      end;
+  end;
+  // if v then CalcDocSumma(Data);
+end;
+
+procedure SetCurPrice(Data : Variant);
+begin
+  if VarAsDec(Data.КурсТовара) <> 0 then
+    Data.ЦенаВВалюте := VarAsDec(Data.Цена) / Data.КурсТовара;
+end;
+
+procedure SetGrnPrice(Data : Variant);
+begin
+  Data.Цена := VarAsDec(Data.ЦенаВВалюте) * VarAsDec(Data.КурсТовара);
+  ЦенаНДС(Data, False);
+end;
+
+procedure GoodMDSFieldChange(MasterData : ICDocuments; FieldName : string; Value : Variant; var ChangeLock : Boolean);
+var
+  Constants : IC4VPAConst;
+begin
+  if (not ChangeLock) and IsObjFocused(MasterData) then
+    try
+      ChangeLock := True;
+      Constants := GetConstants;
+      //**    SetTransSums(FieldName,Value,MasterData,Constants.ProcentPDV); //расчет товаро-трансп.
+      CalcDocSumma(MasterData); //**
+      // SetSums(FieldName,Value,MasterData,Constants.ProcentPDV);
+      case StrLowerCase(FieldName) of
+        'валюта' :
+          begin
+            if VarAsBool(MasterData.@Валюта.IsFocused) then
+              MasterData.Курс := MasterData.Валюта.GetTimedValue(
+                Constants.UsedCurs, MasterData.ДатаДокумента);
+            SetCurSumma(MasterData);
+          end;
+        'курс' : 
+          SetCurSumma(MasterData);
+      end;
+    finally
+      ChangeLock := False
+    end
+end;
+
+function GetNatCurrency(Currency : ICDictionary) : Variant;
+begin
+  if Currency.FindByField('НацВалюта', VarAsInt(True), True) then
+    Result := Currency
+  else
+    begin
+      Currency.Append();
+      Currency.Код := 'ГРН';
+      Currency.Название := 'Гривна Украины';
+      Currency.НацВалюта := VarAsInt(True);
+      Currency.SetTimedValue('КурсНацБанка', CurrentDateTime, 1);
+      Currency.SetTimedValue('КурсНаличный', CurrentDateTime, 1);
+      Currency.Post();
+      Currency.ApplyUpdates();
+      Result := Currency;
+    end;
+end;
+
+function ExtractHumanName(var FIO : string) : string;
+var
+  IOPos : Integer;
+begin
+  IOPos := StrPos(' ', FIO);
+  if IOPos > 1 then
+    begin
+      Result := StrCopy(FIO, IOPos + 1, StrLength(FIO) - IOPos);
+      FIO := StrCopy(FIO, 1, IOPos - 1);
+    end
+  else
+    Result := '';
+end;
+
+function GetEmplByName(EmplName : string; EmplEditCtrl : TO4DBEdit) : ICDictionary;
+begin
+  ExtractHumanName(EmplName);
+  if IsNil(Respons) then
+    Respons := CreateObject('Справочники.Служащие');
+  if Respons.FindByName(EmplName, False) then
+    begin
+      Result := Respons;
+      EmplEditCtrl.Enabled := GetUDASet('changeresp')
+    end
+  else
+    nil(Result);
+end;     
+
+function GetEmplByNameShort(EmplName : string) : ICDictionary;
+begin
+  if IsNil(Respons) then
+    Respons := CreateObject('Справочники.Служащие');
+  if Respons.FindByField('ПолноеНазвание', EmplName, False) then
+    Result := Respons
+  else
+    Result := Null;
+end;
+
+procedure ChCurrency(MasterData : ICDocuments; Tbl : ICValueTable);
+var
+  CurName : Variant;
+  CurValue : Double;
+  CursorVis : TCursor;
+begin
+  if (IsObjFocused(MasterData) and VarAsBool(MasterData.@Валюта.IsFocused)) then
+    begin
+      CursorVis := WaitCursorStart;
+      MasterData.TableAutoCalcFields := False;
+      MasterData.SaveTableBookmark();
+      MasterData.DisableTableControls;
+      try
+        CurName := MasterData.@Валюта;
+        CurValue := MasterData.Курс;
+        MasterData.SaveContents('', Tbl);
+        Tbl.Select;
+        while Tbl.SelectNext do
+          begin
+            Tbl.Edit;
+            Tbl.ВалютаТовара := CurName;
+            Tbl.КурсТовара := CurValue;
+            SetCurPrice(Tbl);
+            Tbl.Post;
+          end;
+        MasterData.LoadContents('', Tbl);
+      finally
+        MasterData.TableAutoCalcFields := True;
+        MasterData.GotoTablebookmark(True);
+        MasterData.EnableTableControls;
+        SetCursor(CursorVis);
+      end;
+    end;
+end;
+
+procedure ChCourse(MD : ICDocuments; Tbl : ICValueTable);
+var
+  CurName : Variant;
+  Cur, CurValue : Double;
+  Val : Double;
+  CursorVis : TCursor;
+begin
+  if IsObjFocused(MD) and VarAsBool(MD.@ВалютаТовара.IsFocused) then
+    begin
+      CursorVis := WaitCursorStart;
+      MD.TableAutoCalcFields := False;
+      MD.SaveTableBookmark();
+      MD.DisableTableControls;
+      try
+        CurName := MD.@ВалютаТовара;
+        CurValue := MD.КурсТовара;
+        MD.SaveContents('', Tbl);
+        Tbl.SortBy('ВалютаТовара');
+        Tbl.SetRange(CurName, CurName);
+        Tbl.Select;
+        while Tbl.SelectNext do
+          //if Tbl.КурсТовара <> CurValue then
+          begin
+            Tbl.Edit;
+            Tbl.КурсТовара := CurValue;
+            SetGrnPrice(Tbl);
+            Tbl.Post;
+          end;
+        Tbl.CancelRange();
+        MD.LoadContents('', Tbl);
+      finally
+        MD.TableAutoCalcFields := True;
+        MD.GotoTablebookmark(True);
+        MD.EnableTableControls;
+        SetCursor(CursorVis);
+      end;
+    end;
+end;
+
+function GetAStore(Store : ICDictionary) : ICDictionary;
+begin
+  if VarAsBool(Store.FindByField('Активность', VarAsInt(True), False)) then
+    Result := Store
+  else
+    begin
+      Store.Select();
+      if not Store.SelectNext() then
+        begin
+          Store.Append;
+          Store.Название := 'Склад 01';
+          Store.Активность := -1;
+          Store.Post;
+          Store.ApplyUpdates();
+          Result := Store;
+        end
+      else
+        begin
+          Store.Edit();
+          Store.Активность := -1;
+          Store.Post();
+          Store.ApplyUpdates();
+          Result := Store;
+        end;
+    end;
+end;
+
+function GetNextDate(DateFrom : DateTime; Constants : IC4VPAConst) : DateTime;
+var
+  DaysCount : DateTime;
+begin
+  DaysCount := Constants.PayDate;
+  while DaysCount > 0 do
+    begin
+      DateFrom := DateFrom + 1;
+      DaysCount := DaysCount - 1;
+      if VarAsBool(Constants.UseWe) then
+        if DayOfWeek(DateFrom) = 1 then
+          DateFrom := DateFrom + 1
+        else
+          if VarAsBool(Constants.UseSat) and (DayOfWeek(DateFrom) = 7) then
+            DateFrom := DateFrom + 2
+    end;
+  Result := DateFrom;
+end;
+
+//калькуляционный лист и прием готовой продукции
+procedure SetDataValuesOrderIn(Source : ICDictionary; Tbl, Data : Variant);
+var
+  Constants : IC4VPAConst;
+begin
+  Constants := GetConstants;
+  if IsObject(Tbl) then
+    begin
+      Data.Цена := Tbl.Сумма;
+      if VarAsBool(Constants.НДСПроизв) then
+        Data.СтавкаНДС := Constants.ProcentPDV
+      else
+        Data.СтавкаНДС := 0;
+      //   Data.СтавкаНДС := Tbl.СтавкаНДС;
+      ЦенаНДС(Data, False);
+      Data.ВалютаТовара := Tbl.@Валюта;
+      Data.КурсТовара := Tbl.Курс;
+      Data.ЦенаВВалюте := Tbl.СуммаВВалюте;
+      if VarAsBool(Data.HasField('Документ')) then
+        Data.Документ := Tbl.GetDoc; //калькуляционный лист
+      if VarAsBool(Data.HasField('КалкЛист')) then
+        Data.КалкЛист := Tbl.GetDoc; //калькуляционный лист
+    end
+  else
+    if IsObjFocused(Source) then
+      begin 
+        if VarAsBool(Data.HasParam('usePrice')) and VarAsBool(Data.Params['usePrice']) and VarAsBool(Data.HasParam('price')) then
+          Data.ЦенаБезНДС := Data.Params['price']
+        else
+          Data.ЦенаБезНДС := Source.ВхЦена;
+        //   Data.СтавкаНДС := 0;
+        //   Data.СтавкаНДС := Source.СтавкаНДС;
+        if VarAsBool(Constants.НДСПроизв) then
+          Data.СтавкаНДС := Constants.ProcentPDV
+        else
+          Data.СтавкаНДС := 0;
+        ЦенаНДС(Data, True);
+        Data.ВалютаТовара := Source.@Валюта;
+        Data.КурсТовара := Source.КурсВхЦены;
+        Data.ЦенаВВалюте := Source.ВхЦенаВал;
+      end;
+  if VarAsBool(Data.HasField('ПроцентСкидкиНадбавки')) then
+    Data.ЦенаБезСкидкиНадбавки := Data.Цена;
+end;
+
+procedure AppendGoodIn(Data : ICDocuments; Tbl : ICValueTable; Source, Store: ICDictionary; Count : Decimal);
+Var
+  Constants : IC4VPAConst;
+begin
+  Constants := GetConstants;
+  Data.AppendLine;
+  Data.Товар := Source;
+  Data.AssignFields('Код;ЕдИзм', Source);
+  if (Data.GetSign <> 'КалкЛист') then
+    Data.Склад := Store;
+  if Data.HasField('Крой') then
+    Data.Крой := Source.Крой;
+  Data.AssignFields('Код;ЕдИзм', Source);
+  if Data.HasField('Склад') then
+    Data.Склад := Store;
+  Data.Количество := Count;
+//  Data.Упаковка := GetActiveLink(Units, Source);
+//  GetPackCount(Data);
+  if VarAsBool(Data.HasParam('usePrice')) and VarAsBool(Data.Params['usePrice']) and VarAsBool(Data.HasParam('price')) then
+    Data.ЦенаВВалюте := Data.Params['price']
+  else
+    Data.ЦенаВВалюте := Source.ВхЦена;
+  Data.ВалютаТовара := Source.@Валюта;
+  if Data.Валюта.Код = Data.ВалютаТовара.Код then
+    Data.КурсТовара := Data.Курс
+  else
+    Data.КурсТовара := Source.Валюта.GetTimedValue(Constants.UsedCurs, Data.ДатаДокумента);// Source.КурсВхЦены;
+  //масса и площадь в счете на закупку
+  if Data.HasField('ОбщаяМасса') then
+    Data.Масса := Source.Масса;
+  if Data.HasField('ОбщаяПлощадь') then
+    Data.Площадь := Source.Площадь;
+
+  Data.Цена := Data.КурсТовара* Data.ЦенаВВалюте;
+  Data.СтавкаНДС := 0;
+  Data.ЦенаБезНДС := Data.Цена;
+  if VarAsBool(Data.HasField('ПроцентСкидкиНадбавки')) then
+    Data.ЦенаБезСкидкиНадбавки := Data.Цена;
+//  SetDataValuesOrderIn(Source, Tbl, Data); //расчеты
+  Data.PostLine;
+end;
+
+procedure AppendGoodInDict(Data : ICDocuments; Tbl : ICValueTable; Source, Store : ICDictionary; Count : Decimal);
+begin
+  Data.AppendLine;
+  FindAndFillDefaultCertificate(Data, Source);
+  Data.Товар := Source;
+  Data.AssignFields('Код;ЕдИзм', Source);
+  if (Data.GetSign = 'СчетНаЗакупку') or
+    (Data.GetSign = 'СчетНаПолучениеУслуг') or
+    (Data.GetSign = 'АктНаПолучениеУслуг') then
+    begin
+    end
+  else
+    Data.Склад := Store;
+  Data.Количество := Count;
+  if VarAsBool(Data.HasField('КоличествоУпаковок')) and VarAsBool(Data.@Упаковка.IsFocused)
+    and (VarAsDec(Data.Упаковка.Количество) <> 0) then
+    Data.КоличествоУпаковок := VarAsDec(Data.Количество) / Data.Упаковка.Количество;
+  Data.ВалютаТовара := Source.@ВалютаВхЦены;
+  Data.КурсТовара := Source.КурсВхЦены;
+  //масса и площадь в счете на закупку
+  if Data.HasField('ОбщаяМасса') then
+    Data.Масса := Source.Масса;
+  if Data.HasField('ОбщаяПлощадь') then
+    Data.Площадь := Source.Площадь;
+  SetDataValuesOrderIn(Source, Tbl, Data); //расчеты
+  Data.PostLine;
+end;
+
+//списание использованных ТМЦ
+
+procedure CreateApplyTableProd(Source, Tbl, Stores : Variant; Data : ICDocuments;
+  Count : Decimal; Constants : IC4VPAConst; Currency : ICDictionary;
+  Options : ICOptions; Store : ICDictionary);
+var
+  RulID : Integer;
+  Rule : ICDictionary;
+  sIdx : string;
+  StInRul : Boolean;
+  TblPartGood : ICValueTable;
+  SrvStores : ISDictionary;
+begin
+  RulID := 0;
+  Rule := CheckRule(Null, Options);
+  if IsObjFocused(Rule) then
+    RulID := VarAsInt(Rule.Признак);
+  case RulID of
+    0 :
+      sIdx := ';КолОбщ';
+    1 :
+      sIdx := ';-КолОбщ';
+    2 :
+      sIDx := ';ВхЦенаВал';
+    3 :
+      sIDx := ';-ВхЦенаВал';
+    4 :
+      sIDx := ';ДатаПр';
+    5 :
+      sIDx := ';-ДатаПр';
+    else
+      sIdx := '';
+  end;
+  server.CreateApplyTableProdObjects;
+  TblPartGood := CreateObject('ТаблицаЗначений');
+  SetFldToTblPartGood(TblPartGood);
+  TblPartGood.CopyDataToServer();
+  Source.SetSrvToClientPos();
+  if IsObjFocused(Stores) then
+    begin
+      Stores.SetSrvToClientPos();
+      SrvStores := Stores.SrvMean;
+    end;
+  server.CreateApplyTableProd(TblPartGood.SrvMean, Source.SrvMean, SrvStores, Constants.УчетПоСреднейСтоимПр);
+  TblPartGood.CopyDataFromServer();
+  if VarAsBool(Constants.УчетПоСреднейСтоим) then
+    begin
+      TblPartGood.DoCalculation('ВхЦенаБезНДС', 'СумВх/КолОбщ');
+      TblPartGood.DoCalculation('ВхЦенаВал', 'СумВалВх/КолОбщ');
+    end;
+  if IsObjFocused(Stores) then
+    begin
+      TblPartGood.SortBy('Товар;Склад' + sIdx);
+      TblPartGood.SetRange(ArrayOf(Source, Stores),
+        ArrayOf(Source, Stores));
+      DiscardProd(Source, Tbl, Count, TblPartGood, Stores, True, Data, Constants, Currency, Store);
+    end;
+end;
+
+procedure AddGoodProd(Source, Tbl : Variant; Count : Decimal; TblPartGood : ICValueTable;
+  Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary; Store : ICDictionary);
+begin
+  Data.AppendLine;
+  Data.Товар := Source;
+  Data.AssignFields('Код;ЕдИзм', Source);
+  if Data.HasField('ОбщаяМасса') then
+    Data.Масса := Source.Масса;
+  if Data.HasField('ОбщаяПлощадь') then
+    Data.Площадь := Source.Площадь;
+  if IsObject(Tbl) then
+    Data.Объект := Tbl.Объект;
+  Data.Количество := Count;
+  if VarAsBool(Data.HasField('КоличествоУпаковок')) and VarAsBool(Data.Упаковка.IsFocused)
+    and (VarAsDec(Data.Упаковка.Количество) <> 0) then
+    Data.КоличествоУпаковок := VarAsDec(Data.Количество) / Data.Упаковка.Количество;
+  if IsObjFocused(Store) then
+    Data.Склад := Store;
+  // Data.AssignFields('ВхЦенаБезНДС;Партия;ВалютаТовара;Цена;ЦенаВВалюте;КурсТовара', TblPartGood); //
+  Data.AssignFields('ВалютаТовара;ЦенаБезНДС=ВхЦенаБезНДС;ЦенаВВалюте;КурсТовара;Партия;ВхЦенаБезНДС', TblPartGood); //
+  if VarAsBool(Constants.НДСПроизв) then
+    Data.СтавкаНДС := Constants.ProcentPDV
+  else
+    Data.СтавкаНДС := 0;
+  ЦенаНДС(Data, True);
+  Data.НаличиеТовара := TblPartGood.КолОбщ;
+  if VarAsBool(Data.HasField('ПроцентСкидкиНадбавки')) then
+    Data.ЦенаБезСкидкиНадбавки := Data.Цена;
+  Data.PostLine;
+end;
+
+procedure FillTmpCtxTbl(CalcDoc : ICDocuments; Source : ICValueTable; Count : Decimal; var tmpCtx : ICValueTable);
+begin
+  CalcDoc := Source.КалкЛист;
+  CalcDoc.SelectLines;
+  tmpCtx := CreateObject('ТаблицаЗначений');
+  Source.CopyColumnsTo(tmpCtx);
+  tmpCtx.Clear;
+  while VarAsBool(CalcDoc.SelectNextLine) do
+    begin
+      tmpCtx.Append;
+      tmpCtx.Товар := CalcDoc.@Товар;
+      tmpCtx.Партия := CalcDoc.Партия;
+      tmpCtx.ЦенаБезНДС := CalcDoc.ЦенаБезНДС;
+      tmpCtx.ВалютаТовара := CalcDoc.@ВалютаТовара;
+      tmpCtx.ВхЦенаБезНДС := CalcDoc.ЦенаБезНДС;
+      tmpCtx.ЦенаВВалюте := CalcDoc.ЦенаВВалюте;
+      tmpCtx.КурсТовара := CalcDoc.КурсТовара;
+      tmpCtx.Количество := CalcDoc.Количество * Count;
+      tmpCtx.Комплект := Source.@Комплект;
+      if VarAsBool(CalcDoc.@КалкЛист.IsFocused) then
+        tmpCtx.КалкЛист := CalcDoc.КалкЛист;
+      tmpCtx.Post;
+    end;
+end;
+
+procedure DiscardProdAll(Source, Tbl : Variant; var Count : Decimal;
+  TblPartGood : ICValueTable; object : ICDictionary; DoAll : Boolean; Data : ICDocuments;
+    Constants : IC4VPAConst; Currency : ICDictionary; Store : ICDictionary; Options : ICOptions);
+var
+  NoMove : Boolean;
+  CalcDoc : ICDocuments;
+  tmpCtx : ICValueTable;
+begin
+  if Count < 0 then
+    exit;
+  NoMove := True;
+  if not ProdTblAll.SelectFirst then
+    begin
+      if DoAll then
+        begin
+          if VarAsBool(Source.@КалкЛист.IsFocused) then
+            begin
+              FillTmpCtxTbl(CalcDoc, Source, Count, tmpCtx);
+              CreateApplyTableProdAll(tmpCtx, Null, object, Data, Count, Constants, Currency, Options, Null);
+            end
+          else
+            AddGoodProdAll(Source, Tbl, Count, Source, Data, Constants, Currency, Store);//ProdTblAll
+          Count := 0;
+        end
+    end
+  else
+    while ((Count > 0) or NoMove) do
+      begin
+        if ProdTblAll.КолОбщ >= Count then
+          begin
+            AddGoodProdAll(Source, Tbl, Count, ProdTblAll, Data, Constants, Currency, Store);
+            ProdTblAll.Edit;
+            ProdTblAll.КолОбщ := ProdTblAll.КолОбщ - Count;
+            ProdTblAll.Post;
+            Count := 0;
+            NoMove := False;
+            break;
+          end
+        else
+          if ProdTblAll.КолОбщ > 0 then
+            begin
+              AddGoodProdAll(Source, Tbl, ProdTblAll.КолОбщ, ProdTblAll, Data, Constants, Currency, Store);
+              Count := Count - ProdTblAll.КолОбщ;
+              ProdTblAll.Edit;
+              ProdTblAll.КолОбщ := 0;
+              ProdTblAll.Post;
+              NoMove := False;
+            end;
+        if not ProdTblAll.SelectNext then
+          begin //break; //begin
+            if DoAll and (Count > 0) then
+              begin
+                //        if not NoMove then
+                //        begin
+                //           if Data.FindLineBy('Товар;Объект;Партия',
+                //                   ArrayOf(TblPartGood.Товар,TblPartGood.Склад,TblPartGood.Партия)) then
+                //           begin
+                if VarAsBool(Source.@КалкЛист.IsFocused) then
+                  begin
+                    FillTmpCtxTbl(CalcDoc, Source, Count, tmpCtx);
+                    CreateApplyTableProdAll(tmpCtx, Null, object, Data, Count, Constants, Currency, Options, Null);
+                  end
+                else
+                  if not NoMove then
+                    begin
+                      Data.EditLine();
+                      Data.Количество := Data.Количество + Count;
+                      Data.PostLine();
+                    end
+                  else
+                    AddGoodProdAll(Source, Tbl, Count, ProdTblAll, Data, Constants, Currency, Store);
+                Count := 0;
+              end;
+            break;
+          end;
+      end;
+end;
+
+procedure CreateProdTblAll;
+begin
+  ProdTblAll := CreateObject('ТаблицаЗначений');
+  ProdTblAll.AddColumn('Товар', lftLink, 0);
+  ProdTblAll.AddColumn('Склад', lftLink, 0);
+  ProdTblAll.AddColumn('Партнер', lftLink, 0);
+  ProdTblAll.AddColumn('Партия', lftFloat, 0);
+  ProdTblAll.AddColumn('Валюта', lftLink, 0);
+  ProdTblAll.AddColumn('ВалютаТовара', lftLink, 0);
+  ProdTblAll.AddColumn('Комиссия', lftInteger, 0);
+  ProdTblAll.AddColumn('ДатаПр', lftDate, 0);
+  AddFFtColumnsList(ProdTblAll, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал;Цена;ЦенаВВалюте;КурсТовара;СумОтп;СумВалОтп;СумВх;СумВалВх');
+  ProdTblAll.Open;
+end;
+
+procedure CreateApplyTableProdAll(Source, Tbl, Stores : Variant; Data : ICDocuments;
+  Count : Decimal; Constants : IC4VPAConst; Currency : ICDictionary;
+  Options : ICOptions; Store : ICDictionary);
+var
+  RulID : Integer;
+  Rule, TmpGood : ICDictionary;
+  sIdx : string;
+  StInRul : Boolean;
+  TblPartGood : ICValueTable;
+  SrvStores : ISDictionary;
+begin
+  RulID := 0;
+  Rule := CheckRule(Null, Options);
+  if IsObjFocused(Rule) then
+    RulID := VarAsInt(Rule.Признак);
+  case RulID of
+    0 :
+      sIdx := ';КолОбщ';
+    1 :
+      sIdx := ';-КолОбщ';
+    2 :
+      sIDx := ';ВхЦенаВал';
+    3 :
+      sIDx := ';-ВхЦенаВал';
+    4 :
+      sIDx := ';ДатаПр';
+    5 :
+      sIDx := ';-ДатаПр';
+    else
+      sIdx := '';
+  end;                        
+  server.CreateApplyTableProdObjects;
+  TblPartGood := CreateObject('ТаблицаЗначений');
+  SetFldToTblPartGood(TblPartGood);
+  TblPartGood.CopyDataToServer();
+  Source.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Source.Select;
+  while VarAsBool(Source.SelectNext) do
+    begin
+      ProdTblAll.SortBy('Товар');
+      ProdTblAll.Select;
+      if not ProdTblAll.Find(Source.@Товар) then
+        begin
+          TmpGood := Source.Товар;
+          TmpGood.SetSrvToClientPos();
+          if IsObjFocused(Stores) then
+            begin
+              Stores.SetSrvToClientPos();
+              SrvStores := Stores.SrvMean;
+            end;
+          server.CreateApplyTableProd(TblPartGood.SrvMean, TmpGood.SrvMean, SrvStores, Constants.УчетПоСреднейСтоимПр);
+          TblPartGood.CopyDataFromServer();
+          TblPartGood.SrvMean.Clear;
+          if VarAsBool(Constants.УчетПоСреднейСтоим) then
+            begin
+              TblPartGood.DoCalculation('ВхЦенаБезНДС', 'СумВх/КолОбщ');
+              TblPartGood.DoCalculation('ВхЦенаВал', 'СумВалВх/КолОбщ');
+            end;
+          TblPartGood.SortBy('Товар');
+          TblPartGood.AppendTo('', ProdTblAll);
+        end;
+      Count := Source.Количество;
+      if IsObjFocused(Stores) then
+        begin
+          ProdTblAll.SortBy('Товар;Склад' + sIdx);
+          ProdTblAll.SetRange(ArrayOf(Source.@Товар, Stores),
+            ArrayOf(Source.@Товар, Stores));
+          DiscardProdAll(Source, Tbl, Count, TblPartGood, Stores, True, Data, Constants, Currency, Store, Options);
+          ProdTblAll.CancelRange;
+        end;
+    end;
+end;
+
+procedure AddGoodProdAll(Source, Tbl : Variant; Count : Decimal; TblPartGood : ICValueTable;
+  Data : ICDocuments; Constants : IC4VPAConst; Currency : ICDictionary; Store : ICDictionary);
+begin
+  Data.AppendLine;
+  Data.Комплект := Source.@Комплект;
+  Data.Товар := Source.@Товар;
+  Data.AssignFields('Код;ЕдИзм', Source); 
+  if Data.HasField('ОбщаяМасса') then
+    Data.Масса := Source.Товар.Масса;
+  if Data.HasField('ОбщаяПлощадь') then
+    Data.Площадь := Source.Товар.Площадь;
+  if IsObject(Tbl) then
+    Data.Объект := Tbl.@Объект;
+  Data.Количество := Count;
+  if IsObjFocused(Store) then
+    Data.Склад := Store;
+  // Data.AssignFields('ВхЦенаБезНДС;Партия;ВалютаТовара;Цена;ЦенаВВалюте;КурсТовара', TblPartGood); //
+  Data.AssignFields('ВалютаТовара;Цена;ЦенаВВалюте;КурсТовара;Партия;ВхЦенаБезНДС', TblPartGood); //ЦенаБезНДС=ВхЦенаБезНДС
+  if VarAsBool(Constants.НДСПроизв) then
+    Data.СтавкаНДС := Constants.ProcentPDV
+  else
+    Data.СтавкаНДС := 0;
+  ЦенаНДС(Data, False);
+  Data.НаличиеТовара := TblPartGood.КолОбщ;
+  Data.PostLine;
+end;
+
+procedure DiscardProd(Source, Tbl : Variant; var Count : Decimal;
+  TblPartGood : ICValueTable; object : ICDictionary; DoAll : Boolean; Data : ICDocuments;
+    Constants : IC4VPAConst; Currency : ICDictionary; Store : ICDictionary);
+var
+  NoMove : Boolean;
+begin
+  if Count < 0 then
+    exit;
+  NoMove := True;
+  if not TblPartGood.SelectFirst then
+    begin
+      if DoAll then
+        begin
+          AddGoodProd(Source, Tbl, Count, TblPartGood, Data, Constants, Currency, Store);
+          Count := 0;
+        end
+    end
+  else
+    while ((Count > 0) or NoMove) do
+      begin
+        if TblPartGood.КолОбщ >= Count then
+          begin
+            AddGoodProd(Source, Tbl, Count, TblPartGood, Data, Constants, Currency, Store);
+            TblPartGood.Edit;
+            TblPartGood.КолОбщ := TblPartGood.КолОбщ - Count;
+            TblPartGood.Post;
+            Count := 0;
+            break;
+          end
+        else
+          if TblPartGood.КолОбщ > 0 then
+            begin
+              AddGoodProd(Source, Tbl, TblPartGood.КолОбщ, TblPartGood, Data, Constants, Currency, Store);
+              Count := Count - TblPartGood.КолОбщ;
+              TblPartGood.Edit;
+              TblPartGood.КолОбщ := 0;
+              TblPartGood.Post;
+              NoMove := False;
+            end;
+        if not TblPartGood.SelectNext then
+          begin //break; //begin
+            if DoAll and (Count > 0) then
+              begin
+                if not NoMove then
+                  begin
+                    //           if Data.FindLineBy('Товар;Объект;Партия',
+                    //                   ArrayOf(TblPartGood.Товар,TblPartGood.Склад,TblPartGood.Партия)) then
+                    //           begin
+                    Data.EditLine();
+                    Data.Количество := Data.Количество + Count;
+                    if VarAsBool(Data.HasField('КоличествоУпаковок')) and VarAsBool(Data.@Упаковка.IsFocused)
+                      and (VarAsDec(Data.Упаковка.Количество) <> 0) then
+                      Data.КоличествоУпаковок := VarAsDec(Data.Количество) / Data.Упаковка.Количество;
+                    Data.PostLine();
+                    //           end
+                  end
+                else
+                  AddGoodProd(Source, Tbl, Count, TblPartGood, Data, Constants, Currency, Store);
+                Count := 0;
+              end;
+            break;
+          end;
+      end;
+end;
+
+procedure CalcDocSimplSumma(Data : ICDocuments);
+var
+  V : Variant;
+begin
+  // V := GetGoodSums(Data);
+  V := Data.Total('СуммаСтроки;НДССтроки');
+  //сумма по товару
+  Data.Сумма := V[0];
+  Data.СуммаНДС := V[1];
+  Data.СуммаБезНДС := VarAsDec(Data.Сумма) - VarAsDec(Data.СуммаНДС);
+  if (Data.GetSign <> 'ДокументУчетаПокупок') and (Data.GetSign <> 'ДокументУчетаПродаж') and
+    (Data.GetSign <> 'КорНалогНакл') and (Data.GetSign <> 'КорНалогНаклПрих') then
+    SetCurSumma(Data);
+end;
+
+//******************************************************************************
+//сертификация
+var
+  DicCertificates : ICDictionary;
+
+procedure ProceedCertChange(DocEdited : ICDocuments; FieldName : string);
+var
+  DicPart : ICDictionary;
+begin
+  case FieldName of
+    'СертификатСоотв' :
+      if VarAsBool(DocEdited.@СертификатСоотв.IsFocused) then
+        DocEdited.РегНомерСертификатаСоотв := DocEdited.СертификатСоотв.РегНомер
+      else
+        DocEdited.РегНомерСертификатаСоотв := '';
+    'РегНомерСертификатаСоотв' :
+      begin
+        if VarAsStr(DocEdited.РегНомерСертификатаСоотв) = '' then
+          begin
+            DocEdited.СертификатСоотв := Null;
+            exit;
+          end;
+        if IsNil(DicCertificates) then
+          DicCertificates := CreateObject('Справочники.Сертификаты');
+        if DicCertificates.FindByField('РегНомер', DocEdited.РегНомерСертификатаСоотв, False) then
+          begin
+            DocEdited.СертификатСоотв := DicCertificates;
+            exit;
+          end;
+        // добавление нового сертификата
+        DicCertificates.Append;
+        DicCertificates.РегНомер := DocEdited.РегНомерСертификатаСоотв;
+        DicCertificates.Post;
+        DicCertificates.ApplyUpdates;
+        //
+        DocEdited.СертификатСоотв := DicCertificates;
+      end;
+  end;
+end;
+
+procedure FindAndFillDefaultCertificate(DocEdited : ICDocuments; DicGood : ICDictionary);
+begin
+  if not DocEdited.HasField('СертификатСоотв') or VarAsBool(DocEdited.@СертификатСоотв.IsFocused) or
+    not DicGood.HasField('СертификатСоотвПоУмолчанию') then
+    exit;
+  DocEdited.СертификатСоотв := DicGood.@@СертификатСоотвПоУмолчанию;
+  ProceedCertChange(DocEdited, 'СертификатСоотв'); // а нужно с новым
+end;
+
+procedure FillCertificateToOutComeContentsTable(TblForContentsPrint : ICValueTable;
+  CertField : string);
+begin
+  if IsNil(AccGoodsConsgs) then
+    AccGoodsConsgs := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccGoodsConsgs.AssignFieldsByDimIDTo('Партия', 'СертификатСоотв=' + CertField, TblForContentsPrint);
+end;
+
+procedure FillCertificateToPrintFormAndRegroup(DocForPrint : ICDocuments;
+  TblForContentsPrint : ICValueTable; GroupFields : string = '';
+  CertField : string = 'ВалютаТовара'; DeleteConsgnFromGroup : Boolean = True);
+var
+  Pos : Integer;
+begin
+  if DocForPrint.HasField('Партия') then
+    FillCertificateToOutComeContentsTable(TblForContentsPrint, CertField);
+  if (GroupFields <> '') and DeleteConsgnFromGroup then // нужна перегруппировка
+    begin
+      Pos := StrPos('Партия', GroupFields);
+      StrDelete(GroupFields, Pos, StrLength('Партия'));
+      StrInsert(CertField, GroupFields, Pos);
+      TblForContentsPrint.GroupBy(GroupFields, 'Количество');
+    end;
+end;
+
+function GetCertificateValueAtPrinting(TblForContentsPrint : ICValueTable;
+  CertField : string = 'ВалютаТовара') : string;
+begin
+  if TblForContentsPrint.HasField('СертификатСоотв') then
+    Result := TblForContentsPrint.DefValue['СертификатСоотв']
+  else
+    if TblForContentsPrint.HasField('Партия') then
+      Result := TblForContentsPrint.DefValue[CertField]
+    else
+      Result := '';
+end;
+//******************************************************************************    
+
+function GetTimeStr(TimeTotal: Decimal): String;
+var
+  TimeH, TimeM, TimeS: Decimal;
+  TimeStr: String;
+begin
+  result := '00:00:00';
+  TimeH := DecInt(TimeTotal/3600);
+  TimeTotal := TimeTotal - TimeH*3600;
+  TimeM := DecInt(TimeTotal/60);
+  TimeTotal := TimeTotal - TimeM*60;
+  TimeS := TimeTotal;
+  result :=  FormatFloat('##00',TimeH) + ':' + FormatFloat('00',TimeM) + ':' + FormatFloat('00',TimeS);
+  if StrLength(result) = 7 then
+    result := '0' + result;
+end;  
+
+procedure SetSums(FieldName : string; Value : Variant; Data : Variant; Tax : Decimal);
+begin
+  case StrLowerCase(FieldName) of
+    'суммабезндс' :
+      begin
+        Data.Сумма := CalcTaxPrice(Tax, Value, Tax);
+        Data.СуммаНДС := Tax;
+      end;
+    'суммандс' :
+      Data.СуммаБезНДС := VarAsDec(Data.Сумма) - VarAsDec(Value);
+    'сумма' :
+      begin
+        Data.СуммаНДС := GetTaxFromBrutto(Value, Tax);
+        Data.СуммаБезНДС := Data.Сумма - Data.СуммаНДС;
+      end;
+  end;
+end;
+
+end.

@@ -1,0 +1,185 @@
+interface
+
+uses
+ System, DispIntf,// TransferData,
+ Расчеты, ConstNames, Интерфейс, InitColors;
+
+implementation
+
+procedure TDS_FieldChange(FieldName: String; Value: Variant); forward;
+
+var
+ ChangeLock, DropMode, LockCalc, ScrollLock, FindLink, AvtoLock : Boolean;
+ Constants : IC4VPAConst;
+ Options : ICOptions;
+ LinkDoc, Proc : Variant;
+ MasterData : ICDocuments;
+ cvtICalc, tmpGoods, GoodTbl, tmpCmp : ICValueTable;
+ Currency, LinkDict, Cmp, Units : ICDictionary;
+ CursorVis : TCursor;
+
+procedure CreateObjects;
+begin
+ Constants := GetConstants;
+ Options := GetOptions;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+ MasterData := MDS.GetMean;
+ CreateObjects;
+ SetColors(Constants);
+end;
+
+procedure CalcSumma(Doc : ICDocuments);
+var
+  TmpTbl : ICValueTable;
+begin
+  TmpTbl := CreateObject('ТаблицаЗначений');
+  TmpTbl.Open;
+  Doc.SaveContents('',TmpTbl);
+  TmpTbl.Select;
+  Doc.Сумма :=TmpTbl.Total('СуммаОплаты');
+end;
+
+
+procedure Form_Open(Sender : TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    begin
+      deRespons.Enabled := GetUDASet('changeresp');
+    end;
+  miViewDoc.Enabled := True;
+  CalcSumma(MasterData);
+end;
+
+
+procedure TDS_FieldChange(FieldName: String; Value: Variant);
+begin
+  GoodTDSFieldChange(MasterData, FieldName, Value, ChangeLock, DropMode);
+end;
+
+procedure MDS_FieldChange(FieldName: String; Value: Variant);
+begin
+  GoodMDSFieldChange(MasterData, FieldName, Value, ChangeLock);
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  MasterData.Ответственный := GetEmplByName(GetUserName, deRespons);
+end;
+
+{$D-}
+procedure dbgListData_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+  if MasterData.LinesCount > 0 then
+    begin
+      if MasterData.Состояние > 0 then
+        Index1 := 86
+      else
+        Index1 := 92;
+      if not VarAsBool(MasterData.Документ.IsFocused) then
+        Index2 := 49;
+    end;
+end; 
+
+{$D+}
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  MasterData.SendEvent(evNakladn, Unassigned, False);
+end;
+
+procedure TDS_VPAAfterPost(Sender : TObject);
+begin
+  if not DropMode then
+    CalcSumma(MasterData);
+end;
+
+
+
+procedure MenuItem6_Click(Sender : TObject);
+begin
+  TDS_VPAAfterPost(TDS);
+end;
+
+procedure tsHead_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  nbHead.PageIndex := NewTab;
+end;
+
+procedure miViewDoc_Click(Sender : TObject);
+var
+  OneDoc : ICDocuments;
+begin     
+ if IsObjFocused(MasterData.ДокументПроплаты) then
+   begin
+     OneDoc := CreateObject('Документы.'+MasterData.ДокументПроплаты.GetSign);
+     if OneDoc.Find(MasterData.ДокументПроплаты) then
+      OneDoc.EditInForm(OneDoc.GetSign, 3);
+   end;
+end;
+
+procedure btOK_VPABeforeActionClick(Sender : TObject);
+begin
+  FindLink := false;
+  CalcSumma(MasterData);
+end;
+
+procedure miViewNaklDoc_Click(Sender: TObject);
+var
+  OneDoc : ICDocuments;
+begin     
+ if IsObjFocused(MasterData.ДокументОснование) then
+   begin
+     OneDoc := CreateObject('Документы.'+MasterData.ДокументОснование.GetSign);
+     if OneDoc.Find(MasterData.ДокументОснование) then
+      OneDoc.EditInForm(OneDoc.GetSign, 3);
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+BottomPanel:TO4Panel
+Label3:TO4Label
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+DBTotalSum:TO4DBEdit
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+Panel7:TO4Panel
+tbrData:TO4ToolBar
+tbDelete:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+Panel3:TO4Panel
+tsHead:TO4TabSet
+nbHead:TO4Notebook
+Label1:TO4Label
+Label2:TO4Label
+Label18:TO4Label
+Label21:TO4Label
+Label4:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+deRoute:TO4DBEdit
+deRespons:TO4DBEdit
+dbePartner:TO4DBEdit
+dbNotes:TO4DBMemo
+dbgListData:TO4DBGrid
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+pmList:TO4PopupMenu
+miDelete:TO4MenuItem
+miFresh:TO4MenuItem
+miViewDoc:TO4MenuItem
+miViewNaklDoc:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem
+pmSave:TO4PopupMenu
+MenuItem6:TO4MenuItem

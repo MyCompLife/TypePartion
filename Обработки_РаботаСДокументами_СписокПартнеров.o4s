@@ -1,0 +1,31 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+procedure LoadPartToTbl(ActiveRegion: Variant; PartTbl : ISValueTable; StrRange: String); Server;
+Var
+  UrPartDic, ManPartDic: ISDictionary;
+  TempTbl: ISValueTable;
+begin
+  UrPartDic   := CreateObject('Справочники.ЮрПартнеры');
+  ManPartDic  := CreateObject('Справочники.ФизЛица');
+  TempTbl     := CreateObject('ТаблицаЗначений');
+  TempTbl.Open;         
+  if VarAsBool(ActiveRegion.IsFocused) then
+    UrPartDic.SetRangeByField('Регион',ActiveRegion,ActiveRegion);
+  if StrRange <> '' then
+    UrPartDic.SetFieldFilter('ПолноеНазвание', 'Like', '%' + StrRange + '%', '', '', null);
+  UrPartDic.Select;
+  UrPartDic.SaveToValueTable('', TempTbl, 1 , UrPartDic.RecordCount);
+  TempTbl.AppendTo('Код;ПолноеНазвание;Self=Партнер', PartTbl);
+  if StrRange <> '' then
+    ManPartDic.SetFieldFilter('ПолноеНазвание', 'Like', '%' + StrRange + '%', '', '', null);
+  ManPartDic.Select;
+  ManPartDic.SaveToValueTable('', TempTbl, 1 , ManPartDic.RecordCount);
+  TempTbl.AppendTo('Код;ПолноеНазвание;Self=Партнер', PartTbl);
+end;
+
+end.

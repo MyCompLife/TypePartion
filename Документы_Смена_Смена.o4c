@@ -1,0 +1,358 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, Расчеты, ФиксацияCL, РаботаСТаблицамиЗначенийCL, Пользователи, НумерацияДокументов,
+  РаботаСДокументамиCL, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  Options : ICOptions;
+  MasterData: ICDocuments;
+  TblContents: ICValueTable;
+  Goods: ICDictionary;
+  V: ICProcessing;
+  LockCalc, isSave, AddDoc : boolean;
+  Cursor: TCursor;
+  SumPayCashDelDoc, SumPayBankDelDoc : Decimal;
+
+procedure Form_Open(Sender: TObject);
+begin
+  try
+    Options := GetOptions;
+    if MasterData.GetDocState > 0 then
+      begin
+         SetReadOnlyForm(Form);
+        tbDelete.Enabled := false;
+      end
+    else
+      begin
+        eData.Enabled := GetUDASet('changedate');
+        eRespons.Enabled := GetUDASet('changeresp');
+        if MasterData.HasParam('LockMarketObject') and  VarAsBool(MasterData.Params['LockMarketObject']) then
+          eMarketObject.Enabled := false;
+      end;
+
+    TblContents := CreateObject('ValueTable');
+    TblContents.AddColumn('NumID',vtcString,20);
+    TblContents.AddColumn('НомСтроки',vtcInteger,0);
+    TblContents.AddColumn('Код',vtcString,20);
+    TblContents.AddColumn('Товар',vtcLink,0);
+    TblContents.AddColumn('Количество',vtcFFT,5);
+    TblContents.AddColumn('Цена',vtcFFT,7);
+    TblContents.AddColumn('ПроцентСкидкиНадбавки',vtcFFT,7);
+    TblContents.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,7);
+    TblContents.AddColumn('Сумма',vtcFFT,7);
+    TblContents.AddColumn('ТипДокумента',vtcFFT,7);
+    TblContents.AddColumn('КомментарийСкидкиНадбавки',vtcString,200);
+    TblContents.Open;
+    ReadPropsFromBLOB(TblContents,MasterData.Таб_ТоварыПоЧекам);
+    V := CreateObject('Обработки.ПечатьЧека');
+    Cursor := WaitCursorStart;
+    TblContents.SortBy('НомСтроки');
+    TblContents.DoCalculation('Сумма','Цена*Количество');
+    TblContents.SetColumnFormat('Количество','0.###');
+    TblContents.SetColumnFormat('ПроцентСкидкиНадбавки','0.###');
+    TblContents.SetColumnFormat('ЦенаБезСкидкиНадбавки','0.00#');
+    TblContents.SetColumnFormat('Цена','0.00#');
+    TblContents.SetColumnFormat('Сумма','0.00');
+    TblContents.SetColumnFormat('ТипДокумента','0.##');
+    TblContents.UseDataSource(CtrlToVar(TVSGoods));
+    if (TblContents.LineCount = 0) then
+      tsData.Tabs.Delete(1);
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+end;
+
+procedure TableCalcFields(Doc : ICDocuments);
+begin
+  if LockCalc then
+    exit;
+end;
+
+procedure CalcFields(Doc : ICDocuments);
+begin
+  if LockCalc then
+    exit;
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  isSave := false;
+  Options := GetOptions;
+  MasterData := MDS.GetMean;
+ // MasterData.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+//  MasterData.SetOnCalcFields(EntryPoint(CalcFields));
+end;
+
+procedure dbgListData_DblClick(Sender: TObject);
+var
+  CheckDoc: ICDocuments;
+begin
+  if VarAsBool(MasterData.Партнер.IsFocused) then
+    begin
+      TblContents.Params['Сумма'] := MasterData.СуммаДокумента;
+      TblContents.Params['ДатаДокумента'] := MasterData.Дата;
+      TblContents.Params['Документ'] := MasterData.НазваниеДокумента;
+      TblContents.Params['Партнер'] := MasterData.Партнер;
+      TblContents.Params['Склад'] := MasterData.Склад;
+      TblContents.Params['Регион'] := MasterData.Регион;
+      TblContents.Params['Касса'] := MasterData.Касса;
+      if (TblContents.LineCount > 0) then
+        try
+          TblContents.DisableControls;
+          TblContents.SortBy('NumID;ТипДокумента;Товар');
+          TblContents.SetRange(ArrayOf(MasterData.DocNumID,MasterData.ТипДокумента),ArrayOf(MasterData.DocNumID,MasterData.ТипДокумента));
+          TblContents.Select;
+          V.Execute('ЧекА4ExcelСмена', TblContents); 
+        finally
+          TblContents.CancelRange;
+          TblContents.EnableControls;
+        end
+      else
+        begin
+          CheckDoc := MasterData.Документ;
+          CheckDoc.SelectLines;
+          CheckDoc.AppendLinesTo('Товар;Количество;Цена',TblContents);
+          TblContents.Select;
+          V.Execute('ЧекА4ExcelСмена', TblContents);
+          TblContents.Clear;
+        end;
+    end;
+  TblContents.SortBy('НомСтроки');
+end;
+
+procedure tsData_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  nbTable.PageIndex := NewTab;
+end;
+
+
+
+procedure Button1_Click(Sender: TObject);
+begin
+  TblContents.Select;
+  While TblContents.SelectNext do
+    begin
+      if (TblContents.ЦенаБезСкидкиНадбавки = 0) or (TblContents.ЦенаБезСкидкиНадбавки = Null) then
+        begin
+          TblContents.Edit;
+          if TblContents.Дисконт = '' then
+            TblContents.ЦенаБезСкидкиНадбавки := TblContents.Цена
+          else
+            begin
+
+            end;
+          TblContents.Post;
+        end;
+    end;
+end;
+
+procedure CalcPrice(var Count : Decimal; s : string; var Accept : Boolean);
+begin                                                                                                       //
+  if VarAsBool(Options.GetServerPrm(CountAck)) and not StdInpDec('Введите цену без скидки/надбавки для товара ' + s, Count) then
+    Accept := MessageDlg(EnterAsk, mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo;
+end;
+
+procedure MenuItem1_Click(Sender: TObject);
+var
+  Count : Decimal;
+  Accept : Boolean;
+begin
+  Count := TblContents.Цена;
+  Accept := true;
+  CalcPrice(Count, TblContents.Товар.назвтовара, Accept);
+  if not Accept then
+    exit;
+  TblContents.Edit;
+  TblContents.ЦенаБезСкидкиНадбавки := Count;
+  TblContents.Post;
+end;
+
+procedure MenuItem2_Click(Sender: TObject);
+var
+ RealGoodsPrc : ICProcessing;
+ Partner : ICDictionary;
+ i : Integer;
+begin
+ RealGoodsPrc := CreateObject('Обработки.ПодборТовара');
+ TblContents.Params['Date'] := MasterData.ДатаДокумента;
+ if RealGoodsPrc.Execute('ВыборТовара',TblContents) = mrOk then
+   begin
+     if TblContents.HasParam('НовыйТовар') then
+       begin
+         TblContents.Edit;
+         TblContents.Товар := TblContents.Params['НовыйТовар'];
+         TblContents.Код := TblContents.Товар.Код;
+         TblContents.Post;
+       end;
+   end;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  MasterData.Таб_ТоварыПоЧекам := WritePropsToBlob(TblContents);
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin   
+ AddDoc := true;
+ MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+ SetDocDefRegonStore(MasterData,'Склад');
+end;
+
+procedure tbDelete_Click(Sender: TObject);
+var DialogProc : ICProcessing;  
+    DialogResult, TypeDoc : integer;
+    Doc : ICDocuments;  
+    DocNumID : string;
+    DocTbl : ICValueTable;
+    CurDelAck, DelOK : Boolean;
+begin
+ if MasterData.LinesCount>0 then
+   begin
+     Doc := MasterData.Документ;
+     if IsObjFocused(Doc) then
+       begin
+         DialogProc := CreateObject('Обработки.Диалоги');
+         DialogResult := DialogProc.Execute('УдалениеДокументаИзСмены','Удалить '+Doc.GetName+' №'+Doc.GetNumber+' от '+DateToStr(Doc.GetDate)+' из смены?');
+         if DialogResult<>mrCancel then
+           begin
+              if (DialogResult=mrYesToAll) and HasChildPays(Doc) then
+                case DialogProc.Execute('УдалениеДокументаСПодчДокОплат',Doc) of
+                  mrCancel : exit;
+                  mrYesToAll : DelAllChildPayDoc(Doc);
+                end;
+
+             Doc.Edit;
+             Doc.Смена := Null;
+             Doc.Post;
+             Doc.ApplyUpdates;
+
+             DocTbl := CreateObject('ТаблицаЗначений');
+             try
+               MasterData.DisableTableControls;
+               TblContents.DisableControls;
+               DocNumID := VarAsStr(MasterData.DocNumID);
+               TypeDoc := VarAsInt(MasterData.ТипДокумента);
+               MasterData.DeleteLine; 
+               if TblContents.SelectFirst then
+                 While not TblContents.EOF do
+                   if (TblContents.ТипДокумента=TypeDoc) and (TblContents.NumID=DocNumID) then
+                     TblContents.Delete
+                   else
+                     TblContents.SelectNext;
+               MasterData.SaveContents('СуммаДокумента;ТипДокумента;',DocTbl);
+             finally
+               MasterData.EnableTableControls;
+               TblContents.EnableControls;
+             end;
+             DocTbl.SortBy('ТипДокумента');
+             DocTbl.SetRange(0,0);
+             MasterData.СуммаПродаж := DocTbl.Total('СуммаДокумента');
+             DocTbl.SetRange(1,1);
+             MasterData.СуммаВозвратов := DocTbl.Total('СуммаДокумента');
+             MasterData.Сумма := MasterData.СуммаПродаж + MasterData.СуммаВозвратов;
+             MasterData.СуммаОплатыНал := MasterData.Total('СуммаОплатыНалДокумента');
+             MasterData.СуммаОплатыКарт := MasterData.Total('СуммаОплатыКартДокумента');
+             MasterData.Таб_ТоварыПоЧекам := WritePropsToBlob(TblContents);
+             MasterData.Post;
+             MasterData.ApplyUpdates;
+             MasterData.Edit;  
+             MasterData.SelectLines;
+             MasterData.SelectNextLine;
+             if DialogResult=mrYesToAll then
+               try
+                 DelOK := false;
+                 CurDelAck := Options.GetServerPrm(DelAck);
+                 Options.SetServerPrm(DelAck,false);
+                 Doc.Params['NotCheckChildPays'] := true;
+                 Doc.Delete;
+                 Doc.ApplyUpdates;
+                 DelOK := true;
+               finally
+                 Options.SetServerPrm(DelAck,CurDelAck);
+                 if not DelOK then
+                   ShowMessage('Во время удаления документа произошла ошибка!');
+               end;
+           end;
+       end
+     else
+       ShowMessage('Документ не найден!');
+   end;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label7:TO4Label
+Label3:TO4Label
+Label5:TO4Label
+Label9:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+eMarketObject:TO4DBEdit
+dbeRegion:TO4DBEdit
+dbeKassa:TO4DBEdit
+Panel2:TO4Panel
+Label8:TO4Label
+Label4:TO4Label
+Label6:TO4Label
+Label10:TO4Label
+Label11:TO4Label
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+eSumAll:TO4DBEdit
+ePaySum:TO4DBEdit
+ePaySumCard:TO4DBEdit
+dbeSumOut:TO4DBEdit
+dbeSumReturn:TO4DBEdit
+Panel3:TO4Panel
+nbTable:TO4Notebook
+dbgListData:TO4DBGrid
+Panel5:TO4Panel
+tbToolsPanel:TO4ToolBar
+tbPrint:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbParam:TO4ToolButton
+dbgGoods:TO4DBGrid
+tsData:TO4TabSet
+MDS:TO4DataSource
+TDS:TO4DocContentsSource
+TVSGoods:TO4TableValueSource
+pmContents:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem

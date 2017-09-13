@@ -1,0 +1,79 @@
+interface
+
+
+uses
+ System, DispIntf, Расчеты, Интерфейс, ConstNames;
+
+implementation
+var TelDic : ICDictionary;
+    TelTbl : ICValueTable;
+    P : ICProcessing;
+procedure Form_Open(Sender: TObject);
+begin
+ TelDic := CreateObject('Справочники.Телефоны');
+ TelTbl :=CreateObject('ТаблицаЗначений');
+ TelTbl.AddColumn('Партнер',vtcLink,0);
+ TelTbl.AddColumn('Телефон',vtcLink,0);
+ TelTbl.Open;
+ TelTbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+procedure tbRun_Click(Sender: TObject);
+begin
+ TelTbl.UseDataSource(0);
+ TelTbl.Clear;
+ TelTbl.CopyDataToServer;
+ P.RunThreadProcess(server.CheckTelEP(TelTbl.SrvMean, cbUro.Checked,  cbEmpl.Checked,
+                    cbOnlySMS.Checked, cbSetSMSType.Checked),'Проверка телефонов');
+ TelTbl.CopyDataFromServer;
+ TelTbl.UseDataSource(CtrlToVar(TVS));
+ TelTbl.SelectFirst;
+ if TelTbl.LineCount>0 then
+  begin   
+   tbAllPartTel.Enabled := true;
+   tbTel.Enabled := true;
+  end
+ else
+  begin  
+   tbAllPartTel.Enabled := false;
+   tbTel.Enabled := false;
+  end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+ P := Mean;
+end;
+
+procedure tbTel_Click(Sender: TObject);
+begin
+ if TelDic.Find(TelTbl.Телефон) then
+  TelDic.EditInForm('Телефон',1);
+end;
+
+procedure tbAllPartTel_Click(Sender: TObject);
+var DefName : string;
+begin
+ if TelDic.UseMasterAndSelect(TelTbl.Партнер) then
+  TelDic.SelectInForm('ВыборТелефона',DefName, Null);
+end;
+
+procedure dbgTel_DblClick(Sender: TObject);
+begin
+ if TelDic.Find(TelTbl.Телефон) then
+  TelDic.EditInForm('Телефон',1);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+cbUro:TO4CheckBox
+cbEmpl:TO4CheckBox
+cbOnlySMS:TO4CheckBox
+cbSetSMSType:TO4CheckBox
+dbgTel:TO4DBGrid
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+tbTel:TO4ToolButton
+tbAllPartTel:TO4ToolButton
+TVS:TO4TableValueSource

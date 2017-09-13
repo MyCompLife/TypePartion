@@ -1,0 +1,62 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation   
+
+var
+  PrcCurrent : ICProcessing; 
+  TblMeanTypes : ICValueTable;
+
+const
+  smSign = 0;
+  smSelFormName = 1;
+  smAdditParams = 2;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  i : Integer;
+  MeansForSelect : Variant;
+  ObjOneMean : IObject;
+begin
+  PrcCurrent := Mean;
+  TblMeanTypes := CreateObject('ValueTable');
+  TblMeanTypes.AddColumn('Index', vtcInteger, 0);
+  TblMeanTypes.AddColumn('MeanName', vtcString, 100);
+  TblMeanTypes.Open;
+  MeansForSelect := PrcCurrent.Params['MeansForSelect'];
+  for i := 0 to ArrayHigh(MeansForSelect) do
+    begin
+      ObjOneMean := CreateObject(VarAsStr(PrcCurrent.Params['MeansCommonType']) + '.' + VarAsStr(MeansForSelect[i][smSign]));
+      TblMeanTypes.Append;
+      TblMeanTypes.Index := i;
+      TblMeanTypes.MeanName := ObjOneMean.GetName;
+      TblMeanTypes.Post;
+    end;   
+  TblMeanTypes.SelectFirst;
+  TblMeanTypes.UseDataSource(CtrlToVar(tvsMeanTypes));
+end;
+
+procedure dbgMeanTypes_DblClick(Sender : TObject);
+begin
+  PrcCurrent.Params['SelectedMean'] := PrcCurrent.Params['MeansForSelect'][TblMeanTypes.Index];
+  Form.ModalResult := mrOk;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  PrcCurrent.Params['SelectedMean'] := PrcCurrent.Params['MeansForSelect'][TblMeanTypes.Index];
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnBottom:TO4Panel
+pnButtons:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnMain:TO4Panel
+dbgMeanTypes:TO4DBGrid
+pnImage:TO4Panel
+liMain:TO4LinkImage
+tvsMeanTypes:TO4TableValueSource

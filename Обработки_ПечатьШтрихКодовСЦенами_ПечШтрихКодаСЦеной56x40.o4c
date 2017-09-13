@@ -1,0 +1,138 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  Options : ICOptions;
+  Constants : IC4VPAConst;
+  MasterData : ICDocuments;
+  BarCodeDic : ICDictionary;
+  Tbl : ICValueTable;
+  InParams : Variant;
+  DisableGoodsPriceCount, DisableGoodsBarCodeCount, i,j : integer;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+ Options := GetOptions;
+ Constants := GetConstants;
+ Form.Page.TopMargin := VarAsInt(Options.GetLocalPrm('WorkPlacePrintFormTopMargin'),0);
+ Form.Page.LeftMargin := VarAsInt(Options.GetLocalPrm('WorkPlacePrintFormLeftMargin'),0);
+ Form.Refresh;
+ BarCodeDic := CreateObject('Справочники.ШтрихКодыТоваров');
+ Tbl := CreateObject('ТаблицаЗначений');
+ Tbl.AddColumn('Код',vtcString,20);
+ Tbl.AddColumn('Товар',vtcLink,0);
+ Tbl.AddColumn('НазвТовара',vtcString,150);
+ Tbl.AddColumn('Количество',vtcFFT,0);
+ Tbl.AddColumn('Цена',vtcFFT,0);
+ Tbl.AddColumn('ЦенаКоп',vtcInteger,0);
+ Tbl.AddColumn('ШтрихКод',vtcString,20);
+ Tbl.Open;
+ InParams := Form.GetParams;
+ if IsArray(InParams) then
+   begin
+     Tbl.Append;
+     Tbl.Товар := InParams[0];
+     Tbl.Цена := InParams[1];
+     if ArrayHigh(InParams)>1 then
+       Tbl.Количество := InParams[2]
+     else
+       Tbl.Количество := 1;
+     Tbl.Post;
+   end
+ else
+ if VarAsBool(InParams.IsType('Документы')) then
+   begin
+     MasterData := InParams;
+     MasterData.AppendLinesTo('Товар;Количество;Цена',Tbl);
+   end;
+ Tbl.DoGetLinks('Код=Товар.Код;НазвТовара=Товар.НазвТовара;ШтрихКод=Товар.ШтрихКод');
+ Tbl.DoCalculation('ЦенаКоп','Цена*100');   
+
+ if VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров) then
+   begin
+     BarCodeDic.UseMasterAndSelect(Tbl.Товар);
+     if BarCodeDic.FindByField('Активность',True,False) or (BarCodeDic.Select and BarCodeDic.SelectNext) then
+       begin
+         Tbl.Edit;
+         Tbl.ШтрихКод := VarAsStr(BarCodeDic.Код);
+         Tbl.Post;
+       end;
+   end;
+
+ DisableGoodsPriceCount := 0;
+ DisableGoodsBarCodeCount := 0;
+ Tbl.Select;
+ if Tbl.SelectFirst then
+  While not Tbl.EOF do
+   if VarAsInt(Tbl.ЦенаКоп)>=1000000 then
+     begin
+       inc(DisableGoodsPriceCount);
+       Tbl.Delete;
+     end
+   else
+   if VarAsStr(Tbl.ШтрихКод)='' then
+     begin
+       inc(DisableGoodsBarCodeCount);
+       Tbl.Delete;
+     end
+   else
+     Tbl.SelectNext;   
+
+  if DisableGoodsPriceCount>0 then
+    ShowMessage('Присутствуют товары с ценой >= 10000! Они печататься не будут!')
+  else  
+  if DisableGoodsBarCodeCount>0 then
+    ShowMessage('Присутствуют товары без штрих-кода! Они печататься не будут!');
+  j := 0;
+  Tbl.Select;
+  if Tbl.SelectFirst then
+   i := VarAsInt(Tbl.Количество);
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);   
+var BarCodeStr, PriceStr : string;
+    b : integer;
+begin 
+  if j < i then
+    begin
+      Accept := true;
+      inc(j);
+    end
+  else
+    begin
+      Accept := Tbl.SelectNext;
+      i := VarAsInt(Tbl.Количество);
+      j := 1;
+    end;
+  if Accept then
+    begin 
+      PriceStr := IntToStr(VarAsInt(Tbl.ЦенаКоп));
+      if StrLength(PriceStr)<6 then
+        for b:=1 to 6-StrLength(PriceStr) do
+          PriceStr := '0'+PriceStr;
+      BarCodeStr := '301'+VarAsStr(Tbl.ШтрихКод)+PriceStr;
+      if (StrLength(BarCodeStr) mod 2) >0 then
+        BarCodeStr := '0'+BarCodeStr;
+      BarCode.Text := BarCodeStr;
+      with Table do
+        begin
+          Value['Name'] := VarAsStr(Tbl.НазвТовара);
+          Value['Price'] := VarAsDec(Tbl.Цена);
+        end;
+    end;
+end;
+
+end.
+
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+BarCode:TRBBarCode
+lbGoodName:TRBLabel
+lbPriceTitle:TRBLabel
+lbPrice:TRBLabel
+Structure1:TRBStructure

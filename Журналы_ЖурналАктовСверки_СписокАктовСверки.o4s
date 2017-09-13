@@ -1,0 +1,53 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure FillPartTbl(PartTbl:ISValueTable; ShowPart, ShowEmpl, ShowBank : Boolean; NameFilter:string); server;
+var PartDic : ISDictionary;
+    tmpTbl : ISValueTable;
+begin  
+ tmpTbl := CreateObject('ТаблицаЗначений');  
+ if ShowEmpl then
+   begin
+     PartDic := CreateObject('Справочники.Служащие');
+     if NameFilter<>'' then
+      PartDic.SetFieldFilter('ПолноеНазвание','LIKE','%'+NameFilter+'%','','',Null);
+     PartDic.Select;
+     PartDic.SaveToValueTable('Self;ПолноеНазвание',tmpTbl,0,PartDic.RecordCount);
+     tmpTbl.AppendTo('',PartTbl);
+     Nil(PartDic);
+   end;
+ if ShowBank then
+   begin
+     PartDic := CreateObject('Справочники.Банки');
+     if NameFilter<>'' then
+      PartDic.SetFieldFilter('ПолноеНазвание','LIKE','%'+NameFilter+'%','','',Null);
+     PartDic.Select;
+     PartDic.SaveToValueTable('Self;ПолноеНазвание',tmpTbl,0,PartDic.RecordCount);
+     tmpTbl.AppendTo('',PartTbl);
+     Nil(PartDic);
+   end;
+ PartTbl.DoCalculation('Поставщик','0');
+ PartTbl.DoCalculation('Покупатель','0');
+ if ShowPart then
+   begin
+     PartDic := CreateObject('Справочники.ЮрПартнеры');
+     if NameFilter<>'' then
+      PartDic.SetFieldFilter('ПолноеНазвание','LIKE','%'+NameFilter+'%','','',Null);
+     PartDic.Select;
+     PartDic.SaveToValueTable('Self;ПолноеНазвание;Поставщик;Покупатель',tmpTbl,0,PartDic.RecordCount);
+     tmpTbl.AppendTo('',PartTbl);
+   end; 
+ PartTbl.DoCalculation('Sort','0'); 
+ PartTbl.Append;
+ PartTbl.Sort := -1;  
+ PartTbl.ПолноеНазвание := 'Все';
+ PartTbl.Поставщик := 0;
+ PartTbl.Покупатель := 0;
+ PartTbl.Post;
+end;
+
+end.

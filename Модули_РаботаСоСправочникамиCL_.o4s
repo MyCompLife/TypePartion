@@ -1,0 +1,70 @@
+interface
+
+uses
+  System, DispIntf, ConstNames;
+
+procedure ChangePrice(GoodDic, Currency: ISDictionary; Price: Decimal; TypePrice, Comment, TypeEdit: String);
+
+implementation
+var
+ AccsPart: ISAccs;
+
+function GetNextNumberForFieldCL(MeanName, FieldName : string; Ctg : ISDictionary) : Integer; server;
+var
+  DicCurrent, DicOther : ISDictionary;
+  i, TmpRes : Integer;
+begin
+  DicCurrent := CreateObject(MeanName);
+  DicCurrent.SortByField(FieldName);
+  DicCurrent.UseParent(Ctg);
+  DicCurrent.Select;
+  if VarAsBool(DicCurrent.SelectPrior) then
+    begin
+      if not (IsNull(DicCurrent._Default[FieldName]) or (DicCurrent._Default[FieldName] <= 0)) then
+        Result := DicCurrent._Default[FieldName] + 1
+      else
+        Result := 1;
+    end
+  else
+    Result := 1;
+end;
+
+procedure ChangePrice(GoodDic, Currency: ISDictionary; Price: Decimal; TypePrice, Comment, TypeEdit: String);
+//ѕараметр TypeEdit(“ип¬несени€»зменений): EditInDoc - из документа, EditInGoodDic - из справочника товаров
+Var
+  UserName: String;
+begin
+  if IsNil(AccsPart) then
+    AccsPart := CreateObject('јккумул€торы.»змќтп÷ен—пр“овара');
+  UserName := GetUserName + '('+GetUserLogin+')';
+  Case TypeEdit of
+    'EditInDoc':
+      if (GoodDic._Default[TypePrice] <> Price) or not IsObjEQ(GoodDic._Default['¬алюта'+TypePrice], Currency) then
+        begin
+          GoodDic.Edit;
+          GoodDic._Default[TypePrice] := Price;
+          GoodDic._Default['¬алюта'+TypePrice] := Currency;
+          GoodDic.Post;
+          GoodDic.ApplyUpdates;
+          AccsPart.“овар        := GoodDic;
+          AccsPart.“ип÷ены      := TypePrice;
+          AccsPart.¬алюта       := Currency;
+          AccsPart.÷ена         := Price;
+          AccsPart.ќснование    := Comment;
+          AccsPart.ѕользователь := UserName;
+          AccsPart.Income(null, CurrentDateTime, 0);
+        end;
+    'EditInGoodDic':
+      begin
+        AccsPart.“овар        := GoodDic;
+        AccsPart.“ип÷ены      := TypePrice;
+        AccsPart.¬алюта       := Currency;
+        AccsPart.÷ена         := Price;
+        AccsPart.ќснование    := Comment;
+        AccsPart.ѕользователь := UserName;
+        AccsPart.Income(null, CurrentDateTime, 0);
+      end;
+  end;
+end;
+
+end.

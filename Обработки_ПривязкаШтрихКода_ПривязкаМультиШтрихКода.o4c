@@ -1,0 +1,30 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+var MasterProc : ICProcessing;
+    Constants : IC4VPAConst;
+    Good, BarCodes : ICDictionary;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  if not IsObjFocused(Params) then
+    raise('Неверно задан параметр!');
+  Good := Params;
+  MasterProc := Mean;
+  Constants :=  GetConstants;
+  if not VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров) then
+    raise('МультиШтрихКоды Для Товаров не используеться!');
+//  BarCodes := SetDetailDict(Good, 'ШтрихКодыТоваров', 'ШтрихКоды', CtrlToVar(pnBarCodes));
+  BarCodes := SetDetailDict(Good, 'ШтрихКодыТоваров', 'ШтрихКодыДляКассира', CtrlToVar(pnBarCodes));
+
+  lbGoodName.Caption := '('+IntToStr(Good.Код) + ') - '+  Good.NameField;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbGoodName:TO4Label
+pnBarCodes:TO4Panel

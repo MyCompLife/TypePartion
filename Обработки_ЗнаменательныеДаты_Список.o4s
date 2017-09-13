@@ -1,0 +1,63 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+var
+  TLF, ResponsDic, PartDic, PartEmplDic : ISDictionary;
+  DateFrom, DateTo : DateTime;
+  PeopleTbl : ISValueTable;
+
+implementation
+
+procedure CreateObjects; Server;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  PartDic := CreateObject('Справочники.ЮрПартнеры');
+  PartEmplDic := CreateObject('Справочники.Служащие');
+end;
+
+
+procedure AssignPeopleTbl(PeopleTblS: ISValueTable); Server;
+Var
+  PartTbl, PartEmplTbl : ISValueTable;
+  Year: Integer;
+  DateStr : string;
+begin
+  PeopleTbl := PeopleTblS;
+  DateStr := VarAsStr(GetDay(CurrentDate))+'.'+VarAsStr(GetMonth(CurrentDate));
+  PartTbl := CreateObject('ТаблицаЗначений');
+  PartEmplTbl := CreateObject('ТаблицаЗначений');
+  PartDic.Select;
+  PartDic.SaveToValueTable('',PartTbl,0,PartDic.RecordCount);
+  PartEmplDic.Select;
+  PartEmplDic.SaveToValueTable('',PartEmplTbl,0,PartEmplDic.RecordCount);
+  PartTbl.AppendTo('ДатаРождения=Дата;ПолноеНазвание',PeopleTbl);
+  PartEmplTbl.AppendTo('ДатаРождения=Дата;ПолноеНазвание',PeopleTbl);
+  PeopleTbl.CopyColumnsTo(PartTbl);
+  PeopleTbl.Select;
+  while PeopleTbl.SelectNext do
+    begin
+    //  PeopleTbl.Edit;
+      if PeopleTbl.Дата <> Null then
+        if DateStr = VarAsStr(GetDay(PeopleTbl.Дата))+'.'+VarAsStr(GetMonth(PeopleTbl.Дата)) then
+          begin
+            PartTbl.Append;
+            PartTbl.Дата := PeopleTbl.Дата;
+            PartTbl.ПолноеНазвание := PeopleTbl.ПолноеНазвание;
+            if GetMonth(PartTbl.Дата) > GetMonth(CurrentDate) then
+              PartTbl.ДатаВыборки := StrToDate(VarAsStr(GetDay(PartTbl.Дата))+ '.' + VarAsStr(GetMonth(PartTbl.Дата))+ '.' + VarAsStr(GetYear(CurrentDate -1)))
+            else
+              PartTbl.ДатаВыборки := StrToDate(VarAsStr(GetDay(PartTbl.Дата))+ '.' + VarAsStr(GetMonth(PartTbl.Дата))+ '.' + VarAsStr(GetYear(CurrentDate)));
+            PartTbl.Годовщина := GetYear(PartTbl.ДатаВыборки) - GetYear(PartTbl.Дата);
+            if PartDic.FindByField('ПолноеНазвание', PeopleTbl.ПолноеНазвание, false) then
+              PartTbl.Телефон := GetActiv(TLF, 'Номер', PartDic);
+            if PartEmplDic.FindByField('ПолноеНазвание', PeopleTbl.ПолноеНазвание, false) then
+              PartTbl.Телефон := GetActiv(TLF, 'Номер', PartEmplDic);
+            PartTbl.Post;
+          end;
+    end;
+  PartTbl.CopyTo('',PeopleTbl);
+end;
+
+end.

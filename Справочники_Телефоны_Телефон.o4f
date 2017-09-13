@@ -1,0 +1,426 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 535
+  Height = 270
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    317
+    303)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'cbActive.Caption'
+    0
+    
+      #1'-1'#1'Активный  телефон, который будет печататься в отчетах'#1'1058'#1'А' +
+      'ктивний телефон, що буде надрукований у звітах'
+    'cbSMS.Caption'
+    1
+    'Телефон для SMS рассылки'
+    'cbSMS.Hint'
+    1
+    ''
+    'gbTown.Caption'
+    0
+    #1'-1'#1'Город'
+    'Label1.Caption'
+    0
+    #1'-1'#1'Тип телефона'
+    'Label2.Caption'
+    0
+    #1'-1'#1'Описание'
+    'Label3.Caption'
+    0
+    #1'-1'#1'Владелец телефона'#1'1058'#1'Власник телефону'
+    'Label4.Caption'
+    1
+    '(380ХХХХХХХХХ)'
+    'Label4.Hint'
+    1
+    ''
+    'Label5.Caption'
+    0
+    #1'-1'#1'Название'
+    'Label7.Caption'
+    0
+    #1'-1'#1'Телефонный код'
+    'Label8.Caption'
+    0
+    #1'-1'#1'Номер телефона'
+    'miCancel.Caption'
+    0
+    #1'-1'#1'Отменить изменения'
+    'miSave.Caption'
+    0
+    #1'-1'#1'Записать'
+    'miSaveAdd.Caption'
+    0
+    #1'-1'#1'Записать и добавить')
+  Translat.LangDict.Cols = (
+    16
+    120
+    370)
+  Translat.LangDict.Words = (
+    0
+    
+      #1'-1'#1'Активный  телефон, который будет печататься в отчетах'#1'1058'#1'А' +
+      'ктивний телефон, що буде надрукований у звітах'
+    0
+    #1'-1'#1'Владелец телефона'#1'1058'#1'Власник телефону')
+  BevelOuter = bvNone
+  Caption = 'Form'
+  PopupMenu = pmSaveRecord
+  TabOrder = 0
+  ActiveControl = dbeTown
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object ImagePanel: TO4Panel
+    Left = 0
+    Top = 24
+    Width = 112
+    Height = 217
+    Align = alLeft
+    AutoSize = True
+    BevelSides = [sdTop, sdRight, sdBottom]
+    BorderSides = []
+    Caption = 'ImagePanel'
+    ParentCtl3D = False
+    TabOrder = 1
+    Transparent = False
+    object LinkImage: TO4LinkImage
+      Left = 1
+      Top = 1
+      Width = 110
+      Height = 215
+      AutoSize = True
+      Picture = ImagesHolder.PhoneHC
+      Align = alClient
+    end
+  end
+  object MainPanel: TO4Panel
+    Left = 112
+    Top = 24
+    Width = 423
+    Height = 217
+    Align = alClient
+    Alignment = taLeftJustify
+    BevelSides = [sdLeft, sdTop, sdBottom]
+    BorderSides = []
+    ParentCtl3D = False
+    TabOrder = 2
+    Transparent = False
+    object Label1: TO4Label
+      Left = 41
+      Top = 101
+      Width = 71
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Тип телефона'
+    end
+    object Label8: TO4Label
+      Left = 26
+      Top = 125
+      Width = 86
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Номер телефона'
+    end
+    object Label3: TO4Label
+      Left = 11
+      Top = 9
+      Width = 101
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Владелец телефона'
+    end
+    object Label2: TO4Label
+      Left = 62
+      Top = 150
+      Width = 50
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Описание'
+    end
+    object Label4: TO4Label
+      Left = 244
+      Top = 126
+      Width = 87
+      Height = 13
+      Alignment = taRightJustify
+      Caption = '(380ХХХХХХХХХ)'
+    end
+    object deType: TO4DBEdit
+      Left = 117
+      Top = 98
+      Width = 190
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 5
+      Visible = False
+      Lock = False
+      O4FieldName = 'Тип'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object dbeNumber: TO4DBEdit
+      Left = 117
+      Top = 122
+      Width = 124
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 3
+      Lock = False
+      O4FieldName = 'Номер'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object dbeOwner: TO4DBEdit
+      Left = 117
+      Top = 6
+      Width = 297
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 0
+      Lock = False
+      O4FieldName = 'ВладелецТел'
+      O4MDSource = MDS
+      FastFindIndex = 0
+      VPAOnChange.EventName = 'dbeOwner_Change'
+    end
+    object gbTown: TO4GroupBox
+      Left = 10
+      Top = 30
+      Width = 405
+      Height = 65
+      Caption = 'Город'
+      TabOrder = 1
+      object Label5: TO4Label
+        Left = 52
+        Top = 20
+        Width = 50
+        Height = 13
+        Alignment = taRightJustify
+        Caption = 'Название'
+      end
+      object Label7: TO4Label
+        Left = 16
+        Top = 43
+        Width = 86
+        Height = 13
+        Alignment = taRightJustify
+        Caption = 'Телефонный код'
+      end
+      object lbTownCode: TO4Label
+        Left = 107
+        Top = 43
+        Width = 71
+        Height = 13
+        Caption = 'lbTownCode'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -11
+        Font.Name = 'MS Sans Serif'
+        Font.Style = [fsBold]
+        ParentFont = False
+      end
+      object dbeTown: TO4DBEdit
+        Left = 107
+        Top = 15
+        Width = 232
+        Height = 21
+        PasswordChar = #0
+        Period.Enabled = False
+        Period.StrStartDate = '10.06.2002'
+        TabOrder = 0
+        Lock = False
+        O4FieldName = 'Город'
+        O4MDSource = MDS
+        FastFindIndex = 0
+        VPAOnActionClear.EventName = 'deTown_ActionExecute'
+        VPAOnActionExecute.EventName = 'deTown_ActionExecute'
+      end
+    end
+    object cbActive: TO4CheckBox
+      Left = 106
+      Top = 172
+      Width = 311
+      Height = 17
+      Caption = 'Активный  телефон, который будет печататься в отчетах'
+      TabOrder = 4
+      VPAOnClick.EventName = 'chbActive_Click'
+      WordWrap = False
+    end
+    object edCollect: TO4Edit
+      Left = 116
+      Top = 98
+      Width = 192
+      Height = 21
+      EditStyle = fesListBox
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 2
+    end
+    object dbeDescription: TO4DBEdit
+      Left = 117
+      Top = 147
+      Width = 297
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '10.06.2002'
+      TabOrder = 6
+      Lock = False
+      O4FieldName = 'Описание'
+      O4MDSource = MDS
+      FastFindIndex = 0
+    end
+    object cbSMS: TO4CheckBox
+      Left = 106
+      Top = 192
+      Width = 311
+      Height = 17
+      Caption = 'Телефон для SMS рассылки'
+      TabOrder = 7
+      VPAOnClick.EventName = 'cbSMS_Click'
+      WordWrap = False
+    end
+  end
+  object TitlePanel: TO4Panel
+    Left = 0
+    Top = 0
+    Width = 535
+    Height = 24
+    Align = alTop
+    BevelSides = [sdBottom]
+    BorderSides = []
+    BorderWidth = 1
+    ParentCtl3D = False
+    TabOrder = 0
+    Transparent = False
+    object lbTitle: TO4Label
+      Left = 2
+      Top = 2
+      Width = 531
+      Height = 20
+      Align = alClient
+      Color = clBtnShadow
+      Font.Charset = RUSSIAN_CHARSET
+      Font.Color = clWhite
+      Font.Height = -16
+      Font.Name = 'Times New Roman'
+      Font.Style = [fsBold]
+      ParentColor = False
+      ParentFont = False
+    end
+  end
+  object BottomPanel: TO4Panel
+    Left = 0
+    Top = 241
+    Width = 535
+    Height = 29
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    ParentCtl3D = False
+    TabOrder = 3
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 359
+      Top = 1
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      ParentCtl3D = False
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 15
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actSave
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object MDS: TO4DataSource
+    VPAOnAppend.EventName = 'MDS_Append'
+    VPAOnValidate.EventName = 'MDS_Validate'
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    VPAAfterPost.EventName = 'MDS_VPAAfterPost'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 61
+    Top = 117
+  end
+  object pmSaveRecord: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 54
+    Top = 70
+    object miSave: TO4MenuItem
+      Caption = 'Записать'
+      ImageIndex = 5
+      ShortCut = 16467
+      O4Action = actSave
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miSaveAdd: TO4MenuItem
+      Caption = 'Записать и добавить'
+      ImageIndex = 0
+      ShortCut = 16462
+      O4Action = actAdd
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object MenuItem1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miCancel: TO4MenuItem
+      Caption = 'Отменить изменения'
+      ImageIndex = 2
+      ShortCut = 32776
+      VPAOnClick.EventName = 'miCancel_Click'
+      O4Action = actCancel
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+  end
+end

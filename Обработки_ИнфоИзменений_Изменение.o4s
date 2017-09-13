@@ -1,0 +1,34 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  TblDetailDoc, AllDocTbl : ISValueTable;
+  AccsState : ISAccs;                
+  UniqDic : ISDictionary;
+
+procedure CreateObjects; server;
+begin
+  AccsState:= CreateObject('Аккумуляторы.ЖурналИзменений');  
+  UniqDic := CreateObject('Справочники.ИдентификаторДокумента');
+end;
+
+procedure FillTblDocS(Doc: Variant; TblDetailDoc: ISValueTable);server;
+begin
+  AccsState.ClearFieldBuffers;
+  AccsState.ClearFieldFilters;  
+  UniqDic.UseMaster(Doc);
+  UniqDic.Select;
+  if UniqDic.SelectNext then
+    begin
+      AccsState.SetFieldFilter('Идентификатор', UniqDic);
+      AccsState.SaveMotionToValueTable(0, 400000, amtIncome,-1, TblDetailDoc);
+    end
+  else
+    TblDetailDoc.Clear;
+end;
+
+end.

@@ -1,0 +1,821 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, –абота—о—правочникамиCL, –абота—∆урналом»зменений;
+
+implementation 
+var
+  Constants: IS4VPAConst;
+  LogList :ISValueList;
+  IncludeInputRest : boolean;
+procedure CreateStructureKassaTbl(Tbl : ISValueTable);
+begin
+  Tbl.AddColumn('“овар',vtcLink,0);
+  Tbl.AddColumn('Document',vtcLink,0);
+  Tbl.AddColumn('Date',vtcDateTime,0);
+  Tbl.AddColumn('MotionSign',vtcInteger,0);
+  Tbl.AddColumn('DocLineNum',vtcInteger,0);
+  Tbl.AddColumn('¬алюта',vtcLink,0);
+  Tbl.AddColumn(' асса',vtcLink,0);
+  Tbl.AddColumn('—умѕрих',lftFFT,7);
+  Tbl.AddColumn('—ум–асх',lftFFT,7);
+  Tbl.AddColumn('—умќбщ',lftFFT,7);
+  Tbl.Open;
+end;
+
+procedure CreateStructureTbl(Tbl : ISValueTable);
+begin
+  Tbl.AddColumn('Document',vtcLink,0);
+  Tbl.AddColumn('Date',vtcDateTime,0);
+  Tbl.AddColumn('MotionSign',vtcInteger,0);
+  Tbl.AddColumn('DocLineNum',vtcInteger,0);
+  Tbl.AddColumn('“овар”слуга',vtcLink,0);
+  Tbl.AddColumn('ѕартнер',vtcLink,0);
+  Tbl.AddColumn('—тать€',vtcLink,0);
+  Tbl.AddColumn('¬алюта',vtcLink,0);
+  Tbl.AddColumn('–егион',vtcLink,0);
+
+  Tbl.AddColumn('—умма',lftFFT,7);
+  Tbl.AddColumn(' оличество',lftFFT,5);
+  Tbl.AddColumn('—умма√рн',lftFFT,7);
+  Tbl.Open;
+end;
+
+procedure GetAcc(Mean: ISProcessing; var Success: Boolean);
+var
+  Date : DateTime;
+  Accs : ISAccs;
+  Tbl : ISValueTable;
+  i, Total, NotRegion : Integer;
+  CursorVis : TCursor;
+  Client : ISProcessing;
+  Log : TStringList;
+  RegionDic : ISDictionary; 
+  Doc : ISDocuments;
+begin
+  Success := true;
+  Client := Mean;
+  Client.NotifyClientEx(1,'ѕройдено 0 этапов из 2', 0, 2);
+  RegionDic := CreateObject('—правочники.–егионы');
+    RegionDic.Select;
+    if not RegionDic.FindByCode('1',false) then
+      begin
+        Log.Add('–егион с кодом - 1 не найден');
+        exit
+      end;
+  Accs := CreateObject('јккумул€торы.ƒоходы–асходы');
+  Tbl := CreateObject('“аблица«начений');
+  CreateStructureTbl(Tbl);
+
+  //--------------------------- 1 - этап ---------------------------------------
+  Date := 400000;
+  Accs.IncludeZeroRest := true;
+  Accs.AppendGroupMotionToValueTable(0, Date, amtBoth,
+     'Document;Date;MotionSign;DocLineNum;“овар”слуга;ѕартнер;—тать€;¬алюта;–егион;—умма; оличество;—умма√рн', -1, Tbl);
+
+  i := 0;
+  Tbl.Select;
+  Total := Tbl.LineCount;
+  while Tbl.SelectNext do
+  begin
+    Inc(i);
+    Client.NotifyClientEx(2,'”далено '+IntToStr(i)+' из ' + IntToStr(Total),i,Total);
+    if Client.Terminated then
+    begin
+      Success := False;
+      exit;
+    end;
+    if VarAsBool(Tbl.Document.HasField('–егион')) and not VarAsBool(Tbl.Document.@–егион.IsFocused) then
+      begin
+        Doc := Tbl.Document;
+        Doc.Edit;
+        Doc.–егион := RegionDic;
+        Doc.Post;
+      end;
+    Accs.RemoveDoc(Tbl.Document, 1, true);
+  end;
+  Client.NotifyClientEx(1,'ѕройден 1 этап из 2',1,2);
+
+  //--------------------------- 2 - этап ---------------------------------------
+  //удаление из аккумул€тора записей
+  Tbl.SelectFirst;
+  Tbl.Select;
+  i := 0;
+  Total := Tbl.LineCount;
+  Log := CreateStringList;
+  try
+    while Tbl.SelectNext do
+      begin
+        Inc(i);
+        Client.NotifyClientEx(2,'ƒобавлено '+IntToStr(i)+' из ' + IntToStr(Total),i,Total);
+        if Client.Terminated then
+          begin
+            Success := False;
+            exit;
+          end;
+        Accs.AssignFields('“овар”слуга;ѕартнер;—тать€;¬алюта;–егион;—умма; оличество;—умма√рн',Tbl);
+        if  VarAsBool(Tbl.Document.HasField('–егион')) then
+          Accs.–егион := Tbl.Document.–егион
+        else
+          Inc(NotRegion);
+        if Tbl.MotionSign = -1 then
+          Accs.Outcome(Tbl.Document, Tbl.Date, Tbl.DocLineNum)
+        else
+          Accs.Income(Tbl.Document, Tbl.Date, Tbl.DocLineNum);
+        Log.Add(Tbl.DefValue['Document'] +  ' ' + DateToStr(Tbl.Date) + ' ' + FloatToStr(Tbl.—умма));
+      end;
+  finally
+    Log.SaveToFile(ExtractFilePath(RunPath) + 'ErrorCnv.log');
+    Log.Free
+  end;
+   Client.NotifyClientEx(1,'ѕройдено 2 этапа из 2',2,2);
+end;
+
+//заполнение аккумул€тора ќстатки“оваровЌа—егодн€
+//procedure GetAss(Good : ISDictionary);server;
+procedure GetAccKassa(Mean: ISProcessing; var Success: Boolean);
+var
+  Date : DateTime;
+  AccsKassa : ISAccs;
+  TblKassa : ISValueTable;
+  i, Total : Integer;
+  CursorVis : TCursor;
+  Client : ISProcessing;
+  Log : TStringList;
+  CashDic : ISDictionary;
+begin
+  Success := true;
+  Client := Mean;
+  Client.NotifyClientEx(1,'ѕройдено 0 этапов из 2', 0, 2);
+  CashDic := CreateObject('—правочники. ассы');
+    CashDic.Select;
+    if not CashDic.FindByCode('1',false) then
+      begin
+        Log.Add(' асса с кодом - 1 не найдена');
+        exit
+      end;
+  AccsKassa := CreateObject('јккумул€торы.ќстаткиѕо ассе');
+  TblKassa := CreateObject('“аблица«начений');
+  CreateStructureKassaTbl(TblKassa);
+
+  Date := 400000;
+  AccsKassa.IncludeZeroRest := true;
+  AccsKassa.AppendGroupMotionToValueTable(0, Date, amtBoth,
+     '¬алюта; асса;Document;Date;MotionSign;DocLineNum;—умѕрих;—ум–асх;—умќбщ', -1, TblKassa);
+  TblKassa.Select;
+  i := 0;
+  Total := TblKassa.LineCount;
+  while TblKassa.SelectNext do
+  begin
+    Inc(i);
+    Client.NotifyClientEx(2,'”далено '+IntToStr(i)+' из ' + IntToStr(Total),i,Total);
+    if Client.Terminated then
+    begin
+      Success := False;
+      exit;
+    end;
+    AccsKassa.RemoveDoc(TblKassa.Document, 1, true);
+  end;
+  //--------------------------- 2 - этап ---------------------------------------
+  Client.NotifyClientEx(1,'ѕройден 1 этап из 2',1,2);
+ //удаление из аккумул€тора записей
+  TblKassa.SelectFirst;
+  TblKassa.Select;
+  i := 0;
+  Total := TblKassa.LineCount;
+  Log := CreateStringList;
+  try
+    while TblKassa.SelectNext do
+      begin
+        Inc(i);
+        Client.NotifyClientEx(2,'ƒобавлено '+IntToStr(i)+' из ' + IntToStr(Total),i,Total);
+        if Client.Terminated then
+        begin
+          Success := False;
+          exit;
+        end;
+        AccsKassa.AssignFields('¬алюта;—умѕрих;—ум–асх;—умќбщ',TblKassa);
+        AccsKassa. асса := CashDic;
+        if TblKassa.MotionSign = -1 then
+          AccsKassa.Outcome(TblKassa.Document, TblKassa.Date, TblKassa.DocLineNum)
+        else
+          AccsKassa.Income(TblKassa.Document, TblKassa.Date, TblKassa.DocLineNum);
+        Log.Add(TblKassa.DefValue['Document'] +  ' ' + DateToStr(TblKassa.Date) + ' ' + FloatToStr(TblKassa.—умќбщ));
+      end;
+  finally
+    Log.SaveToFile(ExtractFilePath(RunPath) + 'ErrorCnv.log');
+    Log.Free
+  end;
+   Client.NotifyClientEx(1,'ѕройдено 2 этапа из 2',2,2);
+end;
+
+function ConvertationAcc: Variant; server;
+begin
+  Result := EntryPoint(GetAcc);
+end;
+
+procedure EditFiledsInDocs(Mean: ISProcessing; var Success: Boolean);
+var
+  Date : DateTime;
+  TblKassa : ISValueTable;
+  n, i, Total : Integer;
+  CursorVis : TCursor;
+  Client : ISProcessing;
+  Log : TStringList;
+  CashDic, RegionDic, StoreDic : ISDictionary;
+  Docs, Doc : ISDocuments;
+  ListDocType, DocType : String;
+begin
+  try
+    Success := true;
+    Client := Mean;
+    Log := CreateStringList;
+
+    Client.NotifyClientEx(1,'ѕройдено 0 этапов из 3', 0, 2);
+    ListDocType := 'Ќакладна€ѕрихода'; //;ѕриход¬ ассу;–асход»з ассы
+    CashDic := CreateObject('—правочники. ассы');
+    CashDic.Select;
+      if not CashDic.FindByCode('1',false) then
+        begin
+          Log.Add(' асса с кодом - 1 не найдена');
+          exit
+        end;
+
+    RegionDic := CreateObject('—правочники.–егионы');
+    RegionDic.Select;
+      if not RegionDic.FindByCode('1',false) then
+        begin
+          Log.Add('–егион с кодом - 1 не найден');
+          exit
+        end;
+
+    StoreDic := CreateObject('—правочники.—клады');
+    StoreDic.Select;
+      if not StoreDic.FindByCode('11',false) then
+        begin
+          Log.Add('—клад с кодом - 11 не найден');
+          exit
+        end;
+
+
+    for n := 1 to WordCount(ListDocType,';') do
+    begin
+      DocType := ExtractWord(n ,ListDocType, ';');
+      Docs := CreateObject('ƒокументы.' + DocType);
+      Docs.Select;
+      While Docs.SelectNext do
+        Inc(Total);
+      Docs.Select;
+      While Docs.SelectNext do
+        begin
+          if Client.Terminated then
+          begin
+            Success := False;
+            exit;
+          end;
+          if not VarAsBool(Docs.@–егион.IsFocused) then
+          begin
+            Docs.Edit;
+            if Docs.HasField('—кладѕр') then
+              Docs.—кладѕр := StoreDic;
+            if Docs.HasField('—кладѕо”молч') then
+              Docs.—кладѕо”молч := StoreDic;
+            if Docs.HasField(' асса') then
+              Docs. асса := CashDic;
+            Docs.–егион := RegionDic;
+            Docs.Post;
+            Inc(i);
+            Client.NotifyClientEx(2,'»зменено документов "' + DocType +  '" ' +IntToStr(i) + ' из ' + IntToStr(Total),i,Total);
+          end;
+        end;
+      Client.NotifyClientEx(1,'ѕройден ' + IntToStr(n) + ' этап из ' + IntToStr(WordCount(ListDocType,';')),1,WordCount(ListDocType,';'));
+    end;
+  finally
+    Log.SaveToFile(ExtractFilePath(RunPath) + 'ErrorCnv.log');
+    Log.Free
+  end;
+end;
+
+procedure EditFiledsInDic(Mean: ISProcessing; var Success: Boolean);
+var
+  Date : DateTime;
+  TblKassa : ISValueTable;
+  n, i, Total : Integer;
+  CursorVis : TCursor;
+  Client : ISProcessing;
+  Log : TStringList;
+  CashDic, RegionDic, StoreDic : ISDictionary;
+  Dics : ISDictionary;
+  ListDicType, DicType : String;
+begin
+  try
+    Success := true;
+    Client := Mean;
+    Log := CreateStringList;
+
+    Client.NotifyClientEx(1,'ѕройдено 1 этапов из 1', 0, 2);
+    ListDicType := 'ёрѕартнеры;—лужащие'; //;ѕриход¬ ассу;–асход»з ассы
+    RegionDic := CreateObject('—правочники.–егионы');
+    RegionDic.Select;
+      if not RegionDic.FindByCode('1',false) then
+        begin
+          Log.Add('–егион с кодом - 1 не найден');
+          exit
+        end;
+    for n := 1 to WordCount(ListDicType,';') do
+    begin
+      DicType := ExtractWord(n ,ListDicType, ';');
+      Dics := CreateObject('—правочники.' + DicType);
+      Dics.Select;
+      While Dics.SelectNext do
+        Inc(Total);
+      Dics.Select;
+      While Dics.SelectNext do
+        begin
+          if Client.Terminated then
+          begin
+            Success := False;
+            exit;
+          end;
+          Dics.Edit;
+          Dics.–егион := RegionDic;
+          Dics.Post;
+          Inc(i);
+
+          Client.NotifyClientEx(2,'»зменено документов "' + DicType +  '" ' +IntToStr(i) + ' из ' + IntToStr(Total),i,Total);
+        end;
+      Client.NotifyClientEx(1,'ѕройден ' + IntToStr(n) + ' этап из ' + IntToStr(WordCount(ListDicType,';')),1,WordCount(ListDicType,';'));
+    end;
+  finally
+    Log.SaveToFile(ExtractFilePath(RunPath) + 'ErrorCnv.log');
+    Log.Free
+  end;
+end;
+
+function EditDocs: Variant; server;
+begin
+  Result := EntryPoint(EditFiledsInDocs);
+end;
+
+function EditDics: Variant; server;
+begin
+  Result := EntryPoint(EditFiledsInDic);
+end;
+
+
+procedure CancelBarcodes(Mean: ISProcessing; var Success: Boolean);
+Var
+  GoodDic, BarCodesDic : IsDictionary;
+  Count, Total : Integer;
+begin
+  GoodDic := CreateObject('—правочники.“овары');
+  BarCodesDic := CreateObject('—правочники.Ўтрих оды“оваров');
+  GoodDic.Select;
+  Count :=1;
+  Total := GoodDic.RecordCount;
+  while GoodDic.SelectNext do
+    begin
+      BarCodesDic.UseMasterAndSelect(GoodDic);
+      while BarCodesDic.SelectNext do
+        Begin
+          if StrLength(VarAsStr(BarCodesDic. од))<> VarAsInt(GetConstants.Ўтрих од“овара¬нутренний ол—имв) then
+            begin
+              BarCodesDic.Edit;
+              BarCodesDic.јктивность := false;
+              BarCodesDic.Post;
+              BarCodesDic.ApplyUpdates;
+            end
+          else
+            begin
+              if not VarAsBool(BarCodesDic.јктивность) then
+                begin
+                  BarCodesDic.Edit;
+                  BarCodesDic.јктивность := true;
+                  BarCodesDic.Post;
+                  BarCodesDic.ApplyUpdates;
+                end
+            end;
+        end;
+      Mean.NotifyClient('ќбработано товаров:' + IntToStr(Count) + '/' + IntToStr(total),Count,total);
+      inc(Count);
+    end;
+ Success := True;
+end;
+
+function CancelBarcodesEp: Variant; server;
+begin
+  Result := EntryPoint(CancelBarcodes);
+end;
+
+procedure SetLengthBarCode8(Mean: ISProcessing; var Success: Boolean);
+var
+  BarCodeDic : IsDictionary;
+  i, Total : Integer;
+begin
+  Constants := GetConstants;
+  BarCodeDic := CreateObject('—правочники.Ўтрих оды“оваров');
+  BarCodeDic.SetFieldFilter('јктивность','=',true,'','',Null);
+
+  BarCodeDic.Select; 
+  Total := BarCodeDic.RecordCount;
+  i:=1;
+  while BarCodeDic.SelectNext do
+  begin
+    BarCodeDic.Edit;
+    while StrLength(VarAsStr(BarCodeDic. од))<8 do
+      BarCodeDic. од := '0' + VarAsStr(BarCodeDic. од);
+    BarCodeDic.Post;   
+    Mean.NotifyClient('ќбработано товаров: '+IntToStr(i)+'/'+IntToStr(Total),i,Total);
+    inc(i);
+  end;
+
+  Constants.Ўтрих од“овара¬нутренний ол—имв := 8;
+end;
+
+function SetLengthBarCode8Ep: Variant; server;
+begin
+  Result := EntryPoint(SetLengthBarCode8);
+end;
+
+procedure SetLengthBarCode6(Mean: ISProcessing; var Success: Boolean);
+var
+  BarCodeDic : IsDictionary;  
+  Count : Integer;
+  str : String; 
+  i, Total : Integer;
+begin
+  Constants := GetConstants;
+  BarCodeDic := CreateObject('—правочники.Ўтрих оды“оваров');
+  BarCodeDic.SetFieldFilter('јктивность','=',true,'','',Null);
+
+  BarCodeDic.Select;
+  Total := BarCodeDic.RecordCount;
+  i:=1;
+  while BarCodeDic.SelectNext do
+  begin
+    BarCodeDic.Edit;
+    Count :=StrLength(VarAsStr(BarCodeDic. од));
+    if Count>6 then
+    begin               
+      str := VarAsStr(BarCodeDic. од);
+      StrDelete(str, 1, Count-6); 
+      BarCodeDic. од := str;
+    end
+    else
+      while StrLength(VarAsStr(BarCodeDic. од))<6 do
+        BarCodeDic. од := '0' + VarAsStr(BarCodeDic. од);
+
+    BarCodeDic.Post;  
+    Mean.NotifyClient('ќбработано товаров: '+IntToStr(i)+'/'+IntToStr(Total),i,Total);
+    inc(i);
+  end;
+
+  Constants.Ўтрих од“овара¬нутренний ол—имв := 6;
+end;
+
+function SetLengthBarCode6Ep: Variant; server;
+begin
+  Result := EntryPoint(SetLengthBarCode6);
+end;
+
+procedure FillRound5Cop(Mean : ISProcessing; var Accept : Boolean);
+var Jrn : ISJournal;
+    Count, Total : integer;
+    Doc : ISDocuments;
+begin
+ Accept := false;
+ Jrn := CreateObject('∆урналы.∆урналЌакладныхѕрихода');
+ Jrn.Select;
+ Total := Jrn.RecordCount;
+ Jrn.Select;
+ While Jrn.SelectNext do
+   begin
+     Doc := Jrn.GetDoc;
+     if not VarAsBool(Doc.ѕереоценкаќкруг5коп) then
+       begin
+         Doc.Edit;
+         Doc.ѕереоценкаќкруг5коп := true;
+         Doc.Post;
+       end;
+     inc(Count);
+     if Count mod 10 = 0 then
+       begin
+         Mean.NotifyClient('',Count,Total);
+         If Mean.Terminated then break;
+       end;
+   end;
+ Accept := not Mean.Terminated;
+end;
+
+function FillRound5CopEP : Variant; server;
+begin
+  Result := EntryPoint(FillRound5Cop);
+end;
+
+procedure FillInPricesByLastIncome(Mean : ISProcessing; var Accept : Boolean);
+var MasterData : ISDictionary;
+    Count, Total : integer;
+    GoodsAccs : ISAccs;
+    tmpTbl : ISValueTable;
+    InPrice, Course : Decimal;
+    Constants: IS4VPAConst;
+    midList : ISValueList;
+begin
+ Accept := false;
+ midList := CreateObject('—писок«начений');
+ midList.AddValue('',midIncome);
+ if IncludeInputRest then
+   midList.AddValue('',midInputRest);
+ LogList.Clear;
+ Constants := GetConstants;
+ tmpTbl :=  CreateObject('“аблица«начений');
+ GoodsAccs := CreateObject('јккумул€торы.ќстатки“оваров');
+ GoodsAccs.SetFieldFilter('“ип',midList);
+ MasterData := CreateObject('—правочники.“овары');
+ MasterData.Select;
+ Total := MasterData.RecordCount;
+ MasterData.Select;
+ While MasterData.SelectNext do
+   begin
+     GoodsAccs.SetFieldFilter('“овар',MasterData);
+     GoodsAccs.SaveMotionToValueTable(0,400000,amtIncome,-1,tmpTbl);
+     tmpTbl.SortBy('Date');
+     if tmpTbl.SelectLast then
+       begin
+         if VarAsDec(tmpTbl.—ум¬ал¬х)=0 then
+           While tmpTbl.SelectPrior and (VarAsDec(tmpTbl.—ум¬ал¬х)=0) do;
+         if IsObjEQ(tmpTbl.@¬алюта, MasterData.@¬алюта¬х÷ена) then
+           begin
+             InPrice := VarAsDec(tmpTbl.—ум¬ал¬х);
+             if VarAsDec(tmpTbl. олќбщ)>0 then
+              InPrice := InPrice / VarAsDec(tmpTbl. олќбщ);
+           end
+         else
+           begin
+             InPrice := VarAsDec(tmpTbl.—умќтп);
+             if VarAsDec(tmpTbl. олќбщ)>0 then
+              InPrice := InPrice / VarAsDec(tmpTbl. олќбщ);
+             if VarAsBool(MasterData.@¬алюта¬х÷ена.IsFocused) then
+               begin
+                 Course := MasterData.¬алюта¬х÷ена.GetTimedValue(Constants.UsedCurs, VarAsDate(tmpTbl.Date));
+                 if Course>0 then
+                   InPrice := InPrice / Course;
+               end;
+           end;
+         if VarAsDec(MasterData.¬х÷ена)<>RoundDec(InPrice,7) then
+           begin
+             LogList.AddValue(VarAsStr(MasterData.CodeField)+' '+VarAsStr(MasterData.NameField)+
+               ' изменение ¬х.÷ены с '+FormatFloat('0.######',VarAsDec(MasterData.¬х÷ена))+' на '+FormatFloat('0.######',InPrice),0);
+             ChangePrice(MasterData, MasterData.¬алюта¬х÷ена, InPrice, '¬х÷ена', '»зменение ¬х.цен по последенему приходу', 'EditInDoc');
+           end;
+       end;
+     inc(Count);
+     if Count mod 10 = 0 then
+       begin
+         Mean.NotifyClient('»зменение ¬х.цен',Count,Total);
+         If Mean.Terminated then break;
+       end;
+   end;
+ Accept := not Mean.Terminated;
+end;
+
+
+
+
+function FillInPricesByLastIncomeEP(LogLists:ISValueList; IncludeInputRestS:boolean) : Variant; server;
+begin
+ LogList := LogLists;  
+ IncludeInputRest := IncludeInputRestS;
+ Result := EntryPoint(FillInPricesByLastIncome);
+end;
+ 
+
+
+procedure GetFieldCategory(Mean : ISProcessing; var Accept : Boolean);
+var GoodDic, CategoryDic : ISDictionary;
+    Count, Total : integer;
+begin
+ Accept := false;
+ CategoryDic := CreateObject('—правочники.“овары');
+ CategoryDic.IncludeLevels(true);
+ CategoryDic.IncludeOnlyLevels(True);
+ CategoryDic.Select;
+ GoodDic := CreateObject('—правочники.“овары');
+ GoodDic.Select;
+ Count :=0;
+ Total := GoodDic.RecordCount;
+ while GoodDic.SelectNext do
+   begin
+     if IsObjFocused(GoodDic.GetParent) and CategoryDic.Find(GoodDic.GetParent) then
+       begin
+         GoodDic.Edit;
+         GoodDic. атегори€ := CategoryDic;
+         GoodDic.Post;
+         GoodDic.ApplyUpdates;
+       end;
+
+     inc(count);
+     Mean.NotifyClient('ќбработано: '+IntToStr(Count)+'/'+IntToStr(Total),Count,Total);
+     If Mean.Terminated then break;
+   end;
+ Accept := not Mean.Terminated;
+end;
+
+
+
+function GetFieldCategoryEP : Variant; server;
+begin
+ Result := EntryPoint(GetFieldCategory);
+end;
+
+procedure FillPriceFromMargePrecent(Mean : ISProcessing; var Accept : Boolean);
+var MasterData, Currency, NatCurrency : ISDictionary;
+    Count, Total, i : integer;
+    Constants: IS4VPAConst; 
+    PriceTypes : string;  
+    UsePrice0,UsePrice1,UsePrice2 : boolean;   
+    Price, CourseInPrice, CourseOutPrice : Decimal;
+    CourseTbl : ISValueTable;
+begin
+ Accept := false; 
+ Constants := GetConstants;
+ NatCurrency := CreateObject('—правочники.¬алюты');
+ if not NatCurrency.FindByField('Ќац¬алюта',True,False) then
+   Raise('Ќе найдена национальна€ валюта!');
+ Currency := CreateObject('—правочники.¬алюты');
+ CourseTbl := CreateObject('“аблица«начений');
+ FillCurrencyCoursesTbl(Currency, CourseTbl, CurrentDateTime);
+ UsePrice0 := false;
+ UsePrice1 := false;
+ UsePrice2 := false;
+ PriceTypes := Constants.“ипы÷ен;  
+ if StrLength(PriceTypes) > 0 then
+   for i := 1 to StrLength(PriceTypes) do
+     case PriceTypes[i] of
+      '0' : UsePrice0 := true;
+      '1' : UsePrice1 := true;
+      '2' : UsePrice2 := true;
+     end;
+ MasterData := CreateObject('—правочники.“овары');
+ MasterData.Select;
+ Total := MasterData.RecordCount; 
+ MasterData.SortByCode;
+ MasterData.Select;
+ While MasterData.SelectNext do
+   begin
+     if VarAsDec(MasterData.¬х÷ена)>0 then
+       begin
+         if UsePrice0 and (VarAsDec(MasterData.ѕрЌац÷ена)>0) then
+           begin
+             if IsObjEQ(MasterData.@¬алюта¬х÷ена,MasterData.@¬алюта÷ена) then
+               Price := VarAsDec(MasterData.¬х÷ена) * (1+VarAsDec(MasterData.ѕрЌац÷ена)/100)
+             else
+               begin
+                if CourseTbl.Locate('¬алюта',MasterData.@¬алюта¬х÷ена) then
+                  CourseInPrice := CourseTbl. урс
+                else
+                  CourseInPrice := 1;
+                if CourseInPrice<=0 then CourseInPrice := 1;
+                if CourseTbl.Locate('¬алюта',MasterData.@¬алюта÷ена) then
+                  CourseOutPrice := CourseTbl. урс
+                else
+                  CourseOutPrice := 1;
+                if CourseOutPrice<=0 then CourseOutPrice := 1;
+                Price := VarAsDec(MasterData.¬х÷ена)*CourseInPrice/CourseOutPrice * (1+VarAsDec(MasterData.ѕрЌац÷ена)/100);
+               end;
+             if IsObjEQ(MasterData.@¬алюта÷ена, NatCurrency) and VarAsBool(Constants.ќкругл€ть÷ены√рн) then
+               if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+                 Price := RoundTo5Cop(Price)
+               else
+                 Price := RoundDec(Price,VarAsInt(Constants.ќкругление÷ен√рн));
+             if VarAsDec(MasterData.÷ена)<>RoundDec(Price,7) then
+               begin
+                 LogList.AddValue(VarAsStr(MasterData.CodeField)+' '+VarAsStr(MasterData.NameField)+
+                   ' изменение ÷ены с '+FormatFloat('0.######',VarAsDec(MasterData.÷ена))+' на '+FormatFloat('0.######',Price),0);
+                 ChangePrice(MasterData, MasterData.¬алюта÷ена, Price, '÷ена', 'ѕересчет цен по % наценки', 'EditInDoc');
+               end;
+           end;   
+           
+         if UsePrice1 and (VarAsDec(MasterData.ѕрЌацќпт÷ена)>0) then
+           begin
+             if IsObjEQ(MasterData.@¬алюта¬х÷ена,MasterData.@¬алютаќпт÷ена) then
+               Price := VarAsDec(MasterData.¬х÷ена) * (1+VarAsDec(MasterData.ѕрЌацќпт÷ена)/100)
+             else
+               begin
+                if CourseTbl.Locate('¬алюта',MasterData.@¬алюта¬х÷ена) then
+                  CourseInPrice := CourseTbl. урс
+                else
+                  CourseInPrice := 1;
+                if CourseInPrice<=0 then CourseInPrice := 1;
+                if CourseTbl.Locate('¬алюта',MasterData.@¬алютаќпт÷ена) then
+                  CourseOutPrice := CourseTbl. урс
+                else
+                  CourseOutPrice := 1;
+                if CourseOutPrice<=0 then CourseOutPrice := 1;
+                Price := VarAsDec(MasterData.¬х÷ена)*CourseInPrice/CourseOutPrice * (1+VarAsDec(MasterData.ѕрЌацќпт÷ена)/100);
+               end;
+             if IsObjEQ(MasterData.@¬алютаќпт÷ена, NatCurrency) and VarAsBool(Constants.ќкругл€ть÷ены√рн) then
+               if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+                 Price := RoundTo5Cop(Price)
+               else
+                 Price := RoundDec(Price,VarAsInt(Constants.ќкругление÷ен√рн));
+             if VarAsDec(MasterData.ќпт÷ена)<>RoundDec(Price,7) then
+               begin
+                 LogList.AddValue(VarAsStr(MasterData.CodeField)+' '+VarAsStr(MasterData.NameField)+
+                   ' изменение ќпт÷ены с '+FormatFloat('0.######',VarAsDec(MasterData.ќпт÷ена))+' на '+FormatFloat('0.######',Price),0);
+                 ChangePrice(MasterData, MasterData.¬алютаќпт÷ена, Price, 'ќпт÷ена', 'ѕересчет цен по % наценки', 'EditInDoc');
+               end;
+           end;
+
+         if UsePrice2 and (VarAsDec(MasterData.ѕрЌац рќпт÷ена)>0) then
+           begin
+             if IsObjEQ(MasterData.@¬алюта¬х÷ена,MasterData.@¬алюта рќпт÷ена) then
+               Price := VarAsDec(MasterData.¬х÷ена) * (1+VarAsDec(MasterData.ѕрЌац рќпт÷ена)/100)
+             else
+               begin
+                if CourseTbl.Locate('¬алюта',MasterData.@¬алюта¬х÷ена) then
+                  CourseInPrice := CourseTbl. урс
+                else
+                  CourseInPrice := 1;
+                if CourseInPrice<=0 then CourseInPrice := 1;
+                if CourseTbl.Locate('¬алюта',MasterData.@¬алюта рќпт÷ена) then
+                  CourseOutPrice := CourseTbl. урс
+                else
+                  CourseOutPrice := 1;
+                if CourseOutPrice<=0 then CourseOutPrice := 1;
+                Price := VarAsDec(MasterData.¬х÷ена)*CourseInPrice/CourseOutPrice * (1+VarAsDec(MasterData.ѕрЌац рќпт÷ена)/100);
+               end;
+             if IsObjEQ(MasterData.@¬алюта рќпт÷ена, NatCurrency) and VarAsBool(Constants.ќкругл€ть÷ены√рн) then
+               if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+                 Price := RoundTo5Cop(Price)
+               else
+                 Price := RoundDec(Price,VarAsInt(Constants.ќкругление÷ен√рн));
+             if VarAsDec(MasterData. рќпт÷ена)<>RoundDec(Price,7) then
+               begin
+                 LogList.AddValue(VarAsStr(MasterData.CodeField)+' '+VarAsStr(MasterData.NameField)+
+                   ' изменение  рќпт÷ены с '+FormatFloat('0.######',VarAsDec(MasterData. рќпт÷ена))+' на '+FormatFloat('0.######',Price),0);
+                 ChangePrice(MasterData, MasterData.¬алюта рќпт÷ена, Price, ' рќпт÷ена', 'ѕересчет цен по % наценки', 'EditInDoc');
+               end;
+           end;
+
+       end
+     else
+       LogList.AddValue(VarAsStr(MasterData.CodeField)+' '+VarAsStr(MasterData.NameField)+' ¬х.÷ена = 0',0);  
+
+     inc(Count);
+     if Count mod 10 = 0 then
+       begin
+         Mean.NotifyClient('ѕересчет цен',Count,Total);
+         If Mean.Terminated then break;
+       end;
+   end;
+
+
+ Accept := not Mean.Terminated;
+end;
+
+function FillPriceFromMargePrecentEP(LogLists:ISValueList) : Variant; server;
+begin
+ LogList := LogLists;  
+ Result := EntryPoint(FillPriceFromMargePrecent);
+end;
+
+procedure FillIdentificator(Mean: ISProcessing; var Success: Boolean);
+const DocsMean = '„ек;јктЌаќказание”слуг;јктЌаѕолучение”слуг;¬водќстатков;¬озвратќтѕокупателей;¬озвратѕоставщикам;ƒокумент»змен¬х÷ен; орректировкаќстатка“овара;Ќакладна€¬нутрѕеремещ;Ќакладна€ѕрихода;–евизионныйЋисток;–евизи€“овара;—писание“овара;¬водќстЌа–еал;¬водќстатков“ћ÷ѕо—чету;¬озврат“ћ÷;Ќакладна€ќтпуска;Ќакладна€ќтпускаѕо—чету;Ќакладна€ќтпуска“ћ÷ѕо—чету;Ќакладна€ѕриходаѕо—чету;—четЌаќказание”слуг;—четЌаѕродажу';
+var
+  DocChange : ISDocuments;
+  i, j, Total : Integer;
+  TypeDoc : String;
+begin
+  for i := 1 to WordCount(DocsMean,';') do
+    begin
+      TypeDoc := ExtractWord(i, DocsMean, ';');
+      if not CheckObjectExists('ƒокументы.'+TypeDoc) then
+        continue;
+      DocChange := CreateObject('ƒокументы.'+TypeDoc);
+      //DocChange.SetFieldFilter('UniqID','=',0,'','',Null);
+      DocChange.Select;
+      j := 0;
+      while DocChange.SelectNext do
+        begin
+          ChangeDoc(clmtRegister, DocChange, DocChange.GetDate);
+
+          if j mod 10 = 0 then
+            begin
+              Mean.NotifyClientEx(2,'»зменено документов "' + TypeDoc +  '" ' +IntToStr(j),0,0);
+              if Mean.Terminated then exit;
+            end;
+          inc(j);
+        end;
+      nil(DocChange);
+        end;
+  Mean.NotifyClientEx(1,'ќбработано ' + IntToStr(i) + ' типов документов',1,WordCount(DocsMean,';'));
+
+end;
+
+function FillIdentificatorS: Variant; server;
+begin
+  Result := EntryPoint(FillIdentificator);
+end;
+
+end.

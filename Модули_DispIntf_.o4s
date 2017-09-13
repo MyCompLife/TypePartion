@@ -1,0 +1,1033 @@
+interface
+
+type
+  OleVariant = Variant;
+  IObject = Variant;
+
+type
+  TPeriodIDKind = Integer;
+const
+  prkNo = 0; //Без детализации по периодам
+  prkProv = 1; //По проводкам
+  prkOper = 2; //По операциям
+  prkDay = 3; //По дням
+  prkWeek = 4; //По неделям
+  prkDecade = 5; //По декадам
+  prkMonth = 6; //По месяцам
+  prkQuarter = 7; //По кварталам
+  prkHalfYear = 8; //По полугодиям
+  prkYear = 9; //По годам
+
+type
+  TSumFalgs = Integer;
+const
+  sfSumma = 1; //Использовать сумму
+  sfCount = 2; //Использовать количество
+  sfCurSumma = 4; //Использовать валютную сумму
+  sfAll = 7; //Использовать все
+
+type
+  TRotateFlags = Integer;
+const
+  rfAll = 0; //все
+  rfDR = 1; //ненулевые дебетовые обороты
+  rfCR = 2; //ненулевые кредитовые обороты
+  rfCorDR = 4; //ненулевые дебетовые кор-обороты
+  rfCorCR = 8; //ненулевые кредитовые кор-обороты
+
+type
+  TAccsMotionType = Integer;
+const
+  amtIncome = 1; //Приход
+  amtBoth = 0; //Приход и Расход
+  amtOutcome = -1; //Расход
+
+type
+  TValueTableColumnType = Integer; //Типы колонок таблицы значений
+const
+  vtcString = 0; //Строка
+  vtcInteger = 1; //Целое
+  vtcBoolean = 2; //Логическое
+  vtcFloat = 3; //Вещественное с плавающей точкой
+  vtcFFT = 4; //Вещественное с фиксированной точкой
+  vtcDate = 5; //Дата
+  vtcTime = 6; //Время
+  vtcDateTime = 7; //Дата и время
+  vtcLink = 8; //Объект
+  vtcBlob = 9; //Двоичные данные
+  vtcMemo = 10; //Массив строк
+
+type
+
+  //ISField - Объект для работы с полем на сервере
+  ISField = dispinterface;
+
+  //ISBhQuery - Запрос к бухгалтерским данным
+  ISBhQuery = dispinterface;
+
+  //ISNumbers - Объект для работы с нумераторами на стороне сервера
+  ISNumbers = dispinterface;
+
+  //ISSemaphore - Семафор для сервера
+  ISSemaphore = dispinterface;
+
+  //ISTaxWizard - Dispatch interface for STaxWizard Object
+  ISTaxWizard = dispinterface;
+
+  //ISBuhWizard - Dispatch interface for SBuhWizard Object
+  ISBuhWizard = dispinterface;
+
+  //ISEntries - Объект для доступа к отдельным проводкам на сервере
+  ISEntries = dispinterface;
+
+  ISUsersInfoTool = dispinterface;
+
+  //ISDebitCredit - Объект для работы с дебетом/кредитом проводки на сервере
+  ISDebitCredit = dispinterface;
+
+  //ISBhRest - Получение отдельных бухитогов
+  ISBhRest = dispinterface;
+
+  //ISAccVals - Интерфейс доступа к полям-значениям аккумулятора
+  ISAccVals = dispinterface;
+
+  //ISValueList - Список значений со строками представления
+  //ValueList;СписокЗначений;СписокЗначень
+  ISValueList = dispinterface;
+
+  //ISAccs - Накопители аналитической информации
+  //Accumulators;Аккумуляторы;Акумулятори
+  ISAccs = dispinterface;
+
+  //ISProtocols - Объект для ведения протокола действий
+  //Protocols;Протоколы;Протоколи
+  ISProtocols = dispinterface;
+
+  //ISCollection - Объект для работы с коллекциями на сервере
+  //Collections;Коллекции;Колекції
+  ISCollection = dispinterface;
+
+  //ISDocuments - Объект для работы с документами на сервере
+  //Documents;Документы;Документи
+  ISDocuments = dispinterface;
+
+  //ISJournal - Объект для работы с журналами документов для сервера
+  //Journals;Журналы;Журнали
+  ISJournal = dispinterface;
+
+  //ISValueTable - Временная таблица для хранения промежуточных данных
+  //ValueTable;ТаблицаЗначений;ТаблицяЗначень
+  ISValueTable = dispinterface;
+
+  //Declarations;Декларации;Декларації
+  IS4VPATaxPlan = dispinterface;
+
+  //TaxOperations;НалоговыеОперации;ПодатковіОперації
+  IS4VPATax = dispinterface;
+
+  //ISOptions - Объект для работы с параметрами пользователя на сервере
+  //ClientOptions;ОпцииКлиента;ОпціїКлієнта
+  ISOptions = dispinterface;
+
+  //ISProcessing - Объект для обработки на сервере
+  //Processings;Обработки;Обробки
+  ISProcessing = dispinterface;
+
+  //ISDBTable - Работа с физическими таблицами БД
+  //DBTable;ТаблицаБД;ТаблицяБД
+  ISDBTable = dispinterface;
+
+  //ISDictionary - Объект для работы со справочниками на сервере
+  //Dictionaries;Справочники;Довідники
+  ISDictionary = dispinterface;
+
+  //Constants;Константы;Константи
+  IS4VPAConst = dispinterface;
+
+  //ISReport - Объект для работы с отчетами на сервере
+  //Reports;Отчеты;Звіти
+  ISReport = dispinterface;
+
+  //ISBuh - Объект для работы с бухучетом на сервере
+  //Accountancy;БухУчет;БухОблік
+  ISBuh = dispinterface;
+
+  //ISWriNums - Представление чисел и дат прописью
+  //WrittenNumbers;ЧислаПрописью;ЧислаПрописом
+  ISWriNums = dispinterface;
+
+  //ISPlan - Объект работы  с планом счетов на сервере
+  //AccPlan;ПланыСчетов;ПланиРахунків
+  ISPlan = dispinterface;
+
+  //ISOpers - Объект для работы с бухгалтерскими операциями и проводками на сервере
+  //AccOpers;БухОперации;БухОперації
+  ISOpers = dispinterface;
+
+type
+
+  //ISField - Объект для работы с полем на сервере
+  ISField = dispinterface
+    property  Timed:Boolean readonly dispID 1;
+    property  Value:Variant dispID 3;
+    function  GetOnDate(OnDate:DateTime):Variant; dispID 4;
+    procedure SetOnDate(OnDate:DateTime; Value:Variant); dispID 5;
+    property  Active:Boolean readonly dispID 7;
+  end;
+
+  //ISBhQuery - Запрос к бухгалтерским данным
+  ISBhQuery = dispinterface
+    procedure UseAcc(Acc:Variant); dispID 5;
+    procedure UseCorAcc(CorAcc:Variant); dispID 6;
+    procedure SetSubAccLevel(UseSubAccLevel:Integer; UseCorSubAccLevel:Integer); dispID 7;
+    procedure UseAo(AoKind:Variant; Ao:Variant; IsCtg:Boolean); dispID 8;
+    procedure UseCorAo(AoKind:Variant; CorAo:Variant; IsCtg:Boolean); dispID 9;
+    procedure UseCurrency(Currency:Variant); dispID 10;
+    procedure DefineFields(FieldDefs:String); dispID 266;
+    procedure Run(BegDate:DateTime; EndDate:DateTime; PeriodID:TPeriodIDKind; SumFlags:TSumFalgs); dispID 11;
+    procedure SelectAcc(SelectionNum:Integer; Level:Integer; DebCred:TRotateFlags); dispID 20;
+    function  SelectAccNext(SelectionNum:Integer):Boolean; dispID 21;
+    procedure SelectCorAcc(SelectionNum:Integer; Level:Integer; DebCred:TRotateFlags); dispID 23;
+    function  SelectCorAccNext(SelectionNum:Integer):Boolean; dispID 24;
+    procedure SelectCurrency(SelectionNum:Integer; Level:Integer; DebCred:TRotateFlags); dispID 26;
+    function  SelectCurrencyNext(SelectionNum:Integer):Boolean; dispID 27;
+    procedure SelectPeriod(SelectionNum:Integer; Level:Integer; DebCred:TRotateFlags); dispID 29;
+    function  SelectPeriodNext(SelectionNum:Integer):Boolean; dispID 30;
+    procedure SelectAo(AoNum:Integer; SelectionNum:Integer; Level:Integer; DebCred:TRotateFlags); dispID 32;
+    function  SelectAoNext(AoNum:Integer; SelectionNum:Integer):Boolean; dispID 33;
+    procedure SelectCorAo(AoNum:Integer; SelectionNum:Integer; Level:Integer; DebCred:TRotateFlags); dispID 35;
+    function  SelectCorAoNext(AoNum:Integer; SelectionNum:Integer):Boolean; dispID 36;
+    function  BegDate:DateTime; dispID 50;
+    function  EndDate:DateTime; dispID 51;
+    function  Acc:String; dispID 52;
+    function  AccFld(FieldName:String):Variant; dispID 308;
+    function  CorAcc:String; dispID 53;
+    function  CorAccFld(FieldName:String):Variant; dispID 309;
+    function  Currency:String; dispID 54;
+    function  CurrencyFld(FieldName:String):Variant; dispID 310;
+    function  CurrencyObj:Variant; dispID 566;
+    function  Ao(AoNum:Integer):String; dispID 55;
+    function  AoFld(AoNum:Integer; FieldName:String):Variant; dispID 311;
+    function  AoObj(AoNum:Integer):Variant; dispID 567;
+    function  CorAo(AoNum:Integer):String; dispID 56;
+    function  CorAoFld(AoNum:Integer; FieldName:String):Variant; dispID 312;
+    function  CorAoObj(AoNum:Integer):Variant; dispID 568;
+    function  InDebit:Boolean; dispID 58;
+    function  InCredit:Boolean; dispID 59;
+    function  DS(SumFlag:TSumFalgs):Decimal; dispID 100;
+    function  CS(SumFlag:TSumFalgs):Decimal; dispID 101;
+    function  DE(SumFlag:TSumFalgs):Decimal; dispID 102;
+    function  CE(SumFlag:TSumFalgs):Decimal; dispID 103;
+    function  DR(SumFlag:TSumFalgs):Decimal; dispID 104;
+    function  CR(SumFlag:TSumFalgs):Decimal; dispID 105;
+    function  CorDR(SumFlag:TSumFalgs):Decimal; dispID 106;
+    function  CorCR(SumFlag:TSumFalgs):Decimal; dispID 107;
+    function  DSx(SumFlag:TSumFalgs):Decimal; dispID 108;
+    function  CSx(SumFlag:TSumFalgs):Decimal; dispID 109;
+    function  DEx(SumFlag:TSumFalgs):Decimal; dispID 110;
+    function  CEx(SumFlag:TSumFalgs):Decimal; dispID 111;
+    function  OperFld(FieldName:String):Variant; dispID 57;
+  end;
+
+  //ISNumbers - Объект для работы с нумераторами на стороне сервера
+  ISNumbers = dispinterface
+    property  Count:Integer readonly dispID 1;
+    property  NumSign[Index:Integer]:String readonly dispID 2;
+    procedure Open(Sign:String); dispID 3;
+    function  GetOnDate(OnDate:DateTime):Integer; dispID 4;
+    procedure SetOnDate(OnDate:DateTime; Value:Integer); dispID 5;
+    property  NumComment[Index:Integer]:String readonly dispID 6;
+    function  GetNextNumber(OnDate:DateTime; Saved:Boolean):Integer; dispID 7;
+  end;
+
+  //ISSemaphore - Семафор для сервера
+  ISSemaphore = dispinterface
+    procedure CloseSemaphore; dispID 3;
+    function  CheckSemaphore:Boolean; dispID 4;
+    procedure ReopenSemaphore; dispID 5;
+    property  Opened:Boolean readonly dispID 6;
+    function  WaitSemaphore(TimeOut:Integer):Boolean; dispID 7;
+  end;
+
+  //ISTaxWizard - Dispatch interface for STaxWizard Object
+  ISTaxWizard = dispinterface
+    property  TaxPlan:IObject dispID 5;
+    function  GetMappedDocs(StateUpVars:Variant; DocIDs:String; var oleHead:Variant; var oleTable:Variant):Boolean; dispID 6;
+  end;
+
+  //ISBuhWizard - Dispatch interface for SBuhWizard Object
+  ISBuhWizard = dispinterface
+  end;
+
+  //ISEntries - Объект для доступа к отдельным проводкам на сервере
+  ISEntries = dispinterface
+  end;
+
+  ISUsersInfoTool = dispinterface
+    property  UsersIDList:String readonly dispID 1;
+    function  IsUserConnected(UserID:String):Boolean; dispID 2;
+    procedure SendMessage(UserID:String; Msg:String); dispID 5;
+    property  ConnectedUsersIDList:String readonly dispID 3;
+  end;
+
+  //ISDebitCredit - Объект для работы с дебетом/кредитом проводки на сервере
+  ISDebitCredit = dispinterface
+    property  _Default[FieldName:String]:Variant dispID 0;
+    property  Account:Variant dispID 1;
+    property  AO[What:Variant]:Variant dispID 3;
+    procedure AssignValues(AccCode:String; AOTypes:String; Source:Variant); dispID 2;
+  end;
+
+  //ISBhRest - Получение отдельных бухитогов
+  ISBhRest = dispinterface
+    procedure SetPeriod(BegDate:DateTime; EndDate:DateTime); dispID 1;
+    function  BegDate:DateTime; dispID 2;
+    function  EndDate:DateTime; dispID 3;
+    function  DS(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; Ao:Variant):Decimal; dispID 10;
+    function  CS(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; Ao:Variant):Decimal; dispID 11;
+    function  DE(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; Ao:Variant):Decimal; dispID 12;
+    function  CE(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; Ao:Variant):Decimal; dispID 13;
+    function  DR(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; Ao:Variant):Decimal; dispID 14;
+    function  CR(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; Ao:Variant):Decimal; dispID 15;
+    function  RT(DAcc:Variant; CAcc:Variant; SumFlag:TSumFalgs):Decimal; dispID 16;
+    function  DSx(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; ExFlags:Integer; Ao:Variant):Decimal; dispID 17;
+    function  CSx(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; ExFlags:Integer; Ao:Variant):Decimal; dispID 18;
+    function  DEx(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; ExFlags:Integer; Ao:Variant):Decimal; dispID 19;
+    function  CEx(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant; ExFlags:Integer; Ao:Variant):Decimal; dispID 20;
+    function  DSxs(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant):Decimal; dispID 21;
+    function  CSxs(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant):Decimal; dispID 22;
+    function  DExs(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant):Decimal; dispID 23;
+    function  CExs(Acc:Variant; SumFlag:TSumFalgs; Currency:Variant):Decimal; dispID 24;
+  end;
+
+  //ISAccVals - Интерфейс доступа к полям-значениям аккумулятора
+  ISAccVals = dispinterface
+    property  _Default[FieldName:String]:Decimal dispID 0;
+  end;
+
+  //ISValueList - Список значений со строками представления
+  //ValueList;СписокЗначений;СписокЗначень
+  ISValueList = dispinterface
+    function  Count:Integer; dispID 5;
+    function  ValidIndex(Index:Integer):Boolean; dispID 6;
+    property  Checked[Index:Integer]:Boolean dispID 7;
+    procedure Clear; dispID 8;
+    function  AddValue(S:String; Value:Variant):Integer; dispID 9;
+    procedure InsertValue(Index:Integer; S:String; Value:Variant); dispID 10;
+    procedure RemoveValue(Index:Integer); dispID 11;
+    procedure Move(FromPos:Integer; ToPos:Integer); dispID 12;
+    procedure SetStr(Index:Integer; S:String); dispID 13;
+    procedure SetValue(Index:Integer; S:String; Value:Variant); dispID 14;
+    procedure SetValueByStr(S:String; Value:Variant); dispID 15;
+    function  GetStr(Index:Integer):String; dispID 16;
+    function  GetValue(Index:Integer):Variant; dispID 17;
+    function  GetValueByStr(S:String):Variant; dispID 18;
+    function  GetValueRef(Index:Integer):Variant; dispID 273;
+    function  GetValueRefByStr(S:String):Variant; dispID 274;
+    procedure SortByStr(Ascending:Boolean); dispID 19;
+    procedure SortByValue(Ascending:Boolean); dispID 20;
+    function  FindByStr(S:String):Integer; dispID 21;
+    function  FindByValue(Value:Variant):Integer; dispID 22;
+    property  ComaStr[Delimiter:String]:String dispID 23;
+    procedure AssignFields(FieldNames:String; SourceObj:Variant); dispID 256;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+  end;
+
+  //ISAccs - Накопители аналитической информации
+  //Accumulators;Аккумуляторы;Акумулятори
+  ISAccs = dispinterface
+    property  _Default[FieldName:String]:Variant dispID 0;
+    function  Income(Document:Variant; DocDate:DateTime; DocLineNum:Integer):Double; dispID 11;
+    function  IncomeDirect(Document:Variant; DocDate:DateTime; DocLineNum:Integer; Dimensions:Variant; Resources:Variant; Fields:Variant):Double; dispID 12;
+    function  Outcome(Document:Variant; DocDate:DateTime; DocLineNum:Integer):Double; dispID 13;
+    function  OutcomeDirect(Document:Variant; DocDate:DateTime; DocLineNum:Integer; Dimensions:Variant; Resources:Variant; Fields:Variant):Double; dispID 14;
+    function  RemoveDoc(Document:Variant; DocState:Integer; AllStates:Boolean):Boolean; dispID 5;
+    function  IsDocPresent(Document:Variant; DocState:Integer; AllStates:Boolean):Boolean; dispID 6;
+    function  SelectDimID(DimID:Double):Boolean; dispID 141;
+    function  FindDimID:Double; dispID 142;
+    function  FindDimIDDirect(Dimensions:Variant):Double; dispID 143;
+    function  DimensionID:Double; dispID 144;
+    procedure CalcRest(OnDate:DateTime); dispID 15;
+    procedure CalcRestDirect(OnDate:DateTime; Dimensions:Variant); dispID 16;
+    procedure CalcGroupRestDirect(OnDate:DateTime; Dimensions:Variant); dispID 17;
+    procedure CalcRestByDimID(OnDate:DateTime; DimID:Double); dispID 18;
+    property  IncludeZeroRest:Boolean dispID 201;
+    procedure SelectRest(OnDate:DateTime); dispID 20;
+    function  SelectRestNext:Boolean; dispID 21;
+    function  SelectRestPrior:Boolean; dispID 22;
+    procedure SaveRestToValueTable(OnDate:DateTime; ValTbl:Variant); dispID 40;
+    procedure AppendRestToValueTable(OnDate:DateTime; FieldNames:String; ValTbl:Variant); dispID 401;
+    procedure SelectRest2(BegDate:DateTime; EndDate:DateTime); dispID 276;
+    function  SelectRest2Next:Boolean; dispID 277;
+    procedure AppendRest2ToValueTable(OnDate1:DateTime; OnDate2:DateTime; DimFieldNames:String; ResBegFieldNames:String; ResInFieldNames:String; ResOutFieldNames:String; ResEndFieldNames:String; ValTbl:Variant); dispID 402;
+    procedure SelectGroupRest(OnDate:DateTime; FieldNames:String); dispID 4000;
+    function  SelectGroupRestNext:Boolean; dispID 4001;
+    function  SelectGroupRestPrior:Boolean; dispID 4002;
+    procedure SaveGroupRestToValueTable(OnDate:DateTime; FieldNames:String; ValTbl:Variant); dispID 4003;
+    procedure AppendGroupRestToValueTable(OnDate:DateTime; FieldNames:String; ValTbl:Variant); dispID 4004;
+    procedure SelectGroupRest2(BegDate:DateTime; EndDate:DateTime; FieldNames:String); dispID 8096;
+    function  SelectGroupRest2Next:Boolean; dispID 8097;
+    procedure AppendGroupRest2ToValueTable(BegDate:DateTime; EndDate:DateTime; DimFieldNames:String; ResBegFieldNames:String; ResInFieldNames:String; ResOutFieldNames:String; ResEndFieldNames:String; ValTbl:Variant); dispID 8100;
+    procedure ClearFieldBuffers; dispID 49;
+    procedure ClearFieldFilters; dispID 50;
+    procedure SetMeanTypeFieldFilter(FieldName:String; MeanTypes:String); dispID 819;
+    procedure SetFieldFilter(FieldName:String; Values:Variant); dispID 51;
+    procedure SetCtgFieldFilter(FieldName:String; Values:Variant); dispID 307;
+    function  MotionSign:Integer; dispID 60; //Знак движения (-1 или +1)
+    function  Document:Variant; dispID 62;
+    function  Date:Variant; dispID 63;
+    function  LineNum:Integer; dispID 64;
+    function  DocState:Integer; dispID 65;
+    function  IsMotion(BegDate:DateTime; EndDate:DateTime; MotionType:TAccsMotionType; DimID:Double):Boolean; dispID 322;
+    procedure SelectMotion(BegDate:DateTime; EndDate:DateTime; MotionType:TAccsMotionType; DimID:Double); dispID 66; //Движение всех измерений если DimID=-1
+    function  SelectMotionNext:Boolean; dispID 67;
+    function  SelectMotionPrior:Boolean; dispID 68;
+    procedure SaveMotionToValueTable(BegDate:DateTime; EndDate:DateTime; MotionType:TAccsMotionType; DimID:Double; ValTbl:Variant); dispID 69;
+    procedure AppendMotionToValueTable(BegDate:DateTime; EndDate:DateTime; MotionType:TAccsMotionType; FieldNames:String; DimID:Double; ValTbl:Variant); dispID 691;
+    procedure SelectGroupMotion(BegDate:DateTime; EndDate:DateTime; MotionType:TAccsMotionType; FieldNames:String; DimID:Double); dispID 834;
+    function  SelectGroupMotionNext:Boolean; dispID 835;
+    procedure SaveGroupMotionToValueTable(BegDate:DateTime; EndDate:DateTime; MotionType:TAccsMotionType; FieldNames:String; DimID:Double; ValTbl:Variant); dispID 946;
+    procedure AppendGroupMotionToValueTable(BegDate:DateTime; EndDate:DateTime; MotionType:TAccsMotionType; FieldNames:String; DimID:Double; ValTbl:Variant); dispID 947;
+    procedure SelectDocMotion(Document:Variant; MotionType:TAccsMotionType); dispID 80;
+    function  SelectDocMotionNext:Boolean; dispID 81;
+    function  SelectDocMotionPrior:Boolean; dispID 82;
+    procedure SaveDocMotionToValueTable(Document:Variant; MotionType:TAccsMotionType; ValTbl:Variant); dispID 83;
+    procedure AppendDocMotionToValueTable(Document:Variant; MotionType:TAccsMotionType; FieldNames:String; ValTbl:Variant); dispID 831;
+    property  OutcomeMotionWithMinus:Boolean dispID 900;
+    procedure AssignFields(FieldNames:String; SourceObj:Variant); dispID 256;
+    procedure AssignFieldsByDimIDTo(DimIDFieldName:String; FieldNames:String; ValTbl:Variant); dispID 257;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  BegVal:ISAccVals; dispID 3210;
+    function  EndVal:ISAccVals; dispID 3211;
+    function  InVal:ISAccVals; dispID 3212;
+    function  OutVal:ISAccVals; dispID 3213;
+    property  NotIncludeNullMotionInRest:DateTime dispID 23;
+    function  StartTransaction:Integer; dispID 19;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 24;
+    procedure AppendDocsListMotionToValueTable(DocsList:Variant; MotionType:TAccsMotionType; FieldNames:String; ValTbl:Variant); dispID 7;
+    function  SelectGroupMotionPrior:Boolean; dispID 836;
+    function  SelectGroupRest2Prior:Boolean; dispID 8098;
+    function  SelectRest2Prior:Boolean; dispID 278;
+  end;
+
+  //ISProtocols - Объект для ведения протокола действий
+  //Protocols;Протоколы;Протоколи
+  ISProtocols = dispinterface
+    function  AS_ApplyUpdates(ProviderName:String; Delta:Variant; MaxErrors:Integer; var ErrorCount:Integer; var OwnerData:Variant):Variant; dispID 20000000;
+    function  AS_GetRecords(ProviderName:String; Count:Integer; var RecsOut:Integer; Options:Integer; CommandText:String; var Params:Variant; var OwnerData:Variant):Variant; dispID 20000001;
+    function  AS_DataRequest(ProviderName:String; Data:Variant):Variant; dispID 20000002;
+    function  AS_GetProviderNames:Variant; dispID 20000003;
+    function  AS_GetParams(ProviderName:String; var OwnerData:Variant):Variant; dispID 20000004;
+    function  AS_RowRequest(ProviderName:String; Row:Variant; RequestType:Integer; var OwnerData:Variant):Variant; dispID 20000005;
+    procedure AS_Execute(ProviderName:String; CommandText:String; var Params:Variant; var OwnerData:Variant); dispID 20000006;
+    function  GetMean:Variant; dispID 22;
+    function  GetSign:String; dispID 27;
+    function  GetMeanSign:String; dispID 28;
+    procedure SetFilterByMean(Mean:Variant); dispID 29;
+    procedure CancelFilterByMean; dispID 30;
+    function  Select:Boolean; dispID 203;
+    function  SelectNext:Boolean; dispID 204;
+    function  SelectPrior:Boolean; dispID 205;
+    procedure SaveToValueTable(Fields:String; Target:Variant; From:Integer; Count:Integer); dispID 24;
+    procedure SetFieldFilter(FieldName:String; Condition1:String; Val1:Variant; LogCon:String; Condition2:String; Val2:Variant); dispID 34;
+    procedure CancelFieldFilter(FieldName:String); dispID 36;
+    procedure SetOnFilter(Value:Variant); dispID 201;
+    procedure SetDateRange(DateStart:DateTime; DateEnd:DateTime); dispID 39;
+    function  GetDateRange(var DateStart:DateTime; var DateEnd:DateTime):Boolean; dispID 40;
+    procedure CancelDateRange; dispID 41;
+    procedure SetRangeByField(FieldName:String; Value:Variant); dispID 42;
+    procedure CancelRangeByField; dispID 43;
+    procedure SetMeanTypeRange(Value:String); dispID 44;
+    function  GetMeanTypeRange:String; dispID 45;
+    procedure SetActTypeRange(Value:Integer); dispID 46;
+    procedure CancelMeanTypeRange; dispID 48;
+    procedure CancelActTypeRange; dispID 49;
+    property  _Default[AFieldName:String]:Variant dispID 0;
+    procedure AppendMeanTypeRange(AMeanType:String); dispID 47;
+    procedure SortByField(AFields:String); dispID 50;
+    function  FindByField(AFieldName:String; AParam:Variant; APartial:Boolean):Boolean; dispID 51;
+    function  HasField(FieldName:String):Boolean; dispID 52;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 57;
+    function  IsFocused:Boolean; dispID 21010;
+    property  Terminated:Boolean readonly dispID 58;
+    function  GetComment:String; dispID 60;
+    function  RecordCount:Integer; dispID 61;
+    procedure NotifyClient(Msg:String; Count:Integer; Total:Integer); dispID 65;
+    procedure NotifyClientEx(Level:Integer; Msg:String; Count:Integer; Total:Integer); dispID 66;
+  end;
+
+  //ISCollection - Объект для работы с коллекциями на сервере
+  //Collections;Коллекции;Колекції
+  ISCollection = dispinterface
+    function  Select:Boolean; dispID 40;
+    function  SelectNext:Boolean; dispID 41;
+    function  Value:String; dispID 42;
+    function  IsFocused:Boolean; dispID 21010;
+    procedure Change(Sign:String; Comment:String); dispID 50;
+    procedure Delete(Sign:String); dispID 51;
+    procedure ApplyUpdates; dispID 52;
+    procedure Cancel; dispID 53;
+    property  _Default[Item:String]:Variant dispID 3;
+    function  Find(Item:String):Boolean; dispID 4;
+    function  FindByComment(Comment:String; Partial:Boolean):Boolean; dispID 5;
+    function  GetSign:String; dispID 6;
+    function  GetName:String; dispID 8;
+    function  StartTransaction:Integer; dispID 9;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 10;
+    procedure Edit(OldSign:String; NewSign:String; NewComment:String); dispID 11;
+    function  ValueSign:String; dispID 12;
+  end;
+
+  //ISDocuments - Объект для работы с документами на сервере
+  //Documents;Документы;Документи
+  ISDocuments = dispinterface
+    property  _Default[FieldName:String]:Variant dispID 0;
+    procedure SetOnCalcFields(Value:Variant); dispID 237;
+    procedure SetOnFilter(Value:Variant); dispID 238;
+    procedure SetOnTableCalcFields(Value:Variant); dispID 7;
+    function  Select:Boolean; dispID 225;
+    function  SelectNext:Boolean; dispID 226;
+    function  SelectPrior:Boolean; dispID 227;
+    function  Terminated:Boolean; dispID 236;
+    function  Find(Item:Variant):Boolean; dispID 213;
+    function  GetDocState:Integer; dispID 200;
+    function  GetNumber:String; dispID 201;
+    function  GetDate:DateTime; dispID 202;
+    procedure AppendLine; dispID 204;
+    procedure EditLine; dispID 205;
+    procedure PostLine; dispID 206;
+    procedure DeleteLine; dispID 208;
+    procedure Append; dispID 230;
+    procedure Edit; dispID 231;
+    procedure Post; dispID 232;
+    procedure Cancel; dispID 233;
+    procedure CancelLine; dispID 234;
+    function  LinesCount:Integer; dispID 235;
+    procedure Delete; dispID 239;
+    function  SelectLines:Boolean; dispID 240;
+    function  SelectNextLine:Boolean; dispID 241;
+    function  FindLineBy(FieldName:String; Value:Variant):Boolean; dispID 242;
+    function  Total(FieldName:String):Variant; dispID 243;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    procedure SaveContents(Fields:String; Target:Variant); dispID 246;
+    procedure LoadContents(Fields:String; Source:Variant); dispID 247;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    property  Owner:Variant readonly dispID 254;
+    procedure UseMaster(Item:Variant); dispID 248;
+    function  IsFocused:Boolean; dispID 21010;
+    function  GetDocBuhState:Integer; dispID 249;
+    procedure SetMaster(Value:Variant); dispID 250;
+    procedure BuhStateUp; dispID 260;
+    procedure BuhStateDown; dispID 261;
+    function  GetName:String; dispID 17;
+    procedure SaveTableStructure(Fields:String; Item:Variant); dispID 18;
+    procedure AssignFields(Fields:String; Source:Variant); dispID 45;
+    procedure NotifyClient(Msg:String; Count:Integer; Total:Integer); dispID 46;
+    function  HasField(FieldName:String):Boolean; dispID 21005;
+    function  GetSign:String; dispID 19;
+    procedure StateUp; dispID 21;
+    procedure StateDown; dispID 22;
+    function  HasTableField(FieldName:String):Boolean; dispID 23;
+    function  FindByField(FieldName:String; Val:Variant; Partial:Boolean):Boolean; dispID 24;
+    function  StartTransaction:Integer; dispID 25;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 26;
+    procedure SetFieldFilter(FieldName:String; Condition1:String; Val1:Variant; LogCon:String; Condition2:String; Val2:Variant); dispID 449;
+    procedure CancelFieldFilter(FieldName:String); dispID 450;
+    procedure NotifyClientEx(Level:Integer; Msg:String; Count:Integer; Total:Integer); dispID 600;
+    function  GetNumbersObject:IObject; dispID 27;
+    property  DefaultNum:Integer dispID 28;
+    function  GetDateEditBuh(DocType:String; DocID:String):Double; dispID 30;
+    procedure SaveContentsLine(Fields:String; Target:Variant); dispID 32;
+    procedure AppendLineTo(Fields:String; Target:Variant); dispID 33;
+    procedure AppendLinesTo(Fields:String; Target:Variant); dispID 34;
+    procedure ClearContents; dispID 39;
+    function  HasHeaderField(FieldName:String):Boolean; dispID 41;
+    procedure SortByField(AFields:String); dispID 42;
+    procedure SaveHead(Fields:String; Target:Variant); dispID 44;
+    procedure LoadHead(Fields:String; Source:Variant); dispID 47;
+    function  FindAndSelect(Item:Variant):Boolean; dispID 48;
+    function  SelectPriorLine:Boolean; dispID 50;
+    procedure SetListFieldFilter(FieldName:String; Condition1:String; Val1:Variant; LogCon:String; Condition2:String; Val2:Variant); dispID 451;
+    procedure CancelListFieldFilter(FieldName:String); dispID 452;
+    procedure SaveDocsDataToValueTable(ADocHeaderFields:String; ADocContentFields:String; AOnlyCurrentDoc:Boolean; AValueTable:Variant); dispID 500;
+  end;
+
+  //ISJournal - Объект для работы с журналами документов для сервера
+  //Journals;Журналы;Журнали
+  ISJournal = dispinterface
+    procedure SetOnCalcFields(Value:Variant); dispID 200;
+    procedure SetOnFilter(Value:Variant); dispID 201;
+    procedure UseMaster(Item:Variant); dispID 202;
+    function  Select:Boolean; dispID 203;
+    function  SelectNext:Boolean; dispID 204;
+    function  Total(FieldName:String):Variant; dispID 205;
+    property  _Default[FieldName:String]:Variant dispID 0;
+    procedure SetDateRange(DateStart:DateTime; DateEnd:DateTime); dispID 206;
+    function  GetDocSign:String; dispID 207;
+    function  GetDocState:Integer; dispID 208;
+    procedure SetDocStateRange(State:Integer); dispID 209;
+    function  GetStateName(State:Integer):String; dispID 210;
+    function  StateCount:Integer; dispID 211;
+    function  GetDateRange(var DateStart:DateTime; var DateEnd:DateTime):Boolean; dispID 212;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  IsFocused:Boolean; dispID 21010;
+    procedure AddDoc(IDoc:IObject); dispID 213;
+    procedure RemoveDoc(IDoc:IObject); dispID 214;
+    function  GetDocTypeRange:String; dispID 215;
+    procedure SetDocTypeRange(Value:String); dispID 216;
+    function  GetDocOwner:IObject; dispID 217;
+    function  HasDocOwner:Boolean; dispID 17;
+    function  SelectPrior:Boolean; dispID 16;
+    function  GetDoc:Variant; dispID 18;
+    function  GetName:String; dispID 19;
+    function  Terminated:Boolean; dispID 262;
+    procedure NotifyClient(Msg:String; Count:Integer; Total:Integer); dispID 261;
+    function  HasField(FieldName:String):Boolean; dispID 21005;
+    procedure SetRangeByField(FieldName:String; Value:Variant); dispID 20;
+    procedure CancelRangeByField; dispID 21;
+    function  GetSign:String; dispID 22;
+    procedure SetFieldFilter(FieldName:String; Condition1:String; Val1:Variant; LogCon:String; Condition2:String; Val2:Variant); dispID 449;
+    procedure CancelFieldFilter(FieldName:String); dispID 450;
+    procedure NotifyClientEx(Level:Integer; Msg:String; Count:Integer; Total:Integer); dispID 600;
+    procedure SetCliFuncField(FieldName:String; IObj:Variant; FuncID:String; FuncArgs:Variant; MasterKey:String); dispID 21012;
+    procedure SetSrvFuncField(FieldName:String; IObj:Variant; FuncID:String; FuncArgs:Variant; MasterKey:String); dispID 21013;
+    function  RecordCount:Integer; dispID 24;
+    procedure SaveToValueTable(Fields:String; Target:Variant; From:Integer; Count:Integer); dispID 27;
+    procedure SetDocMultiStateRange(States:String); dispID 42;
+    procedure SetCalcFieldInDBServer(Journs:Variant; Fields:Variant; States:Variant); dispID 28;
+    procedure Edit; dispID 35;
+    procedure Post; dispID 36;
+    function  GetForm(FormType:String; var FormID:String; var CLICodeID:String):Variant; dispID 37;
+    function  StartTransaction:Integer; dispID 38;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 39;
+    function  GetDocStateRange:Integer; dispID 40;
+    function  FindDoc(Item:Variant):Boolean; dispID 31;
+    function  FindByField(AFieldName:String; AParam:Variant; APartial:Boolean):Boolean; dispID 43;
+    function  FindDocAndSelect(Item:Variant):Boolean; dispID 55;
+    procedure SetFilterByModifiedDocs; dispID 44;
+    procedure ClearFilterByModifiedDocs; dispID 45;
+    procedure SortByField(AFields:String); dispID 49;
+    procedure ExecGroupQuery(var AQuery:Variant); dispID 51;
+    function  SetToGroupPos(var APos:Variant):Boolean; dispID 53;
+    function  InternalGroupFind(var FindBy:Variant):Boolean; dispID 54;
+    procedure CancelDateRange; dispID 52;
+    procedure SaveDocsDataToValueTable(ADocHeaderFields:String; ADocContentFields:String; AValueTable:Variant); dispID 500;
+    procedure AppendDocTypeRange(Value:String); dispID 57;
+  end;
+
+  //ISValueTable - Временная таблица для хранения промежуточных данных
+  //ValueTable;ТаблицаЗначений;ТаблицяЗначень
+  ISValueTable = dispinterface
+    property  _Default[Column:String]:Variant dispID 0;
+    property  DefValue[Column:String]:Variant dispID 257;
+    property  TblName:String dispID 272;
+    procedure AddColumn(ColumnName:String; DataType:TValueTableColumnType; DataSize:Integer); dispID 1;
+    procedure SetColumnFormat(Column:String; FormatStr:String); dispID 258;
+    function  GetColumnCount:Integer; dispID 259;
+    function  GetColumnName(ColumnIndex:Integer):String; dispID 260;
+    function  GetColumnFormat(ColumnIndex:Integer):String; dispID 261;
+    function  GetColumnDataType(ColumnIndex:Integer):TValueTableColumnType; dispID 262;
+    function  GetColumnDataSize(ColumnIndex:Integer):Integer; dispID 263;
+    procedure Open; dispID 2;
+    procedure Close; dispID 3;
+    property  Active:Boolean dispID 4;
+    function  LineCount:Integer; dispID 5;
+    property  SortedColumns:String dispID 6;
+    property  RecID:Double dispID 7;
+    function  FindByRecID(RecID:Double):Boolean; dispID 25;
+    property  LinkID:Double dispID 8;
+    procedure Append; dispID 9;
+    procedure Edit; dispID 11;
+    procedure Post; dispID 12;
+    procedure Cancel; dispID 13;
+    procedure Delete; dispID 14;
+    procedure Clear; dispID 16;
+    function  BOF:Boolean; dispID 18;
+    function  EOF:Boolean; dispID 19;
+    procedure Select; dispID 20;
+    function  SelectFirst:Boolean; dispID 21;
+    function  SelectLast:Boolean; dispID 22;
+    function  SelectNext:Boolean; dispID 23;
+    function  SelectPrior:Boolean; dispID 24;
+    procedure SortBy(Columns:String); dispID 26;
+    function  Total(Column:String):Variant; dispID 28;
+    procedure DoNumbering(Column:String; StartValue:Integer; IncValue:Integer); dispID 281;
+    procedure DoCalculation(Column:String; Expression:String); dispID 282;
+    procedure DoGetMeanNames(LinkColumns:String; StrColumns:String); dispID 283;
+    procedure DoGetLinks(ColumnsAsgn:String); dispID 284;
+    function  Find(Values:Variant):Boolean; dispID 30;
+    function  Locate(Columns:String; Values:Variant):Boolean; dispID 31;
+    procedure UpdateObjNames; dispID 50;
+    procedure UseMaster(MasterTable:Variant); dispID 60;
+    procedure RemoveMaster; dispID 61;
+    procedure GroupBy(GroupColumns:String; SumColumns:String); dispID 27;
+    procedure GroupLinkedBy(GroupColumns:String; SumColumns:String); dispID 63;
+    procedure GroupTo(GroupColumns:String; SumColumns:String; ValTbl:Variant); dispID 64;
+    procedure GroupLinkedTo(GroupColumns:String; SumColumns:String; ValTbl:Variant); dispID 65;
+    procedure GroupToMaster(GroupColumns:String; SumColumns:String; MasterValTbl:Variant); dispID 66;
+    procedure CopyColumnsTo(TrgValTbl:Variant); dispID 79;
+    procedure CopyTo(FieldNames:String; TrgValTbl:Variant); dispID 80;
+    procedure AppendTo(FieldNames:String; TrgValTbl:Variant); dispID 81;
+    procedure GroupToList(ColName:String; ValLst:IObject); dispID 10;
+    procedure SetRange(StartValues:Variant; EndValues:Variant); dispID 15;
+    procedure CancelRange; dispID 17;
+    procedure AssignFields(FieldNames:String; SourceObj:Variant); dispID 256;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  IsFocused:Boolean; dispID 21010;
+    procedure SaveToFile(FileName:String); dispID 29;
+    function  HasField(ColumnName:String):Boolean; dispID 21005;
+    property  PackedData:Variant dispID 34;
+    function  GetColumnIndex(AColumnName:String):Integer; dispID 32;
+    property  DisableStringTrim:Boolean dispID 33;
+    procedure BuildParentPath(LinkFieldName:String; TargetFieldName:String; Delimiter:String; FullPath:Boolean; IncludeBaseRecord:Boolean); dispID 35;
+    procedure LoadFromFile(AFileName:String); dispID 36;
+    procedure SortBy2(Columns:String; SortLinkOnlyByDefName:Boolean); dispID 37;
+  end;
+
+  //Declarations;Декларации;Декларації
+  IS4VPATaxPlan = dispinterface
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    property  _Default[FieldName:String]:Variant dispID 0;
+    procedure Append; dispID 2;
+    procedure Edit; dispID 9;
+    procedure Post; dispID 10;
+    procedure ApplyUpdates; dispID 11;
+    procedure Cancel; dispID 12;
+    function  Select:Boolean; dispID 15;
+    function  SelectNext(IncludeSub:Boolean):Boolean; dispID 16;
+    function  IsFocused:Boolean; dispID 21010;
+    function  IsGroupMember(Item:Variant):Boolean; dispID 19;
+    function  CalcRest(OnCodes:String; StartDate:DateTime; EndDate:DateTime):Variant; dispID 4;
+    function  StartTransaction:Integer; dispID 3;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 6;
+  end;
+
+  //TaxOperations;НалоговыеОперации;ПодатковіОперації
+  IS4VPATax = dispinterface
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    procedure Append(Document:Variant); dispID 8;
+    procedure Edit; dispID 10;
+    procedure Post; dispID 11;
+    procedure Cancel; dispID 12;
+    procedure AppendLine; dispID 13;
+    procedure EditLine; dispID 14;
+    procedure PostLine; dispID 17;
+    procedure CancelLine; dispID 18;
+    property  Document:Variant dispID 20;
+    function  SelectLines:Boolean; dispID 21;
+    function  SelectNextLine:Boolean; dispID 22;
+    function  LinesCount:Integer; dispID 23;
+    property  _Default[FieldName:String]:Variant dispID 0;
+    function  GetPlan:IObject; dispID 19;
+    function  StartTransaction:Integer; dispID 24;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 25;
+    function  FindDoc(Item:Variant):Boolean; dispID 3;
+    function  CalcRest(OnCodes:String; StartDate:DateTime; EndDate:DateTime):Variant; dispID 4;
+    function  CalcGroupRest(OnCodes:String; StartDate:DateTime; EndDate:DateTime):Variant; dispID 50;
+  end;
+
+  //ISOptions - Объект для работы с параметрами пользователя на сервере
+  //ClientOptions;ОпцииКлиента;ОпціїКлієнта
+  ISOptions = dispinterface
+    function  GetPrm(Name:String):Variant; dispID 1;
+    procedure SetPrm(Name:String; Value:Variant); dispID 2;
+  end;
+
+  //ISProcessing - Объект для обработки на сервере
+  //Processings;Обработки;Обробки
+  ISProcessing = dispinterface
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  Terminated:Boolean; dispID 236;
+    procedure NotifyClient(Msg:String; Count:Integer; Total:Integer); dispID 599;
+    procedure NotifyClientEx(Level:Integer; Msg:String; Count:Integer; Total:Integer); dispID 600;
+    function  GetSign:String; dispID 4;
+  end;
+
+  //ISDBTable - Работа с физическими таблицами БД
+  //DBTable;ТаблицаБД;ТаблицяБД
+  ISDBTable = dispinterface
+    property  _Default[FieldName:String]:Variant dispID 0;
+    property  TableName:String dispID 2;
+    property  IndexFields:String dispID 3;
+    property  Field[FieldName:String]:Variant dispID 4;
+    function  First:Boolean; dispID 5; //To first record
+    function  Last:Boolean; dispID 6; //To last record
+    function  Next:Boolean; dispID 7; //To next record
+    function  Prior:Boolean; dispID 8; //To prior record
+    function  EOF:Boolean; dispID 9; //End of file
+    procedure SetMaster(Master:IObject; MasterFields:String; IndexFields:String); dispID 10;
+    function  RecordCount:Integer; dispID 11;
+    function  Locate(IndexName:String; Keys:Variant):Boolean; dispID 12;
+    procedure ClearMaster; dispID 13;
+    property  Active:Boolean dispID 14;
+    procedure Delete; dispID 15;
+    function  BOF:Boolean; dispID 16; //Begin of file
+    procedure Append; dispID 17;
+    procedure Edit; dispID 18;
+    property  IndexName:String dispID 19;
+    property  FieldCount:Integer readonly dispID 20;
+    property  Fields[FieldIndex:Integer]:Variant dispID 21;
+    function  MoveBy(Distance:Integer):Integer; dispID 22;
+    property  RecNo:Integer readonly dispID 23;
+    procedure SetKey; dispID 24;
+    function  GotoKey:Boolean; dispID 25;
+    procedure GotoNearest; dispID 26;
+    procedure Post; dispID 27;
+    procedure FlushBuffers; dispID 28;
+    procedure SetRange(StartValues:Variant; EndValues:Variant); dispID 29;
+    procedure CancelRange; dispID 30;
+    property  KeyFieldCount:Integer dispID 31;
+    function  FindKey(KeyValues:Variant):Boolean; dispID 32;
+    procedure FindNearest(KeyValues:Variant); dispID 33;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  HasField(FieldName:String):Boolean; dispID 21005;
+    function  CreateTable(liTableType:Integer; lsTableName:String; lsFields:String):Boolean; dispID 34;
+    function  PackTable:Boolean; dispID 35;
+    procedure EmptyTable; dispID 36;
+    procedure InitializeClientDataSet; dispID 37;
+    property  FileName:String dispID 38;
+    function  GetFieldName(FieldIndex:Integer):String; dispID 39;
+  end;
+
+  //ISDictionary - Объект для работы со справочниками на сервере
+  //Dictionaries;Справочники;Довідники
+  ISDictionary = dispinterface
+    procedure Append; dispID 204;
+    procedure Post; dispID 205;
+    function  OpenMean(MeanID:String; var MeanInfo:Variant; var LockInfo:IObject):Integer; dispID 200;
+    function  GetParent:IObject; dispID 209;
+    function  GetSign:String; dispID 210;
+    function  IsParent:Boolean; dispID 211;
+    function  IsChildForParent(Parent:Variant):Boolean; dispID 212;
+    function  Find(AItem:Variant):Boolean; dispID 213;
+    function  FindByCode(Param:String; Partial:Boolean):Boolean; dispID 214;
+    function  FindByName(Param:String; Partial:Boolean):Boolean; dispID 215;
+    function  FindByField(FieldName:String; Param:Variant; Partial:Boolean):Boolean; dispID 216;
+    procedure SetDateForTimedField(Val:DateTime); dispID 217;
+    procedure SortByCode; dispID 218;
+    procedure SortByName; dispID 219;
+    procedure SortByField(FieldName:String); dispID 220;
+    property  _Default[FieldName:String]:Variant dispID 0;
+    procedure Edit; dispID 221;
+    function  _GetOwner:IObject; dispID 222;
+    function  UseMaster(Item:Variant):Boolean; dispID 223;
+    procedure RemoveMaster(Item:Variant); dispID 224;
+    function  Select:Boolean; dispID 225;
+    function  SelectNext:Boolean; dispID 226;
+    function  Field(FieldName:String):IObject; dispID 229;
+    function  SelectPrior:Boolean; dispID 227;
+    procedure UseParent(Item:Variant); dispID 230;
+    procedure UseLevelsOnTop(Value:Boolean); dispID 231;
+    procedure IncludeLevels(DoInclude:Boolean); dispID 232;
+    procedure IncludeOnlyLevels(DoInclude:Boolean); dispID 233;
+    procedure AppendLevel; dispID 234;
+    procedure NotifyClient(Msg:String; Count:Integer; Total:Integer); dispID 235;
+    function  Terminated:Boolean; dispID 236;
+    procedure SetOnCalcFields(Value:Variant); dispID 237;
+    procedure SetOnFilter(Value:Variant); dispID 238;
+    property  CodeField:Variant dispID 239;
+    property  NameField:Variant dispID 240;
+    function  GetUniID:Double; dispID 241;
+    function  GetTimedValue(FieldName:String; OnDate:DateTime):Variant; dispID 10;
+    procedure SetTimedValue(FieldName:String; OnDate:DateTime; Value:Variant); dispID 12;
+    procedure SetMaster(Value:Variant); dispID 15;
+    procedure SetParent(Value:Variant); dispID 16;
+    function  GetName:String; dispID 17;
+    procedure AssignFields(Fields:String; Source:Variant); dispID 45;
+    function  IsFocused:Boolean; dispID 21010;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  HasField(FieldName:String):Boolean; dispID 21005;
+    procedure SetRangeByField(FieldName:String; RSVal:Variant; REVal:Variant); dispID 18;
+    procedure CancelRange; dispID 19;
+    function  FindByCodeName(FCode:String; FName:String):Boolean; dispID 20;
+    function  UseMasterAndSelect(Item:Variant):Boolean; dispID 21;
+    procedure ApplyUpdates; dispID 22;
+    procedure CancelUpdates; dispID 23;
+    property  BatchUpdates:Boolean dispID 26;
+    property  RecordCount:Integer readonly dispID 25;
+    procedure SetFieldFilter(FieldName:String; Condition1:String; Val1:Variant; LogCon:String; Condition2:String; Val2:Variant); dispID 449;
+    procedure CancelFieldFilter(FieldName:String); dispID 450;
+    procedure NotifyClientEx(Level:Integer; Msg:String; Count:Integer; Total:Integer); dispID 600;
+    procedure SaveToValueTable(Fields:String; Target:Variant; From:Integer; Count:Integer); dispID 27;
+    procedure Get_DVListForTimedFields(RecID:Double; FieldName:String; DS:DateTime; DE:DateTime); dispID 21012;
+    procedure NextDVTimedFields(var Date:DateTime; var Value:Variant); dispID 28;
+    function  DVEof:Boolean; dispID 29;
+    procedure SetCalcFieldInDBServer(Field:String; StrSql:String; Param:String); dispID 8;
+    function  StartTransaction:Integer; dispID 46;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 47;
+    procedure Delete; dispID 49;
+    function  FindAndSelect(AItem:Variant):Boolean; dispID 53;
+    property  DefaultDSID:String readonly dispID 54;
+    procedure CopyToDB(DBName:String; OnlyCurrentRecord:Boolean; Rewrite:Boolean); dispID 55;
+    function  GetCtgPath(Delimiter:String; FullPath:Boolean; IncludeBaseRecord:Boolean):String; dispID 56;
+    procedure DeleteTimedValue(FieldName:String; DateFrom:DateTime; DateTo:DateTime); dispID 57;
+    procedure Cancel; dispID 242;
+    procedure CreateDefineSelectParams(Active:Boolean; TypeLine:Integer; Clause:String; FieldName:String; Predicate:String; Value:Variant); dispID 59;
+    procedure ClearDefineSelectParams; dispID 60;
+  end;
+
+  //Constants;Константы;Константи
+  IS4VPAConst = dispinterface
+    property  _Default[Name:String]:Variant dispID 0;
+    property  TMDate:DateTime dispID 200;
+    function  GetValFromClient(FieldName:String; var Val:Variant; var RecType:Double; var RecID:Double):Boolean; dispID 1;
+  end;
+
+  //ISReport - Объект для работы с отчетами на сервере
+  //Reports;Отчеты;Звіти
+  ISReport = dispinterface
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  Terminated:Boolean; dispID 236;
+    procedure NotifyClient(Msg:String; Count:Integer; Total:Integer); dispID 599;
+    procedure NotifyClientEx(Level:Integer; Msg:String; Count:Integer; Total:Integer); dispID 600;
+    function  GetItems(OnlyExternal:Boolean):String; dispID 4;
+    procedure ExecProc(Caller:Variant; ProcID:String; InParams:Variant; var OutParams:Variant); dispID 21099;
+    procedure OpenSrvReport(FormID:String); dispID 5;
+    procedure SaveReportListToValueTable(Target:Variant); dispID 6;
+    function  GetName:String; dispID 7;
+    function  GetSign:String; dispID 9;
+  end;
+
+  //ISBuh - Объект для работы с бухучетом на сервере
+  //Accountancy;БухУчет;БухОблік
+  ISBuh = dispinterface
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  Rest:ISBhRest; dispID 4;
+    function  Query:ISBhQuery; dispID 5;
+    property  MaxAOCount:Integer readonly dispID 7;
+    property  Plan:IObject readonly dispID 9;
+    function  StartTransaction:Integer; dispID 10;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 11;
+  end;
+
+  //ISWriNums - Представление чисел и дат прописью
+  //WrittenNumbers;ЧислаПрописью;ЧислаПрописом
+  ISWriNums = dispinterface
+    function  DigitToStr(Val:Double; LangID:Integer):String; dispID 1;
+    function  MoneyToStr(Val:Double; CurCode:String; LangID:Integer):String; dispID 2;
+    function  MonthToStr(Num:Integer; Frm:Integer; LangID:Integer):String; dispID 3;
+    function  FormatDateTime(Format:String; DT:DateTime; Frm:Integer; LangID:Integer):String; dispID 4;
+    function  DayOfWeekStr(DOW:Integer; Frm:Integer; LangID:Integer):String; dispID 6;
+    function  DateRangeToStr(Num:Integer; RD:Integer; LangID:Integer):String; dispID 5;
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    procedure SetSex(Sex:Integer); dispID 7;
+  end;
+
+  //ISPlan - Объект работы  с планом счетов на сервере
+  //AccPlan;ПланыСчетов;ПланиРахунків
+  ISPlan = dispinterface
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    property  IBuh:IObject readonly dispID 1;
+    property  _Default[FieldName:String]:Variant dispID 0;
+    property  IsCurrency:Boolean dispID 32;
+    property  IsCount:Boolean dispID 33;
+    property  IsSingle:Boolean dispID 34;
+    property  IsActive:Integer dispID 35;
+    procedure Append; dispID 2;
+    procedure Edit; dispID 9;
+    procedure Post; dispID 10;
+    procedure ApplyUpdates; dispID 11;
+    procedure Cancel; dispID 12;
+    function  AccByCode(Code:String):IObject; dispID 13;
+    function  GetIDisp:IObject; dispID 14;
+    function  Select:Boolean; dispID 15;
+    function  SelectNext(IncludeSub:Boolean):Boolean; dispID 16;
+    function  IsFocused:Boolean; dispID 21010;
+    function  IsGroup:Boolean; dispID 17;
+    function  Level:Integer; dispID 18;
+    function  IsGroupMember(Item:Variant):Boolean; dispID 19;
+    procedure IncludeGroups(Include:Boolean); dispID 20;
+    property  AOType[Index:Integer]:Variant dispID 22;
+    function  AOCount:Integer; dispID 23;
+    function  GetData:Variant; dispID 24;
+    procedure SetAllCount(bit:Integer; Code:String; Value:Variant); dispID 27;
+    function  StartTransaction:Integer; dispID 26;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 28;
+    function  FindByField(AFieldName:String; AValue:Variant; APartial:Boolean):Boolean; dispID 29;
+    function  FindByCode(ACode:String; APartial:Boolean):Boolean; dispID 30;
+    function  FindByName(AName:String; APartial:Boolean):Boolean; dispID 31;
+    function  Find(AItem:Variant):Boolean; dispID 36;
+    procedure SetFieldFilter(AFieldName:String; ACond1:String; AValue1:Variant; ALogCon:String; ACond2:String; AValue2:Variant); dispID 37;
+    procedure CancelFieldFilter(AFieldName:String); dispID 38;
+  end;
+
+  //ISOpers - Объект для работы с бухгалтерскими операциями и проводками на сервере
+  //AccOpers;БухОперации;БухОперації
+  ISOpers = dispinterface
+    function  IsType(VPAName:String):Boolean; dispID 21001;
+    function  GetType:String; dispID 21002;
+    function  HasParam(Name:String):Boolean; dispID 21003;
+    property  Params[Name:String]:Variant dispID 21004;
+    function  Debit:ISDebitCredit; dispID 3;
+    function  Credit:ISDebitCredit; dispID 7;
+    procedure Append(Document:Variant); dispID 8;
+    procedure Edit; dispID 10;
+    procedure Post; dispID 11;
+    procedure Cancel; dispID 12;
+    procedure AppendLine; dispID 13;
+    procedure EditLine; dispID 14;
+    procedure PostLine; dispID 17;
+    procedure CancelLine; dispID 18;
+    property  Document:Variant dispID 20;
+    function  SelectLines:Boolean; dispID 21;
+    function  SelectNextLine:Boolean; dispID 22;
+    function  LinesCount:Integer; dispID 23;
+    property  _Default[FieldName:String]:Variant dispID 0;
+    function  GetPlan:ISPlan; dispID 19;
+    function  StartTransaction:Integer; dispID 24;
+    function  EndTransaction(Commit:Boolean):Integer; dispID 25;
+    function  GetGroupData(oleQuery:Variant):Variant; dispID 6;
+    function  IsDocEdit(DocType:String; DocID:String; DateEditBuh:DateTime):Boolean; dispID 28;
+    function  DocState(DocType:String; DocID:String; DateEditBuh:DateTime):Integer; dispID 27;
+    procedure SetDocStateRange(DocState:Integer); dispID 29;
+    procedure ClearDocStateRange; dispID 30;
+    function  FindDoc(Item:Variant):Boolean; dispID 31;
+    procedure Delete; dispID 34;
+  end;
+
+implementation
+end.

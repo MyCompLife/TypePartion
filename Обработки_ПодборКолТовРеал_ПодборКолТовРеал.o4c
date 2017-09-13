@@ -1,0 +1,134 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  Param : Variant;
+  Doc : ICDocuments;
+  TblGood : ICValueTable;
+  TLZStore : ICDictionary;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Doc := Params;
+  TblGood := CreateObject('ТаблицаЗначений');
+  TLZStore := CreateObject('Справочники.Склады');
+  if TLZStore.FindByField('Активность', VarAsInt(True), True) then
+    edStore.Text := TLZStore.Название;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  Doc.Params['AutoCreate'] := rbYes.Checked;
+  if rbYes.Checked then
+    begin
+      Doc.SaveTableStructure('', TblGood);
+      TblGood.CopyDataToServer;
+      case Doc.GetSign() of
+        'СписаниеСТоргТочки', 'ВозвратОтТоргТочки', 'ИнвентНаТоргТочке',
+          'ДокументИзмЦенВРознице' :
+          begin
+            if IsObjFocused(TLZStore) then
+              begin
+                TLZStore.SetSrvToClientPos();
+                server.GetStoreListMag(TblGood.SrvMean, Doc.Партнер, Doc.SrvMean,
+                  rgCount.ItemIndex, TLZStore.SrvMean)
+              end
+            else
+              server.GetStoreListMag(TblGood.SrvMean, Doc.Партнер, Doc.SrvMean,
+                rgCount.ItemIndex, Null)
+          end;
+        'СписаниеСРеализатора', 'ВозвратОтРеализатора', 'ИнвентНаРеал',
+          'ДокументИзмЦенРеал' :
+          begin
+            if IsObjFocused(TLZStore) then
+              begin
+                TLZStore.SetSrvToClientPos();
+                server.GetStoreListReal(TblGood.SrvMean, Doc.Партнер, Doc.SrvMean,
+                  rgCount.ItemIndex, TLZStore.SrvMean)
+              end
+            else
+              server.GetStoreListReal(TblGood.SrvMean, Doc.Партнер, Doc.SrvMean,
+                rgCount.ItemIndex, Null)
+          end;
+        'СписаниеСПостНаРеал', 'ВозвратПостНаРеал',
+          'ИнвентПостНаРеал' :
+          begin
+            if IsObjFocused(TLZStore) then
+              begin
+                TLZStore.SetSrvToClientPos();
+                server.GetListFromReal(TblGood.SrvMean, Doc.Партнер, Doc.SrvMean,
+                  rgCount.ItemIndex, TLZStore.SrvMean)
+              end
+            else
+              server.GetListFromReal(TblGood.SrvMean, Doc.Партнер, Doc.SrvMean,
+                rgCount.ItemIndex, Null)
+          end;
+        'ВозвратДогПост', 'НакладнаяДоговПостСчет' :
+          begin
+            if IsObjFocused(TLZStore) then
+              begin
+                TLZStore.SetSrvToClientPos();
+                server.GetStoreListDog(TblGood.SrvMean, Doc.Партнер, Doc.SrvMean,
+                  rgCount.ItemIndex, TLZStore.SrvMean)
+              end
+            else
+              server.GetStoreListReal(TblGood.SrvMean, Doc.Партнер, Doc.SrvMean,
+                rgCount.ItemIndex, Null)
+          end;
+      end;
+      TblGood.CopyDataFromServer;
+      Doc.Params['GoodReal'] := TblGood;
+    end;
+end;
+
+procedure edStore_ActionExecute(Sender : TObject);
+var
+  TLZStoreName : string;
+begin
+  if IsNil(TLZStore) then
+    TLZStore := CreateObject('Справочники.Склады');
+  if TLZStore.SelectInForm('ВыборСклада', TLZStoreName, Null) then
+    edStore.Text := TLZStoreName;
+end;
+
+procedure edStore_ActionClear(Sender : TObject);
+begin
+  nil(TLZStore);
+  edStore.Text := '';
+end;
+
+procedure rbYes_Click(Sender : TObject);
+begin
+  rgCount.Enabled := rbYes.Checked;
+  Label2.Enabled := rbYes.Checked;
+  edStore.Enabled := rbYes.Checked;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if (Doc.GetSign() = 'СписаниеСПостНаРеал') or (Doc.GetSign() = 'ВозвратПостНаРеал')
+    or (Doc.GetSign() = 'ИнвентПостНаРеал') then
+    begin
+      Label2.Visible := False;
+      edStore.Visible := False;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+Panel3:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+LinkImage1:TO4LinkImage
+Label1:TO4Label
+Label2:TO4Label
+rgCount:TO4RadioGroup
+rbNo:TO4RadioButton
+rbYes:TO4RadioButton
+edStore:TO4Edit

@@ -1,0 +1,51 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€CL, –абота—∆урналом»зменений; //!!
+
+implementation
+
+var
+  AccsGood, AccsPart, AccsRev: ICAccs;
+  FullName : String;
+  Constants : IC4VPAConst;
+
+procedure CanChangeStateUp(Data: ICDocuments; var Accept: boolean);
+begin
+  FullName := CanFixDel(Data, Accept, DecGood, UniFix, FixAck);
+  Accept := CheckRestrictions(Data, '—кладѕо”молч');
+end;
+
+procedure DoChangeStateUp(Doc:ICDocuments);
+var Options: ICOptions;
+begin
+  Options := GetOptions;
+  case Doc.GetDocState of
+    1: begin
+         Server.GetChangeStateUpEP(Doc.SrvMean);
+         ChangeDoc(clmtStateUp, Doc);
+       end;
+    2: ;
+  end;
+end;
+
+procedure CanChangeStateDown(Data:ICDocuments; var Accept : boolean);
+begin
+  FullName := CanFixDel(Data, Accept, DecGood, UniUnFix, FixAck)
+end; 
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin
+  ChangeDoc(clmtStateDown, Doc);
+end;
+
+procedure CanDelete(Data: ICDocuments; var Accept: boolean);
+begin  
+  FullName := CanFixDel(Data, Accept, DecGood, UniDel, DelAck, CheckChildPayDoc);
+  if Accept then
+    ChangeDoc(clmtDelete, Data);
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

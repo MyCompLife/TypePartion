@@ -1,0 +1,218 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation  
+
+var
+  V: ICProcessing;
+  Driver: OleVariant; 
+  Price: Integer;
+  Count: String;
+  Scales, Source : ICDictionary;
+  Constants : IC4VPAConst;
+  isWeight, IsPicture : Boolean;
+
+procedure btnClick(Sender: TObject);
+Var
+  TOper : Integer;
+begin
+  PlaySound('Ding');
+  TOper := (Sender as TO4Button).Tag;
+  case TOper of
+    10: Count := Count + ',';
+    11: Count := '';
+    12: Count := StrCopy(Count, 0, StrLength(Count) - 1);
+    else
+      Count := Count + VarAsStr(TOper);
+  end;
+  edCount.Text := Count;
+end;
+
+procedure btOk_Click(Sender: TObject);
+var Cnt : Decimal;
+begin
+  PlaySound('Ding');
+  Cnt := StrToDecDef(edCount.Text,-1);
+  if Cnt>0 then
+    begin
+      V.Params['Count'] := Cnt;
+      Form.ModalResult := mrOK;
+      Form.Close;
+    end
+  else
+    ShowMessage('Количество должно быть >0 !');
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+Var
+  TempStr : String;
+  PhotoFileName: string;
+begin
+  V := Mean;
+  Constants := GetConstants;
+
+  Source :=  Params[2];
+  Price := VarAsInt(Params[0]*100);
+  edCount.Text := VarAsStr(Params[1]);
+  if VarAsBool(Source.ЕдИзм.IsFocused) then
+    pnGood.Caption := VarAsStr(Source.ЕдИзм.Value)
+  else
+    pnGood.Caption := '';
+  pnInfoCnt.Caption := VarAsStr(Source.NameField);
+  pnInfoCode.Caption :='Код: '+ VarAsStr(Source.CodeField);
+  isWeight := VarAsBool(Source.ВесовойТовар);
+  if isWeight then
+    begin
+      Scales := Params[3];
+      if IsObjFocused(Scales) then
+        try
+          if Scales.Тип = 'ВТА' then
+            Driver := CreateOleObject('ScalesCOMServer.ScalesServerBTA.1');
+        except
+          isWeight := false;
+        end
+      else
+        isWeight := false;
+    end;
+
+
+
+
+  if VarAsStr(Constants.ПутьККаталогуФото) <> '' then
+   begin
+     IsPicture := True;
+     PhotoFileName := VarAsStr(Constants.ПутьККаталогуФото) + VarAsStr(Source.CodeField,'NoPhoto') + '.jpg';
+     if FileExists(PhotoFileName) then
+       begin
+         imPhoto.Picture.LoadFromFile(PhotoFileName);
+         imPhoto.Visible := true;
+       end;
+   end
+ else
+   IsPicture := False;
+
+end;
+
+procedure Form_Show(Sender: TObject);
+Var
+  HeightPlus : Integer;
+
+begin
+  HeightPlus := pnGetWeight.Height + pnGoodImage.Height;
+  if not isWeight then
+    begin
+      pnGetWeight.Visible := False;
+      HeightPlus := HeightPlus - pnGetWeight.Height;
+    end;
+  if not IsPicture then
+    begin
+      pnGoodImage.Visible := False;
+      HeightPlus := HeightPlus - pnGoodImage.Height;
+    end;
+
+  Form.Parent.Height := pnInfoCode.Height + pnSeparator3.Height+pnInfoCnt.Height+pnNum.Height+pnButt.Height+
+                        pnSeparator1.Height+pnSeparator2.Height+pnSeparator4.Height+HeightPlus +28;
+  Form.Refresh;
+//  ShowMessage(IntToStr(Form.Parent.Height) + ' - '+IntToStr(Form.Height));
+  edCount.SetFocus;
+end;
+
+function CheckError(Error: Integer): boolean;
+begin
+  if Error = 0 then 
+    begin
+      result := true;
+      exit; 
+    end;
+  case Error of
+    1: begin
+      ShowMessage('Ошибка при работе с СОМ-портом, убедитесь в правильности имени СОМ-порта,'+#13+'а также или СОМ-порт не занят другим приложением.');
+      result := false;
+    end;
+    2: begin
+      ShowMessage('Сом-порт закрыт. Возможно, был аппаратный сбой.');
+      result := false;
+    end;
+    3: begin
+      ShowMessage('Нет ответа от весов. Проверьте включены ли весы, а также кабель подключения к весам.');
+      result := false;
+    end;
+    4: begin
+      ShowMessage('Ошибка в формате цены.');
+      result := false;
+    end;
+    5: begin
+      ShowMessage('Ошибка в типе весов. Этот тип весов не поддерживат данной команды.');
+      result := false;
+    end;
+    6: begin
+      ShowMessage('Даная копия компонента для работы с весами нелицензионная.'+#13+'Обратитесь к поставщику за получением лицензионного кода.');
+      result := false;
+    end;
+    else
+      begin
+      ShowMessage('Ошибка ' + VarAsStr(Error));
+      result := false;
+    end;
+  end;
+end;
+
+procedure btGetWeight_Click(Sender: TObject);
+var
+  Weight, Cost, Error: Integer; 
+
+  ComPort: String;
+begin
+  PlaySound('Ding');
+  edCount.Text := '';
+  if IsObjFocused(Scales) and (Scales.Тип = 'ВТА') then
+    begin
+      if Scales.ComPort <= 8 then
+        ComPort := 'COM' + IntToStr(Scales.ComPort)
+      else
+        ComPort := '\\.\COM' + IntToStr(Scales.ComPort);
+      Driver.OpenComPort(ComPort, Error);
+      if not CheckError(Error) then
+       exit;
+      Driver.SetPrice(Price, Error);
+      if not CheckError(Error) then
+       exit;
+      Driver.GetInfo(Weight, Price, Cost, Error);
+      if not CheckError(Error) then
+        exit;
+      edCount.Text := edCount.Text + VarAsStr(Weight/1000);
+      Driver.CloseComPort(Error);
+      if not CheckError(Error) then
+        exit;
+    end;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+ Driver := Null;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnButt:TO4Panel
+btOk:TO4Button
+Button1:TO4Button
+pnGetWeight:TO4Panel
+btGetWeight:TO4Button
+pnInfoCode:TO4Panel
+pnSeparator3:TO4Panel
+pnInfoCnt:TO4Panel
+pnGoodImage:TO4Panel
+imPhoto:TO4Image
+pnNum:TO4Panel
+edCount:TO4Edit
+pnGood:TO4Panel
+pnSeparator1:TO4Panel
+pnSeparator2:TO4Panel
+pnSeparator4:TO4Panel
+PopupMenu1:TO4PopupMenu
+MenuItem1:TO4MenuItem

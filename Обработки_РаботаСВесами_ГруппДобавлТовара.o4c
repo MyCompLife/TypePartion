@@ -1,0 +1,148 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+vAR
+  GoodsTbl, SelGoodsTbl : ICValueTable;
+  V: ICProcessing;
+
+procedure CreateObjects;
+begin
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.AddColumn('Товар', vtcLink, 0);
+  GoodsTbl.AddColumn('Название', vtcString, 200);
+  GoodsTbl.AddColumn('Код', vtcString, 15);
+  GoodsTbl.AddColumn('RangeField', vtcInteger, 0);
+  GoodsTbl.Open;
+
+  SelGoodsTbl := CreateObject('ТаблицаЗначений');
+  SelGoodsTbl.AddColumn('Товар', vtcLink, 0);
+  SelGoodsTbl.AddColumn('Название', vtcString, 200);
+  SelGoodsTbl.AddColumn('Код', vtcString, 15);
+  SelGoodsTbl.AddColumn('RangeField', vtcInteger, 0);
+  SelGoodsTbl.Open;
+end;
+
+procedure LoadGoods(StrRange: String);
+begin
+  GoodsTbl.UseDataSource(Null);
+  SelGoodsTbl.UseDataSource(Null);
+  GoodsTbl.Clear;
+  GoodsTbl.CopyDataToServer;
+  SelGoodsTbl.CopyDataToServer;
+  Server.LoadPartToTbl(GoodsTbl.SrvMean,SelGoodsTbl.SrvMean, StrRange);
+  GoodsTbl.CopyDataFromServer;
+
+  GoodsTbl.SortBy('RangeField;Название');
+  GoodsTbl.SetRange(0,0);
+  GoodsTbl.Select;
+  GoodsTbl.UseDataSource(CtrlToVar(TVSGoods));
+  GoodsTbl.SelectFirst;
+
+  SelGoodsTbl.Select;
+  SelGoodsTbl.UseDataSource(CtrlToVar(TVSSelectedGood));
+  SelGoodsTbl.SelectFirst;
+
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  CreateObjects;
+  LoadGoods(eGoodFilter.Text);
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  LoadGoods(eGoodFilter.Text);
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  eGoodFilter.Text := '';
+  LoadGoods(eGoodFilter.Text);
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+  if SelGoodsTbl.LineCount > 0  then
+    V.Params['SelGoodsTbl']  := SelGoodsTbl;
+  Form.ModalResult := mrOk
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+end;
+
+procedure dbgData_DblClick(Sender: TObject);
+begin
+  if GoodsTbl.IsFocused then
+    begin
+      GoodsTbl.UseDataSource(Null);
+      SelGoodsTbl.UseDataSource(Null);
+      SelGoodsTbl.Append;
+      SelGoodsTbl.Товар := GoodsTbl.Товар;
+      SelGoodsTbl.Название := GoodsTbl.Название;
+      SelGoodsTbl.Код := GoodsTbl.Код;
+      SelGoodsTbl.RangeField :=1;
+
+      SelGoodsTbl.Post;
+      GoodsTbl.Delete;
+//      GoodsTbl.Select;
+      GoodsTbl.UseDataSource(CtrlToVar(TVSGoods));
+//      GoodsTbl.SelectFirst;
+
+//      SelGoodsTbl.Select;
+      SelGoodsTbl.UseDataSource(CtrlToVar(TVSSelectedGood));
+//      SelGoodsTbl.SelectFirst;
+    end;
+end;
+
+procedure dbgSelectedGoods_DblClick(Sender: TObject);
+begin
+  if SelGoodsTbl.IsFocused then
+    begin
+      SelGoodsTbl.Delete;
+      LoadGoods(eGoodFilter.Text);
+    end;
+end;
+
+
+procedure eGoodFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if Key = 13 then
+    LoadGoods(eGoodFilter.Text);
+end;
+
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+Label3:TO4Label
+dbgData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pFilter:TO4Panel
+CodePanel:TO4Panel
+Label1:TO4Label
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+eGoodFilter:TO4Edit
+Panel1:TO4Panel
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+ToolBar2:TO4ToolBar
+ToolButton1:TO4ToolButton
+Panel3:TO4Panel
+Label2:TO4Label
+dbgSelectedGoods:TO4DBGrid
+TVSGoods:TO4TableValueSource
+TVSSelectedGood:TO4TableValueSource

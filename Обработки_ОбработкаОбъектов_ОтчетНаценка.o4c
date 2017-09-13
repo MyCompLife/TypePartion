@@ -1,0 +1,81 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+Var
+  V : IcProcessing;
+  TblGoods : IcValueTable;
+
+procedure tbRun_Click(Sender: TObject);
+VAr
+  i : Integer;
+  TypePrice : String;
+begin
+  XGrid.ClearAll;
+  TblGoods.Clear;
+
+
+  TypePrice := eTypePrice.Text;
+  TblGoods.CopyDataToServer;
+  v.RunThreadProcess(server.GetBarCodesErrorEp(TblGoods.SrvMean,TypePrice,rgTypeInPrice.ItemIndex,StrToDec(eFrom.Text),StrToDec(eTo.Text) ),'123');
+  TblGoods.CopyDataFromServer;
+  XGrid.AddSection('Hed');
+  TblGoods.Select;
+  TblGoods.SelectFirst;
+  TblGoods.AddToXGrid(CtrlToVar(XGrid),'Good','Код;Товар;КолОбщ;ВхЦенаБезНДС;Цена;Наценка;ДатаПр',0,TblGoods.LineCount);
+  TblGoods.SortBy('Код');
+  TblGoods.Select;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+  TblGoods := CreateObject('ValueTable');
+  TblGoods.AddColumn('Товар',vtcLink,0);
+  TblGoods.AddColumn('Склад',vtcLink,0);
+  TblGoods.AddColumn('Код',vtcString,30);
+  TblGoods.AddColumn('КолОбщ',vtcFFt,7);
+  TblGoods.AddColumn('Цена',vtcFFt,7);
+  TblGoods.AddColumn('ВхЦенаБезНДС',vtcFFt,7);
+  TblGoods.AddColumn('Наценка',vtcFFt,7);
+  TblGoods.AddColumn('СумОбщ',vtcFFt,7);
+  TblGoods.AddColumn('Партия',vtcFloat,0);
+  TblGoods.AddColumn('ДатаПр',vtcDate,0);
+  TblGoods.Open;
+end;
+
+procedure XGrid_DblClick(Sender: TObject);
+Var
+ GoodMoveDial : ICProcessing; 
+ GoodDic : IcDictionary;
+begin
+ GoodDic := CreateObject('Справочники.Товары');
+ GoodDic.Select;
+ if TblGoods.Find(VarAsStr(Xgrid.Cells(Xgrid.SelectedCells.Row1,1,Xgrid.SelectedCells.Row1,1).Value)) then
+   begin
+     GoodDic.Find(TblGoods.@Товар);
+     GoodMoveDial := CreateObject('Обработки.ДвижениеПоТовару');
+
+     GoodDic.Params['Store'] := null;
+     GoodMoveDial.Execute('ДвижениеПоСкладам', GoodDic);
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+XGrid:TO4XGrid
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+Panel2:TO4Panel
+Label1:TO4Label
+eTypePrice:TO4Edit
+rgTypeInPrice:TO4RadioGroup
+GroupBox1:TO4GroupBox
+Label2:TO4Label
+Label3:TO4Label
+eFrom:TO4Edit
+eTo:TO4Edit
+PopupMenu1:TO4PopupMenu
+miCardMove:TO4MenuItem

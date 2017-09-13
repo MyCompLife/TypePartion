@@ -1,0 +1,94 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+
+var
+  Options : ICOptions;
+  i,j,k,x: Integer;
+  Constants : IC4VPAConst;
+  IsCountDlg : Boolean;
+  PriceRoundAfterComma: integer;
+  TypePrice : string;
+  MasterData,GoodDic, CurrencyDic : ICDictionary;
+  PrintPrice, IsRoundPrice, IsRoundPriceTo5Cop, PriceInCurrency : boolean;
+  Price : Decimal;
+  BarCodeStr : String;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams[0];
+  BarCodeStr := VarAsStr(Form.GetParams[1]);
+  Options := GetOptions;
+  Constants := GetConstants;
+  GoodDic := CreateObject('—правочники.“овары');
+  CurrencyDic := CreateObject('—правочники.¬алюты');
+  PriceRoundAfterComma :=  VarAsInt(Constants.ќкругление÷ен√рн);
+  IsRoundPrice := VarAsBool(Constants.ќкругл€ть÷ены√рн);
+  IsRoundPriceTo5Cop := VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп);
+  PriceInCurrency := VarAsBool(Constants.ѕечатьЁтикетки÷ена¬¬алюте);
+  PrintPrice := VarAsBool(Constants.ѕечатьЁтикетки÷ена);
+  TypePrice := VarAsStr(Constants.ѕечатьЁтикетки“ип÷ены);
+  if TypePrice='' then
+    TypePrice := '÷ена';
+  Form.Page.TopMargin := Form.Page.TopMargin + VarAsInt(Options.GetServerPrm('TopMargin ѕечатьЎтрих одов'),0);
+  Form.Page.LeftMargin := Form.Page.TopMargin + VarAsInt(Options.GetServerPrm('LeftMargin ѕечатьЎтрих одов'),0);
+
+  lbPriceTitle.Visible := PrintPrice;
+  lbPrice.Visible := PrintPrice;
+  lbDate.Caption := 'Ќадруковано: ' + DateToStr(CurrentDate);
+
+  i:=1;
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+Var
+  Course: Decimal;
+begin
+  Accept:=i=1;
+  BarCode.Text := BarCodeStr;
+  if GoodDic.Find(MasterData) then
+    with Table do
+      begin
+        Value['BCode'] := BarCodeStr;
+        Value['Code'] := GoodDic. од;
+        Value['Name'] := GoodDic.NameField;
+        if PrintPrice and CurrencyDic.Find(GoodDic._Default['¬алюта'+TypePrice]) then
+          begin
+            Price :=  GoodDic._Default[TypePrice];
+            if PriceInCurrency then
+              begin
+                Value['Price'] := Price;
+                lbPriceTitle.Caption := 'ц≥на, '+CurrencyDic.CodeField;
+              end
+            else
+              begin
+                if IsRoundPrice then
+                  begin
+                    if IsRoundPriceTo5Cop then
+                      Value['Price'] := RoundTo5Cop(Price *CurrencyDic.GetTimedValue(' урсЌаличный', CurrentDate))
+                    else
+                      Value['Price'] := RoundDec(Price *CurrencyDic.GetTimedValue(' урсЌаличный', CurrentDate),PriceRoundAfterComma)
+                  end
+                else
+                  Value['Price'] := Price *CurrencyDic.GetTimedValue(' урсЌаличный', CurrentDate);
+                lbPriceTitle.Caption := 'ц≥на, √–Ќ';
+              end;
+          end;
+      end;
+  Dec(i);
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+Label5:TRBLabel
+lbPriceTitle:TRBLabel
+lbPrice:TRBLabel
+lbDate:TRBLabel
+Label3:TRBLabel
+BarCode:TRBBarCode
+Structure1:TRBStructure

@@ -1,0 +1,325 @@
+interface
+
+uses
+
+  System, DispIntf, ConstNames, InitColors, Расчеты, Пользователи, ПодключениеДопИнтерфейса, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, XMLИмпортЭкспорт, РаботаСТаблицамиЗначенийCL, НумерацияДокументов,   РаботаСДокументамиCL,КПК;
+
+implementation
+
+const
+  msgEndExchange = 'Обмен данными завершен.';
+  errEmployNotFound = 'Заполните поле "Служащий" в справочнике "Торговые агенты"';
+  errEmailNotFound = 'Установите для "Служащего" (для торгового агента) активный адрес E-mail';
+  errMSOutlookFound = 'Microsoft Outlook не найден';
+  msgNotFoundDataToSend = 'Не найдены файлы для отправки по електронной почте';
+  PocketMailClient = 'PocketMailClient';
+  PocketIncomeMailFolder = 'PocketIncomeMailFolder';
+  PocketReadMailFolder = 'PocketReadMailFolder';
+  msgPocketPathDoesNotExists = 'Не найдена папка обмена. Проверте путь к папке обмена либо подключение КПК к ПК.';
+
+var
+  CommercialAgents : ICDictionary;
+  Constants : IC4VPAConst;
+  ConfType : Integer;
+  PrcCurrent : ICProcessing;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  PrcCurrent := Mean;
+  CommercialAgents := Params;
+  cbSendToEMail.checked := CommercialAgents.ОтправкаПоПочте;
+  cbReceiveFromEMail.checked := CommercialAgents.ИмпортИзПочты;
+end;
+
+procedure ReceiveFromEMail;
+var
+  myOlApp, myNameSpace, myInbox, myIncomeFolder, myReadFolder, myItem, myAttachments : OLEVariant;
+  TmpCommercialAgentsGroup, Employ, Email : ICDictionary;
+  FullFileName, FilesDesc, FileRecordDesc : string;
+  i, j : Integer;
+  PocketMailClientIndex : Integer;
+begin
+  TmpCommercialAgentsGroup := CreateObject('Справочники.ГруппыТА');
+  TmpCommercialAgentsGroup.Select;
+  if not TmpCommercialAgentsGroup.FindByField('Тип', 0, False) then
+    raise(Trans(errNotSystemGroupPresent));
+
+  Employ := CommercialAgents.Служащий;
+  Email := CreateObject('Справочники.Email');
+  Email.UseMasterAndSelect(Employ);
+  Email := GetActiveObject(Email);
+  if not IsObjFocused(Email) then
+    raise(Trans(errEmailNotFound));
+
+  PocketMailClientIndex := VarAsInt(Constants.ТипПочтовогоКлиентаКПК);
+  case PocketMailClientIndex of
+    0 :
+      begin
+        myOlApp := CreateOleObject('Outlook.Application');
+        myNameSpace := myOlApp.GetNamespace('MAPI');
+        myInbox := myNameSpace.GetDefaultFolder(6); //olFolderInbox
+        myIncomeFolder := myInbox.Folders(VarAsStr(Constants.ПапкаВходящейПочтыКПК));
+        myReadFolder := myInbox.Folders(VarAsStr(Constants.ПапкаПрочитаннойПочтыКПК));
+        while myIncomeFolder.Items.Count > 0 do
+          begin
+            myItem := myIncomeFolder.Items(1);
+            myAttachments := myItem.Attachments;
+            myAttachments.Item(1).SaveAsFile(CommercialAgents.ПутьИмпортаПК + 'ExportPocketData' +
+              '_' + Constants.ИмяБазыНаКПК + '_' +
+              IntToStr(CommercialAgents.Код) + '_' + FormatDateTime('ddmmyyhhnnsszzz', CurrentDateTime) +
+              '.zip');
+            myItem.Move(myReadFolder);
+          end;
+      end;
+    1, 2 : //OutlookExpress, The Bat
+      begin
+        FilesDesc := ExportFileOle.ReadMail(Email.Адрес);//ReadMail(Email.Адрес, True);//Для The Bat 4.2. использовать  ExportFileOle.ReadMail(Email.Адрес)
+        for i := 1 to WordCount(FilesDesc, ';') do
+          begin
+            FileRecordDesc := ExtractWord(i, FilesDesc, ';');
+            for j := 2 to WordCount(FileRecordDesc, ',') do
+              begin
+                FullFileName := ExtractWord(j, FileRecordDesc, ',');
+                if (StrPos('Export', FullFileName) > 0) and (StrPos('.zip', FullFileName) > 0) and
+                  FileExists(FullFileName) then
+                  RenameFile(FullFileName, CommercialAgents.ПутьИмпортаПК + 'ExportPocketData' +
+                    '_' + Constants.ИмяБазыНаКПК + '_' +
+                    IntToStr(CommercialAgents.Код) + '_' + FormatDateTime('ddmmyyhhnnsszzz', CurrentDateTime) +
+                    '.zip');
+                sleep(10);
+              end;
+          end;
+      end;
+  end;
+end;
+
+procedure SendToEMail;
+var
+  myOlApp, myNameSpace, myInbox, myFolder, myReadFolder, myItem, myAttachments : OLEVariant;
+  TmpCommercialAgentsGroup, Employ, Email : ICDictionary;
+  FileName1, FullFileName1, FileName2, FullFileName2, Attachments : string;
+  PocketMailClientIndex : Integer;
+begin
+  TmpCommercialAgentsGroup := CreateObject('Справочники.ГруппыТА');
+  TmpCommercialAgentsGroup.Select;
+  if not TmpCommercialAgentsGroup.FindByField('Тип', 0, False) then
+    raise(Trans(errNotSystemGroupPresent));
+  FileName1 := 'ImportPocketData' + '_' + Constants.ИмяБазыНаКПК + '_' + IntToStr(CommercialAgents.Код) + '.zip';
+  FullFileName1 := TmpCommercialAgentsGroup.ПутьЭкспортаПК + FileName1;
+  if cbAgentFile.Checked then
+    begin
+      FileName2 := 'CommercialAgents' + '_' + Constants.ИмяБазыНаКПК + '_' + IntToStr(CommercialAgents.Код) + '.zip';
+      FullFileName2 := TmpCommercialAgentsGroup.ПутьЭкспортаПК + FileName2;
+    end;
+  if (not FileExists(FullFileName1)) and (not FileExists(FullFileName2)) then
+    raise(Trans(msgNotFoundDataToSend));
+  if not VarAsBool(CommercialAgents.@Служащий.IsFocused) then
+    raise(Trans(errEmployNotFound));
+  Employ := CommercialAgents.Служащий;
+  Email := CreateObject('Справочники.Email');
+  Email.UseMasterAndSelect(Employ);
+  Email := GetActiveObject(Email);
+  if not IsObjFocused(Email) then
+    raise(Trans(errEmailNotFound));
+
+  if FileExists(FullFileName1) then
+    Attachments := Attachments + ';' + FullFileName1;
+  if FileExists(FullFileName2) then
+    Attachments := Attachments + ';' + FullFileName2;
+
+  PocketMailClientIndex := VarAsInt(Constants.ТипПочтовогоКлиентаКПК);
+  if StrLength(Attachments) > 0 then
+    begin
+      StrDelete(Attachments, 1, 1);
+      case PocketMailClientIndex of
+        0 : //MS Outlook
+          begin
+            try
+              myOlApp := CreateOleObject('Outlook.Application');
+            except
+              raise(Trans(errMSOutlookFound))
+            end;
+            myNameSpace := myOlApp.GetNamespace('MAPI');
+            myItem := myOlApp.CreateItem(0);
+            myAttachments := myItem.Attachments;
+            myItem.to := Email.Адрес;
+            myItem.Subject := 'from office';
+            if FileExists(FullFileName1) then
+              myAttachments.Add(FullFileName1, 1, 1, FileName1);
+            if FileExists(FullFileName2) then
+              myAttachments.Add(FullFileName2, 1, 1, FileName2);
+            MyItem.Send;
+          end;
+        1, 2 : //OutlookExpress, The Bat 3.6
+          ExportFileOle.SendMail(Employ.NameField, Email.Адрес, 'from office', Attachments);
+      end;
+    end
+  else
+    ShowMessage(Trans(msgNotFoundDataToSend));
+end;
+
+procedure RunWindowsMobile;
+var
+  ResultArray : Variant;
+begin
+  try
+    ExportFileOle := CreateOleObject('O4PocketFunc.PocketFunc');
+  except
+    raise(Trans(errNotFoundPocketFunc));
+  end;
+  try
+    Constants := GetConstants;
+    if cbReceiveFromEMail.Checked and cbImport.Checked then
+      ReceiveFromEMail;
+    DataCommunication(null, CommercialAgents, not cbSendToEMail.checked and cbAgentFile.checked,
+      cbAgentFile.Checked, False,
+      cbExport.Checked, cbImport.Checked, cbCreateDocs.Checked, False,
+      False,
+      cbSendToEMail.Checked and cbExport.Checked,
+      cbReceiveFromEMail.Checked and cbImport.Checked,
+      ConfType, pnConf, ResultArray);
+    if cbSendToEMail.checked and cbExport.checked then
+      SendToEMail;
+  finally
+    nil(ExportFileOle)
+  end;
+  if cbCreateDocs.Checked then
+    begin
+      if (not IsNil(ResultArray)) and IsArray(ResultArray) then
+        ShowMessage(Trans(msgEndExchange) + #13#10 +
+          Trans(msgAdd) + IntToStr(ResultArray[1]) + Trans(msgOrdersDoc) + #13#10 +
+          Trans(msgAdd) + IntToStr(ResultArray[2]) + Trans(msgNaklsDoc) + #13#10 +
+          Trans(msgAdd) + IntToStr(ResultArray[0]) + Trans(msgVisitDoc))
+      else
+        ShowMessage(Trans(msgEndExchange) + #13#10 +
+          Trans(msgAdd) + '0' + Trans(msgOrdersDoc) + #13#10 +
+          Trans(msgAdd) + '0' + Trans(msgNaklsDoc) + #13#10 +
+          Trans(msgAdd) + '0' + Trans(msgVisitDoc))
+    end
+  else
+    ShowMessage(Trans(msgEndExchange));
+end;
+
+procedure RunAndroid;
+var
+  ResultArray : Variant;
+  OrdersCount, NaklsCount, VisitCount, PaysCount : integer;
+  fso : OLEVariant;
+  XMLDocZipFullName, XMLDocPocketZipFullName : String;
+  Constants : IC4VPAConst;
+  HasError : boolean;
+begin
+  if cbExport.Checked or cbImport.Checked then
+    begin
+      HasError := False;
+      try
+        if not DirectoryExists(CommercialAgents.ПутьИмпортаКПК) then
+          begin
+            ShowMessage(Trans(msgPocketPathDoesNotExists));
+            exit;
+          end;
+      except
+        ShowMessage(Trans(msgPocketPathDoesNotExists));
+        HasError := True;
+      end;
+      if HasError then
+        exit;
+    end;
+  if cbExport.Checked then
+    begin
+      XMLDocZipFullName := CommercialAgents.ПутьИмпортаПК + AndroidExportZipFileName + ZipExt;
+      XMLDocPocketZipFullName := CommercialAgents.ПутьИмпортаКПК + AndroidExportZipFileName + ZipExt;
+      fso := CreateOleObject('Scripting.FileSystemObject');
+      if VarAsBool(fso.FileExists(XMLDocZipFullName)) then
+        fso.CopyFile(XMLDocZipFullName, XMLDocPocketZipFullName, True)
+    end;
+  if cbImport.Checked then
+    begin
+      XMLDocZipFullName := CommercialAgents.ПутьИмпортаПК + AndroidImportZipFileName + ZipExt;
+      XMLDocPocketZipFullName := CommercialAgents.ПутьЭкспортаКПК + AndroidImportZipFileName + ZipExt;
+      fso := CreateOleObject('Scripting.FileSystemObject');
+      if VarAsBool(fso.FileExists(XMLDocPocketZipFullName)) then
+        fso.CopyFile(XMLDocPocketZipFullName, XMLDocZipFullName, True)
+    end;
+  if cbCreateDocs.Checked then
+    begin
+      OrdersCount := 0;
+      NaklsCount := 0;
+      VisitCount := 0;
+//      CreateAndroidOrdersForOneAgent(CommercialAgents, ConfType, pnConf, OrdersCount, NaklsCount, VisitCount, PaysCount);
+      ShowMessage(Trans(msgEndExchange) + #13#10 +
+        Trans(msgAdd) + IntToStr(OrdersCount) + Trans(msgOrdersDoc) + #13#10 +
+        Trans(msgAdd) + IntToStr(NaklsCount) + Trans(msgNaklsDoc) + #13#10 +
+     Trans(msgAdd) + IntToStr(PaysCount) + Trans(msgPaysDoc));
+    end
+  else
+    ShowMessage(Trans(msgEndExchange));
+end;
+
+procedure btRun_Click(Sender : TObject);
+begin
+  if VarAsInt(CommercialAgents.ОперационнаяСистема) = 0 then
+    RunWindowsMobile
+  else              
+    RunAndroid;
+end;
+
+procedure cbImport_Click(Sender : TObject);
+begin
+  SetPropertyForComponentList(ptEnabled, Form, 'cbOnlyUpdateDicts;cbSendToEMail', cbExport.Checked);
+end;
+
+procedure cbExport_Click(Sender : TObject);
+begin
+  SetPropertyForComponentList(ptEnabled, Form, 'cbReceiveFromEMail', cbImport.Checked);
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  DocSlipOut : ICDocuments;
+begin
+  if CheckObjectExists('Документы.НакладнаяОтпуска') then
+    begin
+      DocSlipOut := CreateObject('Документы.НакладнаяОтпуска');
+      ConfType := cnfType;
+    end
+  else
+    if CheckObjectExists('Документы.НакладнаяОтпускаФарм') then
+      begin
+        DocSlipOut := CreateObject('Документы.НакладнаяОтпускаФарм');
+        ConfType := cnfFarm;
+      end
+    else
+      begin
+        DocSlipOut := CreateObject('Документы.НакладнаяОтпускаАлко');
+        ConfType := cnfAlco;
+      end;
+  case ConfType of
+    cnfFarm :
+      DefaultInterfaceInitOnPanel('ОбработкаДанныхДляМодулей', 'ОбработкаДанныхФарм',
+        pnConf, PrcCurrent);
+    cnfAlco :
+      DefaultInterfaceInitOnPanel('ОбработкаДанныхДляМодулей', 'ОбработкаДанныхАлко',
+        pnConf, PrcCurrent);
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btnClose:TO4Button
+pnConf:TO4Panel
+Panel1:TO4Panel
+btRun:TO4Button
+gbImport:TO4GroupBox
+cbCreateDocs:TO4CheckBox
+cbImport:TO4CheckBox
+cbReceiveFromEMail:TO4CheckBox
+gbExport:TO4GroupBox
+cbExport:TO4CheckBox
+cbAgentFile:TO4CheckBox
+cbSendToEMail:TO4CheckBox
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage

@@ -1,0 +1,35 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation
+var
+  AccsPart: ISAccs;
+  Currency: ISDictionary;
+
+
+procedure GetBalansSum(Part: Variant; Var Sum: Decimal; Var CurrCode: String);server;
+var DocSum: Decimal;
+begin
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  Currency := CreateObject('Справочники.Валюты');
+  if not Currency.FindByField('Активность', VarAsInt(true), false) then
+    begin
+      Currency.Select;
+      Currency.SelectNext;
+    end;
+  AccsPart.ClearFieldBuffers;
+  AccsPart.ClearFieldFilters;
+  if Currency.IsFocused then
+    begin
+      AccsPart.CalcGroupRestDirect(400000, ArrayOf(Part, Currency));
+      CurrCode := Currency.Код;
+    end
+  else
+    AccsPart.CalcGroupRestDirect(400000, ArrayOf(Part));
+  Sum := AccsPart.СумОбщВал;
+end;
+
+end.

@@ -1,0 +1,1099 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+function CreateSMSManager(SMSConfigDic:ICDictionary; Quiet:boolean=false):Boolean;
+procedure CloseSMSManager;
+function SendSMS(SMSConfigDic:ICDictionary; FromAddr,ToAddr,Message : string; var ServerAnswer:string):boolean;
+function GetAlphaSMSAnswerError(s:string):string;
+function GetSMSBalans(SMSConfigDic:ICDictionary):string;
+function GetSMSPrice(SMSConfigDic:ICDictionary):string;
+function GetSMSStatus(SMSConfigDic:ICDictionary; SMSId:string; var MessageStatusCode:integer):string;
+function DeleteSMSStatus(SMSConfigDic:ICDictionary; SMSId:string):string;
+function ExctractPriceFromStr(S:string):Decimal;
+function UpdatePriceByDic(SMSConfigDic:ICDictionary; var ServerAnswer:string; RecordIsEditing:Boolean = false):boolean;
+function SendSMSDocument(Doc:ICDocuments; var GoodSMSCount:integer; ProgressBar:TO4ProgressBar; RecordIsEditing:Boolean = false):boolean;
+procedure SetSMSDocumentState(Doc:ICDocuments);
+function CheckStatusSMSDocument(Doc:ICDocuments; var GoodSMSCount:integer; ProgressBar:TO4ProgressBar; RecordIsEditing:Boolean = false):boolean;
+function ExctractAlphaSMSIdFromStr(S:string; var MessageId:string):Boolean;
+function GetSMSPromStatus(S:string):string;
+function GetStatusSMSByCode(StatusCode:integer):string;
+procedure CalcTotalSumSMSDoc(Doc:ICDocuments);
+function CheckValidSMSdocument(Doc:ICDocuments; var ErrorStr:string; RecordIsEditing:Boolean = false):Boolean;
+function CheckValidTextMessage(var TextMessage:String; var DisableSMSCharWaring, CyrilicCharPresent:Boolean; var SMSCount:integer):Boolean;
+function ValidTelNumber(Tel:string):Boolean;
+function StrOnlyDigitTel(s:string):string;
+procedure CalcAllSMSCounts(Doc:ICDocuments);
+procedure InsertLineToSMSDoc(Doc:ICDocuments; Tel:string; Part: Variant; Quet:boolean=false);
+function SelectionTelByPartner(PartDic,TLF:ICDictionary):string;
+function CreateSMSDoc : ICDocuments;
+procedure AppendLineToSMSDoc(SMSDoc:ICdocuments; Партнер:ICDictionary; НомерТелефона,Текстсообщения:String);
+function ExctractSMSFlyIdFromStr(S:string; var MessageId:string):Boolean;
+function  GetXMLStrValue(s:string):string;
+
+implementation
+
+var  SMSManager, SOAPSerializer, SOAPReader, SOAPConnector, SOAPAnswerDOM: OLEVariant;
+     SMSConfigDic : ICDictionary; 
+     AccSMS : ICAccs;
+
+const
+           DisableSMSChar  = '&';
+           CyrilicCharSet='абвгдеёжзийклмнопрстуфхцчшщъыьэюяіїє';
+           CyrilicMaxSMSLength = 70;
+           MaxSMSLength = 160;     
+
+function  GetXMLStrValue(s:string):string;
+var i:integer;
+begin
+ Result := '';
+ if StrLength(s)>0 then
+   for i:=1 to StrLength(s) do
+     case s[i] of
+      '"' : Result := Result+'&quot;';
+      '&' : Result := Result+'&amp;';
+      '''' : Result := Result+'&apos;'; 
+      '<' : Result := Result+'&lt;';  
+      '>' : Result := Result+'&gt;'
+     else
+       Result := Result+s[i];
+     end;
+end;
+
+function CreateSMSManager(SMSConfigDic:ICDictionary; Quiet:boolean=false):Boolean;
+var res : string;
+begin        
+  Result := false;
+  Nil(SMSManager); 
+  try
+   case VarAsInt(SMSConfigDic.ТипСервиса, 0) of
+     0,3 :  // Alpha SMS и SMS-Fly
+       begin
+         SMSManager := CreateOLEObject('addl_func.sendMessage');
+         Result := true;
+       end;
+     1 :  // Turbo SMS
+       begin
+         SMSManager := CreateOLEObject('MSSOAP.SoapClient30');
+         SMSManager.mssoapinit('http:/'+'/'+SMSConfigDic.АдресСервиса);  //'http:/'+'/turbosms.in.ua/api/wsdl.html'
+         res := VarAsStr(SMSManager.Auth(SMSConfigDic.Login,SMSConfigDic.Pass));
+         Result :=  res='Вы успешно авторизировались';
+         if not Result then
+           begin
+             Nil(SMSManager);
+             if not Quiet then
+               ShowMessage(Res);
+           end;
+       end;  
+     2: // SMS Prom
+       begin
+         SOAPReader := CreateOLEObject('MSSOAP.SoapReader30');
+         SOAPConnector := CreateOLEObject('MSSOAP.HttpConnector30');
+         SOAPSerializer := CreateOLEObject('MSSOAP.SoapSerializer30');
+         SOAPConnector.Property('EndPointURL') := 'http:/'+'/'+VarASStr(SMSConfigDic.АдресСервиса); 
+         Result := true;
+       end;
+   end;
+
+  except
+   Result := false;
+   if not Quiet then
+     ShowMessage('Ошибка создания OLE-объекта!');
+  end;
+end;
+
+procedure CloseSMSManager;
+begin
+  Nil(SMSManager); 
+  Nil(SOAPSerializer);
+  Nil(SOAPReader);
+  Nil(SOAPConnector);
+  Nil(SOAPAnswerDOM);
+end;
+
+function GetSMSPromStatus(S:string):string;
+const SMSStatusList = 'NOSTATUS;TAKEN;SENT;DELIVERED;NOT_DELIVERED;CANT_SEND;INSUFFICIENT_OF_MONEY;SCHEDULED;ENROUTE;EXPIRED;DELETED;UNDELIVERABLE;ACCEPTED;UNKNOWN;REJECTED;SKIPPED;SMSC_NOT_READY;PROTOCOL_NOT_SUPPORTED;OPERATOR_FAILED';
+var i:integer;
+begin
+ i := StrToIntDef(s,0); 
+ if i>=WordCount(SMSStatusList,';') then i:=0;
+ Result := ExtractWord(i, SMSStatusList,';')
+end;
+
+function SendSMS(SMSConfigDic:ICDictionary; FromAddr,ToAddr,Message : string; var ServerAnswer:string):boolean;
+var messageId, xmlStr : string;
+    ArrayStr : Variant;  
+    SMSStatuses : OleVariant;
+begin
+ Result := false;
+ try
+    case VarAsInt(SMSConfigDic.ТипСервиса, 0) of
+     0 :  // Alpha SMS
+       begin
+         if VarAsBool(SMSConfigDic.ТипАвторизацииКлюч) then
+           ServerAnswer := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&key='+SMSConfigDic.key+
+           '&command=send&from='+FromAddr+'&to='+ToAddr+'&message=' + Message,'/api/http.php')
+         else
+          ServerAnswer := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&login='+SMSConfigDic.Login+'&password='+
+           SMSConfigDic.Pass+'&command=send&from='+FromAddr+'&to='+ToAddr+'&message=' + Message,'/api/http.php');
+         if ExctractAlphaSMSIdFromStr(ServerAnswer, messageId) then
+           begin
+             Result := true;
+             ServerAnswer := messageId;
+           end
+         else
+           Result := false;
+       end;
+     1: // Turbo SMS
+       begin
+         ArrayStr := SMSManager.SendSMS(FromAddr,ToAddr,Message,'');
+         if ArrayStr[0]='Сообщения успешно отправлены' then
+           begin
+             Result := true;
+             ServerAnswer := VarAsStr(ArrayStr[1]);
+           end
+         else
+           begin
+             Result := false;
+             ServerAnswer := VarAsStr(ArrayStr[0]);
+           end;
+       end;   
+     2: // SMS Prom
+       begin
+         SOAPConnector.Connect;
+         SOAPConnector.Property('SoapAction') := 'sendMessages';
+         SOAPConnector.BeginMessage;
+         SOAPSerializer.Init(SOAPConnector.InputStream);
+         SOAPSerializer.startEnvelope('soapenv','NONE');
+         SOAPSerializer.SoapNamespace('soapenv', 'http:/'+'/schemas.xmlsoap.org/soap/envelope/');
+         SOAPSerializer.SoapNamespace('q0', 'sms.papchap.com');
+         SOAPSerializer.SoapNamespace('xsd', 'http:/'+'/www.w3.org/2001/XMLSchema');
+         SOAPSerializer.SoapNamespace('xsi', 'http:/'+'/www.w3.org/2001/XMLSchema-instance');
+         SOAPSerializer.WriteXML('<soapenv:Body>'+#13+
+                                 '<q0:sendMessages>'+#13+
+                                 '<alfaName>'+FromAddr+'</alfaName>'+#13+
+                                 '<contacts>'+#13+
+                                 '<phone>'+ToAddr+'</phone>'+#13+
+                                 '<prop />'+#13+
+                                 '</contacts>'+#13+
+                                 '<template>'+GetXMLStrValue(Message)+'</template>'+#13+
+                                 '<user>'+#13+
+                                 '<password>'+SMSConfigDic.Pass+'</password>'+#13+
+                                 '<userName>'+SMSConfigDic.Login+'</userName>'+#13+
+                                 '</user>'+#13+
+                                 '</q0:sendMessages>'+#13+
+                                 '</soapenv:Body>');
+         SOAPSerializer.endEnvelope;
+         SOAPConnector.EndMessage;
+         SOAPReader.Load(SOAPConnector.OutputStream);
+         SOAPAnswerDOM := SOAPReader.DOM;
+         SMSStatuses := SOAPAnswerDOM.getElementsByTagName('requestId');
+         if VarAsInt(SMSStatuses.length)>0 then
+           begin
+             ServerAnswer := VarAsStr(SMSStatuses.item(0).Text);
+             if StrToIntDef(ServerAnswer,0)=0 then
+               begin
+                SMSStatuses := SOAPAnswerDOM.getElementsByTagName('status');
+                 if VarAsInt(SMSStatuses.length)>0 then  
+                   ServerAnswer := GetSMSPromStatus(VarAsStr(SMSStatuses.item(0).Text));
+               end
+             else
+               Result := true;
+           end
+         else   
+           begin
+             ServerAnswer := VarAsStr(SOAPAnswerDOM.Text);
+             Result := false;
+           end;
+       end;
+     3 : // Fly-SMS
+       begin
+         xmlStr := '<?xml version="1.0" encoding="utf-8"?>'+#13+
+                   '<request>'+#13+
+                  '<operation>SENDSMS</operation>'+#13+
+                  '<message start_time="AUTO" end_time="AUTO" lifetime="4" rate="120" desc="" source="'+GetXMLStrValue(FromAddr)+'">'+#13+
+                  '<body>'+GetXMLStrValue(Message)+'</body>'+#13+
+                  '<recipient>'+ToAddr+'</recipient>'+#13+
+                  '</message>'+#13+
+                  '<request>';
+          ServerAnswer := SMSManager.SendHttpRequestAuth(VarAsStr(SMSConfigDic.АдресСервиса),
+                                                     xmlStr,'/api/api.php',
+                                                     VarAsStr(SMSConfigDic.Login),
+                                                     VarAsStr(SMSConfigDic.Pass),-1);
+         if ExctractSMSFlyIdFromStr(ServerAnswer, messageId) then
+           begin
+             Result := true;
+             ServerAnswer := messageId;
+           end
+         else
+           Result := false;
+       end;
+   end;
+ except
+   ServerAnswer := 'error';
+   Result := false;
+ end;
+end;
+
+function GetAlphaSMSAnswerError(s:string):string;
+begin
+ if strpos('errors:Wrong login/password',s)<>0 then
+  begin
+   Result := 'Не правильный логин или пароль';
+   exit;
+  end;
+ if strpos('12007',s)<>0 then
+  begin
+   Result := 'Нет связи с сервисом';
+   exit;
+  end;
+ Result := 'Ошибка';
+end;
+
+function GetSMSBalans(SMSConfigDic:ICDictionary):string;
+var res, xmlStr : string;  
+    BalanceBegin,BalanceEnd : integer;
+begin
+ try
+    case VarAsInt(SMSConfigDic.ТипСервиса, 0) of
+     0 :  // Alpha SMS
+       begin
+         if VarAsBool(SMSConfigDic.ТипАвторизацииКлюч) then
+           res := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&key='+
+                                             SMSConfigDic.key+'&command=balance','/api/http.php')
+         else
+          res := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&login='+
+                                            SMSConfigDic.Login+'&password='+SMSConfigDic.Pass+'&command=balance','/api/http.php');
+         if (StrLowerCase(StrCopy(res,1,8))='balance:') and (StrLength(res)>8) then
+           res := VarAsStr(RoundDec(VarAsDec(StrCopy(res,9,StrLength(res)-8),0),2))
+         else
+           res := GetAlphaSMSAnswerError(res);
+       end; 
+     1 : //Turbo SMS
+       begin
+         res := SMSManager.GetCreditBalance;
+       end;
+     2 :  //SMSProm
+       begin
+         res := 'SMSProm не поддерживает функцию проверки баланса!';
+       end; 
+     3 :   // MSM-Fly
+       begin
+         xmlStr := '<?xml version="1.0" encoding="utf-8"?>'+#13+
+         '<request> <operation>GETBALANCE</operation></request>'; 
+          res := SMSManager.SendHttpRequestAuth(VarAsStr(SMSConfigDic.АдресСервиса),
+                                                     xmlStr,'/api/api.php',
+                                                     VarAsStr(SMSConfigDic.Login),
+                                                     VarAsStr(SMSConfigDic.Pass),0);
+          BalanceBegin := StrPos('<balance>',res);
+          BalanceEnd := StrPos('</balance>',res);
+          if (BalanceBegin<>0) and (BalanceEnd<>0) and (BalanceBegin<BalanceEnd) then
+            res := StrCopy(Res,BalanceBegin+9,BalanceEnd-BalanceBegin-9);
+       end;
+    end;
+  Result := res;
+ except
+  Result := 'error';
+ end;
+end;
+
+
+function ExctractPriceFromStr(S:string):Decimal;
+var tmpPrice : Decimal;
+    tmpStr : String;
+    PricePos,CurrencyPos : integer;
+begin
+ tmpPrice := -1;
+ tmpStr := StrLowerCase(StrTrim(S));
+ if StrLength(tmpStr)>6 then
+  begin
+   PricePos := StrPos('price:',tmpStr);
+   CurrencyPos := StrPos('currency:',tmpStr);
+   if (PricePos<>0) and (CurrencyPos<>0) then
+    tmpPrice := StrToDecDef(StrCopy(tmpStr,PricePos+6,CurrencyPos-7),0);
+  end;
+ Result := tmpPrice;
+end;
+
+function GetSMSPrice(SMSConfigDic:ICDictionary):string;
+var res : string;
+begin
+ try     
+  case VarAsInt(SMSConfigDic.ТипСервиса, 0) of
+  0 :  // Alpha SMS
+    begin
+      if VarAsBool(SMSConfigDic.ТипАвторизацииКлюч) then
+        res := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&key='+SMSConfigDic.key+
+                                          '&command=price&to='+SMSConfigDic.Login,'/api/http.php')
+      else
+        res := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&login='+SMSConfigDic.Login+
+                                         '&password='+SMSConfigDic.Pass+'&command=price&to='+SMSConfigDic.Login, '/api/http.php');
+    end; 
+  1,2,3 : res := 'Сайт не поддерживает функцию цена';
+  end;
+  Result := res;
+ except
+  Result := 'error';
+ end;
+end;
+
+function UpdatePriceByDic(SMSConfigDic:ICDictionary; var ServerAnswer:string; RecordIsEditing:Boolean = false):boolean;
+var Price : Decimal;
+begin   
+  if not ((IsObjFocused(SMSConfigDic)) and (SMSConfigDic.GetSign='SMSНастройки')) then
+   begin
+    ServerAnswer:='Справочник SMSНастройки не спозиционирован';
+    Result := false;
+    exit;
+   end;
+
+  if not CreateSMSManager(SMSConfigDic) then
+   begin
+    ServerAnswer:='Не удалось инициализировать OLE-объект работы с SMS';
+    Result := false;
+    exit;
+   end;
+
+
+   ServerAnswer := GetSMSPrice(SMSConfigDic);
+  Price := ExctractPriceFromStr(ServerAnswer);
+  if Price>=0 then
+   begin
+    try
+     if not RecordIsEditing then
+      SMSConfigDic.Edit;
+     SMSConfigDic.ЦенаSMS := Price; 
+     if not RecordIsEditing then
+      begin
+       SMSConfigDic.Post;
+       SMSConfigDic.ApplyUpdates;
+      end;
+     Result := true;
+    except
+     Result := false;
+    end;
+   end
+  else
+   Result := false;
+
+
+end; 
+function GetStatusSMSByCode(StatusCode:integer):string;
+begin
+ case StatusCode of
+  0 : Result := 'Ожидает';
+  1 : Result := 'Отправляется';
+  2 : Result := 'Отправлено';
+  3 : Result := 'Доставлено';
+  5 : Result := 'Нет на связи';
+  10 : Result := 'Удалено';
+  50 : Result := 'Частично доставлено';
+  96 : Result := 'Сбой сети при доставке SMS';
+  99 : Result := 'Ошибка в номере или Номер не обслуживается';
+  100 : Result := 'Не достаточно денег на счете';
+  -1 : Result := 'Ошибка определения статуса SMS сообщения';
+  else  Result := 'Неизвестный код статуса';
+ end;
+
+end;
+
+function ExctractAlphaSMSStatusFromStr(S:string):integer;
+var tmpStr : String;
+    statusPos,CodePos,  TimePos : integer;
+begin
+ Result := -1;
+ tmpStr := StrLowerCase(StrTrim(S));
+ if StrLength(tmpStr)>7 then
+  begin
+   statusPos := StrPos('status:',tmpStr);
+   CodePos := StrPos('code:',tmpStr);
+   TimePos := StrPos('status_time:',tmpStr);
+   if (statusPos<>0) and (CodePos<>0) then
+    begin
+     Result := VarAsInt(StrCopy(tmpStr,CodePos+5,TimePos-CodePos-5),-1);
+    end
+  end
+end;
+
+function ExctractSMSFlyStatusFromStr(S:string):string;
+var tmpStr : String; 
+    statusPos,i : integer;
+begin
+ tmpStr := StrLowerCase(StrTrim(S));
+ Result := 'error';
+ statusPos := StrPos('status="',tmpStr);
+ statusPos := statusPos+8;
+ i := statusPos;
+ While (i<StrLength(tmpStr)) and (tmpStr[i]<>'"') do inc(i);
+ Result := StrCopy(tmpStr,statusPos,i-statusPos);
+end;
+
+function GetSMSStatus(SMSConfigDic:ICDictionary; SMSId:string; var MessageStatusCode:integer):string;
+var res, xmlStr : string;
+    SMSStatuses : OleVariant;
+begin
+ try
+    case VarAsInt(SMSConfigDic.ТипСервиса, 0) of
+     0 :  // Alpha SMS
+       begin
+         if VarAsBool(SMSConfigDic.ТипАвторизацииКлюч) then
+           res := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&key='+SMSConfigDic.key+
+                         '&command=receive&id='+SMSId,'/api/http.php')
+         else
+           res := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&login='+SMSConfigDic.Login+
+                        '&password='+SMSConfigDic.Pass+'&command=receive&id='+SMSId, '/api/http.php');
+         MessageStatusCode := ExctractAlphaSMSStatusFromStr(res);
+       end;
+     1 : // Turbo SMS
+       begin
+          Res := SMSManager.GetMessageStatus(SMSId);
+          case StrLowerCase(Res) of
+           'в очереди',
+           'сообщение передано в мобильную сеть',
+           'сообщение доставлено на сервер'      : MessageStatusCode := 1;
+           'отправлено'                          : MessageStatusCode := 2;
+           'сообщение доставлено получателю'     : MessageStatusCode := 3;
+           'истек срок сообщения',
+            'вы не авторизированы',
+           'ошибка, сообщение не отправлено'     : MessageStatusCode := 96;
+           'удалено оператором', 
+           'отклонено оператором',
+           'отправка отменена', 
+           'отправка приостановлена',
+           'удалено пользователем'               : MessageStatusCode := 10;
+           'не достаточно кредитов на счете'     : MessageStatusCode :=  100;
+           else
+            MessageStatusCode := -1;
+          end;
+       end; 
+     2: // SMS Prom
+       begin
+         SOAPConnector.Connect;
+         SOAPConnector.Property('SoapAction') := 'requestNotificationStatus';
+         SOAPConnector.BeginMessage;
+         SOAPSerializer.Init(SOAPConnector.InputStream);
+         SOAPSerializer.startEnvelope('soapenv','NONE');
+         SOAPSerializer.SoapNamespace('soapenv', 'http:/'+'/schemas.xmlsoap.org/soap/envelope/');
+         SOAPSerializer.SoapNamespace('q0', 'sms.papchap.com');
+         SOAPSerializer.SoapNamespace('xsd', 'http:/'+'/www.w3.org/2001/XMLSchema');
+         SOAPSerializer.SoapNamespace('xsi', 'http:/'+'/www.w3.org/2001/XMLSchema-instance');
+         SOAPSerializer.WriteXML('<soapenv:Body>'+#13+
+                                 '<q0:requestMessageStatus>'+#13+
+                                 '<requestID>'+SMSId+'</requestID>'+#13+
+                                 '<user>'+#13+
+                                 '<password>'+VarAsStr(SMSConfigDic.Pass)+'</password>'+#13+
+                                 '<userName>'+VarAsStr(SMSConfigDic.Login)+'</userName>'+#13+
+                                 '</user>'+#13+
+                                 '</q0:requestMessageStatus>'+#13+
+                                 '</soapenv:Body>');
+         SOAPSerializer.endEnvelope;
+         SOAPConnector.EndMessage;
+         SOAPReader.Load(SOAPConnector.OutputStream);
+         SOAPAnswerDOM := SOAPReader.DOM;
+         res := SOAPAnswerDOM.Text;
+         SMSStatuses := SOAPAnswerDOM.getElementsByTagName('status'); 
+         if VarAsInt(SMSStatuses.length)>0 then
+           begin      
+             res := GetSMSPromStatus(VarAsStr(SMSStatuses.item(0)));
+             case VarAsStr(SMSStatuses.item(0).Text) of
+              '1','7'       : MessageStatusCode := 1;
+              '2'           : MessageStatusCode := 2;
+              '3'           : MessageStatusCode := 3;
+              '4', '5','17' : MessageStatusCode := 96;
+              '6'           : MessageStatusCode := 100;
+              '9'           : MessageStatusCode := 10;
+              else
+               MessageStatusCode := -1;
+             end;
+           end
+         else
+            MessageStatusCode := -1;
+       end;
+     3 :  // SMS-Fly
+       begin
+         xmlStr := '<?xml version="1.0" encoding="utf-8"?>'+#13+
+                   '<request> <operation>GETCAMPAIGNINFO</operation>'+#13+
+                   '<message campaignID="'+SMSId+'"/> </request>';
+         res := SMSManager.SendHttpRequestAuth(VarAsStr(SMSConfigDic.АдресСервиса),
+                                                     xmlStr,'/api/api.php',
+                                                     VarAsStr(SMSConfigDic.Login),
+                                                     VarAsStr(SMSConfigDic.Pass),0);
+         case ExctractSMSFlyStatusFromStr(res) of  
+              'pending'       : MessageStatusCode := 0;
+              'inprogress'       : MessageStatusCode := 1;
+              'complete'           : MessageStatusCode := 3;
+              'error','userstoped','sysstoped' : MessageStatusCode := 96
+             else
+              MessageStatusCode := -1;
+         end;
+       end;
+   end;
+  Result := res;
+ except
+  Result := 'error';
+ end;
+end;
+
+function DeleteSMSStatus(SMSConfigDic:ICDictionary; SMSId:string):string;
+var res : string;
+begin
+ try
+    case VarAsInt(SMSConfigDic.ТипСервиса, 0) of
+     0 :  // Alpha SMS
+       begin
+         if VarAsBool(SMSConfigDic.ТипАвторизацииКлюч) then
+           res := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&key='+SMSConfigDic.key+
+                              '&command=delete&id='+SMSId, '/api/http.php')
+         else
+           res := SMSManager.SendHttpRequest(SMSConfigDic.АдресСервиса,'version=http&login='+SMSConfigDic.Login+
+           '&password='+SMSConfigDic.Pass+'&command=delete&id='+SMSId, '/api/http.php');
+       end;  
+     1, 2 : res := 'Сайт не поддерживает функцию удаление SMS';
+   end;
+  Result := res;
+ except
+  Result := 'error';
+ end;
+end;
+
+function ExctractAlphaSMSIdFromStr(S:string; var MessageId:string):Boolean;
+var tmpStr : String;
+    IdPos,SMSCountPos : integer;
+begin
+ MessageId:='';
+ tmpStr := StrLowerCase(StrTrim(S));
+ if StrLength(tmpStr)>4 then
+  begin
+   IdPos := StrPos('id:',tmpStr);
+   SMSCountPos := StrPos('sms_count:',tmpStr);
+   if (IdPos<>0) and (SMSCountPos<>0) then
+    begin
+     MessageId := StrCopy(tmpStr,IdPos+3,SMSCountPos-5);
+     Result := true;
+    end
+   else
+    Result := false;
+  end
+ else
+  Result := false;
+end;     
+
+function ExctractSMSFlyIdFromStr(S:string; var MessageId:string):Boolean;
+var tmpStr : String;  
+    IdPos, i : integer;
+begin
+ MessageId:='';
+ Result := false;
+ tmpStr := StrLowerCase(StrTrim(S));
+ IdPos := StrPos('campaignid="',tmpStr);
+ if IdPos>0 then
+   begin     
+     IdPos := IdPos+12;
+     i := IdPos;
+     While (i<=StrLength(tmpStr)) and (tmpStr[i]>='0') and (tmpStr[i]<='9') do inc(i);
+     MessageId := StrCopy(tmpStr,IdPos,i-IdPos);
+     Result := true;
+   end;
+end;
+
+procedure SetSMSDocumentState(Doc:ICDocuments);
+var CountSMSState1, CountSMSState2 : integer;
+begin
+ // Проверка правильности номеров телефонов и статусов SMS
+  CountSMSState1 := 0;
+  CountSMSState2 := 0;
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+   begin
+    if VarAsStr(Doc.MessageId,'')<>'' then inc(CountSMSState1);
+    if (VarAsInt(Doc.КодСтатусаСообщения,0)=3) or
+       (VarAsInt(Doc.КодСтатусаСообщения,0)=10) or
+       (VarAsInt(Doc.КодСтатусаСообщения,0)=50) then inc(CountSMSState2);
+    end;
+
+  // Установка статуса документа
+  if Doc.LinesCount=0 then
+   Doc.СтатусДокумента := 0
+  else
+  if (CountSMSState2=Doc.LinesCount) then
+   Doc.СтатусДокумента := 2
+  else
+  if (CountSMSState1=Doc.LinesCount) then
+   Doc.СтатусДокумента := 1
+  else
+    Doc.СтатусДокумента := 0;
+end;
+
+function SendSMSDocument(Doc:ICDocuments; var GoodSMSCount:integer; ProgressBar:TO4ProgressBar; RecordIsEditing:Boolean = false):boolean;
+var ServerAnswer, MessageId, MessageText : string;
+    CurSMS : integer;
+begin
+ GoodSMSCount := 0;
+ if not Doc.IsFocused then
+  begin
+   Result := false;
+   exit;
+  end;
+
+ if IsNil(SMSConfigDic) then
+  SMSConfigDic := CreateObject('Справочники.SMSНастройки');
+
+ if (not VarAsBool(Doc.@SMSНастройки.IsFocused)) or (not SMSConfigDic.Find(Doc.SMSНастройки)) then
+  begin
+   Result := false;
+   exit;
+  end;
+
+ if not CreateSMSManager(SMSConfigDic) then
+   begin
+    Result := false;
+    exit;
+   end;
+
+ if IsNil(AccSMS) then
+   AccSMS := CreateObject('Аккумуляторы.SMSРассылки');
+ if not RecordIsEditing then
+  Doc.Edit;
+ // Отправка SMS сообщений
+ CurSMS := 0;
+ Doc.SelectLines;
+ While Doc.SelectNextLine do
+  begin
+   if Doc.MessageId='' then // сообщение ещё не отправлено
+    begin
+     if VarAsBool(Doc.ИспОбщТекстСообщения, false) then
+      MessageText := Doc.ОбщТекстСообщения
+     else
+      MessageText := Doc.ТекстСообщения;
+     Doc.EditLine;
+     Doc.КодСтатусаСообщения := 0;
+     if SendSMS(SMSConfigDic,Doc.Отправитель,Doc.НомерТелефона,MessageText, ServerAnswer) then
+      begin // SMS отправилось
+       Doc.MessageId := ServerAnswer;
+       Doc.СтатусСообщения := 'Ожидает';
+       Doc.ДатаОтправки := CurrentDateTime;
+       inc(GoodSMSCount);
+       if VarAsBool(Doc.ИспОбщТекстСообщения, false) then
+         AccSMS.IncomeDirect(Doc,Doc.ДатаОтправки,Doc.ORDNUM,
+                             ArrayOf(Doc.Партнер,Doc.НомерТелефона,Doc.MessageID,Doc.КодСтатусаСообщения,Doc.СтатусСообщения,Doc.ПолноеНазваниеПартнера),
+                             ArrayOf(0,0),null)
+       else
+         AccSMS.IncomeDirect(Doc,Doc.ДатаОтправки,Doc.ORDNUM,
+                             ArrayOf(Doc.Партнер,Doc.НомерТелефона,Doc.MessageID,Doc.КодСтатусаСообщения,Doc.СтатусСообщения,Doc.ПолноеНазваниеПартнера),
+                             ArrayOf(0,0),null);
+      end
+     else
+      begin // Ошибка отправки SMS
+       Doc.MessageId := '';
+       Doc.СтатусСообщения := 'Ошибка отправки SMS';
+      end;
+     Doc.ОтветСервера := ServerAnswer;
+     Doc.PostLine;
+    end
+   else
+    inc(GoodSMSCount);  // сообщение уже отправлено
+    inc(CurSMS);
+    if not IsNil(ProgressBar)then
+     ProgressBar.Position := CurSMS;
+ end;  // while
+ SetSMSDocumentState(Doc); // устанавливаем статус документа
+ if not RecordIsEditing then
+  begin
+   Doc.Post;
+   Doc.ApplyUpdates;
+  end;
+ if GoodSMSCount = VarAsInt(Doc.LinesCount,-1) then
+     Result := true;
+end;
+
+
+function CheckStatusSMSDocument(Doc:ICDocuments; var GoodSMSCount:integer; ProgressBar:TO4ProgressBar; RecordIsEditing:Boolean = false):boolean;
+var ServerAnswer : string;
+    MessageStatusCode : integer;  
+    CurSMS : integer;
+begin
+ GoodSMSCount := 0;
+ if not Doc.IsFocused then
+  begin
+   Result := false;
+   exit;
+  end;  
+ if IsNil(SMSConfigDic) then
+  SMSConfigDic := CreateObject('Справочники.SMSНастройки');
+ if (not VarAsBool(Doc.@SMSНастройки.IsFocused)) or (not SMSConfigDic.Find(Doc.SMSНастройки)) then
+  begin
+   Result := false;
+   exit;
+  end;
+
+ if not CreateSMSManager(SMSConfigDic) then
+   begin
+    Result := false;
+    exit;
+   end;
+ if IsNil(AccSMS) then
+   AccSMS := CreateObject('Аккумуляторы.SMSРассылки');
+
+ if not RecordIsEditing then
+  Doc.Edit;
+
+ CurSMS := 0;
+ Doc.SelectLines;
+ While Doc.SelectNextLine do
+  begin
+   if (Doc.КодСтатусаСообщения=3) or
+      (Doc.КодСтатусаСообщения=10) or
+      (Doc.КодСтатусаСообщения=50) then // сообщение или доставлено или частично доставлено или удалено
+    inc(GoodSMSCount)
+   else   // сообщение ещё не доставлено
+    begin
+     Doc.EditLine;  
+     MessageStatusCode := VarAsInt(Doc.КодСтатусаСообщения);
+     ServerAnswer := GetSMSStatus(SMSConfigDic,Doc.MessageId, MessageStatusCode);
+     if Doc.КодСтатусаСообщения <> MessageStatusCode then
+      begin
+       Doc.КодСтатусаСообщения := MessageStatusCode;
+       Doc.СтатусСообщения := GetStatusSMSByCode(MessageStatusCode);
+       if (MessageStatusCode=3) or (MessageStatusCode=10) or (MessageStatusCode=50) then
+         begin
+          inc(GoodSMSCount);
+          if VarAsBool(Doc.ИспОбщТекстСообщения, false) then
+           begin
+            Doc.СуммаПотраченная := Doc.СуммаПотраченная +  (Doc.ЦенаSMS*Doc.КоличествоSMSОбщТекст);
+            AccSMS.IncomeDirect(Doc,CurrentDateTime,Doc.ORDNUM,
+                                ArrayOf(Doc.Партнер,Doc.НомерТелефона,Doc.MessageID,Doc.КодСтатусаСообщения,Doc.СтатусСообщения,Doc.ПолноеНазваниеПартнера),
+                                ArrayOf(Doc.КоличествоSMSОбщТекст,Doc.ЦенаSMS*Doc.КоличествоSMSОбщТекст),null);
+           end
+          else
+           begin
+            Doc.СуммаПотраченная := Doc.СуммаПотраченная +  (Doc.ЦенаSMS*Doc.КоличествоSMS);
+            AccSMS.IncomeDirect(Doc,CurrentDateTime,Doc.ORDNUM,
+                                ArrayOf(Doc.Партнер,Doc.НомерТелефона,Doc.MessageID,Doc.КодСтатусаСообщения,Doc.СтатусСообщения,Doc.ПолноеНазваниеПартнера),
+                                ArrayOf(Doc.КоличествоSMS,Doc.ЦенаSMS*Doc.КоличествоSMS),null);
+           end;
+         end
+        else
+         begin
+          if VarAsBool(Doc.ИспОбщТекстСообщения, false) then
+            AccSMS.IncomeDirect(Doc,CurrentDateTime,Doc.ORDNUM,
+                                ArrayOf(Doc.Партнер,Doc.НомерТелефона,Doc.MessageID,Doc.КодСтатусаСообщения,Doc.СтатусСообщения,Doc.ПолноеНазваниеПартнера),
+                                ArrayOf(0,0),null)
+          else
+            AccSMS.IncomeDirect(Doc,CurrentDateTime,Doc.ORDNUM,
+                                ArrayOf(Doc.Партнер,Doc.НомерТелефона,Doc.MessageID,Doc.КодСтатусаСообщения,Doc.СтатусСообщения,Doc.ПолноеНазваниеПартнера),
+                                ArrayOf(0,0),null);
+         end;
+      end;
+     Doc.ОтветСервера := ServerAnswer;
+     Doc.PostLine;
+    end;
+    inc(CurSMS);
+    if not IsNil(ProgressBar)then
+     ProgressBar.Position := CurSMS;
+   end;
+ SetSMSDocumentState(Doc);
+ if not RecordIsEditing then
+  begin
+   Doc.Post;
+   Doc.ApplyUpdates;
+  end;
+ if GoodSMSCount = VarAsInt(Doc.LinesCount,-1) then
+     Result := true;
+end;
+
+function CheckValidTextMessage(var TextMessage:String; var DisableSMSCharWaring, CyrilicCharPresent:Boolean; var SMSCount:integer):Boolean;
+var tmpStr:String;
+    i:integer;
+begin
+ Result := false;
+ DisableSMSCharWaring := false;
+ SMSCount := 1;
+ if StrLength(TextMessage)=0 then
+  exit;
+  // Убираем запрещенные символы из текста сообщения
+ tmpStr := '';
+ for i:=1 to StrLength(TextMessage) do
+  if StrPos(TextMessage[i],DisableSMSChar)=0 then
+    tmpStr := tmpStr + TextMessage[i];
+ if StrLength(tmpStr)<>StrLength(TextMessage) then
+  begin
+   TextMessage := tmpStr;
+   DisableSMSCharWaring := true;
+  end;
+ // подсчет количества SMS для сообщения
+ CyrilicCharPresent := false;
+ tmpStr := StrLowerCase(TextMessage);
+ for i:=1 to StrLength(tmpStr) do
+  if StrPos(tmpStr[i],CyrilicCharSet)<>0 then
+   begin
+     CyrilicCharPresent := true;
+     break;
+   end;                         
+ if CyrilicCharPresent then
+  SMSCount:=Trunc(StrLength(TextMessage)/CyrilicMaxSMSLength+0.999)
+ else
+  SMSCount:=Trunc(StrLength(TextMessage)/MaxSMSLength+0.999);
+ Result := true;
+end;
+
+procedure CalcAllSMSCounts(Doc:ICDocuments);
+var SMSCount, WaringCount : integer;
+    TextMessage, ServerAnswer : String;
+    DisableSMSCharWaring, CyrilicCharPresent : Boolean; 
+begin
+  // Подсчет общей стоимости SMS-сообщений документа
+  if IsNil(SMSConfigDic) then
+    SMSConfigDic := CreateObject('Справочники.SMSНастройки');
+ WaringCount := 0;
+ if SMSConfigDic.Find(Doc.SMSНастройки) then
+      begin
+       Doc.ЦенаSMS := SMSConfigDic.ЦенаSMS;
+       if  VarAsBool(Doc.ИспОбщТекстСообщения,false) then
+        begin  // если используеться общий текст сообщения
+         TextMessage := VarAsStr(Doc.ОбщТекстСообщения,'');
+         CheckValidTextMessage(TextMessage, DisableSMSCharWaring, CyrilicCharPresent, SMSCount);
+         if DisableSMSCharWaring then
+          inc(WaringCount);
+         Doc.ОбщТекстСообщения := TextMessage;
+         Doc.КоличествоSMSОбщТекст := SMSCount;
+        end
+       else
+        begin // если НЕ используеться общий текст сообщения
+          Doc.SelectLines;
+          While Doc.SelectNextLine do
+           begin
+            Doc.EditLine;
+            TextMessage := VarAsStr(Doc.ТекстСообщения,'');
+            CheckValidTextMessage(TextMessage, DisableSMSCharWaring, CyrilicCharPresent, SMSCount);
+            if DisableSMSCharWaring then
+             inc(WaringCount);
+            Doc.ТекстСообщения := TextMessage;
+            Doc.КоличествоSMS := SMSCount;
+            Doc.PostLine;
+           end;
+        end; // если НЕ используеться общий текст сообщения
+      end;
+  if WaringCount<>0 then
+   ShowMessage('В текстах SMS-сообщениях были недопустимые символы! Они были удалены!');
+
+end;
+
+procedure CalcTotalSumSMSDoc(Doc:ICDocuments);
+begin  
+   Doc.SaveTableBookmark;
+   Doc.КоличествоСообщений := Doc.LinesCount;
+   if VarAsBool(Doc.ИспОбщТекстСообщения,false) then
+     Doc.КоличествоSMSОбщ := Doc.КоличествоСообщений * Doc.КоличествоSMSОбщТекст
+   else
+    Doc.КоличествоSMSОбщ := Doc.Total('КоличествоSMS');
+   Doc.СуммаРасчетная :=  Doc.КоличествоSMSОбщ*Doc.ЦенаSMS;
+   Doc.GotoTablebookmark(true);
+end;
+
+function CheckValidSMSdocument(Doc:ICDocuments; var ErrorStr:string; RecordIsEditing:Boolean = false):Boolean;// Проверка правильности SMS документа
+var ErrorCount, CountSMSState1, CountSMSState2 : integer;
+    InvalidTels, NilTextMes, TelNum : string;
+    TextMessage, ServerAnswer : String;
+begin
+ if IsNil(SMSConfigDic) then
+  SMSConfigDic := CreateObject('Справочники.SMSНастройки'); 
+ if not RecordIsEditing then
+  Doc.Edit;
+ ErrorCount := 0;
+ ErrorStr := 'В документе:';
+ if not VarAsBool(Doc.@SMSНастройки.IsFocused) then
+  begin
+   ErrorStr:=ErrorStr+' Не указаны Настройки SMS;';
+   inc(ErrorCount);
+  end;
+ if Doc.Отправитель='' then
+  begin
+   ErrorStr:=ErrorStr+' Не заполнено поле "Отправитель";';
+   inc(ErrorCount);
+  end;
+  // Проверка правильности номеров телефонов и статусов SMS
+  CountSMSState1 := 0;
+  CountSMSState2 := 0;
+  InvalidTels:='';
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+   begin
+    TelNum := VarAsStr(Doc.НомерТелефона,'');
+     if not ValidTelNumber(TelNum) then
+      InvalidTels := InvalidTels + VarAsStr(Doc.ORDNUM,'')+';';
+    end;
+  if InvalidTels<>'' then
+   begin
+      ErrorStr:=ErrorStr+' Не правильные телефоны в строках: ('+InvalidTels+')';
+      inc(ErrorCount);
+   end;
+
+   SetSMSDocumentState(Doc); // устанавливаем статус документа
+
+  // Подсчет общей стоимости SMS-сообщений документа
+   UpdatePriceByDic(SMSConfigDic, ServerAnswer);
+   CalcTotalSumSMSDoc(Doc);
+     
+  // Проверка заполнения полей Тест Сообщения
+  if  VarAsBool(Doc.ИспОбщТекстСообщения,false) then
+   begin  // если используеться общий текст сообщения
+    if VarAsStr(Doc.ОбщТекстСообщения,'')='' then
+     begin
+      ErrorStr:=ErrorStr+' Не заполнено "Общий Текст Сообщения";';
+      inc(ErrorCount);
+     end;
+   end
+  else
+   begin // если НЕ используеться общий текст сообщения
+    NilTextMes:='';
+    Doc.SelectLines;
+    While Doc.SelectNextLine do
+      if VarAsStr(Doc.ТекстСообщения,'')='' then
+        NilTextMes := NilTextMes + VarAsStr(Doc.ORDNUM,'')+';';
+    if NilTextMes<>'' then
+     begin
+      ErrorStr:=ErrorStr+' Не заполнено Текст Сообщения в строках: ('+NilTextMes+')';
+      inc(ErrorCount);
+     end;
+   end;  
+
+ if not RecordIsEditing then
+  begin
+   Doc.Post;
+   Doc.ApplyUpdates;
+  end;
+
+  if ErrorCount=0 then
+   Result := True
+  else
+   Result := false; 
+end; 
+
+function ValidTelNumber(Tel:string):Boolean;
+begin
+ if (VarAsDec(Tel,0)<>0) and
+ (((StrCopy(Tel,1,1)='0') and (StrLength(Tel)=10)) or
+  ((StrCopy(Tel,1,3)='380') and (StrLength(Tel)=12))) then
+ Result := true
+else
+ Result := false;
+end;
+
+function StrOnlyDigitTel(s:string):string;
+var tmpStr : String;
+    i : integer;
+const AllowChars='0123456789';
+begin
+ tmpStr := '';
+  if strLength(s)>0 then
+   for i:=1 to strLength(s) do
+    if StrPos(s[i],AllowChars)<>0 then
+     tmpStr := tmpStr + s[i];
+  if (StrLength(tmpStr)=11) and (tmpStr[1]='8') then
+   StrDelete(tmpStr,1,1);
+  Result := tmpStr;
+end;
+
+procedure InsertLineToSMSDoc(Doc:ICDocuments; Tel:string; Part: Variant; Quet:boolean=false);
+begin
+ Tel := StrOnlyDigitTel(Tel);
+ if Doc.FindLineBy('НомерТелефона',Tel) then
+   begin
+     if not Quet then
+      ShowMessage('Номер '+Tel+' уже добавлен в документ!');
+   end
+ else  
+ if not ValidTelNumber(Tel) then
+   begin
+     if not Quet then
+      if IsObjFocused(Part) and VarAsBool(Part.HasField('ПолноеНазвание')) then
+        ShowMessage('Номер партнера '+VarAsStr(Part.ПолноеНазвание)+' '+Tel+' нельзя использовать для SMS-рассылки!')
+      else
+        ShowMessage('Номер '+Tel+' нельзя использовать для SMS-рассылки!');
+   end
+ else
+   begin
+     Doc.AppendLine;
+     Doc.партнер := Part;
+     Doc.ПолноеНазваниеПартнера := Part.ПолноеНазвание;
+     Doc.НомерТелефона := Tel;
+     Doc.текстсообщения := '';
+     Doc.messageid := '';
+     Doc.ответсервера := '';
+     Doc.статуссообщения := 'создано';
+     Doc.кодстатусасообщения := 0;
+     Doc.PostLine;
+   end;
+end; 
+
+function SelectionTelByPartner(PartDic,TLF:ICDictionary):string;
+begin                                        
+ if (not IsObjFocused(PartDic)) or (IsNil(TLF)) then
+  begin 
+   Result := '';
+   exit;
+  end;  
+  TLF.SetFieldFilter('SMSРассылка','=',true,'','',Null);
+  if TLF.UseMasterAndSelect(PartDic) then
+   begin
+    if not TLF.FindByField('Активность', True, False) then
+     begin
+      TLF.Select;
+      TLF.SelectNext;
+     end;
+   end
+  else
+   begin
+    TLF.CancelFieldFilter('SMSРассылка');
+    if TLF.UseMasterAndSelect(PartDic) and (not TLF.FindByField('Активность', True, False))then
+     begin
+      TLF.Select;
+      TLF.SelectNext;
+     end;
+   end;
+
+  if TLF.IsFocused then
+   Result := StrOnlyDigitTel(TLF.Номер)
+  else
+   Result := '';
+end;
+
+function CreateSMSDoc : ICDocuments;
+var SMSDoc : ICDocuments;
+    SMSConfigDic,Respons : ICDictionary;
+begin   
+  try
+    SMSDoc := CreateObject('Документы.SMSРассылка');
+    SMSConfigDic := CreateObject('Справочники.SMSНастройки');
+    Respons := CreateObject('Справочники.Служащие');
+    SMSDoc.Select;
+    SMSDoc.Append;
+    SMSDoc.Комментарий := 'SMS-рассылка должникам от '+DateToStr(CurrentDate);
+    if SMSConfigDic.FindByField('Активность',-1,false) then
+     begin
+      SMSDoc.SMSНастройки := SMSConfigDic;
+      SMSDoc.Отправитель := SMSConfigDic.Отправитель;
+      SMSDoc.ЦенаSMS := SMSConfigDic.ЦенаSMS;
+     end;
+    if Respons.FindByField('ПолноеНазвание', GetUserName, False) then
+      SMSDoc.Ответственный := Respons; 
+   finally
+    Result := SMSDoc;
+   end;
+end;
+
+procedure AppendLineToSMSDoc(SMSDoc:ICdocuments; Партнер:ICDictionary; НомерТелефона,Текстсообщения:String);
+begin
+  SMSDoc.AppendLine;
+  SMSDoc.Партнер := Партнер;
+  SMSDoc.ПолноеНазваниеПартнера := Партнер.NameField;
+  SMSDoc.НомерТелефона := НомерТелефона;
+  SMSDoc.Текстсообщения := Текстсообщения;
+  SMSDoc.messageid := '';
+  SMSDoc.ответсервера := '';
+  SMSDoc.статуссообщения := 'создано';
+  SMSDoc.кодстатусасообщения := 0;
+  SMSDoc.PostLine;
+end;
+end.

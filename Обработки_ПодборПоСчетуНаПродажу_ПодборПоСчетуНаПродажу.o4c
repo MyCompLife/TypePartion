@@ -1,0 +1,254 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, Интерфейс, Расчеты;
+
+implementation
+
+procedure TVSGood_VPATimedAfterScroll(Sender : TObject);forward;
+
+var
+  MasterData, S, Store : ICDictionary;
+  Stores : ICValueList;
+  TblGood, TblStore, TblPartGood : ICValueTable;
+  ChangeImage : Integer;
+  ChangeSort, LockCalc : Boolean;
+  UseConst : IC4VPAConst;
+
+procedure CreateObjects;
+begin
+  TblStore := CreateObject('ТаблицаЗначений');
+  TblPartGood := CreateObject('ТаблицаЗначений');
+  TblPartGood.Close;
+  TblPartGood.AddColumn('Товар', lftLink, 0);
+  TblPartGood.AddColumn('Склад', lftLink, 0);
+  TblPartGood.AddColumn('Партнер', lftLink, 0);
+  TblPartGood.AddColumn('Партия', lftFloat, 0);
+  TblPartGood.AddColumn('КолОбщ', lftFFT, 5);
+  TblPartGood.AddColumn('ВхЦенаБезНДС', lftFFT, 7);
+  TblPartGood.AddColumn('Валюта', lftLink, 0);
+  TblPartGood.AddColumn('ВхЦенаВал', lftFFT, 7);
+  TblPartGood.AddColumn('ДатаПр', vtcDate, 0);
+  TblPartGood.Open;
+  Stores := CreateObject('СписокЗначений');
+  S := CreateObject('Справочники.Склады');
+  UseConst := GetConstants;
+end;
+
+procedure CreateStore;
+begin
+  Stores.AddValue('Все склады', Null);
+  S.Select;
+  if S.FindByField('Активность', True, False) then
+    Stores.AddValue(S.Название, S);
+  S.Select;
+  while S.SelectNext do
+    if not S.Активность = True then
+      Stores.AddValue(S.Название, S); // или ('',S)
+  Stores.UseControl(CtrlToVar(eStores));
+  Stores.CurIndex := 0;
+  Stores.CopyDataToServer;
+  server.SetStoreParams(CurrentDate, Stores.SrvMean, Stores.CurIndex);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      TblGood := Params;
+      TblGood.CopyDataToServer;
+      TblGood.SrvMean.SortBy('НомСтроки');
+      Params.UseDataSource(CtrlToVar(TVSGood));
+      LockCalc := True;
+      try
+        server.InitSrvData;
+        CreateObjects;
+        TblGood.Tblname := 'tblGood';
+        tblStore.TblName := 'tblStore';
+        TblPartGood.Tblname := 'tblPartGood';
+        TblPartGood.Params['Товар'] := TblGood;
+        tblStore.Params['Товар'] := TblGood;
+        CreateStore;
+      finally
+        LockCalc := False;
+      end;
+      Params.SetColumnFormat('ЦенаБезНДС', UseConst.ФорматЦеныГРН);
+      Params.SetColumnFormat('Цена', UseConst.ФорматЦеныГРН);
+      Params.SetColumnFormat('Количество', UseConst.ФорматКол);
+      Params.SetColumnFormat('ОбщКол', UseConst.ФорматКол);
+      TVSGood_VPATimedAfterScroll(TVSGood);
+    end
+end;
+
+procedure eDate_Change(Sender : TObject);
+begin
+  if LockCalc then
+    exit;
+  server.SetStoreParams(CurrentDate, Stores.SrvMean, Stores.CurIndex);
+  Store := Stores.GetValue(Stores.CurIndex);
+  TblGood.Params['ВыбранныйСклад'] := Store;
+  TVSGood_VPATimedAfterScroll(TVSGood);
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Код;Товар');
+      miSortByCode.Checked := True;
+      miSortByName.Checked := False;
+    end;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Товар;Код');
+      miSortByCode.Checked := False;
+      miSortByName.Checked := True;
+    end;
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+  TVSGood.AfterScrollLock := True;
+end;
+
+procedure TVSGood_VPAAfterMove(Sender : TObject);
+begin
+  TVSGood.AfterScrollLock := False;
+end;
+
+procedure TVSGood_VPATimedAfterScroll(Sender : TObject);
+begin
+  if LockCalc then
+    exit;
+  try
+    TblStore.UseDataSource(0);
+    TblPartGood.UseDataSource(0);
+    TblPartGood.Clear();
+    TblPartGood.CopyDataToServer;
+    server.GetStoreList(TblGood.SrvMean, TblStore.SrvMean, TblPartGood.SrvMean, TblGood.НомСтроки);
+    TblStore.CopyDataFromServer;
+    TblPartGood.CopyDataFromServer;
+    TblStore.SrvMean.Clear;
+    TblPartGood.SrvMean.Clear;
+    TblPartGood.UseMaster(TblStore);
+  finally
+    TblStore.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+    TblPartGood.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+    TblPartGood.SetColumnFormat('ВхЦенаБезНДС', UseConst.ФорматЦеныГРН);
+    TblPartGood.SetColumnFormat('ВхЦенаВал', UseConst.ФорматЦеныВал);
+    TblStore.UseDataSource(CtrlToVar(TVSStore));
+    TblPartGood.UseDataSource(CtrlToVar(TVSPartGood));
+  end;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  if IsObject(InParams) then
+    TblGood.Locate('Товар', InParams)
+  else
+    LockCalc := InParams;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  (dbgPart.PosColumns.Items[0] as TO4GridColumn).Visible := UseConst.УчетДата;
+end;
+
+procedure Sort(Sender : TObject);
+begin
+  if TblPartGood.IsFocused then
+    begin
+      miSortByPrice.ImageIndex := -1;
+      miSortByCnt.ImageIndex := -1;
+      miSortByDate.ImageIndex := -1;
+
+      if ChangeImage = (Sender as TO4MenuItem).Tag then
+        begin
+          if ChangeSort then
+            begin
+              case (Sender as TO4MenuItem).Tag of
+                0 :
+                  TblPartGood.SortBy('-ВхЦенаБезНДС');
+                1 :
+                  TblPartGood.SortBy('-КолОбщ');
+                2 :
+                  TblPartGood.SortBy('ДатаПр');
+              end;
+              ChangeSort := False;
+              (Sender as TO4MenuItem).ImageIndex := 225
+            end
+          else
+            begin
+              case (Sender as TO4MenuItem).Tag of
+                0 :
+                  TblPartGood.SortBy('ВхЦенаБезНДС');
+                1 :
+                  TblPartGood.SortBy('КолОбщ');
+                2 :
+                  TblPartGood.SortBy('-ДатаПр');
+              end;
+              ChangeSort := True;
+              (Sender as TO4MenuItem).ImageIndex := 224
+            end
+        end
+      else
+        begin
+          case (Sender as TO4MenuItem).Tag of
+            0 :
+              TblPartGood.SortBy('ВхЦенаБезНДС');
+            1 :
+              TblPartGood.SortBy('КолОбщ');
+            2 :
+              TblPartGood.SortBy('-ДатаПр');
+          end;
+          ChangeSort := True;
+          (Sender as TO4MenuItem).ImageIndex := 224
+        end;
+
+      miSortByPrice.Checked := False;
+      miSortByCnt.Checked := False;
+      miSortByDate.Checked := False;
+      case (Sender as TO4MenuItem).Tag of
+        0 :
+          miSortByPrice.Checked := True;
+        1 :
+          miSortByCnt.Checked := True;
+        2 :
+          miSortByDate.Checked := True;
+      end;
+      ChangeImage := (Sender as TO4MenuItem).Tag;
+    end
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+Splitter2:TO4Splitter
+dbgData:TO4DBGrid
+Panel3:TO4Panel
+Splitter3:TO4Splitter
+dbgStore:TO4DBGrid
+dbgPart:TO4DBGrid
+Panel1:TO4Panel
+Label3:TO4Label
+eStores:TO4Edit
+TVSPartGood:TO4TableValueSource
+TVSStore:TO4TableValueSource
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+pmPart:TO4PopupMenu
+miSortByPrice:TO4MenuItem
+miSortByCnt:TO4MenuItem
+miSortByDate:TO4MenuItem

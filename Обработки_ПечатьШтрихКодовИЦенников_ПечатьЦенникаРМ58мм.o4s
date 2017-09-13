@@ -1,0 +1,21 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+var
+  PaysOut : ISJournal;
+
+implementation
+
+procedure GetPaysTbl(Order : ISDocuments; Tbl:ISValueTable); Server;
+begin
+  PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysOut.UseMaster(Order);
+  PaysOut.Select; 
+  PaysOut.SaveToValueTable('ƒокумент;—умма¬¬алюте;¬алюта',Tbl, 0,PaysOut.RecordCount);
+end;
+
+
+end.

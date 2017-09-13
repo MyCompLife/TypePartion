@@ -1,0 +1,207 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс,  Пользователи, Расчеты, РаботаСДокументамиВЖурналах;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Options : ICOptions;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  i : Integer;
+begin
+  if IsNil(Users) then
+    Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    begin
+      if VarAsBool(Users.@Регион.IsFocused) and VarAsBool(Users.ОтборПоРегиону) then
+        MasterData.SetFieldFilter('Регион','=',Users.Регион,'','',Null);
+      if VarAsBool(Users.ОтборПоПользователю) then
+        MasterData.SetFieldFilter('Ответственный','=',Users.Служащий,'','',Null);
+    end;
+  Options := GetOptions;    
+  miDocMove.Visible := GetUDASet('viewdocmove');  
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  MasterData.DefineSelectParams(True);
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    if MasterData.GetDocState > 0 then
+      Index1 := 10
+    else
+      Index1 := 9;
+end;
+{$D+}
+
+procedure pmiPrintOne_Click(Sender : TObject);
+var
+  dialog, V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    case MasterData.GetDocSign of
+      'ВводОстатков' :
+        begin
+          V := CreateObject('Обработки.ПечВводОстатков');
+          V.PrintForm('ВводОстатков', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc())
+        end;
+      'ВозвратОтПокупателей' :
+        begin
+          V := CreateObject('Обработки.ПечУнивНакладнаяОтпуска');
+          V.PrintForm('ПечУнивНаклОтпускаБезШапки', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc)
+        end;
+      'ВозвратПоставщикам' :
+        begin
+          V := CreateObject('Обработки.ПечУнивНакладнаяОтпуска');
+          V.PrintForm('ПечУнивНаклОтпускаБезШапки', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc)
+        end;
+      'НакладнаяВнутрПеремещ' :
+        begin
+          V := CreateObject('Обработки.ПечВнутрПеремещ');
+          V.PrintForm('ПечВнутрПеремещ', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc())
+        end;
+      'НакладнаяПрихода' :
+        begin
+          V := CreateObject('Обработки.ПечУнивНакладнаяОтпуска');
+          V.PrintForm('ПечУнивНаклОтпускаБезШапки', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc)
+        end;
+      'РевизияТовара' :
+        begin
+          if MasterData.IsFocused then
+            MasterData.GetDoc.PrintForm('АктРевизии', not VarAsBool(Options.GetServerPrm(DirectPrint)), Null)
+        end;
+      'СписаниеТовара' :
+        begin
+          V := CreateObject('Обработки.ПечУнивНакладнаяОтпуска');
+          V.PrintForm('ПечУнивНаклОтпускаБезШапки', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc)
+        end;
+    end;
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечУнивПодчЖурнала');
+  V.PrintForm('ПечУнивПодчЖурналаСТипом', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+end;
+
+procedure pmiPrintStore_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    case MasterData.GetDocSign of
+      'НакладнаяОтпускаТМЦПоСчету', 'ВводОстатковТМЦПоСчету', 'ВозвратТМЦ' :
+        begin
+          V := CreateObject('Обработки.ПечУнивНаклОтпСклад');
+          V.PrintForm('УнивНаклОтпСклад', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc)
+        end;
+    end;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+end;
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure pmiFix_Click(Sender : TObject);
+var
+  OJ : Variant;
+begin
+  OJ := MasterData.GetOwnerJournal;
+  if VarAsBool(OJ.IsFocused) and VarAsBool(OJ.IsType('Журналы')) then
+    OJ.Refresh;
+end;
+
+procedure DBMemo1_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData);
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender: TObject);
+begin
+//
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+ //
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+
+end.
+
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton4:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbParam:TO4ToolButton
+DBMemo1:TO4DBMemo
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem

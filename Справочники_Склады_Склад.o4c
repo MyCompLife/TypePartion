@@ -1,0 +1,108 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –абота—ѕеременными, –абота—ќбъектами,
+  –абота—“аблицами«начений, –абота—о—правочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  LockCalc: Boolean;
+  listPriceType: ICValueList; 
+  Constants: IC4VPAConst;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+var 
+  PriceTypes: String;
+  i: Integer;
+begin
+  Constants := GetConstants;
+  cbActive.Checked := MasterData.јктивность;
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+  listPriceType := CreateObject('ValueList');
+  PriceTypes := Constants.“ипы÷ен;
+  if StrLength(PriceTypes) > 0 then
+    for i:= 1 to StrLength(PriceTypes) do
+      case StrToInt(PriceTypes[i]) of
+        0: listPriceType.AddValue('÷ена',0);
+        1: listPriceType.AddValue('ќпт÷ена',1);
+        2: listPriceType.AddValue(' рќпт÷ена',2);
+      end;
+  LockCalc := true;
+  listPriceType.UseControl(ctrlToVar(edPriceType));
+  if MasterData.“ип÷ены = '' then
+    MasterData.“ип÷ены := listPriceType.GetStr(0);
+  listPriceType.CurIndex := listPriceType.FindByStr(MasterData.“ип÷ены);
+  LockCalc := false;
+end;
+
+procedure chbActive_Click(Sender : TObject);
+begin
+  MasterData.јктивность := cbActive.Checked;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  MasterData.јктивность := not HasActive(MasterData);
+  //MasterData.“ип÷ены := '÷ена';
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  ResetActive(MasterData);
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure edPriceType_Change(Sender: TObject);
+begin
+  if not LockCalc then
+    MasterData.“ип÷ены := listPriceType.GetStr(listPriceType.CurIndex);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+Label5:TO4Label
+Label6:TO4Label
+Label11:TO4Label
+dbeName:TO4DBEdit
+dbeResponsible:TO4DBEdit
+dbeAddress:TO4DBEdit
+dbePhone:TO4DBEdit
+cbActive:TO4CheckBox
+dbeRegion:TO4DBEdit
+dbeCode:TO4DBEdit
+edPriceType:TO4Edit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnTitle:TO4Panel
+lbTitle:TO4Label
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

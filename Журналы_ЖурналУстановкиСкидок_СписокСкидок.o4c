@@ -1,0 +1,139 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСПеременными,
+  РаботаСДокументамиВЖурналах, ПодключениеДопИнтерфейса, РаботаСОбъектами, РаботаСКомпонентамиVCL;
+
+implementation
+
+var
+  MasterData, ChildPaysOut, ChildPaysIn, ChildNakls, ChildNaklsIn, ChildProxyCards : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MyDocHasOwner, LockCh : Boolean;
+  Currency : ICDictionary;
+  Tbl, TblOwnerDoc : ICValueTable;
+  Doc : ICDocuments;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+var
+  i : Integer;
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  SetColors(Constants);
+  Options := GetOptions;
+end;
+
+procedure ReceiveEvent(Sender : ICDocuments; SessionID : Integer; CenterName, FromUserID, FromUserName : string;
+  Param : Variant);
+begin
+  if GetSessionID <> SessionID then
+    MasterData.Refresh;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;
+begin
+  MakeInterface(tbrData, Nobody, dbgData);
+  miDocMove.Visible := GetUDASet('viewdocmove');   
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  if VarAsBool(Options.GetServerPrm(RefreshOpt)) then
+    MasterData.RegEventReceiver(evNakladn, EntryPoint(ReceiveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  LockCh := True;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  if LockCh then
+    begin
+      MasterData.SetDocStateRange(NewTab - 1);
+      MasterData.Select;
+    end;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  LockCh := False;
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  LockCh := True;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if MasterData.GetDocState > 0 then
+        Index1 := 10
+      else
+        Index1 := 9;
+    end;
+end;
+{$D+}
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbSelect:TO4ToolButton
+tbDelimiter3:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tsState:TO4TabSet
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem

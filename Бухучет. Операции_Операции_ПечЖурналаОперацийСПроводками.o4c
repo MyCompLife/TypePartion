@@ -1,0 +1,111 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, ConstNames;
+
+implementation
+
+var
+  MasterData, TmpOpers : ICOpers;
+  Pk : Integer;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  Pk := Form.GetPrintKind; 
+  TmpOpers := CreateObject('БухОперации.Операции');
+  TmpOpers.Select;
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    MasterData.Select;
+  Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := MasterData.НомерДок;
+      Value['Date'] := MasterData.Дата;
+      Value['Partner'] := MasterData.Комментарий;
+      Value['Summa'] := MasterData.Сумма;
+      Value['TypeDoc'] := MasterData.Документ;
+    end; 
+  TmpOpers.Find(MasterData)
+end;
+
+procedure Structure1_Tbl1_Det1_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if Index = 0 then
+    TmpOpers.SelectLines;
+  Accept := TmpOpers.SelectNextLine;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := TmpOpers.Номер;
+      Value['Debet'] := TmpOpers.Дебет.Code;
+      Value['Credit'] := TmpOpers.Кредит.Code;
+      if VarAsBool(TmpOpers.АОДебет1.IsFocused) then
+        Value['AODebet1'] := TmpOpers.АОДебет1.NameField;
+      if VarAsBool(TmpOpers.АОДебет2.IsFocused) then
+        Value['AODebet2'] := TmpOpers.АОДебет2.NameField;
+      if VarAsBool(TmpOpers.АОДебет3.IsFocused) then
+        Value['AODebet3'] := TmpOpers.АОДебет3.NameField;  
+      if VarAsBool(TmpOpers.АОКредит1.IsFocused) then
+        Value['AOCredit1'] := TmpOpers.АОКредит1.NameField;
+      if VarAsBool(TmpOpers.АОКредит2.IsFocused) then
+        Value['AOCredit2'] := TmpOpers.АОКредит2.NameField;
+      if VarAsBool(TmpOpers.АОКредит3.IsFocused) then
+        Value['AOCredit3'] := TmpOpers.АОКредит3.NameField;
+      Value['Summa'] := TmpOpers.СуммаПроводки;
+      Value['Count'] := TmpOpers.Количество;
+      Value['Price'] := TmpOpers.Цена;
+      Value['Comment'] := TmpOpers.КомментарийПроводки;
+    end;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+lbPartner:TRBLabel
+lbDate:TRBLabel
+lbSumma:TRBLabel
+lbNumber:TRBLabel
+lbTypeDoc:TRBLabel
+hdTypeDoc:TRBLabel
+hdDate:TRBLabel
+hdSumma:TRBLabel
+hdNumber:TRBLabel
+hdPartner:TRBLabel
+Band1:TRBBand
+Label4:TRBLabel
+DetailBand2:TRBDetailBand
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Band3:TRBBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+Structure1:TRBStructure

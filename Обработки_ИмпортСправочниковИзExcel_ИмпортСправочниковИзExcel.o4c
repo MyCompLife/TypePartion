@@ -1,0 +1,2697 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСТаблицамиЗначенийCL, Расчеты, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками, НумерацияДокументов;
+
+implementation
+var
+    Constants : IC4VPAConst;
+    Options : ICOPtions;
+    BeginRow, EndRow : integer;
+    PartnerDiscountDic, PartnerCurrencyDic, PartnerRegionDic,
+    EmplDiscountDic, EmplCurrencyDic, EmplRegionDic, GoodSuppDic,
+    GoodCurrencyInPrice, GoodCurrencyPrice, GoodCurrencyOptPrice, GoodCurrencyKrOptPrice,
+    ServiceCurrencyInPrice, ServiceCurrencyPrice, ServiceCurrencyOptPrice, ServiceCurrencyKrOptPrice : ICDictionary;
+    ChangeLock : Boolean;
+    V : IcProcessing;
+    PostByGoodDic, CheckPostByGoodDic, GoodsDic, BarCodeDic, SuppDic, CtgDefDic: IcDictionary;
+    Doc : IcDocuments;
+    DateDoc : DateTime;
+    TypeTelColl : ICCollection;
+
+function GetCode(Article : Integer): String;
+var
+  i : integer;
+  BarCode: String;
+begin
+  BarCode := IntToStr(Article);
+  i := GetConstants.ШтрихКодТовараВнутреннийКолСимв;
+  while StrLength(BarCode) < i do
+    begin
+      BarCode := '0' + BarCode;
+    end;
+  Result := BarCode;
+end;
+
+procedure WriteFormatToDic(Dic:ICDictionary);
+var i:integer;
+    CurComponentName : string;
+    CurComponent : TComponent;
+    FormatTbl : ICValueTable;
+begin
+ FormatTbl := CreateObject('ТаблицаЗначений');
+ FormatTbl.AddColumn('TypeComponent',vtcString,50);
+ FormatTbl.AddColumn('NameComponent',vtcString,50);
+ FormatTbl.AddColumn('StrValue',vtcString,50);
+ FormatTbl.AddColumn('IntValue',vtcInteger,0);
+ FormatTbl.AddColumn('LinkValue',vtcLink,0);
+ FormatTbl.Open;
+ if nbImport.PageClass[nbImport.PageIndex].ControlCount>0 then
+  for i:=0 to nbImport.PageClass[nbImport.PageIndex].ControlCount-1 do
+    begin
+      CurComponentName := nbImport.PageClass[nbImport.PageIndex].Controls[i].Name;
+      CurComponent := Form.FindComponent(CurComponentName);
+      if not isNil(CurComponent) then
+      case CurComponent.ClassName of
+       'TO4CheckBox' :
+         if VarAsBool((CurComponent as TO4CheckBox).Enabled) then
+           begin
+             FormatTbl.Append;
+             FormatTbl.TypeComponent := 'TO4CheckBox';
+             FormatTbl.NameComponent := CurComponentName;
+             FormatTbl.IntValue := VarAsInt((CurComponent as TO4CheckBox).Checked);
+             FormatTbl.Post;
+           end;
+       'TO4Edit' :
+         begin
+           FormatTbl.Append;
+           FormatTbl.TypeComponent := 'TO4Edit';
+           FormatTbl.NameComponent := CurComponentName;
+           case (CurComponent as TO4Edit).EditStyle of
+             fesDropDownListBox : FormatTbl.IntValue := VarAsInt((CurComponent as TO4Edit).ItemIndex);
+             fesAction :
+               begin
+                 case CurComponentName of
+                   'edPartnerDiscount' :
+                      if IsObjFocused(PartnerDiscountDic) then
+                        FormatTbl.LinkValue := PartnerDiscountDic;
+                   'edPartnerCurrency' :
+                      if IsObjFocused(PartnerCurrencyDic) then
+                        FormatTbl.LinkValue := PartnerCurrencyDic;
+                   'edPartnerRegion' :
+                      if IsObjFocused(PartnerRegionDic) then
+                        FormatTbl.LinkValue := PartnerRegionDic;  
+                   'edEmplDiscount' :
+                      if IsObjFocused(EmplDiscountDic) then
+                        FormatTbl.LinkValue := EmplDiscountDic;
+                   'edEmplCurrency' :
+                      if IsObjFocused(EmplCurrencyDic) then
+                        FormatTbl.LinkValue := EmplCurrencyDic;
+                   'edEmplRegion' :
+                      if IsObjFocused(EmplRegionDic) then
+                        FormatTbl.LinkValue := EmplRegionDic;
+                   'edGoodCurrencyInPrice' :
+                      if IsObjFocused(GoodCurrencyInPrice) then
+                        FormatTbl.LinkValue := GoodCurrencyInPrice;
+                   'edGoodCurrencyPrice' :
+                      if IsObjFocused(GoodCurrencyPrice) then
+                        FormatTbl.LinkValue := GoodCurrencyPrice;
+                   'edGoodCurrencyOptPrice' :
+                      if IsObjFocused(GoodCurrencyOptPrice) then
+                        FormatTbl.LinkValue := GoodCurrencyOptPrice;  
+                   'edGoodCurrencyKrOptPrice' :
+                      if IsObjFocused(GoodCurrencyKrOptPrice) then
+                        FormatTbl.LinkValue := GoodCurrencyKrOptPrice;
+                   'EdGoodSupp' :
+                      if IsObjFocused(GoodSuppDic) then
+                        FormatTbl.LinkValue := GoodSuppDic;  
+                   'edServiceCurrencyInPrice' :
+                      if IsObjFocused(ServiceCurrencyInPrice) then
+                        FormatTbl.LinkValue := ServiceCurrencyInPrice;
+                   'edServiceCurrencyPrice' :
+                      if IsObjFocused(ServiceCurrencyPrice) then
+                        FormatTbl.LinkValue := ServiceCurrencyPrice;
+                   'edServiceCurrencyOptPrice' :
+                      if IsObjFocused(ServiceCurrencyOptPrice) then
+                        FormatTbl.LinkValue := ServiceCurrencyOptPrice;
+                   'edServiceCurrencyKrOptPrice' :
+                      if IsObjFocused(ServiceCurrencyKrOptPrice) then
+                        FormatTbl.LinkValue := ServiceCurrencyKrOptPrice;
+                 end;
+               end
+             else
+               FormatTbl.StrValue := (CurComponent as TO4Edit).Text;
+           end;
+           FormatTbl.Post;
+         end;
+       'TO4RadioGroup' :
+         begin
+           FormatTbl.Append;
+           FormatTbl.TypeComponent := 'TO4RadioGroup';
+           FormatTbl.NameComponent := CurComponentName;
+           FormatTbl.IntValue := VarAsInt((CurComponent as TO4RadioGroup).ItemIndex);
+           FormatTbl.Post;
+         end;
+      end;
+    end;  
+  FormatTbl.Append;
+  FormatTbl.TypeComponent := 'TO4RadioGroup';
+  FormatTbl.NameComponent := 'rgTypeImport';
+  FormatTbl.IntValue := rgTypeImport.ItemIndex;
+  FormatTbl.Post;
+  Dic.Edit;
+  Dic.ImportFormat := WritePropsToBlob(FormatTbl);
+  Dic.Post;
+  Dic.ApplyUpdates;
+end;
+
+procedure ReadFormatFromDic(Dic:ICDictionary);
+var FindCheckBox : TO4CheckBox;
+    FindEdit : TO4Edit;
+    FindRadioGroup : TO4RadioGroup;  
+    FormatTbl : ICValueTable;
+begin
+  FormatTbl := CreateTblFromBLOB(Dic.ImportFormat);
+  if not IsNil(FormatTbl) then
+    begin
+      FormatTbl.Select;
+      While FormatTbl.SelectNext do
+        begin
+          case VarAsStr(FormatTbl.TypeComponent) of
+            'TO4CheckBox' :
+              begin
+                FindCheckBox := (Form.FindComponent(VarAsStr(FormatTbl.NameComponent)) as TO4CheckBox);
+                if not IsNil(FindCheckBox) and FindCheckBox.Enabled then
+                  FindCheckBox.Checked := VarAsBool(FormatTbl.IntValue);
+              end;
+            'TO4Edit' :
+              begin
+                FindEdit := (Form.FindComponent(VarAsStr(FormatTbl.NameComponent)) as TO4Edit);
+                if not IsNil(FindEdit) then
+                  begin
+                    case FindEdit.EditStyle of
+                     fesDropDownListBox :  FindEdit.ItemIndex := VarAsInt(FormatTbl.IntValue);
+                     fesAction :
+                       begin
+                         case VarAsStr(FormatTbl.NameComponent) of
+                           'edPartnerDiscount' :
+                             begin
+                               if IsNil(PartnerDiscountDic) then
+                                 PartnerDiscountDic := CreateObject('Справочники.ГруппыСкидок');
+                               if PartnerDiscountDic.Find(FormatTbl.@LinkValue) then
+                                 edPartnerDiscount.Text := VarAsStr(PartnerDiscountDic.ПолноеНазвание)
+                               else
+                                Nil(PartnerDiscountDic);
+                             end;
+                           'edPartnerCurrency' :
+                             begin
+                               if IsNil(PartnerCurrencyDic) then
+                                 PartnerCurrencyDic := CreateObject('Справочники.Валюты');
+                               if PartnerCurrencyDic.Find(FormatTbl.@LinkValue) then
+                                 edPartnerCurrency.Text := VarAsStr(PartnerCurrencyDic.CodeField)
+                               else
+                                Nil(PartnerCurrencyDic);
+                             end;
+                           'edPartnerRegion' :
+                             begin
+                               if IsNil(PartnerRegionDic) then
+                                 PartnerRegionDic := CreateObject('Справочники.Регионы');
+                               if PartnerRegionDic.Find(FormatTbl.@LinkValue) then
+                                 edPartnerRegion.Text := VarAsStr(PartnerRegionDic.NameField)
+                               else
+                                Nil(PartnerRegionDic);
+                             end;  
+                           'edEmplDiscount' :
+                             begin
+                               if IsNil(EmplDiscountDic) then
+                                 EmplDiscountDic := CreateObject('Справочники.ГруппыСкидок');
+                               if EmplDiscountDic.Find(FormatTbl.@LinkValue) then
+                                 edEmplDiscount.Text := VarAsStr(EmplDiscountDic.ПолноеНазвание)
+                               else
+                                Nil(EmplDiscountDic);
+                             end;
+                           'edEmplCurrency' :
+                             begin
+                               if IsNil(EmplCurrencyDic) then
+                                 EmplCurrencyDic := CreateObject('Справочники.Валюты');
+                               if EmplCurrencyDic.Find(FormatTbl.@LinkValue) then
+                                 edEmplCurrency.Text := VarAsStr(EmplCurrencyDic.CodeField)
+                               else
+                                Nil(EmplCurrencyDic);
+                             end;
+                           'edEmplRegion' :
+                             begin
+                               if IsNil(EmplRegionDic) then
+                                 EmplRegionDic := CreateObject('Справочники.Регионы');
+                               if EmplRegionDic.Find(FormatTbl.@LinkValue) then
+                                 edEmplRegion.Text := VarAsStr(EmplRegionDic.NameField)
+                               else
+                                Nil(EmplRegionDic);
+                             end; 
+                           'edGoodCurrencyInPrice' :
+                             begin
+                               if IsNil(GoodCurrencyInPrice) then
+                                 GoodCurrencyInPrice := CreateObject('Справочники.Валюты');
+                               if GoodCurrencyInPrice.Find(FormatTbl.@LinkValue) then
+                                 edGoodCurrencyInPrice.Text := VarAsStr(GoodCurrencyInPrice.CodeField)
+                               else
+                                Nil(GoodCurrencyInPrice);
+                             end;
+                           'edGoodCurrencyPrice' :
+                             begin
+                               if IsNil(GoodCurrencyPrice) then
+                                 GoodCurrencyPrice := CreateObject('Справочники.Валюты');
+                               if GoodCurrencyPrice.Find(FormatTbl.@LinkValue) then
+                                 edGoodCurrencyPrice.Text := VarAsStr(GoodCurrencyPrice.CodeField)
+                               else
+                                Nil(GoodCurrencyPrice);
+                             end;
+                           'edGoodCurrencyOptPrice' :
+                             begin
+                               if IsNil(GoodCurrencyOptPrice) then
+                                 GoodCurrencyOptPrice := CreateObject('Справочники.Валюты');
+                               if GoodCurrencyOptPrice.Find(FormatTbl.@LinkValue) then
+                                 edGoodCurrencyOptPrice.Text := VarAsStr(GoodCurrencyOptPrice.CodeField)
+                               else
+                                Nil(GoodCurrencyOptPrice);
+                             end; 
+                           'edGoodCurrencyKrOptPrice' :
+                             begin
+                               if IsNil(GoodCurrencyKrOptPrice) then
+                                 GoodCurrencyKrOptPrice := CreateObject('Справочники.Валюты');
+                               if GoodCurrencyKrOptPrice.Find(FormatTbl.@LinkValue) then
+                                 edGoodCurrencyKrOptPrice.Text := VarAsStr(GoodCurrencyKrOptPrice.CodeField)
+                               else
+                                Nil(GoodCurrencyOptPrice);
+                             end;
+                           'EdGoodSupp' :
+                             begin
+                               if IsNil(GoodSuppDic) then
+                                 GoodSuppDic := CreateObject('Справочники.ЮрПартнеры');
+                               if GoodSuppDic.Find(FormatTbl.@LinkValue) then
+                                 EdGoodSupp.Text := VarAsStr(GoodSuppDic.ПолноеНазвание)
+                               else
+                                Nil(GoodSuppDic);
+                             end;  
+                           'edServiceCurrencyInPrice' :
+                             begin
+                               if IsNil(ServiceCurrencyInPrice) then
+                                 ServiceCurrencyInPrice := CreateObject('Справочники.Валюты');
+                               if ServiceCurrencyInPrice.Find(FormatTbl.@LinkValue) then
+                                 edServiceCurrencyInPrice.Text := VarAsStr(ServiceCurrencyInPrice.CodeField)
+                               else
+                                Nil(ServiceCurrencyInPrice);
+                             end;
+                           'edServiceCurrencyPrice' :
+                             begin
+                               if IsNil(ServiceCurrencyPrice) then
+                                 ServiceCurrencyPrice := CreateObject('Справочники.Валюты');
+                               if ServiceCurrencyPrice.Find(FormatTbl.@LinkValue) then
+                                 edServiceCurrencyPrice.Text := VarAsStr(ServiceCurrencyPrice.CodeField)
+                               else
+                                Nil(ServiceCurrencyPrice);
+                             end;
+                           'edServiceCurrencyOptPrice' :
+                             begin
+                               if IsNil(ServiceCurrencyOptPrice) then
+                                 ServiceCurrencyOptPrice := CreateObject('Справочники.Валюты');
+                               if ServiceCurrencyOptPrice.Find(FormatTbl.@LinkValue) then
+                                 edServiceCurrencyOptPrice.Text := VarAsStr(ServiceCurrencyOptPrice.CodeField)
+                               else
+                                Nil(ServiceCurrencyOptPrice);
+                             end;   
+                           'edServiceCurrencyKrOptPrice' :
+                             begin
+                               if IsNil(ServiceCurrencyKrOptPrice) then
+                                 ServiceCurrencyKrOptPrice := CreateObject('Справочники.Валюты');
+                               if ServiceCurrencyKrOptPrice.Find(FormatTbl.@LinkValue) then
+                                 edServiceCurrencyKrOptPrice.Text := VarAsStr(ServiceCurrencyKrOptPrice.CodeField)
+                               else
+                                Nil(ServiceCurrencyKrOptPrice);
+                             end;
+                         end;
+                       end
+                     else
+                       FindEdit.Text := VarAsStr(FormatTbl.StrValue);
+                    end;
+                  end;
+              end;
+            'TO4RadioGroup' :
+              begin
+                FindRadioGroup := (Form.FindComponent(VarAsStr(FormatTbl.NameComponent)) as TO4RadioGroup);
+                if not IsNil(FindRadioGroup) then
+                  FindRadioGroup.ItemIndex := VarAsInt(FormatTbl.IntValue);
+              end;
+          end;
+        end;
+        edEndRow.Text := edBeginRow.Text;
+        BeginRow := StrToIntDef(edBeginRow.Text,1);
+        if BeginRow<1 then BeginRow := 1;
+        EndRow  := StrToIntDef(edEndRow.Text,1);
+        if EndRow<1 then EndRow := 1;
+        if EndRow<BeginRow then EndRow := BeginRow;
+    end;   
+end;
+
+procedure RefreshVCL;
+var GridBeginRow, GridEndRow : integer;
+begin
+  GridBeginRow := BeginRow;
+  if GridBeginRow<1 then GridBeginRow := 1;
+  if GridBeginRow>InXGrid.RowCount then
+    GridBeginRow := InXGrid.RowCount;
+  GridEndRow   := EndRow;
+  if GridEndRow<1 then GridEndRow := 1;
+  if GridEndRow<GridBeginRow then
+    GridEndRow := GridBeginRow;
+  if GridEndRow>InXGrid.RowCount then
+    GridEndRow := InXGrid.RowCount;
+  InXGrid.Cells(1,1,InXGrid.RowCount,InXGrid.ColCount).BkColor := clWindow;
+  case nbImport.PageIndex of
+   0 : //Партнеры
+     begin
+      if edPartnerName.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,edPartnerName.ItemIndex+1,GridEndRow,edPartnerName.ItemIndex+1).BkColor := edPartnerName.Color;
+      if cbPartnerBirthDay.Checked and (edPartnerBirthDay.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edPartnerBirthDay.ItemIndex+1,GridEndRow,edPartnerBirthDay.ItemIndex+1).BkColor := edPartnerBirthDay.Color;
+      if cbPartnerTel.Checked and (edPartnerTel.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edPartnerTel.ItemIndex+1,GridEndRow,edPartnerTel.ItemIndex+1).BkColor := edPartnerTel.Color;
+      miPartnerBirthDay.Visible := cbPartnerBirthDay.Checked;
+      miPartnerTel.Visible := cbPartnerTel.Checked;
+      edPartnerBirthDay.Enabled := cbPartnerBirthDay.Checked;
+      edPartnerTel.Enabled := cbPartnerTel.Checked;
+     end;  
+   1 : //Служащие
+     begin
+      if edEmplFam.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,edEmplFam.ItemIndex+1,GridEndRow,edEmplFam.ItemIndex+1).BkColor := edEmplFam.Color;
+      if cbEmplName.Checked and (edEmplName.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edEmplName.ItemIndex+1,GridEndRow,edEmplName.ItemIndex+1).BkColor := edEmplName.Color;
+      if cbEmplBirthDay.Checked and (edEmplBirthDay.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edEmplBirthDay.ItemIndex+1,GridEndRow,edEmplBirthDay.ItemIndex+1).BkColor := edEmplBirthDay.Color;
+      if cbEmplTel.Checked and (edEmplTel.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edEmplTel.ItemIndex+1,GridEndRow,edEmplTel.ItemIndex+1).BkColor := edEmplTel.Color;
+      miEmplName.Visible := cbEmplName.Checked;
+      miEmplBirthDay.Visible := cbEmplBirthDay.Checked;
+      miEmplTel.Visible := cbEmplTel.Checked;
+      edEmplName.Enabled := cbEmplName.Checked;
+      edEmplBirthDay.Enabled := cbEmplBirthDay.Checked;
+      edEmplTel.Enabled := cbEmplTel.Checked;
+     end;   
+   2 : //Товары
+     begin
+      if edGoodName.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,edGoodName.ItemIndex+1,GridEndRow,edGoodName.ItemIndex+1).BkColor := edGoodName.Color;
+      if EdGoodUnitName.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,EdGoodUnitName.ItemIndex+1,GridEndRow,EdGoodUnitName.ItemIndex+1).BkColor := EdGoodUnitName.Color;
+      if edGoodCtg.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,edGoodCtg.ItemIndex+1,GridEndRow,edGoodCtg.ItemIndex+1).BkColor := edGoodCtg.Color;
+      if cbColor.Checked and (edColor.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edColor.ItemIndex+1,GridEndRow,edColor.ItemIndex+1).BkColor := edColor.Color;
+      if cbSize.Checked and (edSize.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edSize.ItemIndex+1,GridEndRow,edSize.ItemIndex+1).BkColor := edSize.Color;
+      if cbGoodSuppCode.Checked and (edGoodSuppCode.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edGoodSuppCode.ItemIndex+1,GridEndRow,edGoodSuppCode.ItemIndex+1).BkColor := edGoodSuppCode.Color;
+      if cbGoodBarCode.Checked and (edGoodBarCode.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edGoodBarCode.ItemIndex+1,GridEndRow,edGoodBarCode.ItemIndex+1).BkColor := edGoodBarCode.Color;
+      if cbGoodManuf.Checked and (edGoodManuf.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edGoodManuf.ItemIndex+1,GridEndRow,edGoodManuf.ItemIndex+1).BkColor := edGoodManuf.Color;
+      if cbGoodInPrice.Checked and (edGoodInPrice.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edGoodInPrice.ItemIndex+1,GridEndRow,edGoodInPrice.ItemIndex+1).BkColor := edGoodInPrice.Color;
+      if cbGoodPrice.Checked and (edGoodPrice.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edGoodPrice.ItemIndex+1,GridEndRow,edGoodPrice.ItemIndex+1).BkColor := edGoodPrice.Color;
+      if cbGoodOptPrice.Checked and (edGoodOptPrice.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edGoodOptPrice.ItemIndex+1,GridEndRow,edGoodOptPrice.ItemIndex+1).BkColor := edGoodOptPrice.Color;
+      if cbGoodKrOptPrice.Checked and (edGoodKrOptPrice.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edGoodKrOptPrice.ItemIndex+1,GridEndRow,edGoodKrOptPrice.ItemIndex+1).BkColor := edGoodKrOptPrice.Color;
+
+      miGoodSuppCode.Visible := cbGoodSuppCode.Checked;
+      miGoodBarCode.Visible := cbGoodBarCode.Checked;
+      miGoodManuf.Visible := cbGoodManuf.Checked;
+      miGoodInPrice.Visible := cbGoodInPrice.Checked;
+      miGoodPrice.Visible := cbGoodPrice.Checked;
+      miGoodOptPrice.Visible := cbGoodOptPrice.Checked;
+      miGoodKrOptPrice.Visible := cbGoodKrOptPrice.Checked;
+
+      edGoodSuppCode.Enabled := cbGoodSuppCode.Checked;
+      edGoodBarCode.Enabled := cbGoodBarCode.Checked;
+      edGoodManuf.Enabled := cbGoodManuf.Checked;
+      edGoodInPrice.Enabled := cbGoodInPrice.Checked;
+      edGoodPrice.Enabled := cbGoodPrice.Checked;
+      edGoodOptPrice.Enabled := cbGoodOptPrice.Checked;     
+      edGoodKrOptPrice.Enabled := cbGoodKrOptPrice.Checked;
+     end;    
+   3 : //Услуги
+     begin
+      if edServiceName.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,edServiceName.ItemIndex+1,GridEndRow,edServiceName.ItemIndex+1).BkColor := edServiceName.Color;
+      if edServiceUnitName.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,edServiceUnitName.ItemIndex+1,GridEndRow,edServiceUnitName.ItemIndex+1).BkColor := edServiceUnitName.Color;
+      if edServiceCtg.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,edServiceCtg.ItemIndex+1,GridEndRow,edServiceCtg.ItemIndex+1).BkColor := edServiceCtg.Color;
+      if cbServiceInPrice.Checked and (edServiceInPrice.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edServiceInPrice.ItemIndex+1,GridEndRow,edServiceInPrice.ItemIndex+1).BkColor := edServiceInPrice.Color;
+      if cbServicePrice.Checked and (edServicePrice.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edServicePrice.ItemIndex+1,GridEndRow,edServicePrice.ItemIndex+1).BkColor := edServicePrice.Color;
+      if cbServiceOptPrice.Checked and (edServiceOptPrice.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edServiceOptPrice.ItemIndex+1,GridEndRow,edServiceOptPrice.ItemIndex+1).BkColor := edServiceOptPrice.Color;
+      if cbServiceKrOptPrice.Checked and (edServiceKrOptPrice.ItemIndex<>-1) then
+        InXGrid.Cells(GridBeginRow,edServiceKrOptPrice.ItemIndex+1,GridEndRow,edServiceKrOptPrice.ItemIndex+1).BkColor := edServiceKrOptPrice.Color;
+
+
+      miServiceInPrice.Visible := cbServiceInPrice.Checked;
+      miServicePrice.Visible := cbServicePrice.Checked;
+      miServiceOptPrice.Visible := cbServiceOptPrice.Checked;
+      miServiceKrOptPrice.Visible := cbServiceKrOptPrice.Checked;
+
+      edServiceInPrice.Enabled := cbServiceInPrice.Checked;
+      edServicePrice.Enabled := cbServicePrice.Checked;
+      edServiceOptPrice.Enabled := cbServiceOptPrice.Checked;
+      edServiceKrOptPrice.Enabled := cbServiceKrOptPrice.Checked;
+     end;
+   4 : 
+     begin
+      if edCtgName.ItemIndex<>-1 then
+        InXGrid.Cells(GridBeginRow,edCtgName.ItemIndex+1,GridEndRow,edCtgName.ItemIndex+1).BkColor := edCtgName.Color;
+      rgCtgTypeLink.Enabled := cbUseCtgParent.Checked;
+      if cbUseCtgParent.Checked then
+        begin
+          case rgCtgTypeLink.ItemIndex of
+           0 :
+             begin
+               if edCtgNameParent.ItemIndex<>-1 then
+                 InXGrid.Cells(GridBeginRow,edCtgNameParent.ItemIndex+1,GridEndRow,edCtgNameParent.ItemIndex+1).BkColor := edCtgNameParent.Color;
+               edCtgNameParent.Enabled := true;
+               edCtgCode.Enabled := false;
+               edCtgCodeParent.Enabled := false;
+             end;
+           1 :
+             begin
+               if edCtgCode.ItemIndex<>-1 then
+                 InXGrid.Cells(GridBeginRow,edCtgCode.ItemIndex+1,GridEndRow,edCtgCode.ItemIndex+1).BkColor := edCtgCode.Color;
+               if edCtgCodeParent.ItemIndex<>-1 then
+                 InXGrid.Cells(GridBeginRow,edCtgCodeParent.ItemIndex+1,GridEndRow,edCtgCodeParent.ItemIndex+1).BkColor := edCtgCodeParent.Color;
+               edCtgNameParent.Enabled := false;
+               edCtgCode.Enabled := true;
+               edCtgCodeParent.Enabled := true;
+             end;
+          end;
+        end
+      else
+        begin
+          edCtgNameParent.Enabled := false;
+          edCtgCode.Enabled := false;
+          edCtgCodeParent.Enabled := false;
+        end;
+      miCtgNameParent.Visible := cbUseCtgParent.Checked and edCtgNameParent.Enabled;
+      miCtgCode.Visible := cbUseCtgParent.Checked and edCtgCode.Enabled;
+      miCtgCodeParent.Visible := cbUseCtgParent.Checked and edCtgCodeParent.Enabled;
+     end;
+  end;
+
+  InXGrid.Refresh;
+end;
+
+procedure Form_Open(Sender: TObject);  
+var TestOLE : OLEVariant;
+    ExcelOK, OPenOfficeOK : Boolean;
+begin   
+  nbImport.PageIndex := 0;
+  BeginRow := 1;
+  EndRow := 1;
+  Constants := GetConstants;
+  Options := GetOptions;
+  ExcelOK := true;
+  try
+    TestOLE :=  CreateOleObject('Excel.Application');
+    Nil(TestOLE);
+  except
+    ExcelOK := false;
+  end;
+  OPenOfficeOK := true;
+  try
+    TestOLE :=  CreateOleObject('com.sun.star.ServiceManager');
+    Nil(TestOLE);
+  except
+    OPenOfficeOK := false;
+  end;
+  if not (ExcelOK or OPenOfficeOK) then
+    raise('На Вашем компютере не установлены ни MS Excel ни OpenOffice!');
+  rgTypeImport.Enabled := ExcelOK and OPenOfficeOK;
+  if not ExcelOK and (rgTypeImport.ItemIndex=0) then
+    rgTypeImport.ItemIndex := 1;
+  if not OPenOfficeOK and (rgTypeImport.ItemIndex=1) then
+    rgTypeImport.ItemIndex := 0; 
+  TypeTelColl := CreateObject('Коллекции.ТипТелефона');
+  TypeTelColl.Select;
+  While TypeTelColl.SelectNext do
+    begin
+      edPartnerTypeTel.Items.Add(TypeTelColl.Value);
+      edEmplTypeTel.Items.Add(TypeTelColl.Value);
+    end;
+  RefreshVCL;
+end;
+
+procedure edBeginRow_Change(Sender: TObject);
+var tmpInt : Integer;
+begin
+ tmpInt := StrToIntDef(edBeginRow.Text,-1);
+ if tmpInt>0 then
+   begin
+     BeginRow := tmpInt;
+     RefreshVCL;
+   end;
+end;
+
+procedure tbBRowDown_Click(Sender: TObject);
+begin
+ if BeginRow>1 then
+   begin
+     dec(BeginRow);
+     edBeginRow.Text := IntToStr(BeginRow);
+   end;
+end;
+
+procedure tbBRowUp_Click(Sender: TObject);
+begin
+ if BeginRow<InXGrid.RowCount then
+   begin
+     inc(BeginRow);
+     edBeginRow.Text := IntToStr(BeginRow);
+     if BeginRow>EndRow then
+       begin
+         EndRow := BeginRow;
+         edEndRow.Text := IntToStr(EndRow);
+       end;
+   end;
+end;
+
+
+procedure edEndRow_Change(Sender: TObject);
+var tmpInt : Integer;
+begin
+ tmpInt := StrToIntDef(edEndRow.Text,-1);
+ if tmpInt>0 then
+   begin
+     EndRow := tmpInt;
+     RefreshVCL;
+   end;
+end;
+
+
+
+procedure tbERowDown_Click(Sender: TObject);
+begin
+ if (EndRow>1) and (EndRow>BeginRow) then
+   begin
+     dec(EndRow);
+     edEndRow.Text := IntToStr(EndRow);
+   end;
+end;
+
+procedure tbERowUp_Click(Sender: TObject);
+begin
+ if EndRow<InXGrid.RowCount then
+   begin
+     inc(EndRow);
+     edEndRow.Text := IntToStr(EndRow);
+   end;
+end;
+
+
+procedure ExcelImport;
+var  Excel : OLEVariant;
+     WorkSheet, MargeRange : Variant;
+     i,j:integer;
+     CelsMargeCount, RowsMargeCount, ColumnsMargeCount, RowMarge, ColMarge  : Integer;
+     MergeCells : Boolean;
+     RangeTbl : ICValueTable;
+     Accept : Boolean;
+     Znach: Variant;
+begin
+ with OpenDialog do
+    begin
+      Filter := 'Файлы Microsoft Excel|*.xls*';
+      FileName := '*.xls';
+      Title := Trans('Определите путь к данным');
+    end;
+   RangeTbl := CreateObject('ValueTable');
+   RangeTbl.AddColumn('Col1',vtcInteger,0);
+   RangeTbl.AddColumn('Col2',vtcInteger,0);
+   RangeTbl.AddColumn('Row1',vtcInteger,0);
+   RangeTbl.AddColumn('Row2',vtcInteger,0);
+   RangeTbl.Open;
+   RangeTbl.SortBy('Row1;Row2;Col1;Col2');
+
+  if OpenDialog.Execute then
+    try
+      Excel :=  CreateOleObject('Excel.Application');
+      Excel.Visible := false;
+      Excel.Application.Workbooks.Open(OpenDialog.FileName);
+      WorkSheet := Excel.Workbooks[1].ActiveSheet; //WorkSheets[1];
+      InXGrid.Visible := false;
+      InXGrid.ClearAll;
+      InXGrid.RowCount := VarAsInt(WorkSheet.Cells.SpecialCells(11).Row);
+      InXGrid.ColCount := VarAsInt(WorkSheet.Cells.SpecialCells(11).Column);
+      if (InXGrid.ColCount>0) and (InXGrid.RowCount>0) then
+        begin
+          ProgressBar.Position := 0;
+          ProgressBar.Max := InXGrid.RowCount;
+
+          InXGrid.Cell(1,1).RowHeight := Trunc(VarAsFloat(WorkSheet.Cells(1,1).RowHeight)*1.5);
+          InXGrid.Cell(1,1).ColWidth := Trunc(VarAsFloat(WorkSheet.Cells(1,1).ColumnWidth)*7);
+          for i := 1 to InXGrid.RowCount do
+            InXGrid.Cell(i,1).RowHeight := Trunc(VarAsFloat(WorkSheet.Cells(i,1).RowHeight)*1.5);
+          for j := 1 to InXGrid.ColCount do
+            InXGrid.Cell(1,j).ColWidth := Trunc(VarAsFloat(WorkSheet.Cells(1,j).ColumnWidth)*7);
+
+          for i := 1 to InXGrid.RowCount do
+            begin
+              for j := 1 to InXGrid.ColCount do
+                begin
+                  MergeCells := WorkSheet.Cells(i,j).MergeCells;
+                  if MergeCells then
+                    begin
+                      MargeRange := WorkSheet.Cells(i,j).MergeArea;
+                      RowMarge := MargeRange.Row;
+                      ColMarge := MargeRange.Column;
+                      RowsMargeCount := MargeRange.Rows.Count-1;
+                      ColumnsMargeCount := MargeRange.Columns.Count-1;
+
+                      RangeTbl.CancelRange;
+                      RangeTbl.SetRange(ArrayOf(RowMarge,RowMarge+RowsMargeCount, ColMarge,ColMarge+ColumnsMargeCount),
+                      ArrayOf(RowMarge,RowMarge+RowsMargeCount, ColMarge,ColMarge+ColumnsMargeCount));
+                      RangeTbl.Select;
+                      if RangeTbl.LineCount=0 then
+                        Accept:=true
+                      else
+                        Accept:=False;
+                    end
+                  else
+                    Accept:=true;
+
+                if Accept then
+
+                begin
+
+                  if MergeCells then
+                    begin
+//                      RowsMargeCount := WorkSheet.Cells(i,j).MergeArea.Rows.Count;
+//                      ColumnsMargeCount := WorkSheet.Cells(i,j).MergeArea.Columns.Count;
+
+                      //ShowMessage(IntToStr(CelsMargeCount)+' '+IntToStr(RowsMargeCount)+' '+IntToStr(ColumnsMargeCount));
+
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).GroupCells;
+                      InXGrid.Cell(i,j).Value := WorkSheet.Cells(i,j).Value;
+
+                      RangeTbl.Append;
+                      RangeTbl.Row1 := RowMarge;
+                      RangeTbl.Row2 := RowMarge+RowsMargeCount;
+                      RangeTbl.Col1 := ColMarge;
+                      RangeTbl.Col2 := ColMarge+ColumnsMargeCount;
+                      RangeTbl.Post;
+
+
+                      if VarAsInt(MargeRange.Borders(9).LineStyle)=1 then
+                        InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).BorderBottom := 1;
+                      if VarAsInt(MargeRange.Borders(8).LineStyle)=1 then
+                        InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).BorderTop := 1;
+                      if VarAsInt(MargeRange.Borders(7).LineStyle)=1 then
+                        InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).BorderLeft := 1;
+                      if VarAsInt(MargeRange.Borders(10).LineStyle)=1 then
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).BorderRight := 1;
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).FontColor := MargeRange.Font.Color;
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).FontName := MargeRange.Font.Name;
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).FontSize := MargeRange.Font.Size;
+                      if VarAsBool(MargeRange.Font.Bold) then
+                        InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).FontStyle := 1;
+                      InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).WordWrap := MargeRange.WrapText;
+
+                      case VarAsInt(MargeRange.HorizontalAlignment) of
+                       -4131 : InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).Alignment := 0; // left
+                       -4152 : InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).Alignment := 1; // right
+                       -4108 : InXGrid.Cells(i,j,i+RowsMargeCount,j+ColumnsMargeCount).Alignment := 2; // Center
+                      end;
+
+                    end
+                  else
+                    begin
+                      InXGrid.Cell(i,j).Value := WorkSheet.Cells(i,j).Value;
+                      if VarAsInt(WorkSheet.Cells(i,j).Borders(9).LineStyle)=1 then
+                        InXGrid.Cell(i,j).BorderBottom := 1;
+                      if VarAsInt(WorkSheet.Cells(i,j).Borders(8).LineStyle)=1 then
+                        InXGrid.Cell(i,j).BorderTop := 1;
+                      if VarAsInt(WorkSheet.Cells(i,j).Borders(7).LineStyle)=1 then
+                        InXGrid.Cell(i,j).BorderLeft := 1;
+                      if VarAsInt(WorkSheet.Cells(i,j).Borders(10).LineStyle)=1 then
+                      InXGrid.Cell(i,j).BorderRight := 1;
+                      InXGrid.Cell(i,j).FontColor := WorkSheet.Cells(i,j).Font.Color;
+                      InXGrid.Cell(i,j).FontName := WorkSheet.Cells(i,j).Font.Name;
+                      InXGrid.Cell(i,j).FontSize := WorkSheet.Cells(i,j).Font.Size;
+                      if VarAsBool(WorkSheet.Cells(i,j).Font.Bold) then
+                        InXGrid.Cell(i,j).FontStyle := 1;
+                      InXGrid.Cell(i,j).WordWrap := WorkSheet.Cells(i,j).WrapText;
+
+                      case VarAsInt(WorkSheet.Cells(i,j).HorizontalAlignment) of
+                       -4131 : InXGrid.Cell(i,j).Alignment := 0; // left
+                       -4152 : InXGrid.Cell(i,j).Alignment := 1; // right
+                       -4108 : InXGrid.Cell(i,j).Alignment := 2; // Center
+                      end;
+                    end;
+
+                end;
+                end;
+              ProgressBar.Position := i;
+            end;
+          ProgressBar.Position := 0;
+          tbRun.Enabled := true;
+        end
+      else
+        ShowMessage('Документ пустой!');
+    finally
+      Excel.Application.Quit;
+      Nil(Excel);
+      InXGrid.Visible := true;
+      RefreshVCL;
+    end;
+end;
+
+function FileNameToURL(s:string):string;
+var i:integer;
+begin
+ Result := 'file:'+'/'+'/'+'/';
+ if StrLength(s)>0 then
+   for i:=1 to StrLength(s) do
+     if s[i]='\' then
+       Result := Result + '/'
+     else
+       Result := Result + s[i];
+end;
+function ConvertColor(Cl:integer):integer;
+begin
+  Result := (cl and $FF000000)+((cl and $000000FF)*$10000)+(cl and $0000FF00)+((cl and $00FF0000) div $10000);
+end;
+
+procedure OpenOfficeImport;
+var  OpenCalc : OLEVariant;
+     WorkSheet,Sheets, Cell : Variant;
+     i,j, mergeRow, EndMergeRow, EndMergeColumn:integer;
+     CellAcept : boolean;
+     Desktop, VariantArray, Document, PropertyValue, CoreReflection, oCursor, oEndAdr, MergeRange: Variant;
+     MergeTbl : ICValueTable;
+begin
+ with OpenDialog do
+    begin
+      Filter := 'Все файлы';
+      FileName := '*.*';
+      Title := Trans('Определите путь к данным');
+    end;
+  if OpenDialog.Execute then
+    try
+      OpenCalc :=  CreateOleObject('com.sun.star.ServiceManager');
+      Desktop := OpenCalc.CreateInstance('com.sun.star.frame.Desktop');
+      ArrayCreate(VariantArray,[0,0], Variant);
+      CoreReflection := OpenCalc.CreateInstance('com.sun.star.reflection.CoreReflection');
+      CoreReflection.forName('com.sun.star.beans.PropertyValue').createObject(PropertyValue);
+      PropertyValue.Name := 'Hidden';
+      PropertyValue.Value := true;
+      VariantArray[0] := PropertyValue;
+      Document := Desktop.loadComponentFromURL(FileNameToURL(OpenDialog.FileName), '_blank', 0, VariantArray);
+      //WorkSheet := Document.GetCurrentController.GetActiveSheet;
+      Sheets := Document.GetSheets;
+      WorkSheet := Sheets.getByIndex(0);
+      MergeTbl := CreateObject('ValueTable');
+      MergeTbl.AddColumn('Row',vtcInteger,0);
+      MergeTbl.AddColumn('ColB',vtcInteger,0);
+      MergeTbl.AddColumn('ColE',vtcInteger,0);
+      MergeTbl.Open;
+      MergeTbl.SortBy('Row;ColB;ColE');
+      InXGrid.Visible := false;
+      InXGrid.ClearAll;
+      oCursor := WorkSheet.createCursor;
+      oCursor.gotoEndOfUsedArea(true);
+      oEndAdr := oCursor.getRangeAddress;
+
+      InXGrid.RowCount := VarAsInt(oEndAdr.EndRow)+1;
+      InXGrid.ColCount := VarAsInt(oEndAdr.Endcolumn)+1;
+      if (InXGrid.ColCount>0) and (InXGrid.RowCount>0) then
+        begin
+          ProgressBar.Position := 0;
+          ProgressBar.Max := InXGrid.RowCount;
+          InXGrid.Cell(1,1).ColWidth := Trunc(VarAsInt(WorkSheet.getCellByPosition(0,0).getColumns.getByIndex(0).Width)/25);
+          InXGrid.Cell(1,1).RowHeight := Trunc(VarAsInt(WorkSheet.getCellByPosition(0,0).getRows.getByIndex(0).Height)/25);
+          for i := 1 to InXGrid.RowCount do
+            InXGrid.Cell(i,1).RowHeight := Trunc(VarAsInt(WorkSheet.getCellByPosition(0,i-1).getRows.getByIndex(0).Height)/25);
+          for j := 1 to InXGrid.ColCount do
+            InXGrid.Cell(1,j).ColWidth := Trunc(VarAsInt(WorkSheet.getCellByPosition(j-1,0).getColumns.getByIndex(0).Width)/25);
+          for i := 1 to InXGrid.RowCount do
+            begin
+              for j := 1 to InXGrid.ColCount do
+                begin
+                  Cell := WorkSheet.getCellByPosition(j-1,i-1);
+                  CellAcept := true;
+                  if VarAsBool(Cell.isMerged) then
+                    begin
+                      ocursor := WorkSheet.createCursorbyrange(Cell);
+                      ocursor.collapseToMergedArea;
+                      oEndAdr := oCursor.getRangeAddress;
+                      EndMergeRow :=VarAsInt(oEndAdr.EndRow)+1;
+                      EndMergeColumn := VarAsInt(oEndAdr.Endcolumn)+1;
+                      InXGrid.Cells(i,j,EndMergeRow,EndMergeColumn).GroupCells;
+                      for mergeRow := i to EndMergeRow do
+                        begin
+                          MergeTbl.CancelRange;
+                          MergeTbl.Append;
+                          MergeTbl.Row := mergeRow;
+                          MergeTbl.ColB := j;
+                          MergeTbl.ColE :=EndMergeColumn;
+                          MergeTbl.Post;
+                        end;
+                    end
+                  else
+                    begin
+                      MergeTbl.SetRange(i,i);
+                      MergeTbl.Select;
+                      While MergeTbl.SelectNext do
+                        if (VarAsInt(MergeTbl.ColB)<=j) and (VarAsInt(MergeTbl.ColE)>=j) then
+                          begin
+                            CellAcept := false;
+                            break;
+                          end;
+                    end;
+                  if not CellAcept then continue;
+
+                  case VarAsInt(Cell.getType) of
+                    1,3: InXGrid.Cell(i,j).Value := Cell.getValue;
+                    2: InXGrid.Cell(i,j).Value := Cell.String;
+                  end;
+                  InXGrid.Cell(i,j).FontColor := ConvertColor(Cell.charColor);
+                  InXGrid.Cell(i,j).FontName := Cell.charFontName;
+                  InXGrid.Cell(i,j).FontSize := Cell.charHeight;
+                  if VarAsInt(Cell.charWeight)=150 then
+                    InXGrid.Cell(i,j).FontStyle := 1;
+                  InXGrid.Cell(i,j).WordWrap := VarAsBool(Cell.isTextWrapped);
+
+                  if VarAsInt(Cell.bottomBorder.outerLineWidth)>=1 then
+                    InXGrid.Cell(i,j).BorderBottom := 1;
+                  if VarAsInt(Cell.topBorder.outerLineWidth)>=1 then
+                    InXGrid.Cell(i,j).BorderTop := 1;
+                  if VarAsInt(Cell.leftBorder.outerLineWidth)>=1 then
+                    InXGrid.Cell(i,j).BorderLeft := 1;
+                 if VarAsInt(Cell.rightBorder.outerLineWidth)>=1 then
+                  InXGrid.Cell(i,j).BorderRight := 1;
+
+                  case VarAsInt(Cell.HoriJustify) of
+                   1 : InXGrid.Cell(i,j).Alignment := 0; // left
+                   2 : InXGrid.Cell(i,j).Alignment := 2; // Center
+                   3 : InXGrid.Cell(i,j).Alignment := 1; // right
+                  end;
+                end;
+              ProgressBar.Position := i;
+            end;
+          ProgressBar.Position := 0;
+         // InXGrid.Cells(1,1,InXGrid.RowCount,InXGrid.ColCount).AdjustRowHeights;
+          tbRun.Enabled := true;
+        end
+      else
+        ShowMessage('Документ пустой!');
+    finally
+      Document.Dispose;
+      //Document.Close(True);
+      Document:=Unassigned;
+
+      OpenCalc := Unassigned;
+      Nil(Document);
+      Nil(OpenCalc);
+      InXGrid.Visible := true;
+      RefreshVCL;
+    end;
+end;
+
+procedure tbFile_Click(Sender: TObject);
+begin
+ case rgTypeImport.ItemIndex of
+  0 : ExcelImport;
+  1 : OpenOfficeImport;
+  end;
+end;
+
+procedure edTypeDic_Change(Sender: TObject);
+begin
+ nbImport.PageIndex := edTypeDic.ItemIndex;
+ case edTypeDic.ItemIndex of
+  0 : InXGrid.PopupMenu := pmPartner;
+  1 : InXGrid.PopupMenu := pmEmpl;
+  2 : InXGrid.PopupMenu := pmGood;
+  3 : InXGrid.PopupMenu := pmService;
+  4 : InXGrid.PopupMenu := pmCtg;
+ end;
+ RefreshVCL;
+end;
+
+procedure tbSaveFormat_Click(Sender: TObject);  
+var DefName : string; 
+    FormatDic, SelFormatDic : ICDictionary;
+begin
+ SelFormatDic := CreateObject('Справочники.ФорматИмпортаИзXLS');
+ SelFormatDic.SetFieldFilter('ТипФормата','=',edTypeDic.Text,'','',Null);
+ SelFormatDic.Params['ТипФормата'] := edTypeDic.Text;
+ if SelFormatDic.SelectInForm('',DefName,False) then
+   begin   
+     FormatDic := CreateObject('Справочники.ФорматИмпортаИзXLS');
+     if FormatDic.Find(SelFormatDic) then
+       WriteFormatToDic(FormatDic);
+   end;
+end;
+
+procedure tbOpenFormat_Click(Sender: TObject);
+var DefName : string;   
+    FormatDic : ICDictionary;
+begin
+ FormatDic := CreateObject('Справочники.ФорматИмпортаИзXLS');
+ FormatDic.SetFieldFilter('ТипФормата','=',edTypeDic.Text,'','',Null);
+ FormatDic.Params['ТипФормата'] := edTypeDic.Text;
+ if FormatDic.SelectInForm('',DefName,False) then
+   ReadFormatFromDic(FormatDic);
+end;
+
+procedure edPartnerDiscount_ActionClear(Sender: TObject);
+begin
+ Nil(PartnerDiscountDic);
+ edPartnerDiscount.Text := '';
+end;
+
+procedure edPartnerDiscount_ActionExecute(Sender: TObject); 
+var DefName : string;
+    SelDiscountDic : ICDictionary;
+begin
+  SelDiscountDic := CreateObject('Справочники.ГруппыСкидок');
+  if SelDiscountDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(PartnerDiscountDic) then
+        PartnerDiscountDic := CreateObject('Справочники.ГруппыСкидок');
+      if PartnerDiscountDic.Find(SelDiscountDic) then
+        edPartnerDiscount.Text := DefName;
+    end;
+end;
+
+procedure edPartnerCurrency_ActionClear(Sender: TObject);
+begin
+  Nil(PartnerCurrencyDic);
+  edPartnerCurrency.Text := '';
+end;
+
+procedure edPartnerCurrency_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(PartnerCurrencyDic) then
+        PartnerCurrencyDic := CreateObject('Справочники.Валюты');
+      if PartnerCurrencyDic.Find(SelCurrencyDic) then
+        edPartnerCurrency.Text := DefName;
+    end;
+end;
+
+procedure edPartnerRegion_ActionClear(Sender: TObject);
+begin
+ Nil(PartnerRegionDic);
+ edPartnerRegion.Text := '';
+end;
+
+procedure edPartnerRegion_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelRegionDic : ICDictionary;
+begin
+  SelRegionDic := CreateObject('Справочники.Регионы');
+  if SelRegionDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(PartnerRegionDic) then
+        PartnerRegionDic := CreateObject('Справочники.Регионы');
+      if PartnerRegionDic.Find(SelRegionDic) then
+        edPartnerRegion.Text := DefName;
+    end;
+end;
+
+procedure edPartnerName_Change(Sender: TObject);
+var ColNum, Tag, i:integer;
+    CurEd : TComponent;
+begin
+  if ChangeLock then exit;
+ try
+   ChangeLock := true;
+   if Sender.ClassName='TO4MenuItem' then
+     begin
+       ColNum := InXGrid.Col-1;
+       Tag := (Sender as TO4MenuItem).Tag;
+     end
+   else
+   if Sender.ClassName='TO4Edit' then
+     begin
+       ColNum := (Sender as TO4Edit).ItemIndex;
+       Tag := (Sender as TO4Edit).Tag;
+     end;
+
+   if (ColNum>=0) then
+   if (ColNum<=edPartnerName.Items.Count-1) then
+     begin  
+
+       if nbImport.PageClass[nbImport.PageIndex].ControlCount>0 then
+        for i:=0 to nbImport.PageClass[nbImport.PageIndex].ControlCount-1 do
+         begin
+           CurEd := Form.FindComponent(nbImport.PageClass[nbImport.PageIndex].Controls[i].Name);
+           if not IsNil(CurEd) and (CurEd.ClassName='TO4Edit') and ((CurEd as TO4Edit).Tag<>0) then
+             begin
+               if ((CurEd as TO4Edit).Tag=Tag) then
+                 (CurEd as TO4Edit).ItemIndex := ColNum
+               else
+               if (ColNum=(CurEd as TO4Edit).ItemIndex) then
+                 begin
+                   (CurEd as TO4Edit).ItemIndex := -1;
+                   (CurEd as TO4Edit).Text := '';
+                 end;
+             end;
+         end;
+       RefreshVCL;
+     end
+   else
+     ShowMessage('Номер столбца должен быть меньше '+IntToStr(edPartnerName.Items.Count));
+ finally
+    ChangeLock := false;
+ end;
+end;
+
+procedure cbCode_Click(Sender: TObject);
+begin
+ RefreshVCL;
+end;
+
+procedure miBeginRow_Click(Sender: TObject);
+begin
+  BeginRow := InXGrid.Row;
+  edBeginRow.Text := IntToStr(BeginRow);
+  if EndRow<BeginRow then
+    begin
+      EndRow := BeginRow;
+      edEndRow.Text := edBeginRow.Text;
+    end;
+  RefreshVCL;
+end;
+
+procedure miEndRow_Click(Sender: TObject);
+begin
+  EndRow := InXGrid.Row;
+  edEndRow.Text := IntToStr(EndRow);
+  if EndRow<BeginRow then
+    begin
+      BeginRow := EndRow;
+      edBeginRow.Text := edEndRow.Text;
+    end;
+  RefreshVCL;
+end;
+
+procedure edEmplDiscount_ActionClear(Sender: TObject);
+begin
+ Nil(EmplDiscountDic);
+ edEmplDiscount.Text := '';
+end;
+
+procedure edEmplDiscount_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelDiscountDic : ICDictionary;
+begin
+  SelDiscountDic := CreateObject('Справочники.ГруппыСкидок');
+  if SelDiscountDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(EmplDiscountDic) then
+        EmplDiscountDic := CreateObject('Справочники.ГруппыСкидок');
+      if EmplDiscountDic.Find(SelDiscountDic) then
+        edEmplDiscount.Text := DefName;
+    end;
+end;
+
+procedure edEmplCurrency_ActionClear(Sender: TObject);
+begin
+  Nil(EmplCurrencyDic);
+  edEmplCurrency.Text := '';
+end;
+
+procedure edEmplCurrency_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(EmplCurrencyDic) then
+        EmplCurrencyDic := CreateObject('Справочники.Валюты');
+      if EmplCurrencyDic.Find(SelCurrencyDic) then
+        edEmplCurrency.Text := DefName;
+    end;
+end;
+
+procedure edEmplRegion_ActionClear(Sender: TObject);
+begin
+ Nil(EmplRegionDic);
+ edEmplRegion.Text := '';
+end;
+
+procedure edEmplRegion_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelRegionDic : ICDictionary;
+begin
+  SelRegionDic := CreateObject('Справочники.Регионы');
+  if SelRegionDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(EmplRegionDic) then
+        EmplRegionDic := CreateObject('Справочники.Регионы');
+      if EmplRegionDic.Find(SelRegionDic) then
+        edEmplRegion.Text := DefName;
+    end;
+end;
+
+procedure edGoodCurrencyInPrice_ActionClear(Sender: TObject);
+begin
+  Nil(GoodCurrencyInPrice);
+  edGoodCurrencyInPrice.Text := '';
+end;
+
+procedure edGoodCurrencyInPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(GoodCurrencyInPrice) then
+        GoodCurrencyInPrice := CreateObject('Справочники.Валюты');
+      if GoodCurrencyInPrice.Find(SelCurrencyDic) then
+        edGoodCurrencyInPrice.Text := DefName;
+    end;
+end;
+
+procedure edGoodCurrencyPrice_ActionClear(Sender: TObject);
+begin
+  Nil(GoodCurrencyPrice);
+  edGoodCurrencyPrice.Text := '';
+end;
+
+procedure edGoodCurrencyPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(GoodCurrencyPrice) then
+        GoodCurrencyPrice := CreateObject('Справочники.Валюты');
+      if GoodCurrencyPrice.Find(SelCurrencyDic) then
+        edGoodCurrencyPrice.Text := DefName;
+    end;
+end;
+
+procedure edGoodCurrencyOptPrice_ActionClear(Sender: TObject);
+begin
+  Nil(GoodCurrencyOptPrice);
+  edGoodCurrencyOptPrice.Text := '';
+end;
+
+procedure edGoodCurrencyOptPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(GoodCurrencyOptPrice) then
+        GoodCurrencyOptPrice := CreateObject('Справочники.Валюты');
+      if GoodCurrencyOptPrice.Find(SelCurrencyDic) then
+        edGoodCurrencyOptPrice.Text := DefName;
+    end;
+end;
+
+procedure edGoodCurrencyKrOptPrice_ActionClear(Sender: TObject);
+begin
+  Nil(GoodCurrencyKrOptPrice);
+  edGoodCurrencyKrOptPrice.Text := '';
+end;
+
+procedure edGoodCurrencyKrOptPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(GoodCurrencyKrOptPrice) then
+        GoodCurrencyKrOptPrice := CreateObject('Справочники.Валюты');
+      if GoodCurrencyKrOptPrice.Find(SelCurrencyDic) then
+        edGoodCurrencyKrOptPrice.Text := DefName;
+    end;
+end;
+
+procedure EdGoodSupp_ActionClear(Sender: TObject);
+begin
+  Nil(GoodSuppDic);
+  EdGoodSupp.Text := '';
+end;
+
+procedure EdGoodSupp_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelSuppDic : ICDictionary;
+begin
+  SelSuppDic := CreateObject('Справочники.ЮрПартнеры');
+  if SelSuppDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(GoodSuppDic) then
+        GoodSuppDic := CreateObject('Справочники.ЮрПартнеры');
+      if GoodSuppDic.Find(SelSuppDic) then
+        EdGoodSupp.Text := DefName;
+    end;
+end;
+
+procedure edServiceCurrencyInPrice_ActionClear(Sender: TObject);
+begin
+ Nil(ServiceCurrencyInPrice);
+ edServiceCurrencyInPrice.Text := '';
+end;
+
+procedure edServiceCurrencyInPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(ServiceCurrencyInPrice) then
+        ServiceCurrencyInPrice := CreateObject('Справочники.Валюты');
+      if ServiceCurrencyInPrice.Find(SelCurrencyDic) then
+        edServiceCurrencyInPrice.Text := DefName;
+    end;
+end;
+
+procedure edServiceCurrencyPrice_ActionClear(Sender: TObject);
+begin
+ Nil(ServiceCurrencyPrice);
+ edServiceCurrencyPrice.Text := '';
+end;
+
+procedure edServiceCurrencyPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(ServiceCurrencyPrice) then
+        ServiceCurrencyPrice := CreateObject('Справочники.Валюты');
+      if ServiceCurrencyPrice.Find(SelCurrencyDic) then
+        edServiceCurrencyPrice.Text := DefName;
+    end;
+end;
+
+procedure edServiceCurrencyOptPrice_ActionClear(Sender: TObject);
+begin
+ Nil(ServiceCurrencyOptPrice);
+ edServiceCurrencyOptPrice.Text := '';
+end;
+
+procedure edServiceCurrencyOptPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(ServiceCurrencyOptPrice) then
+        ServiceCurrencyOptPrice := CreateObject('Справочники.Валюты');
+      if ServiceCurrencyOptPrice.Find(SelCurrencyDic) then
+        edServiceCurrencyOptPrice.Text := DefName;
+    end;
+end;
+
+procedure edServiceCurrencyKrOptPrice_ActionClear(Sender: TObject);
+begin
+ Nil(ServiceCurrencyKrOptPrice);
+ edServiceCurrencyKrOptPrice.Text := '';
+end;
+
+procedure edServiceCurrencyKrOptPrice_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelCurrencyDic : ICDictionary;
+begin
+  SelCurrencyDic := CreateObject('Справочники.Валюты');
+  if SelCurrencyDic.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(ServiceCurrencyKrOptPrice) then
+        ServiceCurrencyKrOptPrice := CreateObject('Справочники.Валюты');
+      if ServiceCurrencyKrOptPrice.Find(SelCurrencyDic) then
+        edServiceCurrencyKrOptPrice.Text := DefName;
+    end;
+end;    
+
+procedure WriteErrorComment(WorkSheet,TrgRange:Variant; ErrorStr:string; Row, Col, TypeOffice:integer);
+var OpenOfficeCell, OpenOfficeRange : Variant;
+begin
+ case TypeOffice of
+  0 :
+    begin
+      WorkSheet.Cells(Row,Col ).Value := VarAsStr(WorkSheet.Cells(Row,Col ).Value)+ ' '+ ErrorStr;
+      TrgRange.Range(TrgRange.Cells(Row,1) ,TrgRange.Cells(Row,InXGrid.ColCount)).Interior.Color := clRed;
+    end;
+ 1 :
+    begin
+      OpenOfficeCell := WorkSheet.getCellByPosition(col-1, row-1);
+      OpenOfficeCell.setString(ErrorStr);
+      OpenOfficeRange := WorkSheet.getCellRangeByPosition(0, Row-1,InXGrid.ColCount-1, Row-1);
+      OpenOfficeRange.cellBackColor:=clBlue;
+    end;
+ end;
+ InXGrid.Cell(Row,Col).Value := VarAsStr(InXGrid.Cell(Row,Col).Value)+' '+ ErrorStr;
+end;
+
+procedure RunImportPartner;
+var i, Count, AddCount : integer;
+    PartnerDic, TelDic : ICDictionary;
+    PartnerName : string; 
+    Excel, OpenCalc : OLEVariant;
+    WorkSheet, TrgRange, Desktop, VariantArray, Document, CoreReflection, PropertyValue, Sheets : Variant;
+    ErrorCommentCol, TypeOffice : integer;
+begin
+ if (BeginRow<=0) or (EndRow<=0) or (BeginRow>InXGrid.RowCount) or (EndRow>InXGrid.RowCount) or (BeginRow>EndRow) then
+   ShowMessage('Не верно заданы строки импорта!')
+ else
+ if (edPartnerName.ItemIndex=-1) or (edPartnerName.ItemIndex>=InXGrid.ColCount) then
+  ShowMessage('Не верно задан столбец названия партнера!')
+ else
+ if cbPartnerBirthDay.Checked and ((edPartnerBirthDay.ItemIndex=-1) or (edPartnerBirthDay.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец дня рождения партнера!')
+ else
+ if cbPartnerTel.Checked and ((edPartnerTel.ItemIndex=-1) or (edPartnerTel.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец телефона партнера!')
+ else
+ if not IsObjFocused(PartnerDiscountDic) then
+   ShowMessage('Не задана скидка!')
+ else
+ if not IsObjFocused(PartnerCurrencyDic) then
+   ShowMessage('Не задана валюта!')
+ else
+ if not IsObjFocused(PartnerRegionDic) then
+   ShowMessage('Не задан регион!')
+ else   
+ if cbPartnerErrorComment.Checked and ((edPartnerErrorComment.ItemIndex=-1) or (edPartnerErrorComment.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец комментария ошибки!')
+ else
+ if cbPartnerErrorComment.Checked and not FileExists(OpenDialog.FileName) then
+   ShowMessage('Файл "'+OpenDialog.FileName+'" не найден!')
+ else
+   begin  
+     if cbPartnerErrorComment.Checked then
+       begin
+         TypeOffice := rgTypeImport.ItemIndex;
+         ErrorCommentCol := edPartnerErrorComment.ItemIndex+1;
+         case rgTypeImport.ItemIndex of
+         0 :
+           begin
+             Excel :=  CreateOleObject('Excel.Application');
+             Excel.Visible := false;
+             Excel.Application.Workbooks.Open(OpenDialog.FileName);
+             WorkSheet := Excel.Workbooks[1].ActiveSheet;
+             TrgRange := WorkSheet.Range('A1:A1');
+           end;
+         1:
+           begin
+             OpenCalc :=  CreateOleObject('com.sun.star.ServiceManager');
+             Desktop := OpenCalc.CreateInstance('com.sun.star.frame.Desktop');
+             ArrayCreate(VariantArray,[0,0], Variant);
+             CoreReflection := OpenCalc.CreateInstance('com.sun.star.reflection.CoreReflection');
+             CoreReflection.forName('com.sun.star.beans.PropertyValue').createObject(PropertyValue);
+             PropertyValue.Name := 'Hidden';
+             PropertyValue.Value := true;
+             VariantArray[0] := PropertyValue;
+             Document := Desktop.loadComponentFromURL(FileNameToURL(OpenDialog.FileName), '_blank', 0, VariantArray);
+             Sheets := Document.GetSheets;
+             WorkSheet := Sheets.getByIndex(0);
+           end;
+         end;
+       end;
+     if cbPartnerTel.Checked then
+       begin
+         TelDic := CreateObject('Справочники.Телефоны');
+         GenerateNewCollElem(TypeTelColl, edPartnerTypeTel.Text);
+         TypeTelColl.FindByComment(edPartnerTypeTel.Text, False);
+       end;
+     MemoLog.Lines.Clear;
+     MemoLogError.Lines.Clear;
+     PartnerDic := CreateObject('Справочники.ЮрПартнеры');
+     Count := 0;  
+     AddCount := 0;
+     ProgressBar.Position := 0;
+     ProgressBar.Max := EndRow-BeginRow;
+     for i:= BeginRow to EndRow do
+       begin
+         PartnerName := VarAsStr(InXGrid.Cell(i,edPartnerName.ItemIndex+1).Value);
+         if PartnerName='' then 
+           begin
+             MemoLog.Lines.Add('строка №'+IntToStr(i)+'  название партнера пустое!');
+             if cbPartnerErrorComment.Checked then
+                    WriteErrorComment(WorkSheet,TrgRange, 'название партнера пустое', i, ErrorCommentCol, TypeOffice);
+           end
+         else
+         if PartnerDic.FindByName(PartnerName,false) then 
+           begin
+             MemoLogError.Lines.Add('строка №'+IntToStr(i)+' Партнер с названием "'+PartnerName+'" уже есть в справочнике!');
+             if cbPartnerErrorComment.Checked then
+                    WriteErrorComment(WorkSheet,TrgRange, 'дубль названия', i, ErrorCommentCol, TypeOffice);
+           end
+         else
+           begin
+             PartnerDic.Append;
+             PartnerDic.NameField := PartnerName;
+             if cbPartnerBirthDay.Checked then
+               PartnerDic.ДатаРождения := VarAsDate(InXGrid.Cell(i,edPartnerBirthDay.ItemIndex+1).Value);
+             PartnerDic.ГруппаСкидки := PartnerDiscountDic;
+             PartnerDic.Валюта := PartnerCurrencyDic;
+             PartnerDic.Регион := PartnerRegionDic;
+             PartnerDic.ПолноеНазвание := PartnerName;
+             PartnerDic.ТипЦены := edPartnerTypePrice.Text;
+             PartnerDic.СрокОплаты := VarAsInt(Constants.PayDate);
+             PartnerDic.Код := GetNextNumberForField('Справочники.ЮрПартнеры', 'Код');
+             PartnerDic.Логин := PartnerDic.Код;
+             case StrLength(PartnerDic.Логин) of
+               1: PartnerDic.Логин := '0000' + PartnerDic.Логин;
+               2: PartnerDic.Логин := '000' + PartnerDic.Логин;
+               3: PartnerDic.Логин := '00' + PartnerDic.Логин;
+               4: PartnerDic.Логин := '0' + PartnerDic.Логин;
+             end;
+             PartnerDic.Поставщик  := cbPartnerSupplier.Checked;
+             PartnerDic.Покупатель := cbPartnerBuyer.Checked;
+             PartnerDic.Post;
+             PartnerDic.ApplyUpdates;
+             if isObjFocused(PartnerDic) then
+               begin       
+                 inc(AddCount);
+                 MemoLog.Lines.Add('строка №'+IntToStr(i)+' Добавлен партнер "'+PartnerName+'"');
+                 if cbPartnerTel.Checked and (VarAsStr(InXGrid.Cell(i,edPartnerTel.ItemIndex+1).Value)<>'') then
+                   begin
+                     TelDic.UseMaster(PartnerDic);
+                     TelDic.Append;
+                     TelDic.ВладелецТел := PartnerName;
+                     TelDic.Активность := -1;
+                     TelDic.Номер := VarAsStr(InXGrid.Cell(i,edPartnerTel.ItemIndex+1).Value);
+                     if (edPartnerTypeTel.Text<>'') and TypeTelColl.IsFocused then
+                       TelDic.Тип := TypeTelColl;
+                     TelDic.SetMaster(PartnerDic);
+                     TelDic.Post;
+                     TelDic.ApplyUpdates;
+                   end; 
+               end
+             else   
+               begin
+                 MemoLogError.Lines.Add('строка №'+IntToStr(i)+' ошибка добавления партнера "'+PartnerName+'"');
+                 if cbPartnerErrorComment.Checked then
+                   WriteErrorComment(WorkSheet,TrgRange, 'ошибка добавления партнера', i, ErrorCommentCol, TypeOffice);
+               end;
+           end;
+         inc(Count);
+         ProgressBar.Position := Count;
+       end;     
+     if cbPartnerErrorComment.Checked then
+       case rgTypeImport.ItemIndex of
+        0 : // Excel
+          begin
+            Excel.DisplayAlerts := 0;
+            Excel.WorkBooks(1).SaveAs(OpenDialog.FileName,56);
+            Excel.WorkBooks(1).Close;
+            Excel.quit;
+            Nil(Excel);
+          end;
+        1 : // OpenOffice
+          begin
+           Document.Store;
+           Document.Dispose;
+          end;
+       end;
+     ProgressBar.Position := 0;
+     MemoLog.Lines.Add(' ');
+     MemoLog.Lines.Add('Обработано '+IntToStr(Count)+' строк');
+     MemoLog.Lines.Add('Добавлено '+IntToStr(AddCount)+' записей');
+     ShowMessage('Обработано '+IntToStr(Count)+' строк'+#13+
+                 'Добавлено '+IntToStr(AddCount)+' записей');
+   end;
+end;   
+
+procedure RunImportEmpl;
+var i, Count, AddCount : integer;
+    EmplDic, TelDic : ICDictionary;
+    EmplFam : string; 
+    Excel, OpenCalc : OLEVariant;
+    WorkSheet, TrgRange, Desktop, VariantArray, Document, CoreReflection, PropertyValue, Sheets : Variant;
+    ErrorCommentCol, TypeOffice : integer;
+begin
+ if (BeginRow<=0) or (EndRow<=0) or (BeginRow>InXGrid.RowCount) or (EndRow>InXGrid.RowCount) or (BeginRow>EndRow) then
+   ShowMessage('Не верно заданы строки импорта!')
+ else
+ if (edEmplFam.ItemIndex=-1) or (edEmplFam.ItemIndex>=InXGrid.ColCount) then
+  ShowMessage('Не верно задан столбец фамили служащего!')
+ else   
+ if (edEmplName.ItemIndex=-1) or (edEmplName.ItemIndex>=InXGrid.ColCount) then
+  ShowMessage('Не верно задан столбец имени, отчества!')
+ else
+ if cbEmplBirthDay.Checked and ((edEmplBirthDay.ItemIndex=-1) or (edEmplBirthDay.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец дня рождения служащего!')
+ else
+ if cbEmplTel.Checked and ((edEmplTel.ItemIndex=-1) or (edEmplTel.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец телефона служащего!')
+ else
+ if not IsObjFocused(EmplDiscountDic) then
+   ShowMessage('Не задана скидка!')
+ else
+ if not IsObjFocused(EmplCurrencyDic) then
+   ShowMessage('Не задана валюта!')
+ else
+ if not IsObjFocused(EmplRegionDic) then
+   ShowMessage('Не задан регион!')
+ else  
+ if cbEmplErrorComment.Checked and ((edEmplErrorComment.ItemIndex=-1) or (edEmplErrorComment.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец комментария ошибки!')
+ else
+ if cbEmplErrorComment.Checked and not FileExists(OpenDialog.FileName) then
+   ShowMessage('Файл "'+OpenDialog.FileName+'" не найден!')
+ else
+   begin 
+     TypeOffice := rgTypeImport.ItemIndex;
+     if cbEmplErrorComment.Checked then
+       begin
+         TypeOffice := rgTypeImport.ItemIndex;
+         ErrorCommentCol := edEmplErrorComment.ItemIndex+1;
+         case rgTypeImport.ItemIndex of
+         0 :
+           begin
+             Excel :=  CreateOleObject('Excel.Application');
+             Excel.Visible := false;
+             Excel.Application.Workbooks.Open(OpenDialog.FileName);
+             WorkSheet := Excel.Workbooks[1].ActiveSheet;
+             TrgRange := WorkSheet.Range('A1:A1');
+           end;
+         1:
+           begin
+             OpenCalc :=  CreateOleObject('com.sun.star.ServiceManager');
+             Desktop := OpenCalc.CreateInstance('com.sun.star.frame.Desktop');
+             ArrayCreate(VariantArray,[0,0], Variant);
+             CoreReflection := OpenCalc.CreateInstance('com.sun.star.reflection.CoreReflection');
+             CoreReflection.forName('com.sun.star.beans.PropertyValue').createObject(PropertyValue);
+             PropertyValue.Name := 'Hidden';
+             PropertyValue.Value := true;
+             VariantArray[0] := PropertyValue;
+             Document := Desktop.loadComponentFromURL(FileNameToURL(OpenDialog.FileName), '_blank', 0, VariantArray);
+             Sheets := Document.GetSheets;
+             WorkSheet := Sheets.getByIndex(0);
+           end;
+         end;
+       end;
+     if cbEmplTel.Checked then
+       begin
+         TelDic := CreateObject('Справочники.Телефоны');
+         GenerateNewCollElem(TypeTelColl, edEmplTypeTel.Text);
+         TypeTelColl.FindByComment(edEmplTypeTel.Text, False);
+       end;
+     MemoLog.Lines.Clear;     
+     MemoLogError.Lines.Clear;
+     EmplDic := CreateObject('Справочники.Служащие');
+     Count := 0;
+     AddCount := 0;
+     ProgressBar.Position := 0;
+     ProgressBar.Max := EndRow-BeginRow;
+     for i:= BeginRow to EndRow do
+       begin
+         EmplFam := VarAsStr(InXGrid.Cell(i,edEmplFam.ItemIndex+1).Value);
+         if EmplFam='' then 
+           begin
+             MemoLogError.Lines.Add('строка №'+IntToStr(i)+' название служащего пустое!');
+             if cbEmplErrorComment.Checked then
+                   WriteErrorComment(WorkSheet,TrgRange, 'название служащего пустое', i, ErrorCommentCol, TypeOffice);
+           end
+         else
+         if EmplDic.FindByField('Фамилия',EmplFam,false) then
+           begin
+             MemoLogError.Lines.Add('строка №'+IntToStr(i)+' Служащий с фамилией "'+EmplFam+'" уже есть в справочнике!');
+             if cbEmplErrorComment.Checked then
+               WriteErrorComment(WorkSheet,TrgRange, 'дубль названия', i, ErrorCommentCol, TypeOffice);
+           end
+         else
+           begin
+             EmplDic.Append;
+             EmplDic.Совместитель := 0;
+             EmplDic.Уволен := 0;
+             EmplDic.Пенсионер := 0;
+             EmplDic.Инвалид := 0;
+             EmplDic.Профсоюз := 0;
+             EmplDic.РаботаПоКонтракту := 0;
+             EmplDic.Фамилия := EmplFam;
+             if cbEmplName.Checked then
+               EmplDic.ИмяОтчество := VarAsStr(InXGrid.Cell(i,edEmplName.ItemIndex+1).Value);
+             if cbEmplBirthDay.Checked then
+               EmplDic.ДатаРождения := VarAsDate(InXGrid.Cell(i,edEmplBirthDay.ItemIndex+1).Value);
+             EmplDic.ГруппаСкидки := EmplDiscountDic;
+             EmplDic.Валюта := EmplCurrencyDic;
+             EmplDic.Регион := EmplRegionDic;
+             EmplDic.Код := ПолучитьКодДляСправочника(EmplDic);
+             if VarAsStr(EmplDic.ИмяОтчество)<>'' then
+               EmplDic.ПолноеНазвание := EmplFam+' '+ VarAsStr(EmplDic.ИмяОтчество)
+             else
+               EmplDic.ПолноеНазвание := EmplFam;
+             EmplDic.ТипЦены := edEmplTypePrice.Text;
+             EmplDic.СрокОплаты := VarAsInt(Constants.PayDate);
+             EmplDic.Post;
+             EmplDic.ApplyUpdates;
+             if isObjFocused(EmplDic) then
+               begin
+                 inc(AddCount);
+                 MemoLog.Lines.Add('строка №'+IntToStr(i)+' Добавлен служащий "'+EmplFam+'"');
+                 if cbEmplTel.Checked and (VarAsStr(InXGrid.Cell(i,edEmplTel.ItemIndex+1).Value)<>'') then
+                   begin
+                     TelDic.UseMaster(EmplDic);
+                     TelDic.Append;
+                     TelDic.ВладелецТел := EmplFam;
+                     TelDic.Активность := -1;
+                     TelDic.Номер := VarAsStr(InXGrid.Cell(i,edEmplTel.ItemIndex+1).Value);
+                     if (edEmplTypeTel.Text<>'') and TypeTelColl.IsFocused then
+                       TelDic.Тип := TypeTelColl;
+                     TelDic.SetMaster(EmplDic);
+                     TelDic.Post;
+                     TelDic.ApplyUpdates;
+                   end;
+               end
+             else  
+               begin
+                 MemoLogError.Lines.Add('строка №'+IntToStr(i)+' ошибка добавления служащего "'+EmplFam+'"');
+                 if cbEmplErrorComment.Checked then
+                   WriteErrorComment(WorkSheet,TrgRange, 'ошибка добавления служащего', i, ErrorCommentCol, TypeOffice);
+               end;
+           end;
+         inc(Count);
+         ProgressBar.Position := Count;
+       end; 
+     if cbEmplErrorComment.Checked then
+       case rgTypeImport.ItemIndex of
+        0 : // Excel
+          begin
+            Excel.DisplayAlerts := 0;
+            Excel.WorkBooks(1).SaveAs(OpenDialog.FileName,56);
+            Excel.WorkBooks(1).Close;
+            Excel.quit;
+            Nil(Excel);
+          end;
+        1 : // OpenOffice
+          begin
+           Document.Store;
+           Document.Dispose;
+          end;
+       end;
+     ProgressBar.Position := 0;  
+     MemoLog.Lines.Add(' ');
+     MemoLog.Lines.Add('Обработано '+IntToStr(Count)+' строк');
+     MemoLog.Lines.Add('Добавлено '+IntToStr(AddCount)+' записей');
+     ShowMessage('Обработано '+IntToStr(Count)+' строк'+#13+
+                 'Добавлено '+IntToStr(AddCount)+' записей');
+   end;
+end;
+
+procedure RunImportGoods;
+var i, j, Count, AddCount, ImportBarCodeCount, PresentBarCodeCount, ImportBarCodeCountDone : integer;
+    GoodDic, FindGoodDic, CtgDic, BarCodeDic, SuppCodeDic, DefCurrencyDic, ManufDic : ICDictionary;
+    BarCode, CurBarCode, SuppCode, GoodName, CtgName, UnitName, ManufName : string;
+    UnitNameColl : ICCollection;  
+    Excel, OpenCalc : OLEVariant;
+    WorkSheet, TrgRange, Desktop, VariantArray, Document, CoreReflection, PropertyValue, Sheets : Variant;
+    ErrorCommentCol, TypeOffice : integer;
+begin
+ DefCurrencyDic := CreateObject('Справочники.Валюты');
+ if not DefCurrencyDic.FindByField('Активность',true,false) and
+    not DefCurrencyDic.FindByField('НацВалюта',true,false) then
+   ShowMessage('В базе отсутствует национальная и активная валюты!')
+ else
+ if (BeginRow<=0) or (EndRow<=0) or (BeginRow>InXGrid.RowCount) or (EndRow>InXGrid.RowCount) or (BeginRow>EndRow) then
+   ShowMessage('Не верно заданы строки импорта!')
+ else
+ if (edGoodName.ItemIndex=-1) or (edGoodName.ItemIndex>=InXGrid.ColCount) then
+   ShowMessage('Не верно задан столбец название!')
+ else
+ if (EdGoodUnitName.ItemIndex=-1) or (EdGoodUnitName.ItemIndex>=InXGrid.ColCount) then
+   ShowMessage('Не верно задан столбец Единицы измерения!')
+ else
+  if (edGoodCtg.ItemIndex=-1) or (edGoodCtg.ItemIndex>=InXGrid.ColCount) then
+   ShowMessage('Не верно задан столбец категория товара!')
+ else 
+ if cbColor.Checked and ((edColor.ItemIndex=-1) or (edColor.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец цвета!')
+ else
+ if cbSize.Checked and ((edSize.ItemIndex=-1) or (edSize.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец цвета!')
+ else
+ if cbErrorComment.Checked and ((edErrorComment.ItemIndex=-1) or (edErrorComment.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец комментария ошибки!')
+ else
+ if cbErrorComment.Checked and not FileExists(OpenDialog.FileName) then
+   ShowMessage('Файл "'+OpenDialog.FileName+'" не найден!')
+ else
+ if cbGoodSuppCode.Checked and ((edGoodSuppCode.ItemIndex=-1) or (edGoodSuppCode.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец код упоставщика!')
+ else
+ if cbGoodBarCode.Checked and ((edGoodBarCode.ItemIndex=-1) or (edGoodBarCode.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец штрих-код!')
+ else
+ if cbGoodManuf.Checked and ((edGoodManuf.ItemIndex=-1) or (edGoodManuf.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец код производитель!')
+ else
+ if cbGoodInPrice.Checked and ((edGoodInPrice.ItemIndex=-1) or (edGoodInPrice.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец Вх.цена!')
+ else
+ if cbGoodPrice.Checked and ((edGoodPrice.ItemIndex=-1) or (edGoodPrice.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец цена!')
+ else
+ if cbGoodOptPrice.Checked and ((edGoodOptPrice.ItemIndex=-1) or (edGoodOptPrice.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец Опт.цена!')
+ else   
+ if cbGoodKrOptPrice.Checked and ((edGoodKrOptPrice.ItemIndex=-1) or (edGoodKrOptPrice.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец Кр.Опт.цена!')
+ else
+ if cbGoodInPrice.Checked and not IsObjFocused(GoodCurrencyInPrice) then
+   ShowMessage('Не задана валюта Вх.цена!')
+ else
+ if cbGoodPrice.Checked and not IsObjFocused(GoodCurrencyPrice) then
+   ShowMessage('Не задана валюта Цена!')
+ else
+ if cbGoodOptPrice.Checked and not IsObjFocused(GoodCurrencyOptPrice) then
+   ShowMessage('Не задана валюта Цена Оптотая!')
+ else     
+ if cbGoodKrOptPrice.Checked and not IsObjFocused(GoodCurrencyKrOptPrice) then
+   ShowMessage('Не задана валюта Кр.Цена Оптотая!')
+ else
+ if cbGoodSuppCode.Checked and not IsObjFocused(GoodSuppDic) then
+   ShowMessage('Не задан поставщик!')
+ else
+   begin
+     if cbErrorComment.Checked then
+       begin
+         TypeOffice := rgTypeImport.ItemIndex;
+         ErrorCommentCol := edErrorComment.ItemIndex+1;
+         case rgTypeImport.ItemIndex of
+         0 :
+           begin
+             Excel :=  CreateOleObject('Excel.Application');
+             Excel.Visible := false;
+             Excel.Application.Workbooks.Open(OpenDialog.FileName);
+             WorkSheet := Excel.Workbooks[1].ActiveSheet;
+             TrgRange := WorkSheet.Range('A1:A1');
+           end;
+         1:
+           begin
+             OpenCalc :=  CreateOleObject('com.sun.star.ServiceManager');
+             Desktop := OpenCalc.CreateInstance('com.sun.star.frame.Desktop');
+             ArrayCreate(VariantArray,[0,0], Variant);
+             CoreReflection := OpenCalc.CreateInstance('com.sun.star.reflection.CoreReflection');
+             CoreReflection.forName('com.sun.star.beans.PropertyValue').createObject(PropertyValue);
+             PropertyValue.Name := 'Hidden';
+             PropertyValue.Value := true;
+             VariantArray[0] := PropertyValue;
+             Document := Desktop.loadComponentFromURL(FileNameToURL(OpenDialog.FileName), '_blank', 0, VariantArray);
+             Sheets := Document.GetSheets;
+             WorkSheet := Sheets.getByIndex(0);
+           end;
+         end;
+       end;
+     MemoLog.Lines.Clear;
+     MemoLogError.Lines.Clear;
+     GoodDic     := CreateObject('Справочники.Товары');
+     FindGoodDic := CreateObject('Справочники.Товары');
+     CtgDic      := CreateObject('Справочники.Товары');
+     CtgDic.IncludeOnlyLevels(true);
+     BarCodeDic  := CreateObject('Справочники.ШтрихКодыТоваров');
+     if cbGoodSuppCode.Checked then
+       begin
+         SuppCodeDic := CreateObject('Справочники.ПоставщикиТоваров');
+         SuppCodeDic.SetFieldFilter('Партнер','=',GoodSuppDic,'','',Null);
+       end;
+     if cbGoodManuf.Checked then
+       ManufDic := CreateObject('Справочники.Производители');
+     UnitNameColl := CreateObject('Коллекции.ЕдИзм');
+     Count := 0;
+     AddCount := 0;
+     ProgressBar.Position := 0;
+     ProgressBar.Max := EndRow-BeginRow;
+     for i:= BeginRow to EndRow do
+       begin
+          BarCode := '';
+          SuppCode := '';
+          ImportBarCodeCount := 0;
+          PresentBarCodeCount := 0;
+          if cbGoodBarCode.Checked then 
+            begin
+              BarCode := StrTrim(VarAsStr(InXGrid.Cell(i,edGoodBarCode.ItemIndex+1).Value));
+              ImportBarCodeCount := WordCount(BarCode,';');
+              if not VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров) and (ImportBarCodeCount>1) then
+                begin
+                  MemoLogError.Lines.Add('строка №'+IntToStr(i)+' указано больше одного штрих-кода - '+BarCode+',  а константа "ИспльзоватьМультиШтрихКодыДляТоваров" не установлена!');
+                  if cbErrorComment.Checked then
+                    WriteErrorComment(WorkSheet,TrgRange, 'дубль штрих-кода', i, ErrorCommentCol, TypeOffice);
+                end;
+              if ImportBarCodeCount>0 then
+                for j:=1 to ImportBarCodeCount do
+                  begin
+                    CurBarCode := ExtractWord(j,BarCode,';');
+                    if (CurBarCode<>'') and BarCodeDic.FindByCode(CurBarCode,false) and GoodDic.Find(BarCodeDic._GetOwner) then
+                      begin
+                        MemoLogError.Lines.Add('строка №'+IntToStr(i)+' штрих-код '+CurBarCode+' уже привязан к товару "'+GoodDic.NameField+'"');
+                        if cbErrorComment.Checked then
+                          WriteErrorComment(WorkSheet,TrgRange, 'дубль штрих-кода', i, ErrorCommentCol, TypeOffice);
+                        inc(PresentBarCodeCount);
+                      end;
+                  end;
+            end;
+          if cbGoodSuppCode.Checked then
+            SuppCode := StrTrim(VarAsStr(InXGrid.Cell(i,edGoodSuppCode.ItemIndex+1).Value));
+          GoodName   := StrTrim(VarAsStr(InXGrid.Cell(i,edGoodName.ItemIndex+1).Value));
+          if cbColor.Checked then
+           GoodName := GoodName + ' ' + StrTrim(VarAsStr(InXGrid.Cell(i,edColor.ItemIndex+1).Value));  
+          if cbSize.Checked then
+           GoodName := GoodName + ' р. ' + StrTrim(VarAsStr(InXGrid.Cell(i,edSize.ItemIndex+1).Value));   
+          CtgName := StrTrim(VarAsStr(InXGrid.Cell(i,edGoodCtg.ItemIndex+1).Value));  
+
+          if CtgName='' then 
+            begin
+              MemoLogError.Lines.Add('строка №'+IntToStr(i)+' на заполнена категория товара');
+              if cbErrorComment.Checked then
+                WriteErrorComment(WorkSheet,TrgRange, 'Нет категории', i, ErrorCommentCol, TypeOffice);
+            end
+          else
+          if GoodDic.FindByName(GoodName,false) then  
+            begin
+              MemoLogError.Lines.Add('строка №'+IntToStr(i)+' товар с названием "'+GoodName+'" уже есть');
+              if cbErrorComment.Checked then
+                WriteErrorComment(WorkSheet,TrgRange, 'дубль названия', i, ErrorCommentCol, TypeOffice);
+            end
+          else
+          if cbGoodBarCode.Checked and (ImportBarCodeCount<=PresentBarCodeCount) then  
+            begin       
+              if ImportBarCodeCount>1 then 
+                begin
+                  MemoLogError.Lines.Add('строка №'+IntToStr(i)+' товар добавляться не будет, штрих-коды '+BarCode+' уже привязаны к другим товарам');
+                  if cbErrorComment.Checked then
+                    WriteErrorComment(WorkSheet,TrgRange, 'дубль штрих-кода', i, ErrorCommentCol, TypeOffice);
+                end
+            end
+          else
+          if cbGoodSuppCode.Checked and SuppCodeDic.FindByCode(SuppCode,false) and GoodDic.Find(SuppCodeDic._GetOwner) then
+            begin
+              MemoLogError.Lines.Add('строка №'+IntToStr(i)+' код товара у поставщика '+SuppCode+' уже привязан к товару "'+GoodDic.NameField+'"');
+              if cbErrorComment.Checked then
+                WriteErrorComment(WorkSheet,TrgRange, 'дубль кода поставщика', i, ErrorCommentCol, TypeOffice);
+            end
+          else
+            begin
+              if not CtgDic.FindByName(CtgName,false) then
+                begin
+                  CtgDic.AppendLevel;
+                  CtgDic.NameField := CtgName;  
+                  CtgDic.Артикул := GetNextNumberForField('Справочники.Товары','Артикул',true);
+                  CtgDic.Код := IntToStr(CtgDic.Артикул);
+                  case StrLength(CtgDic.Код) of
+                    1: CtgDic.Код := '0' + CtgDic.Код;
+                  end;
+                  CtgDic.Post;
+                  CtgDic.ApplyUpdates;
+                end;
+              UnitName := StrTrim(VarAsStr(InXGrid.Cell(i,EdGoodUnitName.ItemIndex+1).Value));
+              GenerateNewCollElem(UnitNameColl, UnitName);
+
+              GoodDic.UseParent(CtgDic);
+              GoodDic.Append;
+              GoodDic.ТипКарточки := 0;
+              GoodDic.Артикул := GetNextNumberForField('Справочники.Товары', 'Артикул', false, '');
+              GoodDic.Код := GetCode(GoodDic.Артикул);
+              GoodDic.Услуга := 0;
+              GoodDic.БезКоличества := 0;
+              if not VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров) and (ImportBarCodeCount=1) then
+                GoodDic.Штрихкод := BarCode;
+
+              GoodDic.НазвТовара := GoodName;
+              if UnitNameColl.FindByComment(UnitName, False) then
+                GoodDic.ЕдИзм := UnitNameColl;
+              if VarAsBool(Constants.ИспОбщНаценки) then
+                begin
+                  GoodDic.ПрНацЦена := VarAsDec(Constants.ПрНацЦена);
+                  GoodDic.ПрНацОптЦена := VarAsDec(Constants.ПрНацОптЦена);
+                  GoodDic.ПрНацКрОптЦена := VarAsDec(Constants.ПрНацКрОптЦена);
+                end
+              else
+                GoodDic.AssignFields('ПрНацЦена;ПрНацОптЦена;ПрНацКрОптЦена',CtgDic);
+              if IsObjFocused(GoodCurrencyInPrice) then
+                GoodDic.ВалютаВхЦена :=  GoodCurrencyInPrice
+              else
+                GoodDic.ВалютаВхЦена := DefCurrencyDic;
+
+              if IsObjFocused(GoodCurrencyPrice) then
+                GoodDic.ВалютаЦена :=  GoodCurrencyPrice
+              else
+              if IsObjFocused(Constants.ВалютаЦенаУмолч) then
+                GoodDic.ВалютаЦена  := Constants.ВалютаЦенаУмолч
+              else
+                GoodDic.ВалютаЦена := DefCurrencyDic;
+
+             if IsObjFocused(GoodCurrencyOptPrice) then
+                GoodDic.ВалютаОптЦена :=  GoodCurrencyOptPrice
+              else
+              if IsObjFocused(Constants.ВалютаОптЦенаУмолч) then
+                GoodDic.ВалютаОптЦена  := Constants.ВалютаОптЦенаУмолч
+              else
+                GoodDic.ВалютаОптЦена := DefCurrencyDic;  
+
+             if IsObjFocused(GoodCurrencyKrOptPrice) then
+                GoodDic.ВалютаКрОптЦена :=  GoodCurrencyKrOptPrice
+              else
+              if IsObjFocused(Constants.ВалютаКрОптЦенаУмолч) then
+                GoodDic.ВалютаКрОптЦена  := Constants.ВалютаКрОптЦенаУмолч
+              else
+                GoodDic.ВалютаКрОптЦена := DefCurrencyDic;
+              if cbGoodInPrice.Checked and (VarAsDec(InXGrid.Cell(i,edGoodInPrice.ItemIndex+1).Value)>=0) then
+                GoodDic.ВхЦена := VarAsDec(InXGrid.Cell(i,edGoodInPrice.ItemIndex+1).Value);
+              if cbGoodPrice.Checked and (VarAsDec(InXGrid.Cell(i,edGoodPrice.ItemIndex+1).Value)>=0) then
+                GoodDic.Цена := VarAsDec(InXGrid.Cell(i,edGoodPrice.ItemIndex+1).Value);
+              if cbGoodOptPrice.Checked and (VarAsDec(InXGrid.Cell(i,edGoodOptPrice.ItemIndex+1).Value)>=0) then
+                GoodDic.ОптЦена := VarAsDec(InXGrid.Cell(i,edGoodOptPrice.ItemIndex+1).Value); 
+              if cbGoodKrOptPrice.Checked and (VarAsDec(InXGrid.Cell(i,edGoodKrOptPrice.ItemIndex+1).Value)>=0) then
+                GoodDic.КрОптЦена := VarAsDec(InXGrid.Cell(i,edGoodKrOptPrice.ItemIndex+1).Value);
+              if cbGoodManuf.Checked then
+                begin
+                  ManufName := StrTrim(VarAsStr(InXGrid.Cell(i,edGoodManuf.ItemIndex+1).Value));
+                  if ManufName<>'' then
+                    begin
+                      if not ManufDic.FindByName(ManufName,false) then
+                        begin
+                          ManufDic.Append;
+                          ManufDic.NameField := ManufName;
+                          ManufDic.Код := GetNextNumberForField('Справочники.Производители','Код', false);
+                          case StrLength(ManufDic.Код) of
+                            1 : ManufDic.Код := '00' + ManufDic.Код;
+                            2 : ManufDic.Код := '0' + ManufDic.Код;
+                          end;
+                          ManufDic.Post;
+                          ManufDic.ApplyUpdates;
+                        end;
+                      GoodDic.Производитель := ManufDic;
+                    end;
+                end;
+              GoodDic.Категория := CtgDic;
+              GoodDic.SetParent(CtgDic);
+              GoodDic.Post;
+              GoodDic.ApplyUpdates;
+              if IsObjFocused(GoodDic) then
+                begin
+                 inc(AddCount);
+                 MemoLog.Lines.Add('строка №'+IntToStr(i)+' Добавлен товар "'+GoodName+'"');
+                 // Штрих-коды
+                 if VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров) then
+                   begin
+                     BarCode := AlignStr(GoodDic.Код,VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв))+';'+BarCode;
+                     inc(ImportBarCodeCount);
+                     ImportBarCodeCountDone := 0;
+                     for j:=1 to ImportBarCodeCount do
+                       begin
+                         CurBarCode := ExtractWord(j,BarCode,';');
+                         if CurBarCode<>'' then
+                           begin
+                            if BarCodeDic.FindByCode(CurBarCode,false) then
+                               begin
+                                 if not FindGoodDic.Find(BarCodeDic._GetOwner) then
+                                   BarCodeDic.Edit
+                                 else
+                                   continue;
+                               end
+                             else
+                               begin
+                                 BarCodeDic.Append;
+                                 BarCodeDic.Код := CurBarCode;
+                                 BarCodeDic.Количество := 1;
+                                 BarCodeDic.Идентификатор := '0';
+                               end;
+                             BarCodeDic.Активность := (ImportBarCodeCountDone=0);
+                             BarCodeDic.SetMaster(GoodDic);
+                             BarCodeDic.Post;
+                             BarCodeDic.ApplyUpdates;
+                             inc(ImportBarCodeCountDone);
+                           end;
+                       end;
+                   end;
+
+                 // Коды товара у поставщика
+                 if cbGoodSuppCode.Checked and (SuppCode<>'') then
+                   begin
+                     SuppCodeDic.Select;
+                     if SuppCodeDic.FindByField('КодПоставщика',SuppCode, false) then
+                       SuppCodeDic.Edit
+                     else
+                       begin
+                         SuppCodeDic.Append;
+                         SuppCodeDic.Партнер := GoodSuppDic;
+                         SuppCodeDic.Код := GoodSuppDic.Код;
+                         SuppCodeDic.КодПоставщика := SuppCode;
+                       end;
+                     SuppCodeDic.SetMaster(GoodDic);
+                     SuppCodeDic.Post;
+                     SuppCodeDic.ApplyUpdates;
+                   end;
+                end
+              else
+                MemoLogError.Lines.Add('строка №'+IntToStr(i)+' Ошибка добавления товара "'+GoodName+'"');
+            end;
+         inc(Count);
+         ProgressBar.Position := Count;
+       end; 
+     if cbErrorComment.Checked then
+       case rgTypeImport.ItemIndex of
+        0 : // Excel
+          begin
+            Excel.DisplayAlerts := 0;
+            Excel.WorkBooks(1).SaveAs(OpenDialog.FileName,56);
+            Excel.WorkBooks(1).Close;
+            Excel.quit;
+            Nil(Excel);
+          end;
+        1 : // OpenOffice
+          begin
+           Document.Store;
+           Document.Dispose;
+          end;
+       end;
+     ProgressBar.Position := 0;
+     MemoLog.Lines.Add(' ');
+     MemoLog.Lines.Add('Обработано '+IntToStr(Count)+' строк');
+     MemoLog.Lines.Add('Добавлено '+IntToStr(AddCount)+' записей');
+     ShowMessage('Обработано '+IntToStr(Count)+' строк'+#13+
+                 'Добавлено '+IntToStr(AddCount)+' записей');
+   end;
+end;
+     
+procedure RunImportService;
+var i, Count, AddCount : integer;
+    GoodDic, CtgDic, DefCurrencyDic, ManufDic : ICDictionary;
+    ServiceName, CtgName, UnitName : string;
+    UnitNameColl : ICCollection;  
+    Excel, OpenCalc : OLEVariant;
+    WorkSheet, TrgRange, Desktop, VariantArray, Document, CoreReflection, PropertyValue, Sheets : Variant;
+    ErrorCommentCol, TypeOffice : integer;
+begin
+ DefCurrencyDic := CreateObject('Справочники.Валюты');
+ if not DefCurrencyDic.FindByField('Активность',true,false) and
+    not DefCurrencyDic.FindByField('НацВалюта',true,false) then
+   ShowMessage('В базе отсутствует национальная и активная валюты!')
+ else
+ if (BeginRow<=0) or (EndRow<=0) or (BeginRow>InXGrid.RowCount) or (EndRow>InXGrid.RowCount) or (BeginRow>EndRow) then
+   ShowMessage('Не верно заданы строки импорта!')
+ else
+ if (edServiceName.ItemIndex=-1) or (edServiceName.ItemIndex>=InXGrid.ColCount) then
+   ShowMessage('Не верно задан столбец название!')
+ else
+ if (EdServiceUnitName.ItemIndex=-1) or (EdServiceUnitName.ItemIndex>=InXGrid.ColCount) then
+   ShowMessage('Не верно задан столбец Единицы измерения!')
+ else
+  if (edServiceCtg.ItemIndex=-1) or (edServiceCtg.ItemIndex>=InXGrid.ColCount) then
+   ShowMessage('Не верно задан столбец категория товара!')
+ else
+ if cbServiceInPrice.Checked and ((edServiceInPrice.ItemIndex=-1) or (edServiceInPrice.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец Вх.цена!')
+ else
+ if cbServicePrice.Checked and ((edServicePrice.ItemIndex=-1) or (edServicePrice.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец цена!')
+ else
+ if cbServiceOptPrice.Checked and ((edServiceOptPrice.ItemIndex=-1) or (edServiceOptPrice.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец Опт.цена!')
+ else
+ if cbServiceKrOptPrice.Checked and ((edServiceKrOptPrice.ItemIndex=-1) or (edServiceKrOptPrice.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец Кр.Опт.цена!')
+ else
+ if cbServiceInPrice.Checked and not IsObjFocused(ServiceCurrencyInPrice) then
+   ShowMessage('Не задана валюта Вх.цена!')
+ else
+ if cbServicePrice.Checked and not IsObjFocused(ServiceCurrencyPrice) then
+   ShowMessage('Не задана валюта Цена!')
+ else
+ if cbServiceOptPrice.Checked and not IsObjFocused(ServiceCurrencyOptPrice) then
+   ShowMessage('Не задана валюта Цена Оптотая!')
+ else
+ if cbServiceKrOptPrice.Checked and not IsObjFocused(ServiceCurrencyKrOptPrice) then
+   ShowMessage('Не задана валюта Цена Кр.Оптотая!')
+ else   
+ if cbServiceErrorComment.Checked and ((edServiceErrorComment.ItemIndex=-1) or (edServiceErrorComment.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец комментария ошибки!')
+ else
+ if cbServiceErrorComment.Checked and not FileExists(OpenDialog.FileName) then
+   ShowMessage('Файл "'+OpenDialog.FileName+'" не найден!')
+ else
+   begin  
+     if cbServiceErrorComment.Checked then
+       begin
+         TypeOffice := rgTypeImport.ItemIndex;
+         ErrorCommentCol := edServiceErrorComment.ItemIndex+1;
+         case rgTypeImport.ItemIndex of
+         0 :
+           begin
+             Excel :=  CreateOleObject('Excel.Application');
+             Excel.Visible := false;
+             Excel.Application.Workbooks.Open(OpenDialog.FileName);
+             WorkSheet := Excel.Workbooks[1].ActiveSheet;
+             TrgRange := WorkSheet.Range('A1:A1');
+           end;
+         1:
+           begin
+             OpenCalc :=  CreateOleObject('com.sun.star.ServiceManager');
+             Desktop := OpenCalc.CreateInstance('com.sun.star.frame.Desktop');
+             ArrayCreate(VariantArray,[0,0], Variant);
+             CoreReflection := OpenCalc.CreateInstance('com.sun.star.reflection.CoreReflection');
+             CoreReflection.forName('com.sun.star.beans.PropertyValue').createObject(PropertyValue);
+             PropertyValue.Name := 'Hidden';
+             PropertyValue.Value := true;
+             VariantArray[0] := PropertyValue;
+             Document := Desktop.loadComponentFromURL(FileNameToURL(OpenDialog.FileName), '_blank', 0, VariantArray);
+             Sheets := Document.GetSheets;
+             WorkSheet := Sheets.getByIndex(0);
+           end;
+         end;
+       end;
+     MemoLog.Lines.Clear; 
+     MemoLogError.Lines.Clear;
+     GoodDic     := CreateObject('Справочники.Товары');
+     CtgDic      := CreateObject('Справочники.Товары');
+     CtgDic.IncludeOnlyLevels(true);
+     UnitNameColl := CreateObject('Коллекции.ЕдИзм');
+     Count := 0;
+     AddCount := 0;
+     ProgressBar.Position := 0;
+     ProgressBar.Max := EndRow-BeginRow;
+     for i:= BeginRow to EndRow do
+       begin
+          ServiceName   := StrTrim(VarAsStr(InXGrid.Cell(i,edServiceName.ItemIndex+1).Value));
+          if GoodDic.FindByName(ServiceName,false) then
+           begin
+            MemoLogError.Lines.Add('строка №'+IntToStr(i)+' услуга/товар с названием "'+ServiceName+'" уже есть');
+            if cbServiceErrorComment.Checked then
+              WriteErrorComment(WorkSheet,TrgRange, 'дубль названия', i, ErrorCommentCol, TypeOffice);
+           end
+          else
+            begin
+              CtgName := StrTrim(VarAsStr(InXGrid.Cell(i,edServiceCtg.ItemIndex+1).Value));
+              if not CtgDic.FindByName(CtgName,false) then
+                begin
+                  CtgDic.AppendLevel;
+                  CtgDic.NameField := CtgName;   
+                  CtgDic.Артикул := GetNextNumberForField('Справочники.Товары','Артикул',true);
+                  CtgDic.Код := IntToStr(CtgDic.Артикул);
+                  case StrLength(CtgDic.Код) of
+                    1: CtgDic.Код := '0' + CtgDic.Код;
+                  end;
+                  CtgDic.Post;
+                  CtgDic.ApplyUpdates;
+                end;
+              UnitName := StrTrim(VarAsStr(InXGrid.Cell(i,EdServiceUnitName.ItemIndex+1).Value));
+              GenerateNewCollElem(UnitNameColl, UnitName);
+
+              GoodDic.UseParent(CtgDic);
+              GoodDic.Append;
+              GoodDic.ТипКарточки := 0;
+              GoodDic.Артикул := GetNextNumberForField('Справочники.Товары', 'Артикул', false, '');
+              GoodDic.Код := GetCode(GoodDic.Артикул);
+              GoodDic.Услуга := -1;
+              GoodDic.БезКоличества := 0;
+              GoodDic.НазвТовара := ServiceName;
+              if UnitNameColl.FindByComment(UnitName, False) then
+                GoodDic.ЕдИзм := UnitNameColl;
+              if VarAsBool(Constants.ИспОбщНаценки) then
+                begin
+                  GoodDic.ПрНацЦена := VarAsDec(Constants.ПрНацЦена);
+                  GoodDic.ПрНацОптЦена := VarAsDec(Constants.ПрНацОптЦена);
+                  GoodDic.ПрНацКрОптЦена := VarAsDec(Constants.ПрНацКрОптЦена);
+                end
+              else
+                GoodDic.AssignFields('ПрНацЦена;ПрНацОптЦена;ПрНацКрОптЦена',CtgDic);
+              if IsObjFocused(ServiceCurrencyInPrice) then
+                GoodDic.ВалютаВхЦена :=  ServiceCurrencyInPrice
+              else
+                GoodDic.ВалютаВхЦена := DefCurrencyDic;
+
+              if IsObjFocused(ServiceCurrencyPrice) then
+                GoodDic.ВалютаЦена :=  ServiceCurrencyPrice
+              else
+              if IsObjFocused(Constants.ВалютаЦенаУмолч) then
+                GoodDic.ВалютаЦена  := Constants.ВалютаЦенаУмолч
+              else
+                GoodDic.ВалютаЦена := DefCurrencyDic;
+
+             if IsObjFocused(ServiceCurrencyOptPrice) then
+                GoodDic.ВалютаОптЦена :=  ServiceCurrencyOptPrice
+              else
+              if IsObjFocused(Constants.ВалютаОптЦенаУмолч) then
+                GoodDic.ВалютаОптЦена  := Constants.ВалютаОптЦенаУмолч
+              else
+                GoodDic.ВалютаОптЦена := DefCurrencyDic;
+
+              if IsObjFocused(ServiceCurrencyKrOptPrice) then
+                GoodDic.ВалютаКрОптЦена :=  ServiceCurrencyKrOptPrice
+              else
+              if IsObjFocused(Constants.ВалютаКрОптЦенаУмолч) then
+                GoodDic.ВалютаКрОптЦена  := Constants.ВалютаКрОптЦенаУмолч
+              else
+                GoodDic.ВалютаКрОптЦена := DefCurrencyDic;
+              if cbServiceInPrice.Checked and (VarAsDec(InXGrid.Cell(i,edServiceInPrice.ItemIndex+1).Value)>=0) then
+                GoodDic.ВхЦена := VarAsDec(InXGrid.Cell(i,edServiceInPrice.ItemIndex+1).Value);
+              if cbServicePrice.Checked and (VarAsDec(InXGrid.Cell(i,edServicePrice.ItemIndex+1).Value)>=0) then
+                GoodDic.Цена := VarAsDec(InXGrid.Cell(i,edServicePrice.ItemIndex+1).Value);
+              if cbServiceOptPrice.Checked and (VarAsDec(InXGrid.Cell(i,edServiceOptPrice.ItemIndex+1).Value)>=0) then
+                GoodDic.ОптЦена := VarAsDec(InXGrid.Cell(i,edServiceOptPrice.ItemIndex+1).Value);
+              if cbServiceKrOptPrice.Checked and (VarAsDec(InXGrid.Cell(i,edServiceKrOptPrice.ItemIndex+1).Value)>=0) then
+                GoodDic.КрОптЦена := VarAsDec(InXGrid.Cell(i,edServiceKrOptPrice.ItemIndex+1).Value);
+              GoodDic.Категория := CtgDic;
+              GoodDic.SetParent(CtgDic);
+              GoodDic.Post;
+              GoodDic.ApplyUpdates;
+              if IsObjFocused(GoodDic) then
+                begin
+                 inc(AddCount);
+                 MemoLog.Lines.Add('строка №'+IntToStr(i)+' Добавлена услуга "'+ServiceName+'"');
+                end
+              else 
+               begin
+                MemoLogError.Lines.Add('строка №'+IntToStr(i)+' Ошибка добавления услуги "'+ServiceName+'"');
+                if cbServiceErrorComment.Checked then
+                  WriteErrorComment(WorkSheet,TrgRange, 'Ошибка добавления услуги', i, ErrorCommentCol, TypeOffice);
+               end;
+            end;
+         inc(Count);
+         ProgressBar.Position := Count;
+       end; 
+     if cbServiceErrorComment.Checked then
+       case rgTypeImport.ItemIndex of
+        0 : // Excel
+          begin
+            Excel.DisplayAlerts := 0;
+            Excel.WorkBooks(1).SaveAs(OpenDialog.FileName,56);
+            Excel.WorkBooks(1).Close;
+            Excel.quit;
+            Nil(Excel);
+          end;
+        1 : // OpenOffice
+          begin
+           Document.Store;
+           Document.Dispose;
+          end;
+       end;
+     ProgressBar.Position := 0;
+     MemoLog.Lines.Add(' ');
+     MemoLog.Lines.Add('Обработано '+IntToStr(Count)+' строк');
+     MemoLog.Lines.Add('Добавлено '+IntToStr(AddCount)+' записей');
+     ShowMessage('Обработано '+IntToStr(Count)+' строк'+#13+
+                 'Добавлено '+IntToStr(AddCount)+' записей');
+   end;
+end;
+
+procedure RunImportCtg;
+var i, Count, AddCount : integer;
+    CtgDic : ICDictionary;
+    CtgName : string;
+    CtgTbl : ICValueTable; 
+    LogList, LogErrorList : ICValueList; 
+    Excel, OpenCalc : OLEVariant;
+    WorkSheet, TrgRange, Desktop, VariantArray, Document, CoreReflection, Sheets, PropertyValue : Variant;
+    ErrorCommentCol, TypeOffice : integer;
+begin
+ if (BeginRow<=0) or (EndRow<=0) or (BeginRow>InXGrid.RowCount) or (EndRow>InXGrid.RowCount) or (BeginRow>EndRow) then
+   ShowMessage('Не верно заданы строки импорта!')
+ else
+ if (edCtgName.ItemIndex=-1) or (edCtgName.ItemIndex>=InXGrid.ColCount) then
+   ShowMessage('Не верно задан столбец название категории!')
+ else
+ if cbUseCtgParent.Checked and edCtgNameParent.Enabled and
+   ((edCtgNameParent.ItemIndex=-1) or (edCtgNameParent.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец название главной категории!')
+ else
+ if cbUseCtgParent.Checked and edCtgCode.Enabled and
+   ((edCtgCode.ItemIndex=-1) or (edCtgCode.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец код категории!')
+ else
+ if cbUseCtgParent.Checked and edCtgCodeParent.Enabled and
+   ((edCtgCodeParent.ItemIndex=-1) or (edCtgCodeParent.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец код главной категории!')
+ else 
+ if cbCtgErrorComment.Checked and ((edCtgErrorComment.ItemIndex=-1) or (edCtgErrorComment.ItemIndex>=InXGrid.ColCount)) then
+  ShowMessage('Не верно задан столбец комментария ошибки!')
+ else
+ if cbCtgErrorComment.Checked and not FileExists(OpenDialog.FileName) then
+   ShowMessage('Файл "'+OpenDialog.FileName+'" не найден!')
+ else
+   begin 
+     if cbCtgErrorComment.Checked then
+       begin
+         TypeOffice := rgTypeImport.ItemIndex;
+         ErrorCommentCol := edCtgErrorComment.ItemIndex+1;
+         case rgTypeImport.ItemIndex of
+         0 :
+           begin
+             Excel :=  CreateOleObject('Excel.Application');
+             Excel.Visible := false;
+             Excel.Application.Workbooks.Open(OpenDialog.FileName);
+             WorkSheet := Excel.Workbooks[1].ActiveSheet;
+             TrgRange := WorkSheet.Range('A1:A1');
+           end;
+         1:
+           begin
+             OpenCalc :=  CreateOleObject('com.sun.star.ServiceManager');
+             Desktop := OpenCalc.CreateInstance('com.sun.star.frame.Desktop');
+             ArrayCreate(VariantArray,[0,0], Variant);
+             CoreReflection := OpenCalc.CreateInstance('com.sun.star.reflection.CoreReflection');
+             CoreReflection.forName('com.sun.star.beans.PropertyValue').createObject(PropertyValue);
+             PropertyValue.Name := 'Hidden';
+             PropertyValue.Value := true;
+             VariantArray[0] := PropertyValue;
+             Document := Desktop.loadComponentFromURL(FileNameToURL(OpenDialog.FileName), '_blank', 0, VariantArray);
+             Sheets := Document.GetSheets;
+             WorkSheet := Sheets.getByIndex(0);
+           end;
+         end;
+       end;
+     MemoLog.Lines.Clear;   
+     MemoLogError.Lines.Clear;
+     CtgDic := CreateObject('Справочники.Товары');
+     CtgDic.IncludeOnlyLevels(true);
+     Count := 0;
+     AddCount := 0;
+     ProgressBar.Position := 0;
+     ProgressBar.Max := EndRow-BeginRow;
+     if cbUseCtgParent.Checked then  // Импорт со связями
+       begin  
+         LogList := CreateObject('СписокЗначений');
+         LogErrorList := CreateObject('СписокЗначений');
+         CtgTbl := CreateObject('ТаблицаЗначений');
+         CtgTbl.AddColumn('Категория',vtcLink,0);
+         CtgTbl.AddColumn('Parent',vtcLink,0);
+         CtgTbl.AddColumn('Название',vtcString,150);
+         CtgTbl.AddColumn('НазваниеParent',vtcString,150);
+         CtgTbl.AddColumn('Код',vtcString,20);
+         CtgTbl.AddColumn('КодParent',vtcString,20);
+         CtgTbl.Open;
+         for i:= BeginRow to EndRow do
+           begin
+             CtgTbl.Append;
+             CtgTbl.Название := StrTrim(VarAsStr(InXGrid.Cell(i,edCtgName.ItemIndex+1).Value));
+             case rgCtgTypeLink.ItemIndex of
+              0 : //привязка по названию
+               CtgTbl.НазваниеParent := StrTrim(VarAsStr(InXGrid.Cell(i,edCtgNameParent.ItemIndex+1).Value));
+              1 : // привязка по коду
+                begin
+                  CtgTbl.Код := StrTrim(VarAsStr(InXGrid.Cell(i,edCtgCode.ItemIndex+1).Value));
+                  CtgTbl.КодParent := StrTrim(VarAsStr(InXGrid.Cell(i,edCtgCodeParent.ItemIndex+1).Value));
+                end;
+             end;
+             CtgTbl.Post;
+             inc(Count);
+             ProgressBar.Position := Count;
+           end; 
+       LogList.CopyDataToServer;
+       LogErrorList.CopyDataToServer;
+       CtgTbl.CopyDataToServer;
+       AddCount :=  server.AddCtgByTbl(CtgTbl.SrvMean, LogList.SrvMean, LogErrorList.SrvMean, rgCtgTypeLink.ItemIndex);
+       CtgTbl.SrvMean.Clear; 
+       LogList.CopyDataFromServer;
+       LogErrorList.CopyDataFromServer;
+       LogList.SrvMean.Clear;
+       LogErrorList.SrvMean.Clear;
+       MemoLog.Lines.Text := LogList.ComaStr[#13];  
+       MemoLogError.Lines.Text := LogErrorList.ComaStr[#13];
+       end
+     else
+       begin  // Импорт без связей
+         for i:= BeginRow to EndRow do
+           begin
+             CtgName   := StrTrim(VarAsStr(InXGrid.Cell(i,edCtgName.ItemIndex+1).Value));
+              if CtgDic.FindByName(CtgName,false) then  
+                begin
+                  MemoLogError.Lines.Add('строка №'+IntToStr(i)+' Категоря "'+CtgName+'" уже есть!');
+                  if cbCtgErrorComment.Checked then
+                    WriteErrorComment(WorkSheet,TrgRange, 'дубль названия', i, ErrorCommentCol, TypeOffice);
+                end
+              else
+                begin
+                  CtgDic.AppendLevel;
+                  CtgDic.NameField := CtgName;
+                  CtgDic.Артикул := GetNextNumberForField('Справочники.Товары','Артикул',true);
+                  CtgDic.Код := IntToStr(CtgDic.Артикул);
+                  case StrLength(CtgDic.Код) of
+                    1: CtgDic.Код := '0' + CtgDic.Код;
+                  end;
+                  CtgDic.Post;
+                  CtgDic.ApplyUpdates;
+                  if IsObjFocused(CtgDic) then
+                    begin
+                     inc(AddCount);
+                     MemoLog.Lines.Add('строка №'+IntToStr(i)+' Добавлена категория "'+CtgName+'"');
+                    end
+                  else   
+                    begin
+                      MemoLogError.Lines.Add('строка №'+IntToStr(i)+' Ошибка добавления категории "'+CtgName+'"');
+                      if cbCtgErrorComment.Checked then
+                        WriteErrorComment(WorkSheet,TrgRange, 'Ошибка добавления категории', i, ErrorCommentCol, TypeOffice);
+                    end;
+                end;
+             inc(Count);
+             ProgressBar.Position := Count;
+           end;  
+       end;
+     if cbCtgErrorComment.Checked then
+       case rgTypeImport.ItemIndex of
+        0 : // Excel
+          begin
+            Excel.DisplayAlerts := 0;
+            Excel.WorkBooks(1).SaveAs(OpenDialog.FileName,56);
+            Excel.WorkBooks(1).Close;
+            Excel.quit;
+            Nil(Excel);
+          end;
+        1 : // OpenOffice
+          begin
+           Document.Store;
+           Document.Dispose;
+          end;
+       end;
+     ProgressBar.Position := 0;
+     MemoLog.Lines.Add(' ');
+     MemoLog.Lines.Add('Обработано '+IntToStr(Count)+' строк');
+     MemoLog.Lines.Add('Добавлено '+IntToStr(AddCount)+' записей');
+     ShowMessage('Обработано '+IntToStr(Count)+' строк'+#13+
+                 'Добавлено '+IntToStr(AddCount)+' записей');
+   end;
+end;
+
+procedure tbRun_Click(Sender: TObject);
+begin
+ tsLog.TabIndex := 0;
+ case edTypeDic.ItemIndex of
+   0 : RunImportPartner;
+   1 : RunImportEmpl;
+   2 : RunImportGoods;
+   3 : RunImportService; 
+   4 : RunImportCtg;
+ end;
+ if MemoLogError.Lines.Count>0 then 
+   tsLog.TabIndex := 1;
+
+end;
+
+procedure tsLog_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ nbLog.PageIndex :=  NewTab;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnLeft:TO4Panel
+Label6:TO4Label
+gbRows:TO4GroupBox
+Label2:TO4Label
+Label1:TO4Label
+ToolBar1:TO4ToolBar
+tbBRowDown:TO4ToolButton
+edBeginRow:TO4Edit
+ToolBar3:TO4ToolBar
+tbBRowUp:TO4ToolButton
+tbrERowDown:TO4ToolBar
+tbERowDown:TO4ToolButton
+edEndRow:TO4Edit
+tbrERowUp:TO4ToolBar
+tbERowUp:TO4ToolButton
+nbImport:TO4Notebook
+Label4:TO4Label
+Label5:TO4Label
+Label7:TO4Label
+Label8:TO4Label
+Label9:TO4Label
+Label10:TO4Label
+edPartnerName:TO4Edit
+cbPartnerBirthDay:TO4CheckBox
+edPartnerBirthDay:TO4Edit
+cbPartnerTel:TO4CheckBox
+edPartnerTel:TO4Edit
+edPartnerTypeTel:TO4Edit
+edPartnerDiscount:TO4Edit
+edPartnerCurrency:TO4Edit
+edPartnerRegion:TO4Edit
+edPartnerTypePrice:TO4Edit
+cbPartnerBuyer:TO4CheckBox
+cbPartnerSupplier:TO4CheckBox
+cbPartnerErrorComment:TO4CheckBox
+edPartnerErrorComment:TO4Edit
+Label11:TO4Label
+Label12:TO4Label
+Label13:TO4Label
+Label14:TO4Label
+Label15:TO4Label
+Label16:TO4Label
+edEmplFam:TO4Edit
+edEmplBirthDay:TO4Edit
+cbEmplBirthDay:TO4CheckBox
+cbEmplTel:TO4CheckBox
+edEmplTel:TO4Edit
+edEmplTypeTel:TO4Edit
+edEmplDiscount:TO4Edit
+edEmplCurrency:TO4Edit
+edEmplRegion:TO4Edit
+edEmplTypePrice:TO4Edit
+cbEmplName:TO4CheckBox
+edEmplName:TO4Edit
+cbEmplErrorComment:TO4CheckBox
+edEmplErrorComment:TO4Edit
+Label17:TO4Label
+Label18:TO4Label
+Label19:TO4Label
+Label20:TO4Label
+Label21:TO4Label
+Label22:TO4Label
+Label23:TO4Label
+Label30:TO4Label
+edGoodName:TO4Edit
+edGoodManuf:TO4Edit
+cbGoodManuf:TO4CheckBox
+cbGoodInPrice:TO4CheckBox
+edGoodInPrice:TO4Edit
+EdGoodUnitName:TO4Edit
+edGoodCtg:TO4Edit
+cbGoodSuppCode:TO4CheckBox
+edGoodSuppCode:TO4Edit
+edGoodBarCode:TO4Edit
+cbGoodBarCode:TO4CheckBox
+edGoodCurrencyInPrice:TO4Edit
+edGoodCurrencyPrice:TO4Edit
+edGoodCurrencyOptPrice:TO4Edit
+cbGoodPrice:TO4CheckBox
+edGoodPrice:TO4Edit
+cbGoodOptPrice:TO4CheckBox
+edGoodOptPrice:TO4Edit
+EdGoodSupp:TO4Edit
+cbGoodKrOptPrice:TO4CheckBox
+edGoodKrOptPrice:TO4Edit
+edGoodCurrencyKrOptPrice:TO4Edit
+cbColor:TO4CheckBox
+edColor:TO4Edit
+cbSize:TO4CheckBox
+edSize:TO4Edit
+cbErrorComment:TO4CheckBox
+edErrorComment:TO4Edit
+Label24:TO4Label
+Label25:TO4Label
+Label26:TO4Label
+Label27:TO4Label
+Label28:TO4Label
+Label29:TO4Label
+Label31:TO4Label
+edServiceName:TO4Edit
+edServiceUnitName:TO4Edit
+edServiceCtg:TO4Edit
+cbServiceInPrice:TO4CheckBox
+cbServicePrice:TO4CheckBox
+cbServiceOptPrice:TO4CheckBox
+edServiceOptPrice:TO4Edit
+edServicePrice:TO4Edit
+edServiceInPrice:TO4Edit
+edServiceCurrencyInPrice:TO4Edit
+edServiceCurrencyPrice:TO4Edit
+edServiceCurrencyOptPrice:TO4Edit
+cbServiceKrOptPrice:TO4CheckBox
+edServiceKrOptPrice:TO4Edit
+edServiceCurrencyKrOptPrice:TO4Edit
+cbServiceErrorComment:TO4CheckBox
+edServiceErrorComment:TO4Edit
+Label32:TO4Label
+lbCtgNameParent:TO4Label
+lbCtgCodeParent:TO4Label
+lbCtgCode:TO4Label
+edCtgName:TO4Edit
+cbUseCtgParent:TO4CheckBox
+edCtgNameParent:TO4Edit
+edCtgCode:TO4Edit
+edCtgCodeParent:TO4Edit
+rgCtgTypeLink:TO4RadioGroup
+edCtgErrorComment:TO4Edit
+cbCtgErrorComment:TO4CheckBox
+rgTypeImport:TO4RadioGroup
+gbTypeDic:TO4GroupBox
+edTypeDic:TO4Edit
+Panel1:TO4Panel
+Splitter1:TO4Splitter
+InXGrid:TO4XGrid
+ToolBar2:TO4ToolBar
+tbFile:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbRun:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbOpenFormat:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbSaveFormat:TO4ToolButton
+Panel2:TO4Panel
+Label3:TO4Label
+nbLog:TO4Notebook
+MemoLog:TO4Memo
+MemoLogError:TO4Memo
+tsLog:TO4TabSet
+ProgressBar:TO4ProgressBar
+OpenDialog:TO4OpenDialog
+pmPartner:TO4PopupMenu
+miPartnerBeginRow:TO4MenuItem
+miPartnerEndRow:TO4MenuItem
+MenuItem1:TO4MenuItem
+miPartnerName:TO4MenuItem
+miPartnerBirthDay:TO4MenuItem
+miPartnerTel:TO4MenuItem
+pmEmpl:TO4PopupMenu
+miEmplBeginRow:TO4MenuItem
+miEmplEndRow:TO4MenuItem
+MenuItem4:TO4MenuItem
+miEmplFam:TO4MenuItem
+miEmplName:TO4MenuItem
+miEmplBirthDay:TO4MenuItem
+miEmplTel:TO4MenuItem
+pmGood:TO4PopupMenu
+miGoodBeginRow:TO4MenuItem
+miGoodEndRow:TO4MenuItem
+MenuItem5:TO4MenuItem
+miGoodName:TO4MenuItem
+miGoodUnitName:TO4MenuItem
+miGoodCtg:TO4MenuItem
+miColor:TO4MenuItem
+miSize:TO4MenuItem
+miGoodSuppCode:TO4MenuItem
+miGoodBarCode:TO4MenuItem
+miGoodManuf:TO4MenuItem
+miGoodInPrice:TO4MenuItem
+miGoodPrice:TO4MenuItem
+miGoodOptPrice:TO4MenuItem
+miGoodKrOptPrice:TO4MenuItem
+pmService:TO4PopupMenu
+miServiceBeginRow:TO4MenuItem
+miServiceEndRow:TO4MenuItem
+MenuItem6:TO4MenuItem
+miServiceName:TO4MenuItem
+miServiceUnitName:TO4MenuItem
+miServiceCtg:TO4MenuItem
+miServiceInPrice:TO4MenuItem
+miServicePrice:TO4MenuItem
+miServiceOptPrice:TO4MenuItem
+miServiceKrOptPrice:TO4MenuItem
+pmCtg:TO4PopupMenu
+miCtgBeginRow:TO4MenuItem
+miCtgEndRow:TO4MenuItem
+MenuItem7:TO4MenuItem
+miCtgName:TO4MenuItem
+miCtgNameParent:TO4MenuItem
+miCtgCode:TO4MenuItem
+miCtgCodeParent:TO4MenuItem

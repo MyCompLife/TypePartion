@@ -1,0 +1,673 @@
+interface
+
+uses
+  System,  DispIntf, ConstNames, InitColors, Расчеты;
+
+implementation
+
+Var
+  DocTbl, Doc, ErrTbl: ISValueTable;
+  Currency, Units, Store, PartAcc, MyFirm, Partner,  Cash : ISDictionary;
+  DocName, DBID: String;
+  Constants: IS4VPAConst;
+  AllRecCnt, AddRec, ColumnCnt : Integer;
+  Tbl: ISValueTable; TblName: String;
+  DocDate, DateFrom, DateTo : DateTime;
+
+procedure ЦенаНДС(Data: Variant; FromNetto: Boolean=True);
+var Tax: Decimal;
+begin
+ if FromNetto
+  then Data.Цена := CalcTaxPrice(Data.СтавкаНДС, Data.ЦенаБезНДС, Tax)
+  else Data.ЦенаБезНДС := CalcTaxPriceNT(Data.СтавкаНДС, Data.Цена, Tax);
+ Data.НДС := Tax;
+end;
+
+procedure GetPackCount(Data : IObject);
+var
+  DicPack : ISDictionary;
+begin
+  if VarAsBool(Data.HasField('КоличествоУпаковок')) and VarAsBool(Data.HasField('Упаковка')) then
+    begin
+      DicPack := Data.Упаковка;
+      if not DicPack.IsFocused then
+        exit;
+     if (VarAsDec(DicPack.Количество) <> 0) then
+       Data.КоличествоУпаковок := VarAsDec(Data.Количество)/DicPack.Количество;
+    end;
+end;  
+
+function GetAStore(Store:ISDictionary): ISDictionary;
+begin
+   if VarAsBool(Store.FindByField('Активность', VarAsInt(true), false)) then
+     Result := Store
+   else begin
+     Store.Select();
+     if not Store.SelectNext() then begin
+       Store.Append;
+       Store.Название := 'Склад 01';
+       Store.Активность := -1;
+       Store.Post;
+       Store.ApplyUpdates();
+       Result := Store;
+     end
+     else begin
+       Store.Edit();
+       Store.Активность := -1;
+       Store.Post();
+       Store.ApplyUpdates();
+       Result := Store;
+     end;
+   end;
+end;
+
+
+procedure CalcLineSumma(Doc : ISValueTable);
+var
+  SumNt : Decimal;
+begin
+  if Doc.HasField('МетодРасчета') and (Doc.МетодРасчета = 0) then
+    begin
+      SumNt := VarAsDec(Doc.Количество) * VarAsDec(Doc.ЦенаБезНДС);
+      if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+        begin
+          Doc.СуммаСтрокиБезНДС := RoundFloat(SumNt, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС);
+          if Doc.HasField('КоррекцияСтрокиБезНДС') then
+            Doc.СуммаСтрокиБезНДС := Doc.СуммаСтрокиБезНДС - Doc.КоррекцияСтрокиБезНДС;
+        end
+      else
+        Doc.СуммаСтрокиБезНДС := SumNt;
+      Doc.НДССтроки := Doc.СуммаСтрокиБезНДС * Doc.СтавкаНДС / 100;
+      Doc.СуммаСтроки := Doc.СуммаСтрокиБезНДС + Doc.НДССтроки;
+    end
+  else
+    begin
+      Doc.СуммаСтроки := VarAsDec(Doc.Количество) * VarAsDec(Doc.Цена);
+      Doc.НДССтроки := VarAsDec(Doc.Количество) * VarAsDec(Doc.НДС);
+      Doc.СуммаСтрокиБезНДС := Doc.СуммаСтроки - Doc.НДССтроки;
+    end;
+  if Doc.HasField('СуммаВВалютеСНДС') and Doc.HasField('ЦенаВВалюте') then
+    Doc.СуммаВВалютеСНДС := VarAsDec(Doc.ЦенаВВалюте) * VarAsDec(Doc.Количество);
+  if Doc.HasField('ПлощадьСтроки') and Doc.HasField('Площадь') then
+    Doc.ПлощадьСтроки := VarAsDec(Doc.Площадь) * VarAsDec(Doc.Количество);
+  if Doc.HasField('МассаСтроки') and Doc.HasField('Масса') then
+    Doc.МассаСтроки := VarAsDec(Doc.Масса) * VarAsDec(Doc.Количество);
+  if Doc.HasField('НаценкаСтроки') and Doc.HasField('ВхЦенаБезНДС') then
+    Doc.НаценкаСтроки := (VarAsDec(Doc.ЦенаБезНДС) - VarAsDec(Doc.ВхЦенаБезНДС)) * VarAsDec(Doc.Количество);
+end;
+
+
+procedure FillContent(V: ISProcessing; Var Accept: Boolean); //server;
+begin
+  Constants := GetConstants;
+  Units := CreateObject('Справочники.Упаковки');
+  Store := CreateObject('Справочники.Склады');
+  Currency := CreateObject('Справочники.Валюты');
+  AllRecCnt := DocTbl.LineCount;
+  AddRec := 0;
+  Case DocName of
+    'ВводОстатков': begin
+       DocTbl.Select;
+       While DocTbl.SelectNext Do
+         begin
+           Doc.Append;
+//           Doc.AssignFields('Товар;Склад;Партнеры=Партнер;ДатаПр;ВалютаТовара;КурсТовара;СтавкаНДС;Количество=КолОбщ;ЦенаБезНДС=ВхЦенаБезНДС;ЦенаВВалюте=ВхЦенаВал',DocTbl);
+           Doc.AssignFields('Товар;Склад;Партнеры=Партнер;ВалютаТовара;КурсТовара;СтавкаНДС;Количество=КолОбщ;ЦенаБезНДС=ВхЦенаБезНДС;ЦенаВВалюте=ВхЦенаВал;ДатаПр',DocTbl);
+
+           ЦенаНДС(Doc, true);
+           Doc.Упаковка := GetActiveLink(Units, DocTbl.Товар);
+           GetPackCount(Doc);
+           //масса и площадь в счете на закупку
+           if Doc.HasField('ОбщаяМасса') then
+             Doc.Масса := DocTbl.Товар.Масса;
+           if Doc.HasField('ОбщаяПлощадь') then
+             Doc.Площадь := DocTbl.Товар.Площадь;
+           CalcLineSumma(Doc);
+           Doc.Post;
+           Inc(AddRec);   
+           if AddRec mod 10 = 0 then
+             begin
+               V.NotifyClient('ВводОстатков  ',AddRec,AllRecCnt);
+               if V.Terminated then break;
+             end;
+         end;
+    end;
+    'ВводОстатковПоБанкуИКассе': begin
+       PartAcc := CreateObject('Справочники.РасчСчета');
+       MyFirm := CreateObject('Справочники.ВашеПредприятие');
+       Cash := CreateObject('Справочники.Кассы');
+
+       DocTbl.SortBy('Тип;РасчСчет;Валюта');
+       MyFirm.Select;
+       while MyFirm.SelectNext do
+         begin
+           PartAcc.UseMasterAndSelect(MyFirm);
+           PartAcc.Select;
+           while PartAcc.SelectNext do
+             begin
+               Currency.Select;
+               while Currency.SelectNext do
+                 if DocTbl.Find(ArrayOf(0,PartAcc,Currency)) then
+                   begin
+                     Doc.Append;
+                     Doc.Тип := 0;
+                     Doc.Счет := DocTbl.РасчСчет;
+                     Doc.Валюта := DocTbl.Валюта;
+                     Doc.РасчСумма := 0;
+                     Doc.СуммаВВалюте := DocTbl.СумОбщ;
+                     if VarAsBool(Doc.@Валюта.IsFocused) then
+                       Doc.Курс := Doc.Валюта.GetTimedValue(Constants.UsedCurs, DocDate);
+                     Doc.Post;
+                     Inc(AddRec);
+                     V.NotifyClient('ВводОстатковПоБанкуИКассе - добавлено '+ IntToStr(AddRec)+':'+ IntToStr(AllRecCnt),AddRec,AllRecCnt);
+                     if V.Terminated then break;
+                   end
+                 else
+                   begin
+                     Doc.Append;
+                     Doc.Тип := 0;
+                     Doc.Счет := PartAcc;
+                     Doc.Валюта := Currency;
+                     Doc.РасчСумма := 0;
+                     Doc.СуммаВВалюте := 0;
+                     if VarAsBool(Doc.@Валюта.IsFocused) then
+                       Doc.Курс := Doc.Валюта.GetTimedValue(Constants.UsedCurs, DocDate);
+                     Doc.Post;
+                   end;
+             end;
+         end;
+       DocTbl.SortBy('Тип;Касса;Валюта');
+       
+       Cash.Select;
+       while Cash.SelectNext do
+         begin
+           Currency.Select;
+           while Currency.SelectNext do
+             if DocTbl.Find(ArrayOf(1,Cash,Currency)) then
+               begin
+                 Doc.Append;
+                 Doc.Тип := 1;
+                 Doc.Касса := DocTbl.Касса;
+                 Doc.Валюта := DocTbl.Валюта;
+                 Doc.РасчСумма := 0;
+                 Doc.СуммаВВалюте := DocTbl.СумОбщ;
+                 if VarAsBool(Doc.@Валюта.IsFocused) then
+                   Doc.Курс := Doc.Валюта.GetTimedValue(Constants.UsedCurs, DocDate);
+                 Doc.Post;
+                 Inc(AddRec);
+                 V.NotifyClient('ВводОстатковПоБанкуИКассе - добавлено '+ IntToStr(AddRec)+':'+ IntToStr(AllRecCnt),AddRec,AllRecCnt);
+                 if V.Terminated then break;
+               end
+             else
+               begin
+                 Doc.Append;
+                 Doc.Тип := 1;
+                 Doc.Касса := Cash;
+                 Doc.Валюта := Currency;
+                 Doc.РасчСумма := 0;
+                 Doc.СуммаВВалюте := 0;
+                 if VarAsBool(Doc.@Валюта.IsFocused) then
+                   Doc.Курс := Doc.Валюта.GetTimedValue(Constants.UsedCurs, DocDate);
+                 Doc.Post;
+               end;
+         end;
+    end;
+    'ВводОстатковПоВзаиморасчетам': begin
+       DocTbl.Select;
+       While DocTbl.SelectNext Do
+         begin
+           Doc.Append;
+           Doc.Партнер := DocTbl.Партнер;
+           Doc.ДатаРасчетов := DocDate;
+           if VarAsBool(DocTbl.Валюта.IsFocused) then
+             Currency:= DocTbl.Валюта;
+           if Currency.IsFocused then
+             begin
+               Doc.Курс := Currency.GetTimedValue(Constants.UsedCurs, DocDate);
+               Doc.Валюта := Currency;
+             end;
+           if DocTbl.СумОбщВал{СумОбщ} < 0 then
+               Doc.Долг := -1
+           else
+               Doc.Долг := 0;
+
+           Doc.АналитикаВзаиморасчета := DocTbl.@АналитикаВзаиморасчета;
+           Doc.Сумма := AbsD(DocTbl.СумОбщВал*Doc.Курс);
+           Doc.СуммаВВалюте := AbsD(DocTbl.СумОбщВал);
+           Doc.Post;
+           Inc(AddRec); 
+           if AddRec mod 10 = 0 then
+             begin
+               V.NotifyClient('ВводОстатковПоВзаиморасчетам',AddRec,AllRecCnt);
+               if V.Terminated then break;
+             end;
+         end;
+    end;
+
+  end;
+  Accept := not V.Terminated;
+end;
+
+
+
+function FillContentsS(DocTblS, DocS : ISValueTable; DocNameS: String;  PartnerS: ISDictionary; DocDateS: DateTime): Variant;server;
+begin
+  DocTbl := DocTblS;
+  Doc := DocS;
+  DocName := DocNameS;
+  DocDate := DocDateS;
+  Partner := PartnerS;
+  Result := EntryPoint(FillContent);
+end;
+
+procedure  ImportAllDocs(V: ISProcessing; Var Accept: Boolean);
+const DocTypeStr = 'АктНаОказаниеУслуг;АктНаПолучениеУслуг;АктСверки;Акция;Баланс;ВводОстатков;ВводОстатковПоБанкуИКассе;ВозвратОтПокупателей;ВозвратПоставщикам;ДоговорЭквайринга;ДокументИзменВхЦен;ЗаказНаПродажу;ИзмЦенОптЦены;КорректировкаОстаткаТовара;НакладнаяВнутрПеремещ;НакладнаяПрихода;НачислениеВознаграждения;НачислениеЗП_ПоВремени;НачислениеЗарплаты;ОбменВалютВКассе;ПеремещениеМеждуКассами;ПересчетЦенКатегорииТоваров;ПриходВКассу;ПриходНаРасчСчет;ПриходПоЭквайрингу;РасходИзКассы;РасходПоЭквайрингу;РасходСРасчСчета;РевизияТовара;РевизияТовараСт;РевизионныйЛисток;СписаниеТовара;ТрансферНаРасчСчет;ТрансферСРасчСчета;УстановкаСкидок;Чек;СчетНаЗакупку;СчетНаПродажу;СчетНаОказаниеУслуг;СчетНаПолучениеУслуг;НакладнаяОтпускаПоСчету;НакладнаяПриходаПоСчету;ВводОстатковПоВзаиморасчетам;УстановкаСкидок;Смена';
+      NotDateRangeDocType= 'ДоговорЭквайринга;Акция';
+
+var i, num, DocTypeTotal, Count, Total : integer;
+    SourseDoc, DestDoc, OneDocSource, OneDocDest : ISDocuments;
+    ContentTbl, DocTbl : ISValueTable;
+    CurDocType : string;
+    PartAccsSourse, PartAccsDest : ISAccs;
+    CheckDocSource, CheckDocDest: ISDictionary;
+begin
+  Accept := false;  
+  CheckDocDest := CreateObject('Справочники.ИдентификаторДокумента');
+  CheckDocSource := CreateObjectOnDBID('Справочники.ИдентификаторДокумента',DBID);
+  PartAccsDest := CreateObject('Аккумуляторы.ПартииТоваров');
+  PartAccsSourse := CreateObjectOnDBID('Аккумуляторы.ПартииТоваров', DBID);
+  DocTbl := CreateObject('ТаблицаЗначений');
+  DocTbl.AddColumn('Document',vtcLink,0);
+  DocTbl.AddColumn('Date',vtcDateTime,0);
+  DocTbl.AddColumn('DocState',vtcInteger,0);
+  DocTbl.Open;
+  ContentTbl := CreateObject('ТаблицаЗначений');
+  DocTypeTotal := WordCount(DocTypeStr,';');
+  for i:=1 to DocTypeTotal do
+    begin
+      CurDocType := ExtractWord(i, DocTypeStr,';');
+      SourseDoc := CreateObjectOnDBID('Документы.'+CurDocType, DBID);
+      if StrPos(CurDocType,NotDateRangeDocType)=0 then
+        SourseDoc.SetFieldFilter('ДатаДокумента','>=',DateFrom,'and','<',DateTo);
+      DestDoc := CreateObject('Документы.'+CurDocType);
+      SourseDoc.Select;
+      DestDoc.Select;
+      Num := 0;
+      While SourseDoc.SelectNext do
+        begin
+          DestDoc.SetFieldFilter('НомерДокумента','=',SourseDoc.GetNumber,'','',Null);
+          DestDoc.SetFieldFilter('ДатаДокумента','>=',VarAsDate(SourseDoc.GetDate-0.000015),'and','<=',VarAsDate(SourseDoc.GetDate+0.000015));
+          if not (DestDoc.Select and DestDoc.SelectNext) then
+            begin
+             SourseDoc.SaveHead('',ContentTbl);
+             DestDoc.Append;
+             DestDoc.LoadHead('',ContentTbl);
+             SourseDoc.SaveContents('',ContentTbl);
+             if ContentTbl.HasField('Партия') then
+               begin
+                 ContentTbl.Select;
+                 While ContentTbl.SelectNext do
+                   if PartAccsSourse.SelectDimID(ContentTbl.Партия) then
+                     begin
+                       ContentTbl.Edit;
+                       ContentTbl.Партия := PartAccsDest.FindDimIDDirect(
+                        ArrayOf(PartAccsSourse.Товар,
+                                PartAccsSourse.Партнер,
+                                PartAccsSourse.ВхЦенаБезНДС,
+                                PartAccsSourse.Валюта,
+                                PartAccsSourse.ВхЦенаВал,
+                                PartAccsSourse.Комиссия,
+                                PartAccsSourse.СтавкаНДС,
+                                PartAccsSourse.ДатаПр,
+                                PartAccsSourse.СертификатСоотв));
+                       ContentTbl.Post;
+                     end;
+               end
+             else
+             if ContentTbl.HasField('Документ') then
+               begin
+                 ContentTbl.SelectFirst;
+                 While not ContentTbl.EOF do
+                   begin
+                     OneDocSource := CreateObjectOnDBID('Документы.'+ContentTbl.Документ.GetSign, DBID);
+                     if OneDocSource.Find(ContentTbl.@Документ) then
+                       begin
+                         OneDocDest := CreateObject('Документы.'+OneDocSource.GetSign);
+                         OneDocDest.SetFieldFilter('НомерДокумента','=',OneDocSource.GetNumber,'','',Null);
+                         OneDocDest.SetFieldFilter('ДатаДокумента','>=',VarAsDate(OneDocSource.GetDate-0.000015),'and','<=',VarAsDate(OneDocSource.GetDate+0.000015));
+                         if OneDocDest.Select and OneDocDest.SelectNext then
+                           begin
+                            ContentTbl.Edit;
+                            ContentTbl.Документ := OneDocDest;
+                            ContentTbl.Post;
+                            ContentTbl.SelectNext;
+                           end
+                         else
+                           ContentTbl.Delete;
+                       end
+                     else
+                      ContentTbl.Delete;
+                   end;
+               end;
+             DestDoc.LoadContents('',ContentTbl);
+             DestDoc.Post;     
+
+             // Связь с ИдентификаторДокумента  
+             CheckDocSource.UseMaster(SourseDoc);
+             if CheckDocSource.Select and CheckDocSource.SelectNext then
+               begin
+                 if CheckDocDest.Find(CheckDocSource) then
+                   begin
+                     CheckDocDest.Edit;
+                     CheckDocDest.SetMaster(DestDoc);
+                     CheckDocDest.Post;
+                     CheckDocDest.ApplyUpdates;
+                   end;
+               end;
+          if SourseDoc.GetDocState>0 then
+            begin
+              DocTbl.Append;
+              DocTbl.Document :=  DestDoc;
+              DocTbl.Date := DestDoc.GetDate;
+              DocTbl.DocState := SourseDoc.GetDocState;
+              DocTbl.Post;
+            end;
+            end;
+          inc(Num);
+          if Num mod 10 = 0 then
+            begin
+              V.NotifyClient(CurDocType+' '+IntToStr(Num),i,DocTypeTotal);
+              if V.Terminated then exit;
+            end;
+        end;
+        Nil(SourseDoc);
+        Nil(DestDoc);
+    end; 
+
+  // Фиксация документов
+  DocTbl.UpdateObjNames;
+  DocTbl.SortBy('Date');
+  Count := 0;
+  Total := DocTbl.LineCount;
+  DocTbl.Select;
+  While DocTbl.SelectNext do
+    begin  
+      DestDoc := DocTbl.Document;
+      if IsObjFocused(DestDoc) then
+        While DestDoc.GetDocState<VarAsInt(DocTbl.DocState) do
+          DestDoc.StateUp;
+      inc(Count);
+      if Count mod 10 = 0 then
+        V.NotifyClient('Фиксация документов',Count,Total);
+    end;
+  Accept := not V.Terminated;
+end;
+
+function ImportAllDocsEP(DateFromS, DateToS: DateTime; DBIDS:string): Variant;server;
+begin
+ DateFrom := RoundDate(DateFromS,rdDay,false);
+ DateTo := RoundDate(DateToS,rdDay,true);
+ DBID := DBIDS;
+ Result := EntryPoint(ImportAllDocs);
+end;
+
+procedure  ImportLinkPayDocs(V: ISProcessing; Var Accept: Boolean);
+const OwnerJrnStr='ЖурналЧеков;ЖурналВозвратовОтПокупателя;ЖурналАктов;ЖурналВозвратовПоставщикам;ЖурналНакладныхПрихода';
+var
+    Count, Total, J, JrnTotal : integer;
+    SourseDoc, DestDoc, SourseChildPayDoc, DestChildPayDoc : ISDocuments;
+    SourceJrn, SourceChildPaysJrn, DestChildPaysJrn : ISJournal;
+    CurJrn : string;
+begin
+ Accept := false;
+ JrnTotal := WordCount(OwnerJrnStr,';');
+ for J := 1 to JrnTotal do
+   begin
+     V.NotifyClientEx(1,CurJrn,J,JrnTotal);
+     CurJrn := ExtractWord(J,OwnerJrnStr,';');
+     SourceJrn := CreateObjectOnDBID('Журналы.'+CurJrn,DBID);
+     SourceJrn.SetDateRange(DateFrom,DateTo);
+     SourceJrn.Select;
+     Count := 0;
+     Total := SourceJrn.RecordCount;
+     While SourceJrn.SelectNext do
+       begin
+         //SourseDoc := SourceJrn.GetDoc;
+         DestDoc := CreateObject('Документы.'+SourceJrn.GetDocSign);
+         DestDoc.SetFieldFilter('ДатаДокумента','>=',VarAsDate(SourceJrn.ДатаДокумента-0.000015),'and','<=',VarAsDate(SourceJrn.ДатаДокумента+0.000015));
+         DestDoc.SetFieldFilter('НомерДокумента','=',SourceJrn.НомерДокумента,'','',Null);  
+
+         if DestDoc.Select and DestDoc.SelectNext and VarAsBool(DestDoc.HasField('Отпуск')) then
+           begin  
+             if SourceJrn.GetDocSign='СчетРезерв' then
+               begin
+                 SourceChildPaysJrn := CreateObjectOnDBID('Журналы.ЖурналНакладныхОтпускаПоСчетуРезерв',DBID);
+                 DestChildPaysJrn :=  CreateObject('Журналы.ЖурналНакладныхОтпускаПоСчетуРезерв');
+               end
+             else
+             if VarAsBool(DestDoc.Отпуск) then
+               begin
+                 SourceChildPaysJrn := CreateObjectOnDBID('Журналы.ЖурналПодчПлатежейОтп',DBID);
+                 DestChildPaysJrn := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+               end
+             else
+               begin
+                 SourceChildPaysJrn := CreateObjectOnDBID('Журналы.ЖурналПодчПлатежейПрих',DBID);
+                 DestChildPaysJrn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+               end;
+             SourceChildPaysJrn.UseMaster(SourceJrn);
+             SourceChildPaysJrn.Select;
+             While SourceChildPaysJrn.SelectNext do
+               begin
+                // SourseChildPayDoc := SourceChildPaysJrn.GetDoc;
+                 DestChildPayDoc := CreateObject('Документы.'+SourceChildPaysJrn.GetDocSign);
+                 DestChildPayDoc.SetFieldFilter('ДатаДокумента','>=',VarAsDate(SourceChildPaysJrn.ДатаДокумента-0.000015),'and','<=',VarAsDate(SourceChildPaysJrn.ДатаДокумента+0.000015));
+                 DestChildPayDoc.SetFieldFilter('НомерДокумента','=',SourceChildPaysJrn.НомерДокумента,'','',Null);
+
+                 if DestChildPayDoc.Select and DestChildPayDoc.SelectNext then
+                   begin
+                     DestChildPayDoc.Edit;
+                     DestChildPayDoc.SetMaster(DestDoc);
+                     DestChildPayDoc.Post;
+                     DestChildPaysJrn.AddDoc(DestChildPayDoc);
+                   end;
+
+               end;
+             Nil(SourceChildPaysJrn);
+           end;
+         inc(Count);
+         if Count mod 10 = 0 then
+           begin
+             V.NotifyClientEx(2,' ',Count,Total);  
+             if V.Terminated then exit;
+           end;
+       end;
+
+   end;
+ Accept := not V.Terminated;
+end;
+
+function ImportLinkPayDocsEP(DateFromS, DateToS: DateTime; DBIDS:string): Variant;server;
+begin
+ DateFrom := RoundDate(DateFromS,rdDay,false);
+ DateTo := RoundDate(DateToS,rdDay,true);
+ DBID := DBIDS;
+ Result := EntryPoint(ImportLinkPayDocs);
+end;   
+
+
+procedure ImportPriceHistory(V: ISProcessing; Var Accept: Boolean);
+var AccsPriceHistorySource, AccsPriceHistoryDest : ISAccs;
+    PriceHistoryTbl : ISValueTable;
+    Count, Total : integer;
+begin
+  Accept := false;
+  AccsPriceHistorySource := CreateObjectOnDBID('Аккумуляторы.ИзмОтпЦенСпрТовара', DBID);
+  AccsPriceHistoryDest   := CreateObject('Аккумуляторы.ИзмОтпЦенСпрТовара');
+  PriceHistoryTbl := CreateObject('ТаблицаЗначений');
+  AccsPriceHistorySource.SaveMotionToValueTable(DateFrom, DateTo, amtBoth,-1,PriceHistoryTbl);
+  PriceHistoryTbl.Select; 
+  Count := 0;
+  Total :=  PriceHistoryTbl.LineCount;
+  While PriceHistoryTbl.SelectNext do
+    begin
+      AccsPriceHistoryDest.AssignFields('Товар;Валюта;ТипЦены;Цена;Основание;Пользователь',PriceHistoryTbl);
+      AccsPriceHistoryDest.Income(null, PriceHistoryTbl.Date, 0);
+      inc(Count);
+      if Count mod 10 = 0 then
+        V.NotifyClient('История изм. цен',Count,Total);
+    end;
+  Accept := not V.Terminated;
+end;
+
+function ImportPriceHistoryEP(DateFromS, DateToS: DateTime; DBIDS:string): Variant; server;
+begin
+ DateFrom := RoundDate(DateFromS,rdDay,false);
+ DateTo := RoundDate(DateToS,rdDay,true);
+ DBID := DBIDS;
+ Result := EntryPoint(ImportPriceHistory);
+end;
+
+procedure UpdateDic(V: ISProcessing; Var Accept: Boolean);
+const DicListStr='Терминалы;Email;FTPНастройки;SMSНастройки;SMSШаблоныСообщений;Адреса;Банки;ВашеПредприятие;Города;ГруппыСкидок;ГруппыТоваров;ДисконтныеКарты;Кассы;КатегорииПлатежей;Комплектующие;ЛичДокументы;ОграничениеСкидок;ПараметрыОтчетаПоДоходамЗатратам;ПостНаРеализацию;Правила;Представители;РасчСчета;Реализаторы;РегНомера;Сертификаты;Скидки;Склады;Служащие;СтатьиДоходовИЗатрат;Телефоны;Товары;Упаковки;ФизЛица;ФискальныеРегистраторы;ФорматИмпортаИзXLS;ШтрихКодыТоваров;Цвета;ФизЛица;ЮрПартнеры';
+var DicSource, DicDest : ISDictionary;
+    tmpTbl : ISValueTable;
+    Count, Total, DicCount, DicTotal, i : integer;
+    Fields, CurDic : string;
+
+begin
+  Accept := false;
+  tmpTbl := CreateObject('ТаблицаЗначений');
+  DicTotal := WordCount(DicListStr,';');
+  for DicCount:=1 to DicTotal do
+    begin
+      CurDic := ExtractWord(DicCount,DicListStr,';');
+      V.NotifyClientEx(1,CurDic,DicCount,DicTotal);
+      DicSource := CreateObjectOnDBID('Справочники.'+CurDic, DBID);
+      DicDest   := CreateObject('Справочники.'+CurDic);
+      DicSource.Select;
+      DicSource.SaveToValueTable('',tmpTbl,0,DicSource.RecordCount);
+      if tmpTbl.LineCount>0 then
+        begin
+          Fields := '';
+          for i:=0 to tmpTbl.GetColumnCount-1 do
+            if DicSource.HasField(tmpTbl.GetColumnName(i)) and (tmpTbl.GetColumnName(i)<>'Self') then
+              Fields := Fields + tmpTbl.GetColumnName(i)+';';
+          if (StrLength(Fields)>0) and (Fields[StrLength(Fields)]=';') then
+            StrDelete(Fields,StrLength(Fields),1);
+          Count := 0;
+          Total := tmpTbl.LineCount;
+          tmpTbl.Select;
+          While tmpTbl.SelectNext do
+            begin     
+              if DicDest.Find(tmpTbl.@Self) then
+                begin
+                  DicDest.Edit;
+                  DicDest.AssignFields(Fields,tmpTbl);
+                  DicDest.Post;
+                  DicDest.ApplyUpdates;
+                end;
+              inc(Count);
+              if Count mod 10 = 0 then
+                begin
+                  V.NotifyClientEx(2,CurDic,Count,Total);
+                  if V.Terminated then exit;
+                end;
+            end;
+        end;
+    end;
+  Accept := not V.Terminated;
+end;
+
+function UpdateDicEP(DateFromS, DateToS: DateTime; DBIDS:string): Variant; server;
+begin
+ DateFrom := RoundDate(DateFromS,rdDay,false);
+ DateTo := RoundDate(DateToS,rdDay,true);
+ DBID := DBIDS;
+ Result := EntryPoint(UpdateDic);
+end;
+
+
+procedure ImportChangeJrn(V: ISProcessing; Var Accept: Boolean);
+Var AccsCheckDocSource, AccsCheckDocDest: ISAccs;
+    tmpTbl : ISValueTable;
+    Count, Total : integer;
+begin
+  Accept := false;       
+
+  AccsCheckDocDest := CreateObject('Аккумуляторы.ЖурналИзменений');
+  AccsCheckDocSource := CreateObjectOnDBID('Аккумуляторы.ЖурналИзменений',DBID);
+  tmpTbl := CreateObject('ТаблицаЗначений');
+  AccsCheckDocSource.SaveMotionToValueTable(DateFrom,DateTo,amtBoth,-1,tmpTbl);
+  Count := 0;
+  tmpTbl.Select;
+  Total := tmpTbl.LineCount;
+  While tmpTbl.SelectNext do
+    begin
+      AccsCheckDocDest.AssignFields('ТипДокумента;ТипДействия;Док;НомерДокумента;Состояние;Идентификатор;Ответственный;Логин;Движение;Сумма;КолОбщ;ДатаДокумента;Партнер',tmpTbl);
+      AccsCheckDocDest.Income(Null, tmpTbl.Date, 0);
+      inc(Count);
+      if Count mod 100 = 0 then
+        begin
+          V.NotifyClient('Импорт истории изменений документов',Count,Total);
+          if V.Terminated then exit;
+        end;
+    end;
+  Accept := not V.Terminated;
+end;
+
+function ImportChangeJrnEP(DateFromS, DateToS: DateTime; DBIDS:string): Variant; server;
+begin
+ DateFrom := RoundDate(DateFromS,rdDay,false);
+ DateTo := RoundDate(DateToS,rdDay,true);
+ DBID := DBIDS;
+ Result := EntryPoint(ImportChangeJrn);
+end;
+
+procedure RefreshChangeDocs(V: ISProcessing; Var Accept: Boolean);
+var Count, Total : integer;
+    ChangeDoc, ChildDoc : ISDocuments;
+    ChangeJrn : ISJournal;
+begin
+ Accept := false;
+ ChangeJrn := CreateObject('Журналы.ЖурналСмен');
+ ChangeJrn.SetDateRange(DateFrom, DateTo);
+ ChangeJrn.Select;
+ Count := 0 ;
+ Total := ChangeJrn.RecordCount;
+ While ChangeJrn.SelectNext do
+   begin
+     ChangeDoc := ChangeJrn.GetDoc;
+     if IsObjFocused(ChangeDoc) then
+       begin
+         ChangeDoc.SelectLines;
+         While ChangeDoc.SelectNextLine do
+           begin
+             ChildDoc := ChangeDoc.Документ;
+             if IsObjFocused(ChildDoc) and ChildDoc.HasHeaderField('Смена') then
+               begin
+                 ChildDoc.Edit;
+                 ChildDoc.Смена := ChangeDoc;
+                 ChildDoc.Post;
+               end;
+           end;
+       end;    
+      inc(Count);
+      if Count mod 10 = 0 then
+        begin
+          V.NotifyClient('Импорт истории изменений документов',Count,Total);
+          if V.Terminated then exit;
+        end;
+   end;
+ Accept := not V.Terminated;
+end;
+
+function RefreshChangeDocsEP(DateFromS, DateToS: DateTime): Variant; server;
+begin
+ DateFrom := RoundDate(DateFromS,rdDay,false);
+ DateTo := RoundDate(DateToS,rdDay,true);
+ Result := EntryPoint(RefreshChangeDocs);
+end;
+
+end.
+

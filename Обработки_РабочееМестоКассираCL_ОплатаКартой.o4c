@@ -1,0 +1,80 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation  
+
+var
+  V: ICProcessing;  
+  Driver: OleVariant;
+  ContractTbl : ICValueTable;
+  ContractList : ICValueList;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  PlaySound('Ding');
+  V.Params['SumPay'] := StrToDec(edGivenSum.Text);
+  if ContractList.ValidIndex(ContractList.CurIndex) then
+    V.Params['TypeCardRecID'] := ContractList.GetValue(ContractList.CurIndex);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var CurName:string;
+begin
+  V := Mean;
+  edSum.Text := DecToStr(Params,2);
+  edGivenSum .Text := edSum.Text;
+  btOk.Enabled := StrToDec(edGivenSum.Text) <> StrToDec(edSum.Text);
+  if V.HasParam('CurrencyName') then
+    begin
+      CurName := ' '+ VarAsStr(V.Params['CurrencyName']);
+      Panel4.Caption := Panel4.Caption + CurName;
+      Panel10.Caption := Panel10.Caption + CurName;
+    end;       
+  ContractList := CreateObject('СписокЗначений');
+  if V.HasParam('ContractTbl')  then
+    begin
+      ContractTbl := V.Params['ContractTbl'];
+      if ContractTbl.LineCount>0 then
+        begin
+          ContractTbl.SortBy('НомСтроки');  
+          ContractList.Clear;
+          ContractTbl.Select;
+          while ContractTbl.SelectNext do
+            ContractList.AddValue(ContractTbl.Комментарий, ContractTbl.RecID);
+          ContractList.UseControl(CtrlToVar(eTypeCard));
+          ContractTbl.SortBy('Активность');
+          if ContractTbl.Find(VarAsInt(true)) then
+            ContractList.CurIndex := ContractList.FindByValue(ContractTbl.RecID)
+          else
+            ContractList.CurIndex := 0;
+          ContractTbl.SortBy('НомСтроки');
+         end;
+    end;
+end;
+
+procedure edGivenSum_Change(Sender: TObject);
+begin  
+  if StrToDecDef(edGivenSum.Text,0) <> StrToDec(edSum.Text) then
+    btOk.Enabled := false
+  else
+    btOk.Enabled := true;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel8:TO4Panel
+Panel9:TO4Panel
+edGivenSum:TO4Edit
+Panel10:TO4Panel
+Panel2:TO4Panel
+Panel4:TO4Panel
+Panel5:TO4Panel
+edSum:TO4Edit
+btOk:TO4Button
+Button1:TO4Button
+Panel1:TO4Panel
+Panel3:TO4Panel
+eTypeCard:TO4Edit

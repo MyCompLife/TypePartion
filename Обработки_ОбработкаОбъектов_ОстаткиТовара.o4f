@@ -1,0 +1,170 @@
+object Form: TO4Form
+  Left = 0
+  Top = 0
+  Width = 604
+  Height = 496
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = ()
+  Translat.ScanedProps.Props = (
+    'BottomPanel.Caption'
+    1
+    ''
+    'BottomPanel.Hint'
+    1
+    ''
+    'btCancel.Caption'
+    1
+    'Отмена'
+    'btCancel.Hint'
+    1
+    ''
+    'btOK.Caption'
+    1
+    'OK'
+    'btOK.Hint'
+    1
+    ''
+    'ButtonPanel.Caption'
+    1
+    ''
+    'ButtonPanel.Hint'
+    1
+    ''
+    'dbGood.Hint'
+    1
+    ''
+    'dbGood.PosColumns[  0].Period.StrStartDate'
+    1
+    '05.10.2009'
+    'dbGood.PosColumns[  0].Period.Text'
+    1
+    ''
+    'dbGood.PosColumns[  0].Title.Caption'
+    1
+    'Товар'
+    'dbGood.PosColumns[  1].Period.StrStartDate'
+    1
+    '05.10.2009'
+    'dbGood.PosColumns[  1].Period.Text'
+    1
+    ''
+    'dbGood.PosColumns[  1].Title.Caption'
+    1
+    'на сег.'
+    'dbGood.PosColumns[  2].Period.StrStartDate'
+    1
+    '05.10.2009'
+    'dbGood.PosColumns[  2].Period.Text'
+    1
+    ''
+    'dbGood.PosColumns[  2].Title.Caption'
+    1
+    'по партиям')
+  Translat.LangDict.Cols = ()
+  Translat.LangDict.Words = ()
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnExecute.EventName = 'Form_Execute'
+  object dbGood: TO4DBGrid
+    Left = 1
+    Top = 1
+    Width = 602
+    Height = 465
+    AutoAlign = False
+    Align = alClient
+    DragDisabled = False
+    Options = [dgEditing, dgTitles, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = TVS
+    TabOrder = 0
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'Товар'
+        Title.Caption = 'Товар'
+        Width = 328
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '05.10.2009'
+      end
+      item
+        O4FieldName = 'КолНаСегодня'
+        Title.Caption = 'на сег.'
+        Width = 79
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '05.10.2009'
+      end
+      item
+        O4FieldName = 'КолПартии'
+        Title.Caption = 'по партиям'
+        Width = 79
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '05.10.2009'
+      end
+      item
+        O4FieldName = 'КолОбщ'
+        Title.Caption = 'разница'
+        Width = 73
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '05.10.2009'
+      end>
+  end
+  object BottomPanel: TO4Panel
+    Left = 1
+    Top = 466
+    Width = 602
+    Height = 29
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    TabOrder = 1
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 426
+      Top = 1
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 13
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        O4Action = actSave
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        O4Action = actCancel
+      end
+    end
+  end
+  object TVS: TO4TableValueSource
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 30
+    Top = 207
+  end
+end

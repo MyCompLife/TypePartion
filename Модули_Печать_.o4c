@@ -1,0 +1,510 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, УстановкаВажныхОбъектов,
+  ПечатьИВыводНаЭкран;
+
+type
+  TAdrType = T_Enum;
+  // TPartNameStyle - Стиль задает способ
+  // отображения аттрибута имени (ИмяОтчество для ФизЛиц, ОПФ для Юридических по умолчанию)
+  // стилем является битовая сетка, в которой используются первые три бита из TPartNameStyle
+  // +---+
+  // | 0 | -  использовать (0)/не использовать (1) аттрибут
+  // +---+
+  // | 1 | -  использовать аттрибут спереди от имени (0)/сзади от имени (1)
+  // +---+
+  // | 2 | -  использовать полный (0)/сокращенный(1) вариант аттрибута
+  // +---+
+  TPartNameStyle = T_Set; 
+  TDocType = T_Enum;
+
+const
+  atShort = 0; // TAdrType
+  atLong = 1; // TAdrType
+  atStreet = 2; // TAdrType
+  dtOrderOut = 0;//TDocType
+  dtOrderIn = 1;//TDocType
+  dtInvoice = 2;//TDocType 
+  dtAct = 3;//TDocType
+
+const
+  pnsDontUseAttr = 1; // TPartNameStyle
+  pnsUseAttrAfter = 2; // TPartNameStyle
+  pnsUseAttrShort = 4; // TPartNameStyle
+
+  //******************************************************************************
+  // получить название партнера согласно стилю
+function GetParNameByStyle(DicPartner : ICDictionary; PartNameStyle : TPartNameStyle = 0;
+  ExtendedAttributeName : string = ''; IterField : string = 'Партнер') : string;
+// получить адрес согласно типу
+function GetStringAddress(DicPartner, DicAddresses : ICDictionary; AdressActiveField : string = DefActiveName;
+  AdrType : TAdrType = atShort) : string;
+// номер телефона с кодом города
+function GetExtTLFNumber(DicPartner, DicPhoneNumbers : ICDictionary) : string;
+// получить расч. счет партнера
+function GetExtAccount(DicPartner, DicAccount : ICDictionary) : string;
+//******************************************************************************
+// получить название периода (в словах по его ID=PeriodNumber)
+function GetStringPeriodByNumber(PeriodNumber : Integer; PeriodUnit : TRoundDateType;
+  AccrualPeriod : Boolean = True; LCID : Integer = 1058) : string;
+// получить период в словах в стиле 'за <Период> <Год>р.'
+function CompletePeriodWithYearAndSuffix(Period : string; Year : Integer) : string;
+// ф-ции для поддержки со старами версиями
+// название партнера по стилю
+function GetPartName(DicPartner : ICDictionary; Style : Integer = 0) : string;
+// сокр. название партнера
+function GetShortPartName(DicPartner : ICDictionary) : string;
+// получить параметры фирмы при распечатке
+function PrintMyFirm(Table : TRBTable; DicMyFirm, DicAddresses, DicPhoneNumbers, DicBankAccounts : ICDictionary;
+  ActiveFieldName : string = DefActiveName) : Boolean;       
+function PrintPartner(Table : TRBTable; DicPartner, DicAddresses, DicPhoneNumbers, DicBankAccounts : ICDictionary;
+  ActiveFieldName : string = DefActiveName) : Boolean;
+procedure ExportGoodsDocToExcel(Doc : ICDocuments; DocType : TDocType);
+
+implementation
+
+function GetExtAccount(DicPartner, DicAccount : ICDictionary) : string;
+begin
+  DicAccount := GetActiveByMaster(DicAccount, DicPartner);
+  if IsObjFocused(DicAccount) then
+    Result := VarAsStr(DicAccount.НомерСчета) +
+      GetExtStringFieldValue(GetExtendedFieldValue(DicAccount, 'Банк.Название'), '', ' в ') +
+      GetExtStringFieldValue(GetExtendedFieldValue(DicAccount, 'Банк.@@Город'), ' м. ')
+  else
+    Result := '';
+end;
+
+function GetStringAddress(DicPartner, DicAddresses : ICDictionary; AdressActiveField : string = DefActiveName;
+  AdrType : TAdrType = atShort) : string;
+begin
+  DicAddresses := GetActiveByMaster(DicAddresses, DicPartner, DefActiveValue, AdressActiveField);
+  if IsObjFocused(DicAddresses) then
+    begin                                                                         
+      Result := VarAsStr(DicAddresses.Адрес);
+      case AdrType of
+        atShort :
+          Result := GetExtStringFieldValue(DicAddresses.@@Город, ', ') + Result;
+        atLong : // с индексом
+          Result := GetExtStringFieldValue(DicAddresses.ПочтИндекс, ', ') + GetExtStringFieldValue(DicAddresses.@@Город, ', ') + Result;
+        atStreet :
+          ;
+      end;
+    end
+  else
+    begin
+      Result := '';
+      exit;
+    end;
+end;
+
+function GetExtTLFNumber(DicPartner, DicPhoneNumbers : ICDictionary) : string;
+begin
+  Result := GetExtStringFieldValue(GetExtendedFieldValue(GetActiveByMaster(DicPhoneNumbers, DicPartner), 'Город.ТелКод'), ') ', '(') +
+    VarAsStr(GetExtendedFieldValue(GetActiveByMaster(DicPhoneNumbers, DicPartner), 'Номер'));
+end;
+
+function GetFirsLettersFromString(List : string; Delimiter : Char = ' ') : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 1 to WordCount(List, Delimiter) do
+    Result := Result + GetExtStringFieldValue(StrCopy(ExtractWord(i, List, Delimiter), 1, 1), '.', ' ');
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+// получение имени партнера согласно стилю.
+
+function GetParNameByStyle(DicPartner : ICDictionary; PartNameStyle : TPartNameStyle = 0;
+  ExtendedAttributeName : string = ''; IterField : string = 'Партнер') : string;
+begin
+  if IterField <> '' then
+    while IsObjFocused(DicPartner) and DicPartner.HasField(IterField) do
+      DicPartner := DicPartner.IterField;
+  if not IsObjFocused(DicPartner) then
+    begin
+      Result := '';
+      exit;
+    end;
+  Result := StrTrim(VarAsStr(DicPartner.NameField));
+  if PartNameStyle and pnsDontUseAttr <> 0 then
+    exit;
+  if ExtendedAttributeName = '' then
+    if DicPartner.HasField('ИмяОтчество') then
+      ExtendedAttributeName := 'ИмяОтчество'
+    else
+      if DicPartner.HasField('ОПФ') then
+        ExtendedAttributeName := 'ОПФ';
+  if ExtendedAttributeName = '' then
+    exit;
+  // значение аттрибута
+  IterField := StrTrim(GetExtStringFieldValue(DicPartner._Default[ExtendedAttributeName]));
+  if IterField = '' then
+    exit;
+  // полный/сокращенный - только в разрезе поля ИмяОтчество
+  if PartNameStyle and pnsUseAttrShort <> 0 then
+    case ExtendedAttributeName of
+      'ИмяОтчество' :
+        IterField := GetFirsLettersFromString(IterField);
+      else
+    end;
+  // сторона задания аттрибута
+  if PartNameStyle and pnsUseAttrAfter = 0 then
+    Result := IterField + ' ' + Result
+  else
+    Result := Result + ' ' + IterField;
+end;
+
+// ф-ции для поддержки со старами версиями
+
+function GetPartName(DicPartner : ICDictionary; Style : Integer = 0) : string;
+var
+  OPF, IO : string;
+begin
+  Result := '';
+  while IsObjFocused(DicPartner) and DicPartner.HasField('Партнер') do
+    DicPartner := DicPartner.Партнер;
+  if not IsObjFocused(DicPartner) then
+    exit;
+  if VarAsBool(DicPartner.HasField('ОПФ')) and VarAsBool(DicPartner.ОПФ.IsFocused) and
+    (VarAsStr(DicPartner.ОПФ.Value) <> '') then
+    OPF := ' ' + DicPartner.ОПФ.Value
+  else
+    OPF := '';
+  if VarAsBool(DicPartner.HasField('ИмяОтчество')) and (VarAsStr(DicPartner.ИмяОтчество) <> '') then
+    IO := ' ' + DicPartner.ИмяОтчество
+  else
+    IO := '';
+  if (Style and 1 = 0) then
+    Result := Result + OPF;
+  if (Style and 2 <> 0) then
+    Result := Result + IO;
+  if DicPartner.NameField <> '' then
+    Result := Result + ' ' + DicPartner.NameField;
+  if (Style and 2 = 0) then
+    Result := Result + IO;
+  if (Style and 1 <> 0) then
+    Result := Result + OPF;
+  if (Style and 4 = 0) then
+    Result := StrTrim(Result);
+end;
+
+function GetShortPartName(DicPartner : ICDictionary) : string;
+begin
+  Result := '';
+  while IsObjFocused(DicPartner) and DicPartner.HasField('Партнер') do
+    DicPartner := DicPartner.Партнер;
+  if not IsObjFocused(DicPartner) then
+    exit;
+  if DicPartner.NameField <> '' then
+    Result := VarAsStr(DicPartner.NameField);
+  if DicPartner.HasField('ИмяОтчество') and (VarAsStr(DicPartner.ИмяОтчество) <> '') then
+    Result := Result + ' ' + GetFirsLettersFromString(DicPartner.ИмяОтчество);
+end;
+
+function PrintMyFirm(Table : TRBTable; DicMyFirm, DicAddresses, DicPhoneNumbers, DicBankAccounts : ICDictionary;
+  ActiveFieldName : string = DefActiveName) : Boolean;
+begin
+  DicMyFirm := GetMyFirm(True);
+  with Table do
+    begin
+      Value['NAME'] := GetPartName(DicMyFirm);
+      Value['ZKPO'] := VarAsStr(DicMyFirm.ЗКПО);
+      Value['ADDRESS'] := GetStringAddress(DicMyFirm, DicAddresses, ActiveFieldName, atLong);
+      if IsObjFocused(DicAddresses) then
+        begin
+          Value['STREETADDRESS'] := DicAddresses.Адрес;
+          Value['INDEX'] := DicAddresses.ПочтИндекс;
+          if VarAsBool(DicAddresses.@Город.IsFocused) then
+            Value['TOWN'] := DicAddresses.Город.Название;
+        end;
+      Value['PHONE'] := GetExtTLFNumber(DicMyFirm, DicPhoneNumbers);
+      Value['PAYACCNUM'] := VarAsStr(GetExtendedFieldValue(GetActiveByMaster(DicBankAccounts, DicMyFirm), 'НомерСчета'));
+      Value['BANKMFO'] := VarAsStr(GetExtendedFieldValue(GetActiveByMaster(DicBankAccounts, DicMyFirm), 'Банк.МФО'));
+      Value['BANKNAME'] := GetExtStringFieldValue(GetExtendedFieldValue(GetActiveByMaster(DicBankAccounts, DicMyFirm), 'Банк.ОПФ'), ' ') +
+        GetDefaultLinkValue(GetExtendedFieldValue(GetActiveByMaster(DicBankAccounts, DicMyFirm), 'Банк', '', '@@'));
+      Value['BANKTOWN'] := GetExtStringFieldValue(GetExtendedFieldValue(
+        GetActiveByMaster(DicBankAccounts, DicMyFirm), 'Банк.Город', '', '@@'), '', ' м.');
+      Value['LogoType'] := DicMyFirm.Логотип;
+      Value['Chief'] := GetShortPartName(DicMyFirm.Директор);
+      Value['Finansist'] := GetShortPartName(DicMyFirm.Бухгалтер);
+    end;
+  Result := True;
+end;
+
+function PrintPartner(Table : TRBTable; DicPartner, DicAddresses, DicPhoneNumbers, DicBankAccounts : ICDictionary;
+  ActiveFieldName : string = DefActiveName) : Boolean;
+begin
+  with Table do
+    begin
+      Value['NAME'] := GetPartName(DicPartner);
+      case DicPartner.GetSign of
+        'ФизЛица' :
+          Value['ZKPO'] := VarAsStr(DicPartner.ИдентНомер);
+        'Служащие' :
+          Value['ZKPO'] := VarAsStr(DicPartner.НалогНом);
+      else
+        if DicPartner.HasField('ЗКПО') then
+          Value['ZKPO'] := VarAsStr(DicPartner.ЗКПО)
+      end;
+      Value['ADDRESS'] := GetStringAddress(DicPartner, DicAddresses, ActiveFieldName, atLong);
+      if IsObjFocused(DicAddresses) then
+        begin
+          Value['STREETADDRESS'] := DicAddresses.Адрес;
+          Value['INDEX'] := DicAddresses.ПочтИндекс;
+          if VarAsBool(DicAddresses.@Город.IsFocused) then
+            Value['TOWN'] := DicAddresses.Город.Название;
+        end;
+      Value['PHONE'] := GetExtTLFNumber(DicPartner, DicPhoneNumbers);
+      Value['PAYACCNUM'] := VarAsStr(GetExtendedFieldValue(GetActiveByMaster(DicBankAccounts, DicPartner), 'НомерСчета'));
+      Value['BANKMFO'] := VarAsStr(GetExtendedFieldValue(GetActiveByMaster(DicBankAccounts, DicPartner), 'Банк.МФО'));
+      Value['BANKNAME'] := GetExtStringFieldValue(GetExtendedFieldValue(GetActiveByMaster(DicBankAccounts, DicPartner), 'Банк.ОПФ'), ' ') +
+        GetDefaultLinkValue(GetExtendedFieldValue(GetActiveByMaster(DicBankAccounts, DicPartner), 'Банк', '', '@@'));
+      Value['BANKTOWN'] := GetExtStringFieldValue(GetExtendedFieldValue(
+        GetActiveByMaster(DicBankAccounts, DicPartner), 'Банк.Город', '', '@@'), '', ' м.');
+      if DicPartner.HasField('Логотип') then
+        Value['LogoType'] := DicPartner.Логотип;
+      if DicPartner.HasField('Директор') then
+        Value['Chief'] := GetShortPartName(DicPartner.Директор);
+      if DicPartner.HasField('Бухгалтер') then
+        Value['Finansist'] := GetShortPartName(DicPartner.Бухгалтер);
+    end;
+  Result := True;
+end;
+
+
+function GetStringPeriodByNumber(PeriodNumber : Integer; PeriodUnit : TRoundDateType;
+  AccrualPeriod : Boolean = True; LCID : Integer = 1058) : string;
+var
+  wnCurrent : ICWriNums;
+begin
+  wnCurrent := CreateObject('WrittenNumbers');
+  if AccrualPeriod then
+    case PeriodUnit of
+      rdQuarter :
+        case PeriodNumber of
+          1 :
+            Result := 'I ' + wnCurrent.DateRangeToStr(1, PeriodUnit, LCID);
+          2 :
+            Result := wnCurrent.DateRangeToStr(1, rdHalfYear, LCID);
+          3 :
+            Result := '9 ' + wnCurrent.DateRangeToStr(9, rdMonth, LCID);
+          4 :
+            Result := wnCurrent.DateRangeToStr(1, rdYear, LCID);
+        end;
+      rdMonth :
+        if PeriodNumber = 12 then
+          Result := wnCurrent.DateRangeToStr(1, rdYear, LCID)
+        else
+          Result := wnCurrent.DateRangeToStr(PeriodNumber, PeriodUnit, LCID);
+    end
+  else
+    case PeriodUnit of
+      rdQuarter :
+        if PeriodNumber = 4 then
+          Result := 'IV ' + wnCurrent.DateRangeToStr(4, PeriodUnit, LCID)
+        else
+          Result := FillStrByChar('I', PeriodNumber) + ' ' +
+            wnCurrent.DateRangeToStr(PeriodNumber, PeriodUnit, LCID);
+      rdMonth :
+        Result := wnCurrent.MonthToStr(PeriodNumber, 0, LCID);
+    end;
+end;
+
+function CompletePeriodWithYearAndSuffix(Period : string; Year : Integer) : string;
+begin
+  Result := 'за ' + Period + ' ' + IntToStr(Year) + ' р.'
+end;
+
+procedure ExportGoodsDocToExcel(Doc : ICDocuments; DocType : TDocType);
+var
+  i, j, LastLine : Integer;
+  DataDir, BankMFO, TaxNumberName : string;
+  Excel, WorkBook, WorkSheet, TrgRange : Variant;
+  DicPhoneNumbers, DicAddresses, DicAccount, DicMyFirm, TmpPartner, TmpGood : ICDictionary;
+  CNV : ICWriNums;
+begin
+  DicPhoneNumbers := CreateObject('Справочники.Телефоны');
+  DicAddresses := CreateObject('Справочники.Адреса');
+  CNV := CreateObject('ЧислаПрописью');
+  DicAccount := CreateObject('Справочники.РасчСчета');
+  DicMyFirm := CreateObject('Справочники.ВашеПредприятие');
+  Excel := CreateOleObject('Excel.Application');
+  Excel.Visible := True;
+  DataDir := ExtractFilePath(RunPath);
+  case DocType of
+    dtOrderIn, dtOrderOut :
+      Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\Счет.xls').WorkSheets(1).Copy;
+    dtInvoice :
+      Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\Накладная.xls').WorkSheets(1).Copy;
+    dtAct :
+      Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\Акт.xls').WorkSheets(1).Copy;
+  end;
+  TrgRange := Excel.WorkBooks(2).WorkSheets(1).Range('A1:N4');
+  TrgRange.Cells(1, 3) := Doc.НомерДокумента;
+  TrgRange.Cells(1, 4) := ' від ' + DateToStr(Doc.ДатаДокумента);
+  DicMyFirm.Select;
+  if not DicMyFirm.SelectNext then
+    exit;
+  case DocType of
+    dtOrderIn :
+      begin
+        if VarAsBool(Doc.@Партнер.IsFocused) then
+          begin
+            TmpPartner := Doc.Партнер;
+            TrgRange.Cells(2, 3) := TmpPartner.ПолноеНазвание;
+            case TmpPartner.GetSign of
+              'ЮрПартнеры' :
+                TaxNumberName := TmpPartner.ЗКПО;
+              'ФизЛица' :
+                TaxNumberName := TmpPartner.ИдентНомер;
+              'Служащие' :
+                TaxNumberName := TmpPartner.НалогНом;
+            end;
+            TrgRange.Cells(3, 3) := GetStringAddress(TmpPartner, DicAddresses, 'Активность', atLong);
+            TrgRange.Cells(4, 3) := GetExtTLFNumber(TmpPartner, DicPhoneNumbers);
+            TrgRange.Cells(5, 3) := GetExtAccount(TmpPartner, DicAccount);
+            BankMFO := '';
+            DicAccount := GetActiveByMaster(DicAccount, TmpPartner);
+            if IsObjFocused(DicAccount) and VarAsBool(DicAccount.@Банк.IsFocused) then
+              begin
+                TrgRange.Cells(6, 3) := DicAccount.Банк.МФО;
+                TrgRange.Cells(6, 4) := 'Код ЄДРПОУ';
+                TrgRange.Cells(6, 6) := TaxNumberName;
+              end
+            else
+              TrgRange.Cells(6, 3) := 'Код ЄДРПОУ ' + TaxNumberName;
+          end;
+        TrgRange.Cells(8, 3) := GetPartName(DicMyFirm);
+        TrgRange.Cells(9, 3) := GetStringAddress(DicMyFirm, DicAddresses, 'Активность', atLong);
+        TrgRange.Cells(10, 3) := GetExtTLFNumber(DicMyFirm, DicPhoneNumbers);
+        LastLine := 12;
+      end;
+    dtOrderOut :
+      begin
+        TrgRange.Cells(2, 3) := GetPartName(DicMyFirm);
+        TrgRange.Cells(3, 3) := GetStringAddress(DicMyFirm, DicAddresses, 'Активность', atLong);
+        TrgRange.Cells(4, 3) := GetExtTLFNumber(DicMyFirm, DicPhoneNumbers);
+        TrgRange.Cells(5, 3) := GetExtAccount(DicMyFirm, DicAccount);
+        BankMFO := '';
+        DicAccount := GetActiveByMaster(DicAccount, DicMyFirm);
+        if IsObjFocused(DicAccount) and VarAsBool(DicAccount.@Банк.IsFocused) then
+          begin
+            TrgRange.Cells(6, 3) := DicAccount.Банк.МФО;
+            TrgRange.Cells(6, 4) := 'Код ЄДРПОУ';
+            TrgRange.Cells(6, 6) := DicMyFirm.ЗКПО;
+          end
+        else
+          TrgRange.Cells(6, 3) := 'Код ЄДРПОУ ' + DicMyFirm.ЗКПО;
+        if VarAsBool(Doc.@Партнер.IsFocused) then
+          begin
+            TmpPartner := Doc.Партнер;
+            TrgRange.Cells(8, 3) := TmpPartner.ПолноеНазвание;
+            TrgRange.Cells(9, 3) := GetStringAddress(TmpPartner, DicAddresses, 'Активность', atLong);
+            TrgRange.Cells(10, 3) := GetExtTLFNumber(TmpPartner, DicPhoneNumbers);
+          end;
+        LastLine := 12;
+      end;
+    dtInvoice, dtAct :
+      begin
+        if Doc.Отпуск = 1 then
+          begin
+            TrgRange.Cells(2, 3) := GetPartName(DicMyFirm);
+            TrgRange.Cells(3, 3) := GetStringAddress(DicMyFirm, DicAddresses, 'Активность', atLong);
+            TrgRange.Cells(4, 3) := GetExtTLFNumber(DicMyFirm, DicPhoneNumbers);
+            if Doc.HasField('Партнер') and VarAsBool(Doc.@Партнер.IsFocused) then
+              begin
+                TmpPartner := Doc.Партнер;   
+                if TmpPartner.HasField('Партнер') and VarAsBool(TmpPartner.@Партнер.IsFocused) then
+                  TmpPartner := TmpPartner.Партнер;
+                TrgRange.Cells(6, 3) := TmpPartner.ПолноеНазвание;
+                TrgRange.Cells(7, 3) := GetStringAddress(TmpPartner, DicAddresses, 'Активность', atLong);
+                TrgRange.Cells(8, 3) := GetExtTLFNumber(TmpPartner, DicPhoneNumbers);
+              end;
+          end
+        else
+          begin
+            if Doc.HasField('Партнер') and VarAsBool(Doc.@Партнер.IsFocused) then
+              begin
+                TmpPartner := Doc.Партнер; 
+                if TmpPartner.HasField('Партнер') and VarAsBool(TmpPartner.@Партнер.IsFocused) then
+                  TmpPartner := TmpPartner.Партнер;
+                TrgRange.Cells(2, 3) := TmpPartner.ПолноеНазвание;
+                TrgRange.Cells(3, 3) := GetStringAddress(TmpPartner, DicAddresses, 'Активность', atLong);
+                TrgRange.Cells(4, 3) := GetExtTLFNumber(TmpPartner, DicPhoneNumbers);
+              end;
+            TrgRange.Cells(6, 3) := GetPartName(DicMyFirm);
+            TrgRange.Cells(7, 3) := GetStringAddress(DicMyFirm, DicAddresses, 'Активность', atLong);
+            TrgRange.Cells(8, 3) := GetExtTLFNumber(DicMyFirm, DicPhoneNumbers);
+          end;
+        LastLine := 10;
+      end;
+  end;
+  Doc.SelectLines;
+  i := LastLine + 1;
+  while Doc.SelectNextLine do
+    begin
+      TrgRange.Cells(i, 1) := VarAsStr(i - LastLine);
+      TmpGood := Doc.Товар;
+      TrgRange.Cells(i, 2) := TmpGood.Код;
+      TrgRange.Cells(i, 3) := TmpGood.НазвТовара;
+      if VarAsBool(TmpGood.ЕдИзм.IsFocused) then
+        TrgRange.Cells(i, 4) := TmpGood.ЕдИзм.Value;
+      TrgRange.Cells(i, 5) := VarAsFloat(Doc.Количество);
+      if Doc.HasField('ЦенаБезНДС') then
+        TrgRange.Cells(i, 6) := VarAsFloat(Doc.ЦенаБезНДС)
+      else
+        TrgRange.Cells(i, 6) := VarAsFloat(Doc.Цена);
+      TrgRange.Cells(i, 7) := VarAsFloat(Doc.Цена);
+      TrgRange.Cells(i, 8) := VarAsFloat(Doc.Цена * Doc.Количество);
+      for j := 1 to 8 do
+        TrgRange.Cells(i, j).Borders.LineStyle := 1;
+      i := i + 1;
+    end;
+  TrgRange.Cells(i, 5) := 'Сума';
+  if Doc.HasField('СуммаБезНДС') then
+    TrgRange.Cells(i, 6) := VarAsFloat(Doc.СуммаБезНДС)
+  else
+    TrgRange.Cells(i, 6) := VarAsFloat(Doc.Сумма);
+  if Doc.HasField('СуммаНДС') then
+    TrgRange.Cells(i, 7) := VarAsFloat(Doc.СуммаНДС);
+  TrgRange.Cells(i, 8) := VarAsFloat(Doc.Сумма);
+  for j := 5 to 8 do
+    begin
+      TrgRange.Cells(i, j).Borders.LineStyle := 1;
+      TrgRange.Cells(i, j).Font.Bold := True;
+    end;
+  TrgRange.Cells(i + 2, 1) := 'Сума прописом ';
+  TrgRange.Cells(i + 2, 3) := CNV.MoneyToStr(Doc.Сумма, 'ГРН', 1058);
+  TrgRange.Cells(i + 2, 3).Font.Bold := True;
+  case DocType of
+    dtOrderIn :
+      begin
+        TrgRange.Cells(i + 4, 1) := 'Рахунок дійсний до ' + DateToStr(Doc.СрокОплаты) + ' р.';
+        TrgRange.Cells(i + 5, 4) := 'Директор  _________________';
+        TrgRange.Cells(i + 6, 4) := 'Бухгалтер _________________';
+      end;
+    dtOrderOut :
+      begin
+        TrgRange.Cells(i + 4, 1) := 'Рахунок дійсний до ' + DateToStr(Doc.СрокОплаты) + ' р.';
+        TrgRange.Cells(i + 5, 4) := 'Менеджер  _________________';
+      end;
+    dtInvoice :
+      begin
+        TrgRange.Cells(i + 5, 1) := 'Здав _________________';
+        TrgRange.Cells(i + 5, 4) := 'Отримав _________________';
+      end;
+    dtAct :
+      begin
+        TrgRange.Cells(i + 5, 1) := 'Від замовника _________________';
+        TrgRange.Cells(i + 5, 4) := 'Від виконавця _________________';
+      end;
+  end;
+  Excel.WorkBooks(1).Close;
+  TrgRange := Null;
+  Excel := Null;
+end;
+
+end.

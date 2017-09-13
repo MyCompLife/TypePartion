@@ -1,0 +1,1007 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСПеременными,
+  РаботаСТаблицамиЗначенийCL, Пользователи, НумерацияДокументов;
+
+procedure OpenCalculator(var Count: Decimal; TypeEvent: String; Var Good : ICDictionary);
+procedure CalcCount(var Count : Decimal; s : string; var Accept : Boolean; Good: ICDictionary);
+procedure CheckForOneCount(var cbObject: TO4CheckBox; Partner: ICDictionary);
+procedure CalcSumma(Data: ICDocuments);
+procedure AddLineByCode(Data: ICDocuments; Source: ICDictionary; AccsGoods: ICAccs; Code, AddMode: String; PriceMode: boolean = false);
+procedure AddLineInByCode(Data: ICDocuments; Source: ICDictionary; Code, AddMode: String; PriceMode: boolean = false);
+procedure CreatePayDoc(Doc: ICDocuments);
+function CheckBarCode(barCode: String): string;
+function FindGoodByCode(Code: String; Var Source: ICDictionary): boolean;
+function FindGoodByCodeCount(Code: String; Var Source: ICDictionary; Var Count : Integer): boolean;
+
+procedure AddLineByCodeWidthCount(Data: ICDocuments; Source: ICDictionary; AccsGoods: ICAccs; Count: Decimal = 1);
+procedure SetDocDefRegonStore(MasterData:ICDocuments; StoreField:string='СкладПоУмолч');
+procedure ПолучитьЦенуДляЧека(Data: ICDocuments; Source: ICDictionary);
+ 
+Procedure GetPricesTblByNaklIn(NaklDoc : IcDocuments; TblGoods, PriceTbl : IcValueTable; AllowRoundPrice : Boolean);
+
+var
+  TblDocContents: ICValueTable;
+  Users: ICDictionary;
+  DefDocRegionCode : string;
+
+implementation
+
+procedure CheckForOneCount(var cbObject: TO4CheckBox; Partner: ICDictionary);
+begin
+  case VarAsStr(Partner.ТипЦены) of
+   'Цена'       : cbObject.Checked := VarAsBool(StrCopy(VarAsStr(GetConstants.НастройкаЦенДляОтпускаТовараПоОдному),1,1));
+   'ОптЦена'    : cbObject.Checked := VarAsBool(StrCopy(VarAsStr(GetConstants.НастройкаЦенДляОтпускаТовараПоОдному),2,1));
+   'КрОптЦена'  : cbObject.Checked := VarAsBool(StrCopy(VarAsStr(GetConstants.НастройкаЦенДляОтпускаТовараПоОдному),3,1));
+  end;
+end;
+
+function ПолучитьОстатокТовара(Data: ICDocuments; AccsGoods: ICAccs): Decimal;
+Var
+  Users, Store: ICDictionary;
+begin
+  Store := CreateObject('Справочники.Склады');
+  if Data.GetName = 'НакладнаяВнутрПеремещ' then
+    Store.Find(Data.СкладОтп)
+  else
+    Store.Find(Data.СкладПоУмолч);
+  if Store.IsFocused then   
+    begin  
+      if Data.HasField('Партия') and (VarAsFloat(Data.Партия)<>0)  then
+        AccsGoods.CalcGroupRestDirect(Data.ДатаДокумента, ArrayOf(Data.@Товар, Store, Data.Партия))
+      else
+        AccsGoods.CalcGroupRestDirect(Data.ДатаДокумента, ArrayOf(Data.@Товар, Store))
+    end
+  else
+    AccsGoods.CalcGroupRestDirect(Data.ДатаДокумента, Data.@Товар);
+  Result := VarAsDec(AccsGoods.КолОбщ, 0);
+end;
+
+procedure CalcSumma(Data: ICDocuments);
+begin
+  if IsNil(TblDocContents) then
+    TblDocContents := CreateObject('ValueTable')
+  else
+    TblDocContents.Close;
+  Data.SaveContents('', TblDocContents);
+  Data.Сумма := TblDocContents.Total('СуммаСтроки');
+  Data.СуммаВВалюте := RoundFloat(Data.Сумма/Data.Курс,7);
+  if Data.HasField('СуммаОтп') then
+    Data.СуммаОтп := Data.Total('СуммаСтрокиОтп');
+  if Data.HasField('КолОбщ') then
+    Data.КолОбщ  := Data.Total('Количество');
+  if Data.HasField('СлужащийДляВознаграждения') then
+end;
+
+procedure CalcCount(var Count : Decimal; s : string; var Accept : Boolean; Good: ICDictionary);
+Var
+  V: ICProcessing;
+  PackCnt : Integer;
+begin
+  {  // Штучное добавление товара
+  PackCnt := 1;
+  if Good.HasField('Модель') and VarAsBool(Good.@Модель.IsFocused) and VarAsBool(Good.Модель.HasField('КолВУпаковке')) then
+    PackCnt := Good.Модель.КолВУпаковке;
+  if PackCnt > 1 then
+    begin
+      V := CreateObject('Обработки.ПараметрыНастройкиКассы');
+      V.Params['Count'] := Count;
+      V.Params['GoodName'] := s;
+      Accept := V.Execute('ВводКоличестваУпаковок',Null) = 1;
+      Count := V.Params['Count'];
+      if Accept then
+        Count := PackCnt*Count;
+      if Count = 0 then
+        begin
+          Count := 1;
+          Accept := StdInpDec(inpGoodCount + s, Count);
+        end;
+    end
+  else
+  }
+    if VarAsBool(GetOptions.GetServerPrm(CountAck)) and not StdInpDec(inpGoodCount + s, Count) then
+      Accept := MessageDlg(EnterAsk, mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo;
+end;
+
+procedure GetPartFromCheck(Sourse : ICDocuments; Goods: ICDictionary);
+var
+  GoodsTbl: ICValueTable;
+  V : ICProcessing;
+  Proc : Decimal;
+  ТипЦены: String;
+  Course : Decimal;
+begin
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.Open;
+  GoodsTbl.CopyDataToServer;
+  Goods.SetSrvToClientPos();
+  server.GetGoodWithPart(GoodsTbl.SrvMean, Goods.SrvMean);
+  GoodsTbl.CopyDataFromServer2;
+  ТипЦены := 'ОптЦена';
+  if VarAsBool(Sourse.@Партнер.IsFocused) then
+    begin
+      ТипЦены := Sourse.Партнер.ТипЦены;
+      Proc := VarAsDec(Sourse.Партнер.ГруппаСкидки.СкидкаНадбавка);
+      GoodsTbl.SortBy('Партнер;-ДатаДокумента');
+      GoodsTbl.SetRange(Sourse.Партнер,Sourse.Партнер);
+    end
+  else
+    begin
+      Proc := 0;
+      GoodsTbl.SortBy('-ДатаДокумента');
+    end;
+  GoodsTbl.Select;
+  if GoodsTbl.SelectFirst then
+    begin
+      V := CreateObject('Обработки.РаботаСДокументами');
+      V.Params['Good'] := Sourse.Товар;
+      V.Params['TypePrice'] := ТипЦены;
+      V.Params['Course'] := Sourse.Курс;
+      V.Params['Proc'] := Proc;
+      if (V.Execute('ПодборТовараПриВозвратеПокупателю',GoodsTbl)=mrOK) and GoodsTbl.IsFocused then
+        begin
+          Sourse.AssignFields('Партия;Цена;Партнер;ЦенаВх=ВхЦенаБезНДС',GoodsTbl);
+          exit;
+        end;
+    end;
+  Sourse.Партия := 0;
+  if IsObjEQ(Sourse.@Валюта, Goods._Default['Валюта'+ТипЦены]) then
+    Course := VarAsDec(Sourse.Курс)
+  else
+    Course := Goods._Default['Валюта'+ТипЦены].GetTimedValue(GetConstants.UsedCurs,Sourse.ДатаДокумента);
+  if Course<=0 then Course := 1;
+  Sourse.Цена := Goods._Default[ТипЦены]*Course*(1 + Proc/100);
+  if VarAsBool(GetConstants.ОкруглятьЦеныГрн) then
+    begin
+       if VarAsBool(GetConstants.ОкруглятьЦеныГрнДо5Коп) then
+         Sourse.Цена := RoundTo5Cop(Sourse.Цена)
+       else
+        Sourse.Цена := RoundDec(Sourse.Цена, VarAsInt(GetConstants.ОкруглениеЦенГрн));
+    end;
+end;    
+
+procedure GetPriceForRetPart(Data : ICDocuments; Goods: ICDictionary; AccsGoods:ICAccs);
+var
+  GoodsTbl, PartionStoreRestTbl, ResultTbl: ICValueTable;
+  V : ICProcessing;
+  Proc : Decimal;
+  ТипЦены: String;
+  Course : Decimal;
+begin
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.Open;
+  GoodsTbl.CopyDataToServer;
+  PartionStoreRestTbl := CreateObject('ТаблицаЗначений');
+  PartionStoreRestTbl.Open;
+  PartionStoreRestTbl.CopyDataToServer;
+  Goods.SetSrvToClientPos;
+  server.GetGoodRetPart(GoodsTbl.SrvMean, PartionStoreRestTbl.SrvMean, Goods.SrvMean, Data.GetDate);
+  GoodsTbl.CopyDataFromServer2;
+  PartionStoreRestTbl.CopyDataFromServer2;
+  if VarAsBool(Data.@Партнер.IsFocused) then
+    begin
+      GoodsTbl.SortBy('Партнер;-ДатаДокумента');
+      GoodsTbl.SetRange(Data.Партнер,Data.Партнер);
+    end
+  else
+  GoodsTbl.SortBy('-ДатаДокумента');
+  GoodsTbl.Select;
+  if GoodsTbl.SelectFirst then
+    begin
+      V := CreateObject('Обработки.РаботаСДокументами');
+      V.Params['Count'] := VarAsDec(Data.Количество);
+      V.Params['Store'] := Data.СкладПоУмолч;
+      V.Params['Good'] := Goods;
+      V.Params['TypePrice'] := ТипЦены;
+      V.Params['Course'] := Data.Курс;
+      V.Params['Proc'] := Proc;
+      V.Params['PartionStoreRestTbl'] := PartionStoreRestTbl;
+      if (V.Execute('ПодборТовараПриВозвратеПоставщику',GoodsTbl)=mrOk) then
+        begin
+           Data.AssignFields('Партия;Цена;ЦенаВх=Цена',GoodsTbl);  
+           //if VarAsFloat(Data.Партия)<>0 then
+          //   AccsGoods.CalcGroupRestDirect(RoundDate(Data.ДатаДокумента, rdDay, True), ArrayOf(Data.@Товар, Data.@СкладПоУмолч, Data.Партия))
+          // else
+           //  AccsGoods.CalcGroupRestDirect(RoundDate(Data.ДатаДокумента, rdDay, True), ArrayOf(Data.@Товар, Data.@СкладПоУмолч));
+           //Data.НаличиеТовара := AccsGoods.КолОбщ;
+          exit;
+        end;
+    end;
+
+  if MessageDlg('Выбрать партию вручную?',mtInformation,ArrayOf(mbYes,mbNo))=mrYes then
+    begin
+      V := CreateObject('Обработки.РаботаСДокументами');
+      V.Params['Doc'] := Data;
+      if (V.Execute('ПодборПартииВручную',Goods)=mrOk) and V.HasParam('ResultTbl') and IsObjFocused(V.Params['ResultTbl']) then
+        begin
+          ResultTbl := V.Params['ResultTbl'];
+          Data.AssignFields('Партия;Цена;ЦенаВх=Цена',ResultTbl);
+          //AccsGoods.CalcGroupRestDirect(RoundDate(Data.ДатаДокумента, rdDay, True), ArrayOf(Data.@Товар, Data.@СкладПоУмолч));
+          //Data.НаличиеТовара := AccsGoods.КолОбщ;
+        end;
+    // else
+    //   Data.Цена := 0;
+    end;
+ // else
+ //   Data.Цена := 0;
+end;
+
+procedure OpenCalculator(var Count: Decimal; TypeEvent: String; Var Good : ICDictionary);
+Var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ПараметрыНастройкиКассы');
+  V.Params['CalcNum'] := Count;
+  V.Params['ActionTbl'] := TypeEvent;
+  V.Params['Good'] := Good;
+  V.Execute('ВводКоличестваДляППК', Null);
+  Good := V.Params['Good'];
+  Count := V.Params['CalcNum'];
+end;
+
+procedure CreateTbls(Data: ICDocuments; var TblPart, TblGoods: ICValueTable);
+begin
+  if not IsNil(TblPart) then
+    begin
+      TblPart.Clear;
+      TblPart.Close;
+    end;
+  if not IsNil(TblGoods) then
+    begin
+      TblGoods.Clear;
+      TblGoods.Close;
+    end;
+  TblPart := CreateTblFromBLOB(Data.Партнеры);
+  if IsNil(TblPart) then
+    begin
+      TblPart := CreateObject('ValueTable');
+      TblPart.AddColumn('Партнер',vtcLink,0);
+      TblPart.Open;
+      TblPart.SortBy('Партнер');
+    end;
+  TblGoods := CreateTblFromBLOB(Data.Товары);
+  if IsNil(TblGoods) then
+    begin
+      TblGoods := CreateObject('ValueTable');
+      TblGoods.AddColumn('Товар',vtcLink,0);
+      TblGoods.AddColumn('Процент',vtcFFT,2);
+      TblGoods.AddColumn('Цена',vtcFFT,7);
+      TblGoods.Open;
+      TblGoods.SetColumnFormat('Процент','0.##');
+      TblGoods.SetColumnFormat('Цена','0.00#####');
+    end;
+  TblGoods.SortBy('Товар');
+end;
+
+function FindGoodByCode(Code: String; Var Source: ICDictionary): boolean;
+var
+  Find: Boolean;
+  FieldName : string;
+begin
+  result := false;
+  Source := CreateObject('Справочники.ШтрихКодыТоваров');
+  if Source.FindByCode(Code, false) then
+    begin
+      Source := Source._GetOwner;
+      if not IsNil(Source) and Source.IsFocused then
+        Find := true;
+    end;
+  if not Find then
+    begin
+      Source := CreateObject('Справочники.Товары');
+      if StrLength(Code) > 10 then
+        FieldName := 'ШтрихКод'
+      else
+        FieldName := 'Код';
+      if not Source.FindByField(FieldName,Code, false) then
+        begin
+          PlaySound('BarCodeError');
+          ShowMessage('Товар с кодом: ' + Code + ', не найден');
+          exit;
+        end;
+    end;
+  result := true;
+
+end;
+
+function FindGoodByCodeCount(Code: String; Var Source: ICDictionary; Var Count : Integer): boolean;
+var
+  Find: Boolean;
+  FieldName : string;
+begin
+  result := false;
+  Count := 1;
+  Source := CreateObject('Справочники.ШтрихКодыТоваров');
+  if Source.FindByCode(Code, false) then
+    begin
+      Count := Source.Количество;
+      Source := Source._GetOwner;
+      if not IsNil(Source) and Source.IsFocused then
+        Find := true;
+    end;
+  if not Find then
+    begin
+      Source := CreateObject('Справочники.Товары');
+      if StrLength(Code) > 10 then
+        FieldName := 'ШтрихКод'
+      else
+        FieldName := 'Код';
+      if not Source.FindByField(FieldName,Code, false) then
+        begin
+          PlaySound('BarCodeError');
+          ShowMessage('Товар с кодом: ' + Code + ', не найден');
+          exit;
+        end;
+    end;
+  result := true;
+
+end;
+
+procedure ПолучитьЦенуДляЧека(Data: ICDocuments; Source: ICDictionary);
+Var
+  Percent, Price, BasePrice,ActionPrice: Decimal;
+  ActionTbl, TblGoods, TblPart: ICValueTable;
+  OrderOwner: ICDocuments;
+  AccsDiscard: ICAccs;
+  DiscountLimitDic: ICDictionary;
+  CommentPercent, TypePrice, CommentDiscount: String;
+  Constants: IC4VPAConst;  
+  ActionDoc : IcDocuments;
+begin
+  Constants := GetConstants; 
+  TypePrice := 'Цена';
+  if VarAsBool(Data.@Партнер.IsFocused) then
+    TypePrice := VarAsStr(Data.Партнер.ТипЦены);
+  if TypePrice='' then
+    TypePrice := 'Цена';
+  if not IsObjFocused(Source._Default['Валюта'+TypePrice]) then
+    raise('У товара "'+Source.NameField+'" не заполнена валюта '+TypePrice);
+  if IsObjEQ(Source._Default['Валюта'+TypePrice], Data.Валюта) then
+    BasePrice := VarAsDec(Source._Default[TypePrice])*VarAsDec(Data.Курс)
+  else
+    BasePrice := VarAsDec(Source._Default[TypePrice])*VarAsDec(Source._Default['Валюта'+TypePrice].GetTimedValue(Constants.UsedCurs,Data.ДатаДокумента ));
+  Percent := Data.ПроцСкидки;
+  CommentPercent := 'Скидка партнера';
+
+  if VarAsBool(Constants.АвтоПрименятьСкидкуАкции) and VarAsBool(Data.HasParam('ActionTbl')) then
+    begin
+      ActionTbl := Data.Params['ActionTbl'];
+      if not IsNil(ActionTbl) and ActionTbl.Active and (ActionTbl.LineCount>0) then
+        begin
+          if ActionTbl.Locate('ИспКатегории',0) and (VarAsDec(ActionTbl.Скидка)<Percent) then
+            begin
+              CommentDiscount := 'Акция';
+              Percent := VarAsDec(ActionTbl.Скидка);
+              if VarAsBool(ActionTbl.@Document.IsFocused) then
+                begin
+                  ActionDoc := ActionTbl.Document;
+                  CommentDiscount := CommentDiscount + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+                end;
+            end
+          else
+          if ActionTbl.Locate('Категория', Source.GetParent) and (VarAsDec(ActionTbl.Скидка)<Percent) then
+            begin
+              Percent := VarAsDec(ActionTbl.Скидка);
+              CommentDiscount := 'Акция по категориям';
+              if VarAsBool(ActionTbl.@Document.IsFocused) then
+                 begin
+                   ActionDoc := ActionTbl.Document;
+                   CommentDiscount := CommentDiscount + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+                 end;
+            end;
+        end;
+    end;
+
+
+  Price := BasePrice*(1 + Percent/100);
+  DiscountLimitDic := CreateObject('Справочники.ОграничениеСкидок');
+  DiscountLimitDic.SetFieldFilter('Товар','=',Source,'','',Null);
+  DiscountLimitDic.SetFieldFilter('ТипЦены','=',Data.Партнер.ТипЦены,'','',Null);
+  if DiscountLimitDic.Select then
+    begin
+     DiscountLimitDic.SelectNext;
+     if VarAsDec(DiscountLimitDic.Скидка) > Percent then // если ограничение скидки менше скидки партнера, то ставим ограничение
+      begin
+        Percent := VarAsDec(DiscountLimitDic.Скидка);
+        CommentPercent := 'Скидка ограничения на товар';
+        Price := BasePrice*(1 + Percent/100);
+      end
+    end;
+  Data.ЦенаБезСкидкиНадбавки := BasePrice;
+  Data.Цена := Price;   
+  Data.ПроцентСкидкиНадбавки := Percent;
+  Data.КомментарийСкидкиНадбавки := CommentPercent;
+end;
+ 
+
+procedure ПолучитьБазоваюЦенуДляРасчетаВознаграждения(Data: ICDocuments);
+begin
+ if Data.HasField('СлужащийДляВознаграждения') and IsObjFocused(Data.СлужащийДляВознаграждения) and IsObjFocused(Data.Регион) then
+  begin
+    if IsObjEQ(Data.Товар.Валюта, Data.Валюта) then
+      Data.БазоваяЦенаТовара := VarAsDec(Data.Товар._Default[Data.Регион.БазоваяЦенаДляРасчетаВознаграждения])*VarAsDec(Data.Курс)
+    else
+      Data.БазоваяЦенаТовара := VarAsDec(Data.Товар._Default[Data.Регион.БазоваяЦенаДляРасчетаВознаграждения])*VarAsDec(Data.Товар.Валюта.GetTimedValue(GetConstants.UsedCurs,Data.ДатаДокумента ));
+   // Data.БазоваяЦенаТовара := VarAsDec(Data.Товар._Default[Data.Регион.БазоваяЦенаДляРасчетаВознаграждения])*VarAsDec(Data.Курс);
+  end;
+end;
+
+
+procedure AddLineByCode(Data: ICDocuments; Source: ICDictionary; AccsGoods: ICAccs; Code, AddMode: String; PriceMode: boolean = false);
+//Data - документ в котором происходит добавление строк.
+//Source - справочник товаров, если товар выбран со списка тогда передаем в параметр спозиционированный объект, если поиск по коду передаем в параметр Null.
+//AccsGoods - аккумулятор ОстаткиТоваровНаСегодня.
+//Code - код или штрихкод для поиска товаров.
+//AddMode - варианты добавления (ByCode;ByDict;ByCodeTablet;ByDictTablet;ByCodeFromPart;ByDictFromPart)
+//PriceMode - отпуск товара поштучно (используется если в диалоге документа есть отметка "заносить по коду количество товара = 1").
+const PriceFromBarCodeComment='Цена из штрих-кода';
+var
+  s, TypePrice: string;
+  PackCnt, Count, PriceFromBarCode: Decimal;
+  Accept,isWeight, isPriceFromBarCode : boolean;
+  OrderOwner: ICDocuments;
+  Constants: IC4VPAConst;   
+  BarCodeWeitGoodLength, BarCodePriceGoodLength : Integer;
+  PrefixWeitGood, PrefixPriceGood : String;
+begin
+  Constants := GetConstants; 
+  isWeight :=false;  
+  isPriceFromBarCode :=false;
+  if (Data.GetSign = 'Чек') and not VarAsBool(Data.@Партнер.IsFocused) then
+    begin
+      ShowMessage('Не выбран партнер!');
+      exit;
+    end;
+//  Code := CheckBarCode(Code);
+  case AddMode of
+    'ByCode','ByCodeTablet','ByCodeFromPart':
+       begin
+         if Code = '' then
+           exit; 
+         BarCodeWeitGoodLength := VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0)+9;
+         BarCodePriceGoodLength := BarCodeWeitGoodLength;
+         if (BarCodeWeitGoodLength mod 2)>0 then
+           begin
+             inc(BarCodeWeitGoodLength);
+             inc(BarCodePriceGoodLength);
+             PrefixWeitGood := '0201';
+             PrefixPriceGood := '0301';
+           end
+         else
+           begin
+             PrefixWeitGood := '201';
+             PrefixPriceGood := '301';
+           end;
+
+         if (StrLength(Code)=BarCodeWeitGoodLength) and (StrCopy(Code,1,StrLength(PrefixWeitGood))=PrefixWeitGood) then
+           begin
+             Count := StrToDecDef(StrCopy(Code,StrLength(PrefixWeitGood)+VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0)+1,6),0)/1000;
+             if Count<=0 then exit;
+             Code := StrCopy(Code,StrLength(PrefixWeitGood)+1,VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0));
+             isWeight := true;
+           end;
+         if (Data.GetSign='Чек') and (StrLength(Code)=BarCodePriceGoodLength) and (StrCopy(Code,1,StrLength(PrefixPriceGood))=PrefixPriceGood) then
+           begin
+             PriceFromBarCode := StrToDec(StrCopy(Code,StrLength(PrefixPriceGood)+VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0)+1,6))/100;
+             Code := StrCopy(Code,StrLength(PrefixWeitGood)+1,VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0));
+             isPriceFromBarCode := true;
+           end;
+         if not FindGoodByCode(Code, Source) then
+           exit
+       end;
+    'ByDict','ByDictTablet','ByDictFromPart', 'ByDictRevList':
+       begin
+         if not IsObjFocused(Source) then
+            begin
+              ShowMessage('Не указан справочник поиска, обратитесь к разработчику');
+              exit
+            end;
+       end;
+  end;   
+  Accept := true;
+  if not isWeight then
+    begin
+      Count := 1;
+      if not PriceMode then
+        Case AddMode of
+          'ByCode','ByDict','ByCodeFromPart','ByDictFromPart': CalcCount(Count, S, Accept, Source);
+          'ByCodeTablet','ByDictTablet': OpenCalculator(Count,'EditLine',Source);
+          'ByDictRevList' : if Data.HasParam('CountRevList') then Count := VarAsDEc(Data.Params['CountRevList']);
+        end;
+    end;
+  if not Accept then
+    exit;
+//----------------------------Добавление записей в табличную часть----------------------------------
+  if (isPriceFromBarCode and Data.FindLineBy('Товар;Цена',ArrayOf(Source,PriceFromBarCode))) or
+     (not isPriceFromBarCode and Data.FindLineBy('Товар',Source)) then
+    begin
+      Data.EditLine; 
+      if isPriceFromBarCode then
+        begin
+          Data.КомментарийСкидкиНадбавки := PriceFromBarCodeComment;
+          Data.ЦенаБезСкидкиНадбавки := PriceFromBarCode;
+          Data.Цена := PriceFromBarCode;
+          Data.ПроцентСкидкиНадбавки := 0;
+          Data.ЦенаИзШтрихКода := true;
+          Data.РучнаяКорректировка := true;
+        end;
+      if Data.HasField('КоличествоДо') then
+        begin
+          Data.КоличествоПосле := Data.КоличествоПосле + Count;
+          Data.Количество := Data.КоличествоПосле - Data.КоличествоДо;
+        end
+      else
+        Data.Количество := Data.Количество + Count;
+      Data.PostLine;
+    end
+  else
+    begin
+      Data.AppendLine;
+      Data.Товар := Source;
+      Data.AssignFields('Код;ЕдИзм;ШтрихКод',Data.Товар);
+//********************* заполнение поля "Цена" ****************************************************
+      Case Data.GetSign of
+        'Чек':    
+         if isPriceFromBarCode then
+           begin
+             Data.КомментарийСкидкиНадбавки := PriceFromBarCodeComment;
+             Data.ЦенаБезСкидкиНадбавки := PriceFromBarCode;
+             Data.Цена := PriceFromBarCode;
+             Data.ПроцентСкидкиНадбавки := 0;
+             Data.ЦенаИзШтрихКода := true;
+             Data.РучнаяКорректировка := true;
+           end
+         else
+           ПолучитьЦенуДляЧека(Data, Source);
+
+        'ВозвратПоставщикам': // для возврата поставщику цену не заполняем, цена расчитывается во время фиксации.
+          GetPriceForRetPart(Data, Source,AccsGoods);  
+        'ВозвратОтПокупателей' :
+          GetPartFromCheck(Data, Source); //заполнение цены и партии. Используется в док. возврат от покупателей
+        'РевизияТовара', 'НакладнаяВнутрПеремещ', 'СписаниеТовара':
+          begin
+            TypePrice := VarAsStr(Data.ТипЦены);
+            if TypePrice='' then
+              TypePrice := 'ВхЦена';
+            if IsObjFocused(Source._Default['Валюта'+TypePrice]) then
+              Data.Цена := Source._Default[TypePrice]*VarAsDec(Source._Default['Валюта'+TypePrice].GetTimedValue(Constants.UsedCurs,Data.ДатаДокумента ))
+            else
+              raise('У товара не заполнена Валюта'+TypePrice);
+          end
+       else
+         begin
+            TypePrice := 'ВхЦена';
+            if Data.HasField('СкладПр') and VarAsBool(Data.@СкладПр.IsFocused) then
+             TypePrice := Data.СкладПр.ТипЦены
+            else
+            if Data.HasField('СкладПоУмолч') and VarAsBool(Data.@СкладПоУмолч.IsFocused) then
+             TypePrice := Data.СкладПоУмолч.ТипЦены;
+            if TypePrice='' then
+              TypePrice := 'ВхЦена';
+            if IsObjFocused(Source._Default['Валюта'+TypePrice]) then
+              Data.Цена := Source._Default[TypePrice]*VarAsDec(Source._Default['Валюта'+TypePrice].GetTimedValue(Constants.UsedCurs,Data.ДатаДокумента ))
+            else
+              raise('У товара не заполнена Валюта'+TypePrice);
+         end;
+     end;
+      if not isPriceFromBarCode and VarAsBool(Constants.ОкруглятьЦеныГрн) and (Data.GetSign<>'ВозвратПоставщикам') and (Data.GetSign<>'ВозвратОтПокупателей') then
+        begin  
+          if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+            begin
+              if Data.HasField('ЦенаБезСкидкиНадбавки') then
+                Data.ЦенаБезСкидкиНадбавки := RoundTo5Cop(Data.ЦенаБезСкидкиНадбавки);
+              Data.Цена := RoundTo5Cop(Data.Цена);
+            end
+          else
+            begin
+              if Data.HasField('ЦенаБезСкидкиНадбавки') then
+                Data.ЦенаБезСкидкиНадбавки := RoundDec(Data.ЦенаБезСкидкиНадбавки, VarAsInt(Constants.ОкруглениеЦенГрн));
+              Data.Цена := RoundDec(Data.Цена, VarAsInt(Constants.ОкруглениеЦенГрн));
+            end;
+        end;
+
+//********************заполнение полей "Количество" и "Наличия товара" ********************************************
+      if Data.HasField('КоличествоДо') then //используется в док. ревизия товаров
+        begin
+          Data.КоличествоДо := ПолучитьОстатокТовара(Data, AccsGoods);
+          Data.КоличествоПосле := Count;
+          Data.Количество := Data.КоличествоПосле - Data.КоличествоДо;
+          if VarAsBool(Data.Товар.GetParent.IsFocused) then
+            Data.Категория := Data.Товар.GetParent.НазвТовара;
+        end
+      else
+        begin
+          Data.НаличиеТовара := ПолучитьОстатокТовара(Data, AccsGoods);
+          Data.Количество := Count;
+        end;
+//*****************************************************************************************************************
+      OrderOwner := Data.Owner;
+      if IsObjFocused(OrderOwner) and Data.HasField('КоличествоВЗаказе') then
+        begin
+          if OrderOwner.FindLineBy('Товар',Source) then
+            begin
+              Data.КоличествоВЗаказе := OrderOwner.Количество;
+              Data.ЦенаБезСкидкиНадбавки := OrderOwner.ЦенаБезСкидкиНадбавки;
+              Data.Цена := OrderOwner.Цена;
+            end
+          else
+            Data.КоличествоВЗаказе := 0;
+        end;
+      Data.PostLine;
+    end;
+end;
+
+procedure AddLineByCodeWidthCount(Data: ICDocuments; Source: ICDictionary; AccsGoods: ICAccs; Count: Decimal = 1);
+//Data - документ в котором происходит добавление строк.
+//Source - справочник товаров, если товар выбран со списка тогда передаем в параметр спозиционированный объект, если поиск по коду передаем в параметр Null.
+//AccsGoods - аккумулятор ОстаткиТоваровНаСегодня.
+//PriceMode - отпуск товара поштучно (используется если в диалоге документа есть отметка "заносить по коду количество товара = 1").
+var
+  s: string;
+  PackCnt, CountBefore: Decimal;
+  Accept : boolean;
+  OrderOwner: ICDocuments;
+  Constants: IC4VPAConst;
+begin
+  Constants := GetConstants;
+  if (Data.GetSign = 'Чек') and not VarAsBool(Data.@Партнер.IsFocused) then
+    begin
+      ShowMessage('Не выбран партнер!');
+      exit;
+    end;
+//  Code := CheckBarCode(Code);
+  if not IsObjFocused(Source) then
+     begin
+       ShowMessage('Не указан справочник поиска, обратитесь к разработчику');
+       exit
+     end;
+
+
+//----------------------------Добавление записей в табличную часть----------------------------------
+  if Data.FindLineBy('Товар',Source) then
+    begin
+      Data.EditLine;
+      if Data.HasField('КоличествоДо') then
+        begin
+          Data.КоличествоПосле := Data.КоличествоПосле + Count;
+          Data.Количество := Data.КоличествоПосле - Data.КоличествоДо;
+        end
+      else
+        Data.Количество := Data.Количество + Count;
+      Data.PostLine;
+    end
+  else
+    begin
+      Data.AppendLine;
+      Data.Товар := Source;
+      Data.AssignFields('Код;ЕдИзм;ШтрихКод',Data.Товар);
+//********************* заполнение поля "Цена" ****************************************************
+      Case Data.GetSign of
+        'Чек':
+          begin
+            ПолучитьЦенуДляЧека(Data, Source);
+            ПолучитьБазоваюЦенуДляРасчетаВознаграждения(Data);
+          end;
+        'ВозвратПоставщикам': // для возврата поставщику цену не заполняем, цена расчитывается во время фиксации.
+          Data.Цена := 0;
+        'НакладнаяВнутрПеремещ':
+          begin
+            if VarAsBool(Data.@СкладПр.IsFocused) then
+              Data.Цена := Data.Товар._Default[Data.СкладПр.ТипЦены]*Data.Курс
+          end
+       else
+         begin
+           if VarAsBool(Data.@СкладПоУмолч.IsFocused) then
+             Data.Цена := Data.Товар._Default[Data.СкладПоУмолч.ТипЦены]*Data.Курс;
+         end;
+     end;
+//********************заполнение поля Партия в документ "Возврат от покупателей"***********************************
+      if Data.GetSign = 'ВозвратОтПокупателей' then
+       begin
+        if Data.HasField('Партия') then
+          GetPartFromCheck(Data, Source); //заполнение цены и партии. Используется в док. возврат от покупателей
+        ПолучитьБазоваюЦенуДляРасчетаВознаграждения(Data);
+       end;
+//********************заполнение полей "Количество" и "Наличия товара" ********************************************
+      if Data.HasField('КоличествоДо') then //используется в док. ревизия товаров
+        begin
+          Data.КоличествоДо := CountBefore;
+          Data.КоличествоПосле := Count;
+          Data.Количество := Data.КоличествоПосле - Data.КоличествоДо;
+          if VarAsBool(Data.Товар.GetParent.IsFocused) then
+            Data.Категория := Data.Товар.GetParent.НазвТовара;
+        end
+      else
+      if Data.HasField('СкладПоУмолч') then
+        begin
+          Data.НаличиеТовара := ПолучитьОстатокТовара(Data, AccsGoods);
+          Data.Количество := Count;
+        end
+      else
+      if Data.HasField('СкладОтп') then
+        begin
+          Data.НаличиеТовара := ПолучитьОстатокТовара(Data, AccsGoods);
+          Data.Количество := Count;
+        end;
+
+//*****************************************************************************************************************
+      OrderOwner := Data.Owner;
+      if IsObjFocused(OrderOwner) and Data.HasField('КоличествоВЗаказе') then
+        begin
+          if OrderOwner.FindLineBy('Товар',Source) then
+            begin
+              Data.КоличествоВЗаказе := OrderOwner.Количество;
+              Data.ЦенаБезСкидкиНадбавки := OrderOwner.ЦенаБезСкидкиНадбавки;
+              Data.Цена := OrderOwner.Цена;
+            end
+          else
+            Data.КоличествоВЗаказе := 0;
+        end;
+      Data.PostLine;
+      Source := Null;
+    end;
+end;
+
+
+
+procedure AddLineInByCode(Data: ICDocuments; Source: ICDictionary; Code, AddMode: String; PriceMode: boolean = false);
+//Data - документ в котором происходит добавление строк.
+//Source - справочник товаров, если товар выбран со списка тогда передаем в параметр спозиционированный объект, если поиск по коду передаем в параметр Null.
+//AccsGoods - аккумулятор ОстаткиТоваровНаСегодня.
+//Code - код или штрихкод для поиска товаров.
+//AddMode - варианты добавления (ByCode;ByDict;ByCodeTablet;ByDictTablet;ByCodeFromPart;ByDictFromPart)
+//PriceMode - отпуск товара поштучно (используется если в диалоге документа есть отметка "заносить по коду количество товара = 1").
+var
+  s : string;
+  Count, Percent, Price: Decimal;
+  Accept : boolean;
+  Store : ICDictionary;
+begin
+  Code := CheckBarCode(Code);
+  case AddMode of
+    'ByCode','ByCodeTablet','ByCodeFromPart':
+       begin
+         if not FindGoodByCode(Code, Source) then
+           exit
+       end;
+    'ByDict','ByDictTablet','ByDictFromPart':
+       begin
+         if not IsObjFocused(Source) then
+            begin
+              ShowMessage('Не указан справочник поиска, обратитесь к разработчику');
+              exit
+            end;
+       end;
+  end;
+  Count := 1;
+  Accept := true;
+  if not PriceMode then
+    Case AddMode of
+      'ByCode','ByDict','ByCodeFromPart','ByDictFromPart': CalcCount(Count, S, Accept, Source);
+      'ByCodeTablet','ByDictTablet': OpenCalculator(Count,'EditLine',Source);
+    end;
+  if not Accept then
+    exit;
+//----------------------------Добавление записей в табличную часть----------------------------------
+   if Data.FindLineBy('Товар',Source) then
+     begin
+       Data.EditLine;
+       Data.Количество := Data.Количество + Count;
+       Data.PostLine;
+     end
+   else
+     begin
+       AppendGoodIn(Data, Null, Source, Data.СкладПр, null, Count);
+       Data.EditLine;
+       if Data.HasField('КрОптЦена') then
+         Data.КрОптЦена := Data.Товар.КрОптЦена;
+       if Data.HasField('ОптЦена') then
+         Data.ОптЦена := Data.Товар.ОптЦена;
+       if Data.HasField('ЦенаРозн') then
+         Data.ЦенаРозн := Data.Товар.Цена;
+       Data.PostLine;
+       Source := Null;
+     end;
+end;
+
+function GetEmplByName(EmplName : string; EmplEditCtrl : TO4DBEdit) : ICDictionary;
+var
+  Respons: ICDictionary;
+begin
+  Respons := CreateObject('Справочники.Служащие');
+  if Respons.FindByField('ПолноеНазвание', EmplName, False) then
+    Result := Respons
+  else
+    nil(Result);
+end;
+
+procedure CreatePayDoc(Doc: ICDocuments);
+Var
+  PayDoc: ICDocuments;
+  Currency: ICDictionary;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  NilTO4DBEdit : TO4DBEdit;
+begin
+  PayDoc := CreateObject('Документы.РасходИзКассы');
+  PayDoc.Select;
+  PayDoc.Append;
+  Constants := GetConstants;
+  Options := GetOptions;
+  Currency := CreateObject('Справочники.Валюты');
+  if not Currency.FindByField('Активность', VarAsInt(True), True) then
+    Currency := GetNatCurrency(Currency);
+  if Currency.IsFocused then
+    begin
+      PayDoc.Курс := Currency.GetTimedValue(Constants.UsedCurs, PayDoc.ДатаДокумента);
+      PayDoc.Валюта := Currency;
+    end;
+  PayDoc.Ответственный := GetEmplByName(GetUserName, NilTO4DBEdit);
+  PayDoc.Взаиморасчет := VarAsInt(True);
+  PayDoc.ЕстьНДС := VarAsInt(True);
+  PayDoc.СтавкаНДС := Constants.ProcentPDV;
+
+  //Для обработки в бух.учете
+  PayDoc.AppendLine();
+  PayDoc.PostLine();
+
+  PayDoc.SetMaster(Doc);
+  PayDoc.Курс := Doc.Курс;
+  PayDoc.Валюта := Doc.Валюта;
+  PayDoc.СуммаВВалюте := server.СформироватьПлатежПоДокументу(Doc);
+  PayDoc.Сумма := PayDoc.Курс*PayDoc.СуммаВВалюте;
+  SetSums('Сумма', PayDoc.Сумма, PayDoc, Constants.ProcentPDV); //расчеты
+  PayDoc.Комментарий := 'Оплата згідно акта №' + Doc.НомерДокумента + ' від ' + DateToStr(Doc.ДатаДокумента);
+  PayDoc.Партнер := Doc.Партнер;
+  PayDoc.Регион := GetUsersField('Регион');
+  PayDoc.Касса := GetUsersField('Касса');
+  PayDoc.BaseID := VarAsInt(Constants.КодИБ);
+  if PayDoc.BaseID = 0 then
+     raise('Заполните код информационной базы в значениях важных констант');
+  PayDoc.NumID := УстановитьНомерДокумента(PayDoc, '');
+  PayDoc.Post;
+  PayDoc.ApplyUpdates;
+  PayDoc.StateUp;
+end;
+
+function CheckBarCode(barCode: String): string;
+var i: integer;
+begin
+  barCode := StrLowerCase(barCode);
+  for i := 0 to StrLength(barCode) do
+    begin
+      case barCode[i] of
+        'й' : barCode := ReplaceOneStrWithAnother(barCode, 'й', 'q');
+        'ц' : barCode := ReplaceOneStrWithAnother(barCode, 'ц', 'w');
+        'у' : barCode := ReplaceOneStrWithAnother(barCode, 'у', 'e');
+        'к' : barCode := ReplaceOneStrWithAnother(barCode, 'к', 'r');
+        'е' : barCode := ReplaceOneStrWithAnother(barCode, 'е', 't');
+        'н' : barCode := ReplaceOneStrWithAnother(barCode, 'н', 'y');
+        'г' : barCode := ReplaceOneStrWithAnother(barCode, 'г', 'u');
+        'ш' : barCode := ReplaceOneStrWithAnother(barCode, 'ш', 'i');
+        'щ' : barCode := ReplaceOneStrWithAnother(barCode, 'щ', 'o');
+        'з' : barCode := ReplaceOneStrWithAnother(barCode, 'з', 'p');
+        'ф' : barCode := ReplaceOneStrWithAnother(barCode, 'ф', 'a');
+        'і' : barCode := ReplaceOneStrWithAnother(barCode, 'і', 's');
+        'ы' : barCode := ReplaceOneStrWithAnother(barCode, 'ы', 's');
+        'в' : barCode := ReplaceOneStrWithAnother(barCode, 'в', 'd');
+        'а' : barCode := ReplaceOneStrWithAnother(barCode, 'а', 'f');
+        'п' : barCode := ReplaceOneStrWithAnother(barCode, 'п', 'g');
+        'р' : barCode := ReplaceOneStrWithAnother(barCode, 'р', 'h');
+        'о' : barCode := ReplaceOneStrWithAnother(barCode, 'о', 'j');
+        'л' : barCode := ReplaceOneStrWithAnother(barCode, 'л', 'k');
+        'д' : barCode := ReplaceOneStrWithAnother(barCode, 'д', 'l');
+        'я' : barCode := ReplaceOneStrWithAnother(barCode, 'я', 'z');
+        'ч' : barCode := ReplaceOneStrWithAnother(barCode, 'ч', 'x');
+        'с' : barCode := ReplaceOneStrWithAnother(barCode, 'с', 'c');
+        'м' : barCode := ReplaceOneStrWithAnother(barCode, 'м', 'v');
+        'и' : barCode := ReplaceOneStrWithAnother(barCode, 'и', 'b');
+        'т' : barCode := ReplaceOneStrWithAnother(barCode, 'т', 'n');
+        'ь' : barCode := ReplaceOneStrWithAnother(barCode, 'ь', 'm');
+      end;
+    end;
+  Result := barCode;
+end;        
+
+procedure SetDocDefRegonStore(MasterData:ICDocuments; StoreField:string='СкладПоУмолч');
+var Region, Store, Kassa: ICDictionary;
+begin
+ Region := CreateObject('Справочники.Регионы');
+ if Region.FindByCode(DefDocRegionCode,false) then
+   MasterData.Регион := Region
+ else
+   MasterData.Регион := GetUsersField('Регион');
+ if MasterData.HasField(StoreField) then
+   begin
+     if VarAsBool(MasterData.@Регион.IsFocused) then
+       begin
+        Store := CreateObject('Справочники.Склады');
+        if Store.Find(GetUsersField('Склад')) then
+          begin
+            if IsObjEQ(Store.@Регион, MasterData.@Регион) then
+              MasterData._Default[StoreField] := Store
+            else
+              begin
+                Store.SetFieldFilter('Регион','=',MasterData.@Регион,'','',Null);
+                if (Store.Select and Store.SelectNext and not Store.SelectNext) or Store.FindByField('Активность',true,false) then
+                  MasterData._Default[StoreField] := Store;
+              end;
+          end;
+       end
+     else
+       begin
+          Store := GetUsersField('Склад');
+          if IsObjFocused(Store) then
+            begin
+              MasterData._Default[StoreField] := Store;
+              MasterData.Регион := Store.@Регион;
+            end;
+       end;
+   end;  
+ if MasterData.HasField('Касса') then
+   begin
+     Kassa := CreateObject('Справочники.Кассы');
+     if Kassa.Find(GetUsersField('Касса')) then
+       begin
+         if IsObjEQ(Kassa.@Регион, MasterData.@Регион) then
+           MasterData.Касса := Kassa
+         else
+           begin
+             Kassa.SetFieldFilter('Регион','=',MasterData.@Регион,'','',Null);
+             if Kassa.Select and Kassa.SelectNext and not Kassa.SelectNext then
+               MasterData.Касса := Kassa;
+           end;
+       end;
+   end;
+ if MasterData.HasField('ТипЦены') and MasterData.HasField(StoreField) and
+    IsObjFocused(MasterData._Default[StoreField]) and VarAsBool(MasterData._Default[StoreField].HasField('ТипЦены')) then
+     MasterData.ТипЦены := VarAsStr(MasterData._Default[StoreField].ТипЦены);
+end;
+ 
+
+Procedure GetPricesTblByNaklIn(NaklDoc : IcDocuments; TblGoods, PriceTbl : IcValueTable; AllowRoundPrice : Boolean);
+Var
+  tmpGoodsTbl, GoodsTbl : IcValueTable;
+
+Begin
+   tmpGoodsTbl := CreateObject('ТаблицаЗначений');
+   GoodsTbl := CreateObject('ТаблицаЗначений');
+
+   NaklDoc.SaveContents('Товар;Цена;ЦенаВВалюте;ВалютаТовара;НомСтроки',tmpGoodsTbl);
+   tmpGoodsTbl.CopyColumnsTo(GoodsTbl);
+   GoodsTbl.SortBy('Товар;Цена');
+   tmpGoodsTbl.SortBy('Товар;Цена');
+   tmpGoodsTbl.Select;
+   While tmpGoodsTbl.SelectNext do
+     begin
+       if GoodsTbl.IsFocused and IsObjEQ(GoodsTbl.@Товар, tmpGoodsTbl.@Товар, false) then
+         GoodsTbl.Edit
+       else
+         GoodsTbl.Append;
+       GoodsTbl.AssignFields('Цена;ЦенаВВалюте;ВалютаТовара;НомСтроки;Товар',tmpGoodsTbl);
+       GoodsTbl.Post;
+     end;
+   GoodsTbl.CopyDataToServer;
+   TblGoods.CopyDataToServer;
+
+   PriceTbl.CopyDataToServer;
+   if NaklDoc.RunThreadProcess(server.GetPriceTblEP(GoodsTbl.SrvMean, TblGoods.SrvMean, PriceTbl.SrvMean, NaklDoc.GetDate, AllowRoundPrice), 'Заполнение таблицы переоценки') then
+     begin
+       TblGoods.CopyDataFromServer;
+       PriceTbl.CopyDataFromServer;
+       PriceTbl.SetColumnFormat('ВхЦена','0.00');
+
+       PriceTbl.SetColumnFormat('ВхЦенаГрн;ЦенаСпрГрн;ЦенаРекомГрн;ЦенаСпр;ЦенаРеком','0.00');
+       PriceTbl.SrvMean.Clear;
+       TblGoods.SrvMean.Clear;
+       TblGoods.SortBy('НомСтроки');
+     end
+   else
+     ShowMessage('Во время формирования таблицы переоценки произошла ошибка или процес прерван пользователем!');
+
+
+end;
+
+
+end.

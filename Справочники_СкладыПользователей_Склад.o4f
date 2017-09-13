@@ -1,0 +1,183 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 287
+  Height = 67
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    279
+    187)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'chbActive.Caption'
+    0
+    
+      #1'-1'#1'Активный адрес, который будет печататься в отчетах'#1'1058'#1'Акти' +
+      'вна адреса, яку буде надруковано у звітах'
+    'chbUrAdr.Caption'
+    0
+    #1'-1'#1'Юридический адрес'
+    'Label1.Caption'
+    0
+    #1'-1'#1'Тип адреса'#1'1058'#1'Тип адреси'
+    'Label5.Caption'
+    0
+    #1'-1'#1'Город'#1'1058'#1'Місто'
+    'Label7.Caption'
+    0
+    #1'-1'#1'Почтовый индекс'#1'1058'#1'Поштовий індекс'
+    'Label8.Caption'
+    0
+    #1'-1'#1'Улица, дом'#1'1058'#1'Вулиця, дім'
+    'pmiCancel.Caption'
+    0
+    #1'-1'#1'Отменить изменения'
+    'pmiSave.Caption'
+    0
+    #1'-1'#1'Записать'
+    'pmiSaveAdd.Caption'
+    0
+    #1'-1'#1'Записать и добавить')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  PopupMenu = pmSaveRecord
+  TabOrder = 0
+  Transparent = False
+  object MainPanel: TO4Panel
+    Left = 0
+    Top = 0
+    Width = 287
+    Height = 38
+    Align = alClient
+    Alignment = taLeftJustify
+    BevelSides = [sdLeft, sdBottom]
+    BorderSides = []
+    ParentCtl3D = False
+    TabOrder = 0
+    Transparent = False
+    object Label5: TO4Label
+      Left = 12
+      Top = 12
+      Width = 31
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Склад'
+    end
+    object deStore: TO4DBEdit
+      Left = 49
+      Top = 9
+      Width = 232
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '16.05.2002'
+      TabOrder = 0
+      Lock = False
+      O4FieldName = 'Склад'
+      O4MDSource = MDS
+      ActionFormName = 'ВыборСкладаДляПользователя'
+      FastFindIndex = 0
+    end
+  end
+  object BottomPanel: TO4Panel
+    Left = 0
+    Top = 38
+    Width = 287
+    Height = 29
+    Align = alBottom
+    BevelSides = [sdTop]
+    BorderSides = []
+    ParentCtl3D = False
+    TabOrder = 1
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 111
+      Top = 1
+      Width = 175
+      Height = 27
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      ParentCtl3D = False
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 21
+        Top = 1
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actSave
+      end
+      object btCancel: TO4Button
+        Left = 97
+        Top = 1
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object pmSaveRecord: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 54
+    Top = 70
+    object pmiSave: TO4MenuItem
+      Caption = 'Записать'
+      ImageIndex = 5
+      ShortCut = 16467
+      O4Action = actSave
+      SortMenuParent = False
+    end
+    object pmiSaveAdd: TO4MenuItem
+      Caption = 'Записать и добавить'
+      ImageIndex = 0
+      ShortCut = 16462
+      O4Action = actAdd
+      SortMenuParent = False
+    end
+    object MenuItem1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object pmiCancel: TO4MenuItem
+      Caption = 'Отменить изменения'
+      ImageIndex = 2
+      ShortCut = 32776
+      O4Action = actCancel
+      SortMenuParent = False
+    end
+  end
+  object MDS: TO4DataSource
+    VPAOnValidate.EventName = 'MDS_Validate'
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 41
+    Top = 110
+  end
+end

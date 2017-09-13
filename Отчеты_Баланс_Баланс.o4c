@@ -1,0 +1,800 @@
+interface
+
+uses
+  System, DispIntf, »нтерфейс, –асчеты, ConstNames, Reports;//, –абота—ƒокументами¬∆урналах;
+
+implementation
+
+var
+ StoreTbl, KassaTbl, BankTbl, PartTbl, DebTbl, KredTbl, DebTblDet, KredTblDet, RealTbl, ProdTbl, CourseTbl,
+ BankTblTotal, StoreTblTotal, RealTblTotal, ProdTblTotal, PartTblTotal, SumsTbl, PrintBalans, PartTblGroup : ICValueTable;
+ Constants : IC4VPAConst;
+ AccKassa, AccBank, AccsPart, AccsRealizGood : ICAccs;
+ Currency : ICDictionary;
+ Options : ICOptions;
+ CursorVis : TCursor;
+ V: ICReport;
+ DateFrom, DateTo : DateTime;
+ ChangeSort,HasDet : Boolean;
+ Doc: ICDocuments;
+ Balans, SumAll, SumAllStore, SumAllReal, SumAllProd, SumAllKassa, SumAllBank, SumAllDeb, SumAllCred : decimal;
+ Date : DateTime;
+ CurrName : string;
+ TypeSetPart : ICValueList;
+ CurrencySum : string;
+ HasRun : Boolean;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  AccsRealizGood := CreateObject('јккумул€торы.ќстатки“оваровЌа–еализаторах');
+  AccKassa := CreateObject('јккумул€торы.ќстаткиѕо ассе');
+  AccBank := CreateObject('јккумул€торы.ќстаткиЌа–асч—чет');
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Currency := CreateObject('—правочники.¬алюты');
+  SumsTbl := CreateObject('“аблица«начений');
+  SumsTbl.AddColumn('GroupField', vtcInteger, 0);
+  SumsTbl.AddColumn('“ипƒок', vtcString, 100);
+  SumsTbl.AddColumn('¬алюта', vtcLink,0);
+  SumsTbl.AddColumn('—клад', vtcLink, 0);
+  SumsTbl.AddColumn('ѕартнер', vtcLink, 0);
+  SumsTbl.AddColumn('—ум¬х', vtcFFt, 2);
+  SumsTbl.AddColumn('—ум¬ал¬х', vtcFFt, 2);
+  SumsTbl.AddColumn('—умќтп', vtcFFt, 2);
+  SumsTbl.AddColumn('—умЌац', vtcFFt, 2);
+  SumsTbl.AddColumn('—ум—кидки', vtcFFt, 2);
+  SumsTbl.AddColumn('ѕарти€', lftFloat, 0);
+  SumsTbl.AddColumn(' урс', vtcFft, 2);
+  SumsTbl.Open;
+  //—клады
+  StoreTbl := CreateObject('“аблица«начений');
+  StoreTbl.Close();
+  StoreTbl.AddColumn('—клад', vtcString, 100);
+  StoreTbl.AddColumn('¬алюта', vtcLink,0);
+  StoreTbl.AddColumn('—умќбщ', vtcFFt,4);
+  StoreTbl.AddColumn(' урс', vtcFft, 2);
+  StoreTbl.AddColumn('—умќбщ¬ал', vtcFFt, 2);
+  StoreTbl.Open();
+  // асса
+  KassaTbl := CreateObject('“аблица«начений');
+  KassaTbl.Close();
+  KassaTbl.AddColumn(' асса', vtcLink, 0);
+  KassaTbl.AddColumn('¬алюта', vtcLink,0);
+  KassaTbl.AddColumn('—ум¬ал', vtcFFt,4);
+  KassaTbl.AddColumn('—умќбщ', vtcFFt,4);
+  KassaTbl.AddColumn(' урс', vtcFFt,2);
+  KassaTbl.AddColumn('¬алютаDet', vtcString,50);
+  KassaTbl.Open();
+  //р/с
+  BankTbl := CreateObject('“аблица«начений');
+  BankTbl.Close();
+  BankTbl.AddColumn('–асч—чет', vtcLink,0);
+  BankTbl.AddColumn('–асч—четDet', vtcString,50);
+  BankTbl.AddColumn('—ум¬ал', vtcFFt,4);
+  BankTbl.AddColumn('¬алюта', vtcLink,0);
+  BankTbl.AddColumn('—умќбщ', vtcFFt,4);
+  BankTbl.Open();
+  //партнеры
+  PartTbl := CreateObject('“аблица«начений');
+  PartTbl.Close();
+  PartTbl.AddColumn('ѕартнер', vtcLink,0);
+  PartTbl.AddColumn('ѕартнерDet', vtcString, 200);
+  PartTbl.AddColumn('¬алюта', vtcLink,0);
+  PartTbl.AddColumn('—ум¬ал', vtcFFt,4);
+  PartTbl.AddColumn('—умќбщ', vtcFFt,4);
+  PartTbl.AddColumn('Tp', vtcInteger,0);
+  PartTbl.Open();
+  PartTblGroup := CreateObject('“аблица«начений');
+  PartTbl.CopyColumnsTo(PartTblGroup);
+  PartTblGroup.Open;
+  //дебиторы
+  DebTbl := CreateObject('“аблица«начений');
+  DebTbl.Close();
+  DebTbl.AddColumn('ѕартнер', vtcLink,0);
+  DebTbl.AddColumn('ѕартнерDet', vtcString, 200);
+  DebTbl.AddColumn('¬алюта', vtcLink,0);
+  DebTbl.AddColumn('—ум¬ал', vtcFFt,4);
+  DebTbl.AddColumn('—умќбщ', vtcFFt,4);
+  DebTbl.AddColumn('Tp', vtcInteger,0);
+  DebTbl.Open();
+  //кредиторы
+  KredTbl := CreateObject('“аблица«начений');
+  KredTbl.Close();
+  KredTbl.AddColumn('ѕартнер', vtcLink,0);
+  KredTbl.AddColumn('ѕартнерDet', vtcString, 200);
+  KredTbl.AddColumn('¬алюта', vtcLink,0);
+  KredTbl.AddColumn('—ум¬ал', vtcFFt,4);
+  KredTbl.AddColumn('—умќбщ', vtcFFt,4);
+  KredTbl.AddColumn('Tp', vtcInteger,0);
+  KredTbl.Open();
+  CourseTbl := CreateObject('“аблица«начений');
+// KassaTblAll := CreateObject('“аблица«начений');
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+ Nobody : TO4ToolBar; // заглушка на NIL
+ n : TO4DBGrid;
+ FormHeight, FormWidth, PanelHeight, PanelWidth : integer;
+begin
+ CreateObjects;
+ HasRun := false;
+end;
+
+procedure SetStoreRecords;
+var i : integer;
+begin
+  SumAllStore := 0;
+  StoreTbl.UseDataSource(0);
+  StoreTbl.Clear();
+  SumsTbl.Clear;
+  SumsTbl.CopyDataToServer;
+  server.GetPartTbl(SumsTbl.SrvMean, DateTo);
+  SumsTbl.CopyDataFromServer;
+  SumsTbl.SrvMean.Clear;
+  SumsTbl.Select;
+  while SumsTbl.SelectNext do
+    begin
+      StoreTbl.Append;
+      StoreTbl.—клад := SumsTbl.—клад.Ќазвание;
+      if VarAsBool(SumsTbl.¬алюта.IsFocused) then
+        StoreTbl.¬алюта := SumsTbl.¬алюта;
+      StoreTbl.—умќбщ := SumsTbl.—ум¬х;
+      StoreTbl. урс := SumsTbl. урс;
+      StoreTbl.—умќбщ¬ал := SumsTbl.—ум¬ал¬х;
+      StoreTbl.Post;
+    end;
+   StoreTblTotal := CreateObject('“аблица«начений');
+   StoreTbl.CopyTo('',StoreTblTotal);
+   SumAllStore := StoreTblTotal.Total('—умќбщ');
+   StoreTbl.SortBy('—умќбщ');
+   ///////
+   stgStore.RowCount := StoreTbl.LineCount+1;  
+   Currency := CreateObject('—правочники.¬алюты');
+   Currency.FindByField('Ќац¬алюта', VarAsInt(false), false);
+   stgStore.Cells[0, 0] := '¬сего в ' + Currency. од + ' по курсу ' + VarAsStr(Currency.GetTimedValue(' урсЌаличный', DateTo));
+   stgStore.Cells[3, 0] := VarAsStr(SumAllStore);
+   i := 0;
+   StoreTbl.Select;
+   while StoreTbl.SelectNext do
+     begin
+       inc(i);
+       stgStore.Cells[0, i] := StoreTbl.—клад;
+    //   stgStore.Cells[1, i] := FormatFloat('0.00', —умќбщ.—умќбщ);
+       stgStore.Cells[1, i] := FormatFloat('0.00', StoreTbl.—умќбщ¬ал);
+       if VarAsBool(StoreTbl.¬алюта.IsFocused) then
+         stgStore.Cells[2, i] := StoreTbl.¬алюта. од;
+       stgStore.Cells[3, i] := FormatFloat('0.00', StoreTbl.—умќбщ);
+     end;
+end;
+
+procedure SetStoreRecordsNew;
+var i : integer;
+begin
+  SumAllStore := 0;
+  StoreTbl.UseDataSource(0);
+  StoreTbl.Clear();
+  SumsTbl.Clear;
+  SumsTbl.CopyDataToServer;
+  server.GetPartTbl(SumsTbl.SrvMean, DateTo);
+  SumsTbl.CopyDataFromServer;
+  SumsTbl.SrvMean.Clear;
+  SumsTbl.Select;
+  while SumsTbl.SelectNext do
+    begin
+      StoreTbl.Append;
+      StoreTbl.—клад := SumsTbl.—клад.Ќазвание;
+      if VarAsBool(SumsTbl.@¬алюта.IsFocused) then
+        StoreTbl.¬алюта := SumsTbl.¬алюта;
+      StoreTbl.—умќбщ := SumsTbl.—ум¬х;
+      StoreTbl. урс := SumsTbl. урс;
+      StoreTbl.—умќбщ¬ал := SumsTbl.—ум¬ал¬х;
+      StoreTbl.Post;
+    end;
+   StoreTblTotal := CreateObject('“аблица«начений');
+   StoreTbl.CopyTo('',StoreTblTotal);
+   SumAllStore := StoreTblTotal.Total('—умќбщ');
+   StoreTbl.SortBy('—умќбщ');
+   ///////
+   stgStore.RowCount := StoreTbl.LineCount+1;
+   Currency := CreateObject('—правочники.¬алюты');
+   Currency := GetNatCurrency(Currency);
+   stgStore.Cells[0, 0] := '¬сего в ' + Currency. од + ' по курсу ' + VarAsStr(Currency.GetTimedValue(' урсЌаличный', DateTo));
+   stgStore.Cells[3, 0] := VarAsStr(SumAllStore);
+   i := 0;
+   StoreTbl.Select;
+   while StoreTbl.SelectNext do
+     begin
+       inc(i);
+       stgStore.Cells[0, i] := StoreTbl.—клад;
+       stgStore.Cells[1, i] := FormatFloat('0.00', StoreTbl.—умќбщ¬ал);
+       if VarAsBool(StoreTbl.¬алюта.IsFocused) then
+         stgStore.Cells[2, i] := StoreTbl.¬алюта. од;
+       stgStore.Cells[3, i] := FormatFloat('0.00', StoreTbl.—умќбщ);
+     end;
+end;
+
+procedure SetKassaRecords;
+var i : integer;
+begin
+  SumAllKassa := 0;
+  KassaTbl.UseDataSource(0);
+  KassaTbl.Clear();
+  AccKassa.ClearFieldBuffers();
+  AccKassa.AppendRestToValueTable(Date, ' асса;¬алюта;—умќбщ=—ум¬ал', KassaTbl);
+  KassaTbl.SortBy('¬алюта');
+  Currency := CreateObject('—правочники.¬алюты');
+  Currency.Select;
+  while Currency.SelectNext do
+   begin
+     if not KassaTbl.Find(Currency) then
+       begin
+         KassaTbl.Append;
+         KassaTbl.¬алютаDet := Currency.Ќазвание;
+         KassaTbl. урс := Currency.GetTimedValue(' урсЌацЅанка',DateTo);
+         KassaTbl.—умќбщ := 0;
+         KassaTbl.Post;
+       end;
+   end;
+  KassaTbl.Select;
+  while KassaTbl.SelectNext do
+    begin
+      KassaTbl.Edit;
+      if VarAsBool(KassaTbl.¬алюта.IsFocused) then
+        begin
+          KassaTbl.¬алютаDet := KassaTbl. асса.Ќазвание + ' ' + KassaTbl.¬алюта. од;
+          Currency := CreateObject('—правочники.¬алюты');
+          Currency.FindByField(' од', KassaTbl.¬алюта. од, false);
+          KassaTbl. урс := Currency.GetTimedValue(' урсЌацЅанка',DateTo);
+          KassaTbl.—умќбщ := KassaTbl.—ум¬ал * KassaTbl. урс;
+          SumAllKassa := SumAllKassa + KassaTbl.—умќбщ;
+        end;
+      KassaTbl.Post;
+    end;
+  KassaTbl.SortBy('—умќбщ');
+  stgKassa.RowCount := KassaTbl.LineCount+1;
+  Currency := CreateObject('—правочники.¬алюты');
+  Currency.FindByField('Ќац¬алюта', VarAsInt(false), false);
+  stgKassa.Cells[0, 0] := '¬ перерасчете в ' + CurrName + ' по курсу: ';// + VarAsStr(Currency.GetTimedValue(' урсЌацЅанка',RoundDate(StrToDate(eDateTo.Text), rdDay, false)));
+  CurrencySum := CurrName + ' по курсу : ' + VarAsStr(Currency.GetTimedValue(' урсЌацЅанка',DateTo));
+  stgKassa.Cells[3, 0] := VarAsStr(SumAllKassa);
+  i := 0;
+  KassaTbl.Select;
+  while KassaTbl.SelectNext do
+    begin
+      inc(i);
+      stgKassa.Cells[0, i] := KassaTbl.¬алютаDet;
+      stgKassa.Cells[1, i] := FormatFloat('0.00', KassaTbl.—ум¬ал);
+      stgKassa.Cells[2, i] := KassaTbl. урс;
+      stgKassa.Cells[3, i] := FormatFloat('0.00', KassaTbl.—умќбщ);
+    end;
+end;
+
+procedure SetBankRecords;
+var i : integer;
+begin
+  SumAllBank := 0;
+  BankTbl.Clear();
+  AccBank.ClearFieldBuffers();
+  AccBank.AppendRestToValueTable(Date, '–асч—чет;¬алюта;—умќбщ', BankTbl);
+  BankTblTotal := CreateObject('“аблица«начений');
+  BankTbl.SortBy('–асч—чет');
+  BankTbl.Select;
+  while BankTbl.SelectNext do
+    begin
+      BankTbl.Edit;
+      if VarAsBool(BankTbl.–асч—чет.IsFocused) then
+        BankTbl.–асч—четDet :=  BankTbl.–асч—чет.Ќомер—чета;
+      if CourseTbl.Locate('¬алюта',BankTbl.@¬алюта) then
+        BankTbl.—ум¬ал := BankTbl.—умќбщ * CourseTbl. урс;
+      BankTbl.Post;
+    end;
+  BankTbl.CopyTo('',BankTblTotal);
+  SumAllBank := BankTblTotal.Total('—ум¬ал');
+  BankTbl.SortBy('—умќбщ');
+  ///////
+  stgBank.RowCount := BankTbl.LineCount+1;
+  stgBank.Cells[1, 0] := '¬сего:';
+  stgBank.Cells[3, 0] := VarAsStr(SumAllBank);
+  i := 0;
+  BankTbl.Select;
+  while BankTbl.SelectNext do
+    begin
+      inc(i);
+      stgBank.Cells[0, i] := BankTbl.–асч—четDet;
+      stgBank.Cells[1, i] := FormatFloat('0.00', BankTbl.—умќбщ);
+      stgBank.Cells[2, i] := BankTbl.¬алюта. од;
+      stgBank.Cells[3, i] := FormatFloat('0.00', BankTbl.—ум¬ал);
+    end;
+end;
+
+Procedure SetPartRecords;
+var i, j, m : integer;
+    Partner, SumGroup : variant;
+    IsPartner : boolean;
+begin
+ PartTbl.UseDataSource(0);
+ PartTbl.Clear();
+ DebTbl.UseDataSource(0);
+ DebTbl.Clear();
+ KredTbl.UseDataSource(0);
+ KredTbl.Clear();
+ AccsPart.ClearFieldBuffers();
+ AccsPart.IncludeZeroRest := false;
+ AccsPart.AppendRestToValueTable(Date,'ѕартнер;¬алюта;—умќбщ¬ал=—ум¬ал', PartTbl);
+// PartTbl.SortBy('ѕартнер');
+ PartTbl.GroupBy('ѕартнер;¬алюта','—ум¬ал');
+ PartTbl.DoCalculation('—умќбщ','—ум¬ал');
+ PartTbl.SortBy('¬алюта');
+ CourseTbl.Select;
+ While CourseTbl.SelectNext do
+  if VarAsDec(CourseTbl. урс)<>1 then
+    begin
+      PartTbl.SetRange(CourseTbl.@¬алюта, CourseTbl.@¬алюта);
+      PartTbl.DoCalculation('—умќбщ','—ум¬ал*'+DecToStr(CourseTbl. урс));
+    end;
+ PartTbl.CancelRange;
+
+ if edTypePart.ItemIndex = 0 then
+   begin
+     PartTbl.Select;
+     while PartTbl.SelectNext do
+       begin
+         if PartTbl.—ум¬ал < 0 then
+           begin
+             KredTbl.Append;
+             KredTbl.AssignFields('ѕартнер;¬алюта;—ум¬ал;—умќбщ',PartTbl);
+             KredTbl.Post;
+           end
+         else
+           begin
+             DebTbl.Append;
+             DebTbl.AssignFields('ѕартнер;¬алюта;—ум¬ал;—умќбщ',PartTbl);
+             DebTbl.Post;
+           end;
+       end;
+   end
+ else
+   begin
+     if edTypePart.ItemIndex = 1 then m := 20 /// 20 крупнейших
+     else
+     if edTypePart.ItemIndex = 2 then m := 10 /// 10 крупнейших
+     else
+     if edTypePart.ItemIndex = 3 then m := 5; /// 5 крупнейших
+     KredTblDet := CreateObject('“аблица«начений');
+     DebTblDet := CreateObject('“аблица«начений');
+     DebTbl.CopyColumnsTo(DebTblDet);
+     KredTbl.CopyColumnsTo(KredTblDet);
+     DebTblDet.Open; KredTblDet.Open; KredTblDet.Clear; KredTbl.Clear; DebTbl.Clear; DebTblDet.Clear;
+     PartTblGroup.Clear;
+     j := 1;
+     PartTbl.SortBy('—ум¬ал'); // кредиторы
+     PartTbl.SelectFirst;
+     while not PartTbl.EOF do
+       begin
+         Partner := PartTbl.ѕартнер;
+         if (PartTbl.—ум¬ал <= 0) then
+         begin
+          if (j <= m) then
+           begin
+             inc(j);
+             KredTblDet.Append;
+             KredTblDet.AssignFields('ѕартнер;¬алюта;—ум¬ал;—умќбщ', PartTbl);
+             KredTblDet.ѕартнерDet := GetPartName(KredTblDet.ѕартнер);
+             KredTblDet.Tp := 0;
+             KredTblDet.Post;
+             PartTbl.SelectNext;
+           end
+         else
+           begin
+             if PartTbl.—ум¬ал <= 0 then
+               begin
+                 PartTblGroup.Append;
+                 PartTblGroup.AssignFields('ѕартнер;¬алюта;—ум¬ал;—умќбщ', PartTbl);
+                 PartTblGroup.ѕартнерDet := GetPartName(PartTblGroup.ѕартнер);
+                 PartTblGroup.Tp := 1;
+                 PartTblGroup.Post;
+                 PartTbl.SelectNext;
+               end;
+           end;
+          end  else break;
+       end;                  // ѕартнерDet;ѕартнер;
+     PartTblGroup.GroupBy('¬алюта','—умќбщ;—ум¬ал');
+     PartTblGroup.Select;
+     while PartTblGroup.SelectNext do
+       begin
+         KredTblDet.Append;
+         KredTblDet.ѕартнерDet := 'ќстальные кредиторы';
+         KredTblDet.¬алюта := PartTblGroup.¬алюта;
+         KredTblDet.—умќбщ := PartTblGroup.—умќбщ;//Total('—умќбщ');
+         KredTblDet.—ум¬ал := PartTblGroup.—ум¬ал;//Total('—ум¬ал');
+         KredTblDet.Tp := 1;
+         KredTblDet.Post;
+       end;
+     KredTbl.Clear;
+     KredTblDet.AppendTo('Tp;ѕартнерDet;ѕартнер;¬алюта;—умќбщ;—ум¬ал', KredTbl);
+
+     j := 1;
+     PartTblGroup.Clear;
+     PartTbl.SortBy('-—ум¬ал'); // дебиторы
+     PartTbl.SelectFirst;
+     while not PartTbl.EOF do
+       begin
+         Partner := PartTbl.ѕартнер;
+         if PartTbl.—ум¬ал >= 0 then
+         begin
+          if (j <= m) then
+           begin
+             inc(j);
+             DebTblDet.Append;
+             DebTblDet.AssignFields('ѕартнер;¬алюта;—умќбщ;—ум¬ал;—умќбщ', PartTbl);
+             DebTblDet.ѕартнерDet := GetPartName(DebTblDet.ѕартнер);
+             DebTblDet.Tp := 0;
+             DebTblDet.Post;
+             PartTbl.SelectNext;
+           end
+         else
+           begin
+             if PartTbl.—ум¬ал >= 0 then
+               begin
+                 PartTblGroup.Append;
+                 PartTblGroup.AssignFields('ѕартнер;¬алюта;—умќбщ;—ум¬ал;—умќбщ', PartTbl);
+                 PartTblGroup.ѕартнерDet := GetPartName(PartTblGroup.ѕартнер);
+                 PartTblGroup.Tp := 1;
+                 PartTblGroup.Post;
+                 PartTbl.SelectNext;
+               end;
+           end;
+          end  else break;
+       end;                     // ѕартнерDet;ѕартнер;
+     PartTblGroup.GroupBy('¬алюта','—умќбщ;—ум¬ал');
+     PartTblGroup.Select;
+     while PartTblGroup.SelectNext do
+       begin
+         DebTblDet.Append;
+         DebTblDet.ѕартнерDet := 'ќстальные дебиторы';
+         DebTblDet.¬алюта := PartTblGroup.¬алюта;
+         DebTblDet.—умќбщ := PartTblGroup.—умќбщ;//Total('—умќбщ');
+         DebTblDet.—ум¬ал := PartTblGroup.—ум¬ал;//Total('—ум¬ал');
+         DebTblDet.Tp := 1;
+         DebTblDet.Post;
+       end;
+     DebTbl.Clear;
+     DebTblDet.AppendTo('Tp;ѕартнерDet;ѕартнер;¬алюта;—умќбщ;—ум¬ал', DebTbl);
+   end;
+ KredTbl.SortBy('Tp;—умќбщ');
+ DebTbl.SortBy('Tp;-—умќбщ');
+ ///////дебиторы
+ PartTblTotal := CreateObject('“аблица«начений');
+ DebTbl.CopyTo('',PartTblTotal);
+ SumAllDeb := PartTblTotal.Total('—умќбщ');
+ stgPartDeb.RowCount := DebTbl.LineCount+1;
+ stgPartDeb.Cells[1, 0] := '¬сего:';
+ stgPartDeb.Cells[3, 0] := VarAsStr(SumAllDeb);
+ i := 0;
+ DebTbl.Select;
+ while DebTbl.SelectNext do
+   begin
+     inc(i);
+     if edTypePart.ItemIndex = 0 then
+       begin
+         DebTbl.Edit;
+         DebTbl.ѕартнерDet := GetPartName(DebTbl.ѕартнер);
+         DebTbl.Post;
+       end;
+     stgPartDeb.Cells[0, i] := DebTbl.ѕартнерDet;
+     stgPartDeb.Cells[1, i] := FormatFloat('0.00', DebTbl.—ум¬ал);
+     if VarAsBool(DebTbl.¬алюта.IsFocused) then
+       stgPartDeb.Cells[2, i] := DebTbl.¬алюта. од;
+     stgPartDeb.Cells[3, i] := FormatFloat('0.00', DebTbl.—умќбщ);
+   end;
+ /////// кредиторы
+ PartTblTotal.Clear;
+ KredTbl.CopyTo('',PartTblTotal);
+ SumAllCred := PartTblTotal.Total('—умќбщ');
+ stgPartCred.RowCount := KredTbl.LineCount+1;
+ stgPartCred.Cells[1, 0] := '¬сего:';
+ stgPartCred.Cells[3, 0] := VarAsStr(SumAllCred);
+ i := 0;
+ KredTbl.Select;
+ while KredTbl.SelectNext do
+   begin
+     inc(i);
+     if edTypePart.ItemIndex = 0 then
+       begin
+         KredTbl.Edit;
+         KredTbl.ѕартнерDet := GetPartName(KredTbl.ѕартнер);
+         KredTbl.Post;
+       end;
+     stgPartCred.Cells[0, i] := KredTbl.ѕартнерDet;
+     stgPartCred.Cells[1, i] := FormatFloat('0.00', KredTbl.—ум¬ал);
+     if VarAsBool(KredTbl.¬алюта.IsFocused) then
+       stgPartCred.Cells[2, i] := KredTbl.¬алюта. од;
+     stgPartCred.Cells[3, i] := FormatFloat('0.00', KredTbl.—умќбщ);
+   end;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+begin
+ try
+   Panel1.Visible := true;
+   Panel3.Visible := true;
+   Panel4.Visible := true;
+   pDocuments.Visible := true;
+   MainPanel.Visible := true;
+   CursorVis := WaitCursorStart;
+   SumAll := 0;
+   lbAllSum1.Caption := 'Ѕаланс';
+   lbAllSum2.Caption := 'Ѕаланс';
+   Date := RoundDate(StrToDate(eDateTo.Text), rdDay, true);
+   FillCurrencyCoursesTbl(Currency, CourseTbl, Date);
+  // SetStoreRecords;    // на основании акумул€тора ƒвижениеѕо—кладу
+   SetStoreRecordsNew; // на основании акумул€тора ќстатки“оваров
+   SetKassaRecords;
+   SetBankRecords;
+   SetPartRecords;
+   if SumAllStore = 0 then Panel1.Visible := false;
+   if SumAllKassa = 0 then Panel3.Visible := false;
+   if SumAllBank = 0 then Panel4.Visible := false;
+   if SumAllDeb = 0 then pDocuments.Visible := false;
+   if SumAllCred = 0 then MainPanel.Visible := false;
+   SumAll := SumAllStore + SumAllReal + SumAllProd + SumAllKassa + SumAllBank + SumAllDeb - absD(SumAllCred);
+   lbAllSum1.Caption := lbAllSum1.Caption + ' : ' + VarAsStr(SumAll);
+   lbAllSum2.Caption := lbAllSum2.Caption + ' : ' + VarAsStr(SumAll);
+   lbActive.Caption := FormatFloat('0.00',SumAllStore + SumAllReal + SumAllProd + SumAllKassa + SumAllBank + SumAllDeb);
+   lbPassiv.Caption := FormatFloat('0.00',SumAllCred);
+   HasRun := true;
+ finally
+   SetCursor(CursorVis);
+ end;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+ V := Mean;
+ eDateTo.Text := dateToStr(CurrentDate);
+ TypeSetPart := CreateObject('—писок«начений');
+ TypeSetPart.AddValue(Trans('всем дебиторам/кредиторам'), Null);
+ TypeSetPart.AddValue(Trans('20-ти самым крупным дебиторам/кредиторам'), Null);
+ TypeSetPart.AddValue(Trans('10-ти самым крупным дебиторам/кредиторам'), Null);
+ TypeSetPart.AddValue(Trans('5-ти самым крупным дебиторам/кредиторам'), Null);
+ TypeSetPart.UseControl(CtrlToVar(edTypePart));
+ TypeSetPart.CurIndex := 0;
+ edTypePart.Text := '';
+ edTypePart.ItemIndex := 0;
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+ SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+{$D-}
+procedure stgKassa_GetCellProps(Sender : TObject; aCol, aRow : integer; aFont : TFont;var Background : TColor; var CellAlignment : TAlignment; var Layout : TTextLayout; var WrapText : boolean;Selected, Fixed, Highlight : boolean);
+begin
+// if aRow = 0 then CellAlignment := taCenter
+ //else
+ if aCol > 0 then begin
+   CellAlignment := taRightJustify;
+ end;
+ case aRow of
+    0 : aFont.Style := 1;
+//  1 : aFont.Style := fsBold;
+//  2 : aFont.Style := fsBold;
+ end;
+end;
+{$D+}
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  PrintBalans := CreateObject('“аблица«начений');
+  PrintBalans.Close();
+  PrintBalans.AddColumn('—клад', vtcString, 100);
+  PrintBalans.AddColumn('—умќбщ', vtcFFt,4);
+  PrintBalans.AddColumn('¬алюта', vtcLink,0);
+  PrintBalans.AddColumn('¬алютаDet', vtcString,50);
+  PrintBalans.AddColumn('–асч—чет', vtcLink,0);
+  PrintBalans.AddColumn('–асч—четDet', vtcString,50);
+  PrintBalans.AddColumn('ѕартнер', vtcLink,0);
+  PrintBalans.Open();
+
+  PrintBalans.Params['PStoreTbl']:=StoreTbl;
+  PrintBalans.Params['PBankTbl']:=BankTbl;
+  PrintBalans.Params['PKassaTbl']:=KassaTbl;
+  PrintBalans.Params['PDebTbl']:=DebTbl;
+  PrintBalans.Params['PKredTbl']:=KredTbl;
+  V.PrintForm('ѕечЅаланс', not VarAsBool(Options.GetServerPrm(DirectPrint)),ArrayOf(PrintBalans,SumAll,SumAllStore,SumAllReal,SumAllProd,SumAllKassa,SumAllBank,SumAllDeb,SumAllCred,CurrencySum));
+  PrintBalans.Clear();
+end;
+
+//автор —нижко ¬.¬.
+//ѕроцедура дл€ заполнени€ таблицы ContentTbl
+procedure TblFill(Doc : ICDocuments; Vtbl : ICVAlueTable; Fields : String; “ип : Integer);
+begin
+  Vtbl.Select;
+  While Vtbl.SelectNext do
+   if Fields = '¬алютаDet;—умќбщ; урс;—ум¬ал' then
+      begin
+        if (Vtbl.HasField(ExtractWord(1,Fields,';'))) and
+           (Vtbl.HasField(ExtractWord(2,Fields,';'))) and
+           (Vtbl.HasField(ExtractWord(3,Fields,';'))) and
+           (Vtbl.HasField(ExtractWord(4,Fields,';')))then
+            begin
+              Doc.AppendLine;
+                Doc.Ќаименование := Vtbl._Default[ExtractWord(1,Fields,';')];
+                Doc.—умќбщ := Vtbl._Default[ExtractWord(2,Fields,';')];
+                Doc. урс := Vtbl._Default[ExtractWord(3,Fields,';')]; 
+                Doc.—ум¬ал := Vtbl._Default[ExtractWord(4,Fields,';')];
+                Doc.“ип := “ип;
+              Doc.PostLine;
+            end;
+      end
+    else
+      begin 
+        if Fields = 'ѕартнерDet;—умќбщ;¬алюта;—ум¬ал' then
+          begin
+            if (Vtbl.HasField(ExtractWord(1,Fields,';'))) and
+               (Vtbl.HasField(ExtractWord(2,Fields,';'))) and
+               (Vtbl.HasField(ExtractWord(3,Fields,';'))) and
+               (Vtbl.HasField(ExtractWord(4,Fields,';')))then
+                begin
+                  Doc.AppendLine;
+                    Doc.Ќаименование := Vtbl._Default[ExtractWord(1,Fields,';')];
+                    Doc.—умќбщ := Vtbl._Default[ExtractWord(2,Fields,';')];
+                    Doc.¬алюта := Vtbl._Default[ExtractWord(3,Fields,';')];
+                    Doc.—ум¬ал := Vtbl._Default[ExtractWord(4,Fields,';')];
+                    Doc.“ип := “ип;
+                  Doc.PostLine;
+                end;
+          end
+        else
+          if Fields = '–асч—четDet;—умќбщ;¬алюта;—ум¬ал' then
+            begin
+            if (Vtbl.HasField(ExtractWord(1,Fields,';'))) and
+               (Vtbl.HasField(ExtractWord(2,Fields,';'))) and
+               (Vtbl.HasField(ExtractWord(3,Fields,';'))) and
+               (Vtbl.HasField(ExtractWord(4,Fields,';')))then
+                begin
+                  Doc.AppendLine;
+                    Doc.Ќаименование := Vtbl._Default[ExtractWord(1,Fields,';')];
+                    Doc.—умќбщ := Vtbl._Default[ExtractWord(2,Fields,';')];
+                    Doc.¬алюта := Vtbl._Default[ExtractWord(3,Fields,';')];
+                    Doc.—ум¬ал := Vtbl._Default[ExtractWord(4,Fields,';')];
+                    Doc.“ип := “ип;
+                  Doc.PostLine;
+                end;
+            end
+          else 
+            if Fields = '—клад;—умќбщ;¬алюта;—умќбщ¬ал' then
+              begin
+                if (Vtbl.HasField(ExtractWord(1,Fields,';'))) and
+                   (Vtbl.HasField(ExtractWord(2,Fields,';'))) and
+                   (Vtbl.HasField(ExtractWord(3,Fields,';'))) and
+                   (Vtbl.HasField(ExtractWord(4,Fields,';')))then
+                    begin
+                      Doc.AppendLine;
+                        Doc.Ќаименование := Vtbl._Default[ExtractWord(1,Fields,';')];
+                        Doc.—умќбщ := Vtbl._Default[ExtractWord(2,Fields,';')];
+                        Doc.¬алюта := Vtbl._Default[ExtractWord(3,Fields,';')];
+                        Doc.—ум¬ал := Vtbl._Default[ExtractWord(4,Fields,';')];
+                        Doc.“ип := “ип;
+                      Doc.PostLine;
+                    end;
+                end
+              else
+                if (Vtbl.HasField(ExtractWord(1,Fields,';'))) and
+                   (Vtbl.HasField(ExtractWord(2,Fields,';'))) then
+                    begin
+                      Doc.AppendLine;
+                        Doc.Ќаименование := Vtbl._Default[ExtractWord(1,Fields,';')];
+                        Doc.—умќбщ := Vtbl._Default[ExtractWord(2,Fields,';')];
+                        Doc.“ип := “ип;
+                      Doc.PostLine;
+                    end;
+      end;
+end;
+
+//автор —нижко ¬.¬.
+//ѕроцедура дл€ создани€ документа "Ѕаланс"
+procedure tbPutToJournal_Click(Sender : TObject);
+var
+  DocBalans : ICDocuments;
+  RealSum_Vh, RealSum_Ot : Decimal;
+//RealSum - сумма по реализаторам с учетом цен (Vh - входных, Ot - отпускных)
+begin
+  try
+    if VarAsBool(HasRun) then
+      begin
+        DocBalans := CreateObject('ƒокументы.Ѕаланс');
+        DocBalans.Select;
+        DocBalans.Append;
+          DocBalans.DATE := StrToDate(eDateTo.Text);
+          DocBalans.ѕользователь := GetUserName;
+          DocBalans.TypePart := edTypePart.Text;
+          DocBalans.—умма := SumAll;
+          DocBalans.ѕасив—умма :=  SumAllCred;
+          DocBalans.—клады—умма := SumAllStore;
+          DocBalans.ѕрод—умма := SumAllProd;
+          DocBalans. асса—умма := SumAllKassa;
+          DocBalans.–асч—чет—умма := SumAllBank;
+          DocBalans.ƒеб—умма := SumAllDeb;
+          DocBalans.SelectLines;
+          if SumAllStore <> 0 then
+            TblFill(DocBalans,StoreTbl,'—клад;—умќбщ;¬алюта;—умќбщ¬ал',0);
+          if SumAllKassa <> 0 then
+            TblFill(DocBalans,KassaTbl,'¬алютаDet;—умќбщ; урс;—ум¬ал',4);
+          if SumAllBank <> 0 then
+            TblFill(DocBalans,BankTbl,'–асч—четDet;—умќбщ;¬алюта;—ум¬ал',5);
+          if SumAllDeb <> 0 then
+            TblFill(DocBalans,DebTbl,'ѕартнерDet;—умќбщ;¬алюта;—ум¬ал',6);
+          if SumAllCred <> 0 then
+            TblFill(DocBalans,KredTbl,'ѕартнерDet;—умќбщ;¬алюта;—ум¬ал',7);
+          DocBalans.–еал—умма := RealSum_Vh;
+          DocBalans.–еал—уммаќтп := RealSum_Ot;
+        DocBalans.Post;
+      end
+    else
+      begin
+        ShowMessage('ќтчет дл€ передачи в журнал итогов не сформирован!');
+        exit;
+      end;
+  finally
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbParam:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel6:TO4Panel
+lDateFrom:TO4Label
+eDateTo:TO4Edit
+ToolButton3:TO4ToolButton
+tbPutToJournal:TO4ToolButton
+Panel2:TO4Panel
+Splitter3:TO4Splitter
+Splitter2:TO4Splitter
+Splitter4:TO4Splitter
+Panel1:TO4Panel
+Label3:TO4Label
+dbgStore:TO4DBGrid
+stgStore:TO4StringGrid
+Panel3:TO4Panel
+Label1:TO4Label
+dbgKassa:TO4DBGrid
+stgKassa:TO4StringGrid
+pDocuments:TO4Panel
+Label7:TO4Label
+dbgDebitory:TO4DBGrid
+stgPartDeb:TO4StringGrid
+Panel4:TO4Panel
+Label4:TO4Label
+dbgBank:TO4DBGrid
+stgBank:TO4StringGrid
+MainPanel:TO4Panel
+Label2:TO4Label
+dbgCreditory:TO4DBGrid
+stgPartCred:TO4StringGrid
+Panel7:TO4Panel
+Panel8:TO4Panel
+Label8:TO4Label
+Label9:TO4Label
+lbPassiv:TO4Label
+Label5:TO4Label
+Panel9:TO4Panel
+Label12:TO4Label
+Label13:TO4Label
+lbActive:TO4Label
+Label11:TO4Label
+Panel12:TO4Panel
+Label15:TO4Label
+Panel13:TO4Panel
+edTypePart:TO4Edit
+Panel5:TO4Panel
+lbAllSum1:TO4Label
+lbAllSum2:TO4Label

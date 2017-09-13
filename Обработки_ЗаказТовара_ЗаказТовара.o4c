@@ -1,0 +1,533 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСТаблицамиЗначенийCL, Пользователи;
+
+implementation
+Var
+  MasterProc : IcProcessing;
+  TblPartners, GoodPartnerTbl, OrderTbl : IcValueTable;
+  LockDateChange : Boolean;
+  Date : DateTime;
+//  CursorVis : TCursor;
+  DateFrom, DateTo : DateTime;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  PartnDic, Store, Region : IcDictionary;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  TblPartners := CreateObject('ValueTable');
+  TblPartners.AddColumn('Партнер', vtcLink,0);
+  TblPartners.AddColumn('Период', vtcString, 20);
+  TblPartners.AddColumn('ПериодInt', vtcInteger, 0);
+  TblPartners.AddColumn('Документ', vtcLink,0);
+  TblPartners.AddColumn('ОзнДок', vtcBoolean, 0);
+  TblPartners.Open;
+
+
+
+  GoodPartnerTbl := CreateObject('ValueTable');
+  GoodPartnerTbl.AddColumn('Товар',vtcLink,0);
+  GoodPartnerTbl.AddColumn('Партнер',vtcLink,0);
+  GoodPartnerTbl.AddColumn('ВхЦенаБезНДС',vtcFFt,7);
+  GoodPartnerTbl.AddColumn('ДатаПр',vtcDateTime,0);
+  GoodPartnerTbl.AddColumn('КолОбщ',vtcFFt,5);
+  GoodPartnerTbl.Open;
+
+  OrderTbl := CreateObject('ValueTable');
+  OrderTbl.AddColumn('NN',vtcInteger,0);
+  OrderTbl.AddColumn('КодТовара',vtcString,20);
+  OrderTbl.AddColumn('Товар',vtcLink,0);
+  OrderTbl.AddColumn('Цена',vtcFFt,7);
+  OrderTbl.AddColumn('ДатаПр',vtcDateTime,0);
+  OrderTbl.AddColumn('ДатаПр1',vtcFFt,0);
+  OrderTbl.AddColumn('КолОбщ',vtcFFt,5);
+  OrderTbl.AddColumn('Оборот',vtcFFt,7);
+  OrderTbl.AddColumn('ОборотПр',vtcFFt,7);
+  OrderTbl.AddColumn('ОборотРС',vtcFFt,7);
+  OrderTbl.AddColumn('Количество',vtcFFt,7);
+  OrderTbl.AddColumn('Сумма',vtcFFt,7);
+  OrderTbl.AddColumn('Filtr',vtcInteger,0);
+  OrderTbl.Open;
+
+end;
+
+Procedure GetPartnersTbl;
+begin
+  TblPartners.UseDataSource(Null);
+  TblPartners.CopyDataToServer;
+  Server.GetPartnersTbl(Date,TblPartners.SrvMean);
+  TblPartners.CopyDataFromServer;
+  TblPartners.SrvMean.Clear;
+  TblPartners.Select;
+  TblPartners.UseDataSource(CtrlToVar(TVS));
+  TblPartners.SelectFirst;
+end;
+
+
+Procedure RefreshTbl;
+var
+  i : Integer;
+begin
+  OrderTbl.SortBy('NN');
+  for i:=6 to XGrid.RowCount-1 do
+    if OrderTbl.Find(VarAsInt(XGrid.Cells(i,1,i,1).Value)) then
+      begin
+        OrderTbl.Edit;
+        if VarAsDec(XGrid.Cells(i,8,i,8).Value) <> VarAsDec(OrderTbl.Количество) then
+          OrderTbl.Количество := XGrid.Cells(i,8,i,8).Value;
+        if VarAsDec(XGrid.Cells(i,4,i,4).Value) <> VarAsDec(OrderTbl.Цена) then
+          OrderTbl.Цена := XGrid.Cells(i,4,i,4).Value;
+        OrderTbl.Post;
+      end;
+  OrderTbl.Select;
+  OrderTbl.DoCalculation('Сумма','Количество*Цена');
+end;
+
+Procedure AddGoodToXGtid;
+Var
+  i : Integer; 
+  Total : Variant;
+begin
+  if TblPartners.IsFocused then
+    begin
+      XGrid.ClearAll;
+      XGrid.Visible:=False;
+      XGrid.AddSection('Hed');
+      XGrid.Cells(1,1,1,1).Value := XGrid.Cells(1,1,1,1).Value + VarAsStr(TblPartners.Партнер.ПолноеНазвание);
+      XGrid.Cells(2,1,2,1).Value := XGrid.Cells(2,1,2,1).Value + DateToStr(DateFrom)+' - '+DateToStr(DateTo);
+      XGrid.Cells(5,6,5,6).Value := VarAsStr(TblPartners.Период);
+
+      OrderTbl.SortBy('NN');
+      OrderTbl.Select;
+
+      i:=1;
+      while OrderTbl.SelectNext do
+        begin
+          OrderTbl.AddToXGrid(CtrlToVar(XGrid),'Det','NN;КодТовара;Товар;Цена;ДатаПр;Оборот;КолОбщ;Количество;Сумма',i,1);
+          if VarAsDec(OrderTbl.Количество)<=0 then
+            XGrid.Cells(i+5,1,i+5,9).FontStyle:=1;
+          inc(i);
+        end;
+      Total:= OrderTbl.Total('Количество;Сумма');
+      XGrid.AddSection('Total');
+      XGrid.Cells(XGrid.RowCount,8,XGrid.RowCount,8).Value := Total[0];
+      XGrid.Cells(XGrid.RowCount,9,XGrid.RowCount,9).Value := Total[1];
+      if XGrid.RowCount>5 then
+        begin
+          XGrid.FixedRowCount :=5;
+          XGrid.Cells(6,3,XGrid.RowCount,3).AdjustRowHeights(0);
+        end;
+
+      XGrid.Refresh;
+      XGrid.Visible:=True;
+    end;
+
+end;
+
+Procedure GetPartnersOborot;
+begin
+  XGrid.ClearAll;
+  if TblPartners.IsFocused and (VarAsInt(TblPartners.ПериодInt)<>0) then
+    try
+//      CursorVis := WaitCursorStart;
+      DateTo := RoundDate(Date,rdDay,True)-0.00001;
+      DateFrom := RoundDate(Date-VarAsInt(TblPartners.ПериодInt-1),rdDay,False);
+//      PartnDic := TblPartners.Партнер;
+      PartnDic.Find(TblPartners.@Партнер);
+      GoodPartnerTbl.CopyDataToServer;
+      OrderTbl.CopyDataToServer;
+      PartnDic.SetSrvToClientPos;
+      if MasterProc.RunThreadProcess(Server.GetOrderTblEP(DateFrom,DateTo,PartnDic.SrvMean,OrderTbl.SrvMean, GoodPartnerTbl.SrvMean)
+                                     ,'Формирование таблицы товаров:') then
+        begin
+          OrderTbl.CopyDataFromServer;
+          GoodPartnerTbl.CopyDataFromServer;
+          GoodPartnerTbl.SrvMean.Clear;
+          OrderTbl.SrvMean.Clear;
+          AddGoodToXGtid;
+       end;
+    finally
+//       SetCursor(CursorVis);
+    end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  try
+    CreateObjects;
+    LockDateChange := true;
+    eDate.Text := DateToStr(CurrentDate);
+    Date := StrToDate(eDate.Text);
+    LockDateChange := False;
+    Store :=  GetUsersField('Склад');
+    if IsObjFocused(Store) then
+      eStore.Text := VarAsStr(Store.Название);
+    Region :=  GetUsersField('Регион');
+    if IsObjFocused(Region) then
+      eRegion.Text := VarAsStr(Region.Название);
+    PartnDic := CreateObJect('Справочники.ЮрПартнеры');
+    GetPartnersTbl;
+
+  finally
+  end;
+
+
+end;
+
+
+
+procedure eDate_Change(Sender: TObject);
+begin
+  if LockDateChange then exit;
+  Date := StrToDate(eDate.Text);
+  GetPartnersTbl;
+
+end;
+
+procedure TVS_FieldChange(FieldName: string; Value: Variant);
+Var
+  PerInt : Integer;
+begin
+  if FieldName='Период' then
+    if VarAsInt(Value,-1)>=0 then
+      begin
+        TblPartners.ПериодInt := VarAsInt(Value);
+        TblPartners.Период := VarAsStr(Value)+' дн.';
+        GetPartnersOborot;
+      end;
+end;
+
+procedure TVS_VPATimedAfterScroll(Sender: TObject);
+Var
+  Nakl : IcDocuments;  
+  Partn : Variant;
+begin
+  Partn := TblPartners.Партнер;
+  if IsObjEQ(PartnDic,Partn, false) then exit;
+  if TblPartners.IsFocused and VarAsBool(TblPartners.ОзнДок)  then
+    begin
+      Nakl := TblPartners.Документ;
+      XGrid.LoadFromString(Nakl.ДокОснов);
+      OrderTbl := CreateTblFromBLOB(Nakl.ТаблицаОснование);
+      Xgrid.ReadOnly:= True;
+      XGrid.Refresh;
+      tbRun.Enabled := False;
+      tbCreateDoc.Enabled := False;
+      PartnDic.Find(TblPartners.@Партнер);
+
+    end
+  else
+    begin
+      Xgrid.ReadOnly:= False;
+      GetPartnersOborot;
+      tbRun.Enabled := True;
+      tbCreateDoc.Enabled := True;
+    end;
+end;
+
+procedure tbXTools_Click(Sender: TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+
+end;
+
+procedure tbRun_Click(Sender: TObject);
+begin
+  RefreshTbl;
+  AddGoodToXGtid;
+end;
+
+function GetEmplByNameCl(EmplName : string) : ICDictionary;
+Var
+ Respons : ICDictionary;
+begin
+  Respons := CreateObject('Справочники.Служащие');
+  if Respons.FindByField('ПолноеНазвание', EmplName, False) then
+    Result := Respons
+  else
+    nil(Result);
+end;
+
+
+procedure GetPackCount(Data : IObject);
+var
+  DicPack : ICDictionary;
+begin
+  DicPack := Data.Упаковка;
+  if not DicPack.IsFocused then
+    exit;
+  if (VarAsDec(DicPack.Количество) <> 0) then
+    Data.КоличествоУпаковок := VarAsDec(Data.Количество) / DicPack.Количество;
+end;
+
+
+procedure AppendGoodInCl(Data : ICValueTable; Source, Store : ICDictionary; Count, Price : Decimal; MetRasch : Integer);
+Var
+  Units : ICDictionary;
+begin
+  Units := CreateObject('Справочники.Упаковки');
+  Data.Append;
+  Data.Товар := Source;
+  Data.AssignFields('Код;ЕдИзм', Source);
+  if Data.HasField('Склад') then
+    Data.Склад := Store;
+  Data.Количество := Count;
+  Data.Упаковка := GetActiveLink(Units, Source);
+  GetPackCount(Data);
+  Data.ВалютаТовара := Source.@ВалютаВхЦена;
+  Data.КурсТовара := Source.ВалютаВхЦена.GetTimedValue(Constants.UsedCurs, CurrentDateTime);// Source.КурсВхЦены;
+  //масса и площадь в счете на закупку
+  if Data.HasField('ОбщаяМасса') then
+    Data.Масса := Source.Масса;
+  if Data.HasField('ОбщаяПлощадь') then
+    Data.Площадь := Source.Площадь;
+  if Data.HasField('ОптЦена') then
+    begin
+       Data.ОптЦена := Source.ОптЦена;
+       if VarAsBool(Source.@ВалютаОптЦена.IsFocused) then
+         Data.ОптЦена :=   Data.ОптЦена*Source.ВалютаОптЦена.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+    end;
+  Data.ЦенаВВалюте := Price;
+  Data.Цена := Data.КурсТовара* Data.ЦенаВВалюте;
+  Data.СтавкаНДС := 0;
+  Data.ЦенаБезНДС := Data.Цена;
+  if Data.HasField('ПроцентСкидкиНадбавки') then
+    Data.ЦенаБезСкидкиНадбавки := Data.Цена;
+  Data.Post;
+
+
+
+end;
+
+procedure TableCalcFields(Doc : ICDocuments);
+begin
+  CalcLineSumma(Doc); //находится в модуле Расчёты
+end;
+
+
+procedure CalcFields(Doc : ICDocuments);
+begin
+  GetCalcValSumma(Doc); //находится в модуле Расчёты
+end;
+
+procedure tbCreateDoc_Click(Sender: TObject);
+Var
+  ContentTbl : IcValueTable;
+  NaklDoc : IcDocuments;
+  Currency, InStore : IcDictionary;
+begin
+
+  if not IsObjFocused(Store) then
+    begin
+      ShowMessage('Укажите склад');
+      exit;
+    end;
+  if not IsObjFocused(Region) then
+    begin
+      ShowMessage('Укажите регион');
+      exit;
+    end;
+
+
+
+  RefreshTbl;
+  OrderTbl.Select;
+  if (OrderTbl.LineCount>0) and TblPartners.IsFocused then
+    begin
+      ContentTbl := CreateObject('ValueTable');
+
+
+      NaklDoc := CreateObject('Документы.НакладнаяПрихода');
+      NaklDoc.Select;
+      NaklDoc.Append;
+      NaklDoc.ДатаДокумента := CurrentDateTime;
+      NaklDoc.Регион := Region;
+      NaklDoc.СкладПр := store;
+
+
+      NaklDoc.Партнер := TblPartners.Партнер;
+
+
+      Currency := CreateObject('Справочники.Валюты');
+      Currency.Select;
+      if not Currency.FindByField('Активность', VarAsInt(True), True) then
+        Currency := GetNatCurrency(Currency);
+      if Currency.IsFocused then
+        begin
+          NaklDoc.Курс := Currency.GetTimedValue(Constants.UsedCurs, NaklDoc.ДатаДокумента);
+          NaklDoc.Валюта := Currency;
+        end;
+      NaklDoc.Отпуск := 0;
+      if NaklDoc.Партнер.GetSign = 'ФизЛица' then
+        NaklDoc.ЧерезКого := NaklDoc.Партнер;
+
+      GetNextDateForDocument(NaklDoc, Constants, True);
+      NaklDoc.Ответственный := GetEmplByNameCl(GetUserName);
+      NaklDoc.ДатаДоверенности := CurrentDate;
+      NaklDoc.ОснованиеДоверенности := 'накладна № ' + NaklDoc.НомерДокумента + ' від ' + DateToStr(NaklDoc.ДатаДокумента) + ' р.';
+      NaklDoc.МетодРасчета := VarAsInt(Options.GetServerPrm(CalcSumRule));
+      NaklDoc.BaseID := VarAsInt(Constants.КодИБ);
+      if NaklDoc.BaseID = 0 then
+        raise('Заполните код информационной базы в значениях важных констант');
+
+      NaklDoc.SaveContents('',ContentTbl);
+      while OrderTbl.SelectNext do
+        if VarAsBool(OrderTbl.@Товар.IsFocused) and (VarAsDec(OrderTbl.Количество)<>0) then
+          begin
+            AppendGoodInCL(ContentTbl,OrderTbl.Товар,store,OrderTbl.Количество,OrderTbl.Цена,NaklDoc.МетодРасчета);
+          end;
+     NaklDoc.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+     NaklDoc.SetOnCalcFields(EntryPoint(CalcFields));
+
+
+     NaklDoc.LoadContents('',ContentTbl);
+     CalcTransSumma(NaklDoc, Constants.ProcentPDV);
+
+     NaklDoc.ОзДокОснов := True; 
+     XGrid.ReadOnly := True;
+     NaklDoc.ДокОснов := XGrid.SaveToString;
+     NaklDoc.ТаблицаОснование := WritePropsToBlob(OrderTbl);
+     NaklDoc.Post;
+
+     NaklDoc.ApplyUpdates;
+
+     NaklDoc.EditInForm('НакладнаяПрихода',1);
+     if IsObjFocused(NaklDoc) then
+       begin
+         TblPartners.Edit;
+         TblPartners.Документ := NaklDoc;
+         TblPartners.ОзнДок := True;
+         TblPartners.Post;
+         tbRun.Enabled := False;
+         tbCreateDoc.Enabled := False;
+       end;
+    end;
+
+
+
+  Form.ModalResult := mrOk;
+  Form.Close;
+end;
+
+{$D-}
+procedure dbPartners_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if TblPartners.IsFocused and VarAsBool(TblPartners.ОзнДок) then
+    Index1 := 90
+  else
+    Index1 := -1;
+end;
+procedure dbPartners_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if TblPartners.IsFocused and Highlight then
+    BackColor := clHighlight;
+end;
+{$D+}
+
+
+
+procedure tbPrint_Click(Sender: TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure dbPartners_DblClick(Sender: TObject);
+Var
+  NaklDoc : IcDocuments;
+begin
+  if TblPartners.IsFocused and VarAsBool(TblPartners.ОзнДок) and IsObjFocused(TblPartners.Документ) then
+    begin
+      NaklDoc := TblPartners.Документ;
+      NaklDoc.EditInForm('НакладнаяПрихода',1);
+    end;
+end;
+
+procedure eRegion_ActionClear(Sender: TObject);
+begin
+  Store := Null;
+  eStore.Text :='';
+  Region := Null;
+  eRegion.Text :='';
+
+end;
+
+procedure eRegion_ActionExecute(Sender: TObject);
+Var
+  DefName : String;
+  TmpDic : IcDictionary;
+begin
+  TmpDic := CreateObject('Справочники.Регионы');
+  if isNull(Region) or isNil(Region) then
+    Region := CreateObject('Справочники.Регионы');
+  if TmpDic.SelectInForm('ВыборРегиона',DefName, Null) then
+    begin
+      Store := Null;
+      eStore.Text :='';
+      Region.Find(TmpDic);
+      eRegion.Text := DefName;
+    end;
+end;
+
+procedure eStore_ActionClear(Sender: TObject);
+begin
+  Store := Null;
+  eStore.Text :='';
+
+end;
+
+procedure eStore_ActionExecute(Sender: TObject);
+Var
+  DefName : String;
+  TmpDic : IcDictionary;
+begin
+  TmpDic := CreateObject('Справочники.Склады');
+  if isNull(Store) or isNil(Store) then
+    Store := CreateObject('Справочники.Склады');
+  if IsObjFocused(Region) then
+    TmpDic.Params['Region'] := Region;
+  if TmpDic.SelectInForm('ВыборСклада',DefName, Null) then
+    begin
+      Store.Find(TmpDic);
+      eStore.Text := DefName;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+Label1:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+eDate:TO4Edit
+eRegion:TO4Edit
+eStore:TO4Edit
+pPartners:TO4Panel
+Label2:TO4Label
+dbPartners:TO4DBGrid
+pGoods:TO4Panel
+XGrid:TO4XGrid
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbRun:TO4ToolButton
+tbCreateDoc:TO4ToolButton
+TVS:TO4TableValueSource

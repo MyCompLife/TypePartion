@@ -1,0 +1,33 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var MasterProc : ICProcessing;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+end;
+
+procedure tbCancel_Click(Sender: TObject);
+begin
+ Form.ModalResult := mrCancel;
+end;
+
+procedure tbOK_Click(Sender: TObject);
+begin
+  MasterProc.Params['TaxGroup'] := edTaxGroup.ItemIndex+1;
+  Form.ModalResult := mrOK;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+edTaxGroup:TO4Edit
+ToolBar1:TO4ToolBar
+ToolButton2:TO4ToolButton
+tbOK:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbCancel:TO4ToolButton

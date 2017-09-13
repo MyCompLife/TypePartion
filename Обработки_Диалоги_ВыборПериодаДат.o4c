@@ -1,0 +1,33 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+var
+     MasterProc : ICProcessing;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+  DatePeriod.DateFrom := CurrentDate;
+  DatePeriod.DateTo := CurrentDate;
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+  if DatePeriod.DateTo<DatePeriod.DateFrom then
+    ShowMessage('Конечная дата не может быть меньше начальной даты!')
+  else
+    begin
+      MasterProc.Params['BegDate'] := DatePeriod.DateFrom;
+      MasterProc.Params['EndDate'] := DatePeriod.DateTo;
+      Form.ModalResult := mrOK;
+      Form.Close;
+    end;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+btOK:TO4Button
+btCancel:TO4Button
+DatePeriod:TO4DatePeriod

@@ -1,0 +1,34 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsEmploy : ISAccs;
+  Date : DateTime;
+
+procedure InitSrvData; server;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AccsEmploy := CreateObject('Аккумуляторы.РасчетыСоСлужащими');
+end;
+
+procedure GoodCalcFields(Employ : ISDictionary);
+begin
+  AccsEmploy.CalcGroupRestDirect(Date, ArrayOf(Employ));
+  Employ.РасчетыПоЗарплате := AccsEmploy.Задолженность;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  Result := EntryPoint(GoodCalcFields);
+end;
+
+procedure SetDate(DT : DateTime); server;
+begin
+  Date := RoundDate(DT, rdDay, True);
+end;  
+
+end.

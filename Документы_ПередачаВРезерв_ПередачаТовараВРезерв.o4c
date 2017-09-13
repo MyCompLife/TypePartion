@@ -1,0 +1,103 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR : ICDictionary;
+  Tbl : ICValueTable;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  Tbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  TmpPartner : ICDictionary;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      Value['RespName'] := GetShortPartName(MasterData.Ответственный);
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        begin        
+          TmpPartner := MasterData.Партнер;
+          Value['PARTADDR'] := GetActiv(ADR, 'Адрес', TmpPartner);
+          Value['PARTPHONE'] := GetActiv(TLF, 'Номер', TmpPartner);
+          Value['PARTNAME'] := TmpPartner.ПолноеНазвание
+        end
+      else
+        begin
+          Value['PARTADDR'] := '';
+          Value['PARTPHONE'] := '';
+          Value['PARTNAME'] := '';
+        end;
+      Value['DateTo'] := MasterData.ОкончаниеРезерва;
+    end;
+  MasterData.SaveContents('', Tbl);
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Товар');
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := Tbl.SelectFirst()
+  else
+    Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+    end;
+end;
+
+procedure Structure1_ROOT_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := MasterData.LinesCount;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndROOT:TRBDetailBand
+Label5:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label12:TRBLabel
+Label19:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+SysData1:TRBSysData
+bndFtDET:TRBBand
+Label6:TRBLabel
+Label7:TRBLabel
+Structure1:TRBStructure

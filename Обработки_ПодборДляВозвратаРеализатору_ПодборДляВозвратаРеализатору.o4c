@@ -1,0 +1,104 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+var
+  Partner, Good : Variant;
+  TblGood : ICValueTable;
+  ChangeImage : Integer;
+  ChangeSort : Boolean;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  CursorVis : TCursor;
+begin
+  CursorVis := WaitCursorStart;
+  try
+    TblGood.UseDataSource(0);
+    try
+      TblGood.CopyDataToServer;
+      server.GetStoreList(TblGood.SrvMean, Partner, dpDates.DateFrom, dpDates.DateTo);
+      TblGood.CopyDataFromServer;
+      TblGood.SrvMean.Clear;
+    finally
+      TblGood.UseDataSource(CtrlToVar(TVSGood));
+      TblGood.SortBy('Товар;Код');
+    end;
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('Справочники')) then
+    begin
+      Partner := Params;
+      TblGood := CreateObject('ТаблицаЗначений');
+      TblGood.Close;
+      TblGood.AddColumn('Код', lftString, 20);
+      TblGood.AddColumn('Товар', lftLink, 0);
+      TblGood.AddColumn('ЕдИзм', lftLink, 0);
+      TblGood.AddColumn('ВалютаТовара', lftLink, 0);
+      TblGood.AddColumn('Партнер', lftLink, 0);
+      TblGood.AddColumn('Партия', lftFloat, 0);
+      TblGood.AddColumn('СтавкаНДС', lftInteger, 0);
+      AddFFtColumnsList(TblGood, 'Цена;ВхЦенаБезНДС;ЦенаВВалюте;КурсТовара;ВхЦенаВал;КолОбщ');
+      TblGood.Open;
+      TblGood.tblName := 'TblGoodByReal';
+      SetFormatStdColumnsList(TblGood, 'ВхЦенаБезНДС;Цена;ЦенаВВалюте;КолОбщ');
+      tbRun_Click(tbRun);
+    end
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  TblGood.SortBy('Код;Товар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  TblGood.SortBy('Товар;Код');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+  TVSGood.AfterScrollLock := True;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  TblGood.Locate('Товар', InParams);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+Panel4:TO4Panel
+dpDates:TO4DatePeriod
+Panel5:TO4Panel
+tbrData:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbRun:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+TVS_DetGood:TO4TableValueSource
+pmPart:TO4PopupMenu
+miSortByPrice:TO4MenuItem
+miSortByCnt:TO4MenuItem

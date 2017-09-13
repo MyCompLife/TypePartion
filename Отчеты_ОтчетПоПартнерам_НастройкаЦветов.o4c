@@ -1,0 +1,174 @@
+interface
+
+uses  System, DispIntf, »нтерфейс, –асчеты, ConstNames, Reports, ѕользователи;
+
+implementation
+var 
+   Constants : IC4VPAConst;
+   Options : ICOptions;
+   ColorTbl, tmpTbl : ICValueTable;
+   s : string;
+   V : ICProcessing;
+
+procedure CreateObjects;
+begin
+  ColorTbl := CreateObject('“аблица«начений');
+  tmpTbl := CreateObject('“аблица«начений');
+  ColorTbl.AddColumn(' олƒней', vtcInteger, 0);
+  ColorTbl.AddColumn('÷вет', vtcInteger, 0);
+  ColorTbl.Open;
+
+end;
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var i : integer;
+begin
+  V := Mean;
+  Constants := GetConstants;
+  Options := GetOptions;
+  CreateObjects;
+  // чтение списка цветов
+  ColorTbl.Select;
+  s := Options.GetServerPrm('ќтчетѕоѕартнерам÷вета');
+  if WordCount(s,' ')>1 then
+   for i:= 1 to (WordCount(s,' ') div 2) do
+    begin
+     ColorTbl.Append;
+     ColorTbl. олƒней := VarAsInt(ExtractWord(i*2-1, s,  ' '), 0);
+     ColorTbl.÷вет := VarAsInt(ExtractWord(i*2, s,  ' '), 0);
+     ColorTbl.Post;
+    end;
+
+  ColorTbl.UseDataSource(CtrlToVar(TVSColorParam));
+  ColorTbl.SortBy(' олƒней');     
+  ColorTbl.SelectLast; 
+
+end;
+
+procedure tbAdd_Click(Sender: TObject);
+var PayDelay : integer;
+begin
+
+ if ColorTbl.IsFocused then
+  begin
+   ColorTbl.SelectLast;
+   PayDelay := ColorTbl. олƒней+1;
+  end
+ else
+  PayDelay := 1;
+
+ if StdInpInt('¬ведите количество дней просрочки: ', PayDelay) then
+  if not ColorTbl.Locate(' олƒней', PayDelay) then
+   begin
+    ColorTbl.Append;
+    ColorTbl. олƒней := PayDelay;
+    ColorTbl.÷вет := clSilver;
+    ColorSel.Color := clSilver;
+    ColorTbl.Post;
+   end
+  else
+   showmessage('“акое "количество дней просрочки" уже есть в списке !');
+end;
+
+procedure tbDel_Click(Sender: TObject);
+begin
+ if (ColorTbl.IsFocused) and (ColorTbl.LineCount>0) then
+   ColorTbl.Delete;
+end;
+
+procedure ColorSel_Change(Sender: TObject);
+begin
+ if ColorTbl.IsFocused then
+  begin
+   ColorTbl.Edit;
+   ColorTbl.÷вет := ColorSel.Color;
+   ColorTbl.Post;
+  end;
+end;
+
+{$D-}
+procedure DBGridColor_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if Highlight then
+     DrawFont.Style := fsBold;
+ if ColorTbl.IsFocused then
+    BackColor := ColorTbl.÷вет;
+end;
+{$D+}
+
+
+procedure btOK_Click(Sender: TObject);
+
+begin
+ if ColorTbl.LineCount>1 then
+  begin
+  ColorTbl.GroupTo('÷вет',' олƒней',tmpTbl);
+  if ColorTbl.LineCount<>tmpTbl.LineCount then
+   begin
+    showmessage('÷вета не должны повтор€тьс€ !');
+    exit;
+   end;
+  ColorTbl.GroupTo(' олƒней','÷вет',tmpTbl);
+  if ColorTbl.LineCount<>tmpTbl.LineCount then
+   begin
+    showmessage('" оличество дней просрочки" не должно повтор€тьс€ !');
+    exit;
+   end;
+  end;
+
+  s := '';
+  ColorTbl.Select;
+  While ColorTbl.SelectNext do
+   s := s + inttostr(ColorTbl. олƒней)+' '+inttostr(ColorTbl.÷вет)+' ';
+  Options.SetServerPrm('ќтчетѕоѕартнерам÷вета',s);
+  Form.ModalResult := mrOK;
+  Form.Close;
+
+end;
+
+procedure tbEdit_Click(Sender: TObject);
+var PayDelay, OldPayDelay : integer;
+begin
+
+ if not ColorTbl.IsFocused then exit;
+ ColorTbl.DisableControls;
+ PayDelay := ColorTbl. олƒней;
+ OldPayDelay := PayDelay;
+ if StdInpInt('¬ведите количество дней просрочки: ', PayDelay) and
+    (PayDelay <> OldPayDelay) then
+  if not ColorTbl.Locate(' олƒней', PayDelay) then
+   begin
+    ColorTbl.Edit;
+    ColorTbl. олƒней := PayDelay;
+    ColorTbl.÷вет := ColorSel.Color;
+    ColorTbl.Post;
+   end
+  else
+   begin
+    ColorTbl.Locate(' олƒней', OldPayDelay);
+    showmessage('“акое "количество дней просрочки" уже есть в списке !');
+   end;
+  ColorTbl.EnableControls;
+end;
+
+procedure TVSColorParam_VPATimedAfterScroll(Sender: TObject);
+begin
+ if ColorTbl.IsFocused then
+  ColorSel.Color := ColorTbl.÷вет;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+Label1:TO4Label
+ColorSel:TO4ColorSelector
+ToolBar1:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDel:TO4ToolButton
+Panel2:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+DBGridColor:TO4DBGrid
+TVSColorParam:TO4TableValueSource

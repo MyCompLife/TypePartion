@@ -1,0 +1,89 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+function FindDefStore(Store : IObject) : IObject;
+function GetAStore(Store : IObject) : IObject;
+// получение валюты
+function GetCurrency(DicCurrency : IObject = ''; ActiveField : string = 'НацВалюта';
+  DoAppend : Boolean = True; ActiveValue : Variant = -1) : Variant;
+function GetMyFirm(MYFRequired : Boolean = True) : ISDictionary;
+
+implementation
+
+const
+  errCompanyInfoMissing = 'Не определена информация Вашего предприятия!';
+
+var
+  DicGlMYF : ISDictionary;
+
+function FindDefStore(Store : IObject) : IObject; server;
+begin
+  if IsNil(Store) then
+    Store := CreateObject('Справочники.Склады');
+  Store.Select;
+  if not VarAsBool(Store.FindByField('Активность', VarAsInt(True), False)) then
+    begin
+      Store.Select;
+      if not VarAsBool(Store.SelectNext) then
+        begin
+          Store.Append;
+          Store.NameField := 'Склад 1';
+          Store.Активность := VarAsInt(True);
+          Store.Post;
+          Store.ApplyUpdates;
+        end;
+    end;
+end;
+
+function GetAStore(Store : IObject) : IObject; server;
+begin
+  FindDefStore(Store);
+  if not VarAsBool(Store.Активность) then
+    begin
+      Store.Edit;
+      Store.Активность := VarAsInt(True);
+      Store.Post;
+      Store.ApplyUpdates;
+    end;
+end;
+
+function GetCurrency(DicCurrency : IObject = ''; ActiveField : string = 'НацВалюта';
+  DoAppend : Boolean = True; ActiveValue : Variant = -1) : Variant;
+var
+  DicActive : ISDictionary;
+begin
+  if IsNil(DicCurrency) then
+    DicCurrency := CreateObject('Справочники.Валюты');
+  DicCurrency.Select;
+  DicActive := GetActiveObject(DicCurrency, ActiveField, ActiveValue);
+  if not IsNil(DicActive) then
+    Result := DicActive
+  else
+    if DoAppend then
+      begin
+        DicCurrency.Append;
+        DicCurrency.Код := 'ГРН';
+        DicCurrency.Название := 'Гривна Украины';
+        DicCurrency.НацВалюта := VarAsInt(True);
+        DicCurrency.SetTimedValue('КурсНацБанка', CurrentDateTime, 1);
+        DicCurrency.SetTimedValue('КурсНаличный', CurrentDateTime, 1);
+        DicCurrency.Post;
+        DicCurrency.ApplyUpdates;
+        Result := DicCurrency;
+      end
+    else
+      Result := Null;
+end;
+
+function GetMyFirm(MYFRequired : Boolean = True) : ISDictionary;
+begin
+  if IsNil(DicGlMYF) then
+    DicGlMYF := CreateObject('Справочники.ВашеПредприятие');
+  Result := DicGlMYF;
+  if not (DicGlMYF.Select and DicGlMYF.SelectNext) and MYFRequired then
+    raise(Trans(errCompanyInfoMissing));
+end;
+
+end.

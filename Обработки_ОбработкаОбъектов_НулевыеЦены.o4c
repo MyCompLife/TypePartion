@@ -1,0 +1,49 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+Var
+  V : IcProcessing;
+
+procedure tbRun_Click(Sender: TObject);
+VAr
+  TblGoods : IcValueTable;
+  i : Integer; 
+  TypePrice : String;
+begin
+  XGrid.ClearAll;
+
+  TblGoods := CreateObject('ValueTable');
+  TblGoods.AddColumn('Товар',vtcLink,0);
+  TblGoods.AddColumn('Код',vtcString,30);
+  TblGoods.AddColumn('КолОбщ',vtcFFt,7);
+  TblGoods.AddColumn('Цена',vtcFFt,7);
+  TblGoods.Open;
+
+
+  TypePrice := eTypePrice.Text;
+  TblGoods.CopyDataToServer;
+  v.RunThreadProcess(server.GetBarCodesErrorEp(TblGoods.SrvMean,TypePrice ),'123');
+  TblGoods.CopyDataFromServer;
+  XGrid.AddSection('Hed');
+  TblGoods.Select;
+  TblGoods.SelectFirst;
+  TblGoods.AddToXGrid(CtrlToVar(XGrid),'Good','Код;Товар;КолОбщ;Цена',0,TblGoods.LineCount);
+
+  end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+XGrid:TO4XGrid
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+Panel2:TO4Panel
+Label1:TO4Label
+eTypePrice:TO4Edit

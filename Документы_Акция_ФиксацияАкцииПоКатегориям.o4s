@@ -1,0 +1,133 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация;
+
+implementation
+
+var
+  AccsAction : ISAccs;
+  ErrorStr : string;
+
+function GetErrorStr:string; server;
+begin
+  Result := ErrorStr;
+end;
+
+procedure CanChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var TmpTbl, ContentTbl : ISValueTable;
+    ErrorCnt : integer; 
+    DateFrom,DateTo : DateTime;
+    ActionDoc : ISDocuments;
+begin     
+  Accept := false;
+  TmpTbl := CreateObject('ТаблицаЗначений');
+  AccsAction.ClearFieldBuffers;
+  AccsAction.ClearFieldFilters;
+  ErrorStr := '';
+  ErrorCnt := 0;
+  DateFrom := RoundDate(VarAsDate(Doc.ДатаДокумента),rdDay,false);
+  DateTo := VarAsDate(Doc.ДатаКонцаАкции);
+  AccsAction.SaveMotionToValueTable(0,RoundDate(DateTo,rdDay,true),amtBoth,-1,TmpTbl);
+
+  TmpTbl.SortBy('ИспКатегории;Регион;ТипЦены;Категория');
+  ContentTbl := CreateObject('ТаблицаЗначений');
+  Doc.SaveContents('ТипЦены',ContentTbl);
+  ContentTbl.GroupBy('ТипЦены','');
+  ContentTbl.Select;
+  While ContentTbl.SelectNext do
+    begin  
+      // Проверка акций без категорий
+      TmpTbl.SetRange(ArrayOf(0,Doc.Регион,ContentTbl.ТипЦены),ArrayOf(0,Doc.Регион,ContentTbl.ТипЦены));
+      TmpTbl.Select;
+      While TmpTbl.SelectNext do
+        if  not ((VarAsDate(TmpTbl.ДатаНачала)<DateFrom) and (VarAsDate(TmpTbl.ДатаКонца)<DateFrom)) and
+            not ((VarAsDate(TmpTbl.ДатаНачала)>DateTo) and (VarAsDate(TmpTbl.ДатаКонца)>DateTo)) then
+          begin
+            inc(ErrorCnt);
+            ActionDoc := TmpTbl.Document;
+            if IsObjFocused(ActionDoc) then
+              ErrorStr := ErrorStr + 'Акция №'+ActionDoc.GetNumber + ' от '+DateToStr(ActionDoc.GetDate)+' Регион: '+
+                          TmpTbl.Регион.Название + ' Тип цены: '+VarAsStr(TmpTbl.ТипЦены)+#13;
+
+          end; 
+      // Проверка акций с категориями
+      if VarAsBool(Doc.ИспКатегории) then
+        begin
+          TmpTbl.SetRange(ArrayOf(-1,Doc.Регион,Doc.ТипЦены, Doc.Категория),
+                          ArrayOf(-1,Doc.Регион,Doc.ТипЦены, Doc.Категория));
+          TmpTbl.Select;
+          While TmpTbl.SelectNext do
+            if  not ((VarAsDate(TmpTbl.ДатаНачала)<DateFrom) and (VarAsDate(TmpTbl.ДатаКонца)<DateFrom)) and
+                not ((VarAsDate(TmpTbl.ДатаНачала)>DateTo) and (VarAsDate(TmpTbl.ДатаКонца)>DateTo)) then
+              begin
+                inc(ErrorCnt);
+                ActionDoc := TmpTbl.Document;
+                if IsObjFocused(ActionDoc) then
+                  begin
+                    ErrorStr := ErrorStr + 'Акция №'+ActionDoc.GetNumber + ' от '+DateToStr(ActionDoc.GetDate)+' Регион: '+
+                                TmpTbl.Регион.Название + ' Тип цены: '+VarAsStr(TmpTbl.ТипЦены)+#13;
+                    if VarAsBool(TmpTbl.@Категория.IsFocused) then
+                      ErrorStr := ErrorStr + TmpTbl.Категория.NameField;
+                  end; 
+              end;
+        end;
+    end;
+
+  Accept := ErrorCnt=0;
+end;
+
+function GetCanChangeStateUpEP : Variant; server;
+begin               
+  if IsNil(AccsAction) then
+    AccsAction := CreateObject('Аккумуляторы.Акции');  
+  Result := EntryPoint(CanChangeStateUp)
+end;    
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+begin 
+  Accept := false;
+  AccsAction.ClearFieldBuffers;
+  AccsAction.ClearFieldFilters;
+  Doc.SelectLines;  
+  if VarAsBool(Doc.ИспКатегории) then
+    begin
+      While Doc.SelectNextLine do
+         AccsAction.IncomeDirect(Doc,Doc.GetDate,Doc.НомСтроки,
+                                ArrayOf(Doc.@Регион,Doc.ТипЦены,RoundDate(Doc.GetDate, rdDay,false),Doc.ДатаКонцаАкции, Doc.@Категория,-1),
+                                Doc.Скидка,Null);
+    end
+  else
+    begin
+      While Doc.SelectNextLine do
+        AccsAction.IncomeDirect(Doc,Doc.GetDate,Doc.НомСтроки,
+                                ArrayOf(Doc.@Регион,Doc.ТипЦены,RoundDate(Doc.GetDate, rdDay,false),Doc.ДатаКонцаАкции,Null,0),
+                                Doc.Скидка,Null);
+    end;
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin  
+  if IsNil(AccsAction) then
+    AccsAction := CreateObject('Аккумуляторы.Акции');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccsAction := CreateObject('Аккумуляторы.Акции');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.

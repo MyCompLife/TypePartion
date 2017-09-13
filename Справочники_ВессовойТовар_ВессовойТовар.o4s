@@ -1,0 +1,29 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+
+function GetNextNumberForSort( DicMaster : IsDictionary) : Integer; server;
+var
+  DicCurrent : ISDictionary;
+begin
+
+  DicCurrent := CreateObject('Справочники.ВессовойТовар');
+  DicCurrent.SortByField('НомПозиции');
+  DicCurrent.UseMaster(DicMaster);
+  DicCurrent.Select;
+  if VarAsBool(DicCurrent.SelectPrior) then
+    begin
+      if not (IsNull(DicCurrent._Default['НомПозиции']) or (VarAsInt(DicCurrent._Default['НомПозиции']) <= 0)) then
+        Result := VarAsInt(DicCurrent._Default['НомПозиции']) + 1
+      else
+        Result :=  1;
+    end
+  else
+    Result := 1;
+end;
+
+end.

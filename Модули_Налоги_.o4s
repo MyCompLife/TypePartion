@@ -1,0 +1,210 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+const
+  //среднестатистическая численность служащих - average kind
+  akFullMonthly = 0; // за полный месяц
+  akFullDayly = 1; // за день - сейчас будет такая же, как и месячная
+  akFullByMonthly = 2; // за период по месяцам
+  //
+  rdNull = 0;
+  rdValue = 1;
+
+function AverageEmployeesCount(AverKind : Integer; DateFrom, DateTo : DateTime;
+  EmplFilterDescriptor : Variant = '') : Decimal;
+
+implementation
+
+var
+  JrnWageAccruals : ISJournal;
+  TblEmployees, TblForFilter : ISValueTable;
+  DicCalendar : ISDictionary;
+
+procedure ReDefineEmptyFields(FieldNames : string; TblCurrent : ISValueTable;
+  Values : Variant);
+var
+  Counter : Integer;
+  AcceptToEdit : Boolean;
+  FielName : string;
+begin
+  TblCurrent.SortBy('');
+  TblCurrent.Select;
+  while TblCurrent.SelectNext do
+    begin
+      TblCurrent.Edit;
+      for Counter := 1 to WordCount(FieldNames, ';') do
+        begin
+          AcceptToEdit := False;
+          FielName := ExtractWord(Counter, FieldNames, ';');
+          case VarAsInt(Values[Counter - 1][0]) of
+            rdNull :
+              AcceptToEdit := AcceptToEdit or
+                IsNull(TblCurrent._Default[FielName]);
+            rdValue :
+              AcceptToEdit := AcceptToEdit or
+                (VarAsDec(TblCurrent._Default[FielName]) = Values[Counter - 1][2]);
+          end;
+          if AcceptToEdit then
+            TblCurrent._Default[FielName] := Values[Counter - 1][1];
+        end;
+      TblCurrent.Post;
+    end;
+end;
+
+function AverageEmployeesCount(AverKind : Integer; DateFrom, DateTo : DateTime;
+  EmplFilterDescriptor : Variant = '') : Decimal;
+var
+  Counter : Integer;
+  DocWageAccrual : ISDocuments;
+  LastDate : DateTime;
+begin
+  if IsNil(JrnWageAccruals) then
+    begin
+      JrnWageAccruals := CreateObject('Журналы.ЖурналНачисленияЗарплаты_B');
+      DicCalendar := CreateObject('Справочники.Календарь');
+    end;
+  if IsNil(TblEmployees) then
+    begin
+      TblEmployees := CreateObject('ValueTable');
+      TblEmployees.AddColumn('Служащий', vtcLink, 0);
+      TblEmployees.AddColumn('ДатаПриема', vtcDate, 0);
+      TblEmployees.AddColumn('ДатаУвольнения', vtcDate, 0);
+      TblEmployees.AddColumn('Коэффициент', vtcFft, 7);
+      TblEmployees.Open;
+      //
+      TblForFilter := CreateObject('ValueTable');
+      TblForFilter.AddColumn('Служащий', vtcLink, 0);
+      TblForFilter.AddColumn('ЗначениеДляФильтра', vtcFFT, 2); //вместе с дескриптором фильтра действует по принципу 'and'
+      TblForFilter.Open;
+    end;
+  case AverKind of
+    akFullMonthly, akFullDayly :
+      try
+        DateFrom := RoundDate(DateFrom, rdMonth, False);
+        DateTo := RoundDate(DateFrom, rdMonth, True) - 1;
+        try
+          DicCalendar.SetFieldFilter('Дата', '=', DateFrom, '', '', '');
+          JrnWageAccruals.SetDocMultiStateRange('1;2');
+          DicCalendar.Select;
+          while DicCalendar.SelectNext do
+            try
+              JrnWageAccruals.SetFieldFilter('Календарь', '=', DicCalendar, '', '', '');
+              JrnWageAccruals.Select;
+              while JrnWageAccruals.SelectNext do
+                JrnWageAccruals.GetDoc.AppendLinesTo('Служащий', TblEmployees);
+            finally
+              JrnWageAccruals.CancelFieldFilter('Календарь');
+            end;
+        finally
+          DicCalendar.CancelFieldFilter('Дата');
+          JrnWageAccruals.SetDocMultiStateRange('');
+        end;
+        TblEmployees.GroupBy('Служащий', '');
+        TblEmployees.AppendTo('Служащий', TblForFilter);
+        TblForFilter.DoGetLinks('ЗначениеДляФильтра=Служащий.Совместитель');
+        ReDefineEmptyFields('ЗначениеДляФильтра', TblForFilter,
+          ArrayOf(ArrayOf(rdNull, 0)));
+        TblForFilter.SortBy('ЗначениеДляФильтра');
+        TblForFilter.SetRange(0, 0);
+        TblEmployees.Clear;
+        TblForFilter.AppendTo('Служащий', TblEmployees);
+        TblForFilter.Clear;
+        TblForFilter.CancelRange;
+        TblForFilter.SortBy('');
+        if IsArray(EmplFilterDescriptor) then
+          for Counter := 0 to ArrayHigh(EmplFilterDescriptor) do
+            try
+              TblEmployees.AppendTo('Служащий', TblForFilter);
+              TblForFilter.SortBy('');
+              TblForFilter.DoGetLinks('ЗначениеДляФильтра=Служащий.' + EmplFilterDescriptor[Counter][0]);
+              ReDefineEmptyFields('ЗначениеДляФильтра', TblForFilter,
+                ArrayOf(ArrayOf(rdNull, EmplFilterDescriptor[Counter][2])));
+              TblForFilter.SortBy('ЗначениеДляФильтра');
+              TblForFilter.SetRange(EmplFilterDescriptor[Counter][1], EmplFilterDescriptor[Counter][1]);
+              TblEmployees.Clear;
+              TblForFilter.AppendTo('Служащий', TblEmployees);
+            finally
+              TblForFilter.SortBy('');
+              TblForFilter.Clear;
+            end;
+        TblEmployees.DoGetLinks('ДатаПриема=Служащий.ДатаПриема;ДатаУвольнения=' +
+          'Служащий.ДатаУвольнения');
+        ReDefineEmptyFields('ДатаПриема;ДатаУвольнения', TblEmployees,
+          ArrayOf(ArrayOf(rdNull, 0), ArrayOf(rdValue, DateTo + 1, 0)));
+        TblEmployees.SortBy('ДатаПриема');
+        if TblEmployees.SelectLast and TblEmployees.ДатаПриема > DateTo then
+          LastDate := TblEmployees.ДатаПриема
+        else
+          LastDate := DateTo;
+        TblEmployees.SetRange(DateTo, LastDate + 1);
+        // приняты позже, прием раннее и, следовательно, повторный прием - не поддерживается
+        TblEmployees.DoCalculation('Коэффициент', '0');
+        TblEmployees.SetRange(0, DateFrom);
+        TblEmployees.Select;
+        while TblEmployees.SelectNext do
+          begin
+            TblEmployees.Edit;
+            if TblEmployees.ДатаУвольнения < DateFrom then
+              TblEmployees.Коэффициент := 0
+            else
+              if TblEmployees.ДатаУвольнения < DateTo then
+                TblEmployees.Коэффициент := (DateTo - TblEmployees.ДатаУвольнения + 1) / (DateTo - DateFrom + 1)
+              else
+                TblEmployees.Коэффициент := 1;
+            TblEmployees.Post;
+          end;
+        TblEmployees.SetRange(DateFrom, DateTo);
+        TblEmployees.Select;
+        while TblEmployees.SelectNext do
+          begin
+            TblEmployees.Edit;
+            if TblEmployees.ДатаУвольнения <
+              TblEmployees.ДатаПриема then //не поддерживается сейчас раньше уволнение, потом прием
+              TblEmployees.ДатаУвольнения := DateTo + 1;
+            if TblEmployees.ДатаУвольнения < DateTo then
+              TblEmployees.Коэффициент := (TblEmployees.ДатаУвольнения -
+                VarAsDate(TblEmployees.ДатаПриема) + 1) / (DateTo - DateFrom + 1)
+            else
+              TblEmployees.Коэффициент := (DateTo - VarAsDate(TblEmployees.ДатаПриема) + 1) / (DateTo - DateFrom + 1);
+            TblEmployees.Post;
+          end;
+        TblEmployees.CancelRange;
+        Result := TblEmployees.Total('Коэффициент');
+      finally
+        TblEmployees.Clear;
+        TblEmployees.SortBy('');
+      end;
+    akFullByMonthly :
+      begin
+        Counter := DaysPerMonth(GetMonth(DateFrom), IsLeapYear(GetYear(DateFrom)));
+        if GetMonth(DateFrom) < GetMonth(DateTo) then
+          begin
+            Result := AverageEmployeesCount(akFullMonthly, DateFrom, DateFrom, EmplFilterDescriptor) *
+              (RoundDate(DateFrom, rdMonth, True) - DateFrom) / Counter +
+              AverageEmployeesCount(akFullMonthly, DateTo, DateTo, EmplFilterDescriptor) *
+              (DateTo - RoundDate(DateTo, rdMonth, False) + 1) /
+              DaysPerMonth(GetMonth(DateTo), IsLeapYear(GetYear(DateTo)));
+            Counter := 2;
+          end
+        else
+          begin
+            Result := AverageEmployeesCount(akFullMonthly, DateFrom, DateFrom, EmplFilterDescriptor) *
+              (DateTo - DateFrom + 1) / Counter;
+            exit;
+          end;
+        DateFrom := RoundDate(DateFrom, rdMonth, True);
+        DateTo := RoundDate(DateTo, rdMonth, False);
+        while DateFrom < DateTo do
+          begin
+            inc(Counter);
+            Result := Result + AverageEmployeesCount(akFullMonthly, DateFrom, DateFrom, EmplFilterDescriptor);
+            DateFrom := RoundDate(DateFrom, rdMonth, True);
+          end;
+        Result := Result / Counter;
+      end;
+  end;
+end;
+
+end.

@@ -1,0 +1,56 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation  
+
+var
+  MasterData : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeSertRegNo.Text), '');
+end;
+
+procedure dbeSertRegNo_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeSertRegNo.Text), '');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+pnImage:TO4Panel
+LinkImage:TO4LinkImage
+pnBottom:TO4Panel
+pnButton:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnMain:TO4Panel
+lbSertNo:TO4Label
+lbSertDate:TO4Label
+lbSertEndDate:TO4Label
+lbSertRegNo:TO4Label
+dbeSertNo:TO4DBEdit
+dbeSertDate:TO4DBEdit
+dbeSertEndDate:TO4DBEdit
+dbeSertRegNo:TO4DBEdit
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+pnTitle:TO4Panel
+lbTitle:TO4Label

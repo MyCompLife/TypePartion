@@ -1,0 +1,101 @@
+interface
+
+uses
+  System, DispIntf;
+
+function УстановитьНомерДокумента(Doc, DocOwner : ISDocuments; DocCurrentSrvIsFocused, DocOwnerSrvIsFocused : Boolean; Preffix : String; DocDate : DateTime) : String; server;
+//procedure СохранитьНомерДокумента(Doc : ISDocuments); server;
+
+implementation
+
+
+function GetNextNumber(DicName: String; MinNum, MaxNum: Integer) : Integer; server;
+var
+  Dic: ISDictionary;
+  CurMaxNum: Integer;
+begin
+  Dic := CreateObject('Справочники.'+ DicName);
+//  Dic.IncludeOnlyLevels(false);
+//  Dic.SortByField('Код');
+//  Dic.SetFieldFilter('Код','>',MinNum,'','',null);
+//  Dic.SetFieldFilter('Код','>',MaxNum,'','',null);
+  Result := MinNum;
+  Dic.SortByField('Код');
+  Dic.SetRangeByField('Код', MinNum, MaxNum);
+  Dic.Select;
+  if VarAsBool(Dic.SelectPrior) then
+    begin
+      CurMaxNum := VarAsInt(Dic.Код);
+      Inc(CurMaxNum);
+      if CurMaxNum <= MinNum then
+      begin
+        Result := MinNum;
+        exit;
+      end;
+      if CurMaxNum >= MaxNum then
+      begin
+        Result := MaxNum;
+        exit;
+      end;
+    result := CurMaxNum
+  end
+end;
+
+function ReplaceOneStrWithAnother(Source, StrFrom, StrTo : String) : String;
+var
+  Pos : Integer;
+begin
+  if StrFrom = StrTo then
+    begin
+      Result := Source;
+      exit;
+    end;
+  Result := '';
+  Pos := StrPos(StrFrom, Source);
+  while Pos <> 0 do
+    begin
+      Result := Result + StrCopy(Source, 1, Pos - 1) + StrTo;
+      Source := StrCopy(Source, Pos + StrLength(StrFrom), StrLength(Source)); // сэконмлен подсчет третьего параметра - заведомо большее число
+      Pos := StrPos(StrFrom, Source);
+    end;
+  Result := Result + Source; // остаток
+end;
+
+function УстановитьНомерДокумента(Doc, DocOwner : ISDocuments; DocCurrentSrvIsFocused, DocOwnerSrvIsFocused : Boolean; Preffix : String; DocDate : DateTime) : String; server;
+var
+  DictNumbers : ISDictionary;
+ // ПоследнийНомер, НомерIdДокумента : Variant;
+ // DocNumber : Integer;
+ // FindedRec, ПолучитьПоследний : Boolean;
+begin
+  DictNumbers := CreateObject('Справочники.УникальныйНумераторДокументов');
+  DictNumbers.SetFieldFilter('ТипДокумента', '=', Doc.GetSign, '', '', Null);
+  DictNumbers.SortByField('Номер');
+  DictNumbers.Select;
+  if DictNumbers.SelectPrior then 
+   DictNumbers.Edit
+  else      
+   begin
+     DictNumbers.Append; 
+     DictNumbers.ТипДокумента := Doc.GetSign;
+   end;
+  DictNumbers.Номер := VarAsInt(DictNumbers.Номер,0) + 1;
+  DictNumbers.Post;
+  DictNumbers.ApplyUpdates;
+  Result := Preffix+IntToStr(VarAsInt(DictNumbers.Номер));
+end;
+
+//procedure СохранитьНомерДокумента(Doc : ISDocuments); server;
+//var
+//  DictNumbers : ISDictionary;
+//  FindedRec : Boolean;
+//begin
+//  DictNumbers := CreateObject('Справочники.УникальныйНумераторДокументов');
+//  DictNumbers.Append;
+//  DictNumbers.ТипДокумента := Doc.GetSign;
+//  DictNumbers.Номер := Doc.NumID;
+//  DictNumbers.Post;
+//  DictNumbers.ApplyUpdates;
+//end;
+
+end.

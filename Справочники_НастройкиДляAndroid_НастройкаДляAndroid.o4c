@@ -1,0 +1,156 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, –асчеты, ѕользователи, –абота—ѕеременными, –абота—ќбъектами,
+  –абота—“аблицами«начений, XML»мпортЁкспорт, –абота—“аблицами«наченийCL, ѕодключениеƒоп»нтерфейса, Ќумераци€ƒокументов,   –абота—ƒокументамиCL,  ѕ ;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  Constants: IC4VPAConst;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  rgExchangeMethod.ItemIndex := MasterData.—пособќбмена;
+  cbUseItemCode.Checked := MasterData.ќтображать од“овара;
+  cbUseShop.Checked := MasterData.»спользовать“орговые“очки;
+  cbUseRealization.Checked := MasterData.»спользовать–еализаторов;
+  cbExportItemFoto.Checked := MasterData.ѕередавать‘отографии“оваров;
+  cbUsePersonalPays.Checked := MasterData.»спользоватьЋичные‘инансы;
+  cbUseSalesHistory.Checked := MasterData.»спользовать»сториюѕродаж;
+  Constants := GetConstants;
+  eLibrary.Text := VarAsStr(Constants.FtpЅиблиотека);
+
+end;
+
+procedure tsMain_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  nbMain.PageIndex := NewTab;    
+  //»стори€ продаж
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if cbUseSalesHistory.Checked and (MasterData. оличествоƒней»сторииѕродаж mod MasterData. оличество»нтервалов»сторииѕродаж <> 0) then
+    raise(Trans('”становите кратное количество "—рока истории продаж" и " оличество интервалов" напр. 28 и 4'));
+//  MasterData.—пособќбмена := rgExchangeMethod.ItemIndex;
+  MasterData.ќтображать од“овара := cbUseItemCode.Checked;
+  MasterData.»спользовать“орговые“очки := cbUseShop.Checked;
+  MasterData.»спользовать–еализаторов := cbUseRealization.Checked;
+  MasterData.ѕередавать‘отографии“оваров := cbExportItemFoto.Checked;
+  MasterData.»спользоватьЋичные‘инансы := cbUsePersonalPays.Checked;
+  MasterData.»спользовать»сториюѕродаж := cbUseSalesHistory.Checked;
+  MasterData.—пособќбмена := 1;
+
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+var
+  CommercialAgents : ICDictionary;
+begin
+  MasterData.ApplyUpdates;
+  if MasterData.—пособќбмена = 0 then
+    begin
+      CommercialAgents := CreateObject('—правочники.“орговыејгенты');
+      CreateAndroidXMLExchangeFile(CommercialAgents);
+    end;
+end;
+
+procedure btLibraryPath_Click(Sender: TObject);
+var
+  FilePath: string;
+begin
+  with OpenDialog do begin
+    Filter := 'addl_func.dll|addl_func.dll';
+    FileName := 'addl_func.dll';
+    Title := Trans('ќпределите путь к dll-библиотеке');
+    if Execute then
+      eLibrary.Text := FileName
+    else
+      exit;
+  end;
+end;
+
+procedure btReg_Click(Sender: TObject);
+begin
+  if not FileExists(eLibrary.Text) then
+    begin
+      ShowMessage('ѕо указанному пути файл отсутствует!');
+      exit;
+    end;
+  Run('RegSvr32 ' + eLibrary.Text, true);
+
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  Constants.FtpЅиблиотека := eLibrary.Text;
+
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+  MasterData.—пособќбмена := 1;
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Panel5:TO4Panel
+LinkImage1:TO4LinkImage
+pnMain:TO4Panel
+nbMain:TO4Notebook
+Label3:TO4Label
+Label2:TO4Label
+rgExchangeMethod:TO4RadioGroup
+dbePassword:TO4DBEdit
+cbUseItemCode:TO4CheckBox
+dbeAnalizeTermin:TO4DBEdit
+cbUseShop:TO4CheckBox
+cbUseRealization:TO4CheckBox
+cbExportItemFoto:TO4CheckBox
+cbUsePersonalPays:TO4CheckBox
+Label4:TO4Label
+Label5:TO4Label
+Label6:TO4Label
+dbeFTPServerAddress:TO4DBEdit
+dbeFTPUserName:TO4DBEdit
+dbeFTPUserPassword:TO4DBEdit
+Panel2:TO4Panel
+Label9:TO4Label
+eLibrary:TO4Edit
+btLibraryPath:TO4Button
+btReg:TO4Button
+Label7:TO4Label
+Label8:TO4Label
+cbUseSalesHistory:TO4CheckBox
+dbeSalesDaysCount:TO4DBEdit
+dbeSalesIntervalsCount:TO4DBEdit
+Label1:TO4Label
+dbeSODPort:TO4DBEdit
+tsMain:TO4TabSet
+Panel4:TO4Panel
+lbTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+OpenDialog:TO4OpenDialog

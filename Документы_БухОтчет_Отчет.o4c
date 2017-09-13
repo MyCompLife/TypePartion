@@ -1,0 +1,120 @@
+interface
+
+uses
+  System, DispIntf, Налоги,Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;  
+  Options : ICOptions;  
+  isSave : Boolean;
+
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  Options := GetOptions;
+end;
+
+procedure chbActive_Click(Sender : TObject);
+begin
+  MasterData.Активность := chbActive.Checked;
+end;
+
+procedure ResetActive(DetRec : ICDocuments);
+var
+  DetOwner, DetList : ICDocuments;
+  DetRecID : Double;
+  Changed, WasActive : Boolean;
+begin
+  WasActive := (DetRec.Активность = True);
+  DetRec.Активность := False;
+  if WasActive then
+    begin
+      DetList := CreateObject('Документы.' + DetRec.GetSign);
+      DetList.SetFieldFilter('Название', '=', DetRec.Название, '', '', '');
+      DetList.SetFieldFilter('Активность', '=', '-1', '', '', '');
+      DetList.Select;
+      if DetList.SelectNext then
+        begin
+          DetList.Edit;
+          DetList.Активность := False;
+          DetList.Post;
+          DetList.ApplyUpdates;
+        end;
+      DetRec.Активность := True;
+    end;
+end;
+
+procedure UpdateDocByParams;
+begin
+  if not MasterData.HasParam('ДатаДокумента') then
+    exit; //открытие формы по кнопке Изменить
+  MasterData.Период := VarAsStr(MasterData.Params['Период']);
+  MasterData.Параметры := MasterData.Params['Параметры'];
+  MasterData.Название := MasterData.Params[prmNameReportType];
+  MasterData.НазваниеФормы := MasterData.Params['НазваниеФормы']; //!!
+  MasterData.ДатаДокумента := MasterData.Params['ДатаДокумента'];
+  while MasterData.FirstLine do
+    MasterData.DeleteLine;
+  MasterData.LoadContents('', MasterData.Params['TblContents']);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  UpdateDocByParams;
+  //chbActive.Checked := MasterData.Активность;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  MasterData.Params['IsReportFocused'] := Form.ModalResult = mrOk;
+end;
+
+procedure MDS_Validate(Sender : TObject);
+var
+  TblSavedDoc : ICValueTable;
+begin
+  TblSavedDoc := CreateObject('ValueTable');
+  TblSavedDoc.AddColumn('SavedLink', vtcLink, 0);
+  TblSavedDoc.Open;
+  TblSavedDoc.Append;
+  TblSavedDoc.SavedLink := MasterData;
+  TblSavedDoc.Post;
+  MasterData.Params['TblSavedDoc'] := TblSavedDoc;
+  //
+  //ResetActive(MasterData);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+pnBottom:TO4Panel
+pnButtons:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnMain:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+chbActive:TO4CheckBox
+dbeComment:TO4DBEdit
+dbeData:TO4DBEdit
+dbeNumber:TO4DBEdit
+dbePeriod:TO4DBEdit
+pnImage:TO4Panel
+LinkImage:TO4LinkImage
+MDS:TO4DataSource

@@ -1,0 +1,29 @@
+interface
+
+uses
+  System, DispIntf;
+
+const
+  fnSorting = 'Сортировка';
+
+implementation
+
+procedure GetTbl(DicName, FieldName: String ;Tbl: ISValueTable);server;
+var
+  Dic: ISDictionary;
+  TempTbl: ISValueTable;
+begin
+  Dic := CreateObject('Справочники.' +  DicName);
+  Dic.Select;
+  TempTbl := CreateObject('ValueTable');
+  Dic.SaveToValueTable('',TempTbl,1,Dic.RecordCount);
+  TempTbl.AppendTo('SELF=' + FieldName + 'Товара',Tbl);
+  Tbl.DoGetLinks(FieldName + '=' + FieldName + 'Товара.Название');
+  Tbl.DoCalculation('Order','1');
+  Tbl.Append;
+  Tbl._Default[FieldName] := 'Все';
+  Tbl.Order := 0;
+  Tbl.Post;
+end;
+
+end.

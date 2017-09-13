@@ -1,0 +1,104 @@
+interface
+
+uses
+  System, DispIntf, ConstNames;
+
+procedure ChangePrice(GoodDic, Currency: ICDictionary; Price: Decimal; TypePrice, Comment, TypeEdit: String);
+function GetNextNumberForFieldCL(MeanName, FieldName : string;  Ctg: ICDictionary) : Integer;
+function GetFilterPanel(FormName: String): boolean;
+procedure SetFilterPanel(FormName: String; Res: boolean);
+procedure ChangeGoodToDelMark(MasterData:ICDictionary);
+function GetCurrentEmpl:ICDictionary;
+
+implementation
+var
+  AccsPart, RegChangeObjAccs: ICAccs;
+  Options : ICOptions;
+  Respons : ICDictionary;
+
+procedure ChangePrice(GoodDic, Currency: ICDictionary; Price: Decimal; TypePrice, Comment, TypeEdit: String);
+//ѕараметр TypeEdit(“ип¬несени€»зменений): EditInDoc - из документа, EditInGoodDic - из справочника товаров
+Var
+  UserName: String;
+begin
+  if IsNil(AccsPart) then
+    AccsPart := CreateObject('јккумул€торы.»змќтп÷ен—пр“овара');
+  UserName := GetUserName + '('+GetUserLogin+')';
+  Case TypeEdit of
+    'EditInDoc':
+      if (GoodDic._Default[TypePrice] <> Price) or not IsObjEQ(GoodDic._Default['¬алюта'+TypePrice], Currency) then
+        begin
+          GoodDic.Edit;
+          GoodDic._Default[TypePrice] := Price;
+          GoodDic._Default['¬алюта'+TypePrice] := Currency;
+          GoodDic.Post;
+          GoodDic.ApplyUpdates;
+          AccsPart.“овар        := GoodDic;
+          AccsPart.“ип÷ены      := TypePrice;
+          AccsPart.¬алюта       := Currency;
+          AccsPart.÷ена         := Price;
+          AccsPart.ќснование    := Comment;
+          AccsPart.ѕользователь := UserName;
+          AccsPart.Income(null, CurrentDateTime, 0);
+        end;
+    'EditInGoodDic':
+      begin
+        AccsPart.“овар        := GoodDic;
+        AccsPart.“ип÷ены      := TypePrice;
+        AccsPart.¬алюта       := Currency;
+        AccsPart.÷ена         := Price;
+        AccsPart.ќснование    := Comment;
+        AccsPart.ѕользователь := UserName;
+        AccsPart.Income(null, CurrentDateTime, 0);
+      end;
+  end;
+end;
+
+function GetNextNumberForFieldCL(MeanName, FieldName : string;  Ctg: ICDictionary) : Integer;
+begin
+//  Ctg.SetSrvToClientPos;
+//  Result := server.GetNextNumberForFieldCL(MeanName, FieldName, Ctg.SrvMean);
+end;
+
+function GetFilterPanel(FormName: String): boolean;
+begin
+  if IsNil(Options) then
+    Options := CreateObject('ќпции лиента');
+  result := VarAsBool(Options.GetServerPrm('ѕанель‘ильтра ' + FormName));
+end;
+
+procedure SetFilterPanel(FormName: String; Res: boolean);
+begin
+  if IsNil(Options) then
+    Options := CreateObject('ќпции лиента');
+  Options.SetServerPrm('ѕанель‘ильтра ' + FormName, Res);
+end;
+
+function GetCurrentEmpl:ICDictionary;
+begin
+ if IsNil(Respons) then
+   begin
+    Respons := CreateObject('—правочники.—лужащие');
+    Respons.FindByField('ѕолноеЌазвание', GetUserName, False);
+   end;
+ if Respons.IsFocused then
+   Result := Respons;
+end;
+
+procedure ChangeGoodToDelMark(MasterData:ICDictionary);
+var Comment:string;
+begin
+ MasterData.Edit;
+ MasterData.ѕометка”даление := not VarAsBool(MasterData.ѕометка”даление);
+ MasterData.Post;
+ case VarAsBool(MasterData.ѕометка”даление) of
+   true  : Comment := '”становка отметки "ѕометка на удаление"';
+   false : Comment := '—н€тие отметки "ѕометка на удаление"';
+ end;
+ MasterData.ApplyUpdates;
+ if isNil(RegChangeObjAccs) then
+   RegChangeObjAccs := CreateObject('јккумул€торы.–егистраци€»змененийќбъектов');
+ RegChangeObjAccs.IncomeDirect(Null,CurrentDateTime,0,ArrayOf(MasterData,'ѕометка”даление'),0,ArrayOf(GetCurrentEmpl,Comment));
+end;
+
+end.

@@ -1,0 +1,43 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, ПодключениеДопИнтерфейса;
+
+implementation
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;       
+
+procedure GetGoodCount(Store : ISDictionary; tmpCtx : ISValueTable; Date : DateTime; AccsGoods : ISAccs); server;
+var
+  IsStore: boolean;
+begin
+  if (not tmpCtx.Active) then
+    exit;
+  IsStore := VarAsBool(Store.IsFocused);
+  tmpCtx.Select;
+  while tmpCtx.SelectNext do
+    begin
+      if IsStore then 
+        begin
+          if VarAsFloat(tmpCtx.Партия)<>0 then
+            AccsGoods.CalcGroupRestDirect(Date, ArrayOf(tmpCtx.@Товар, Store, tmpCtx.Партия))
+          else
+            AccsGoods.CalcGroupRestDirect(Date, ArrayOf(tmpCtx.@Товар, Store));
+        end
+      else
+        AccsGoods.CalcGroupRestDirect(Date, tmpCtx.@Товар);
+      tmpCtx.Edit;
+      tmpCtx.НаличиеТовара := AccsGoods.КолОбщ;
+      tmpCtx.Post;
+    end;
+end;
+
+end.

@@ -1,0 +1,145 @@
+object Form: TO4Form
+  Left = -20
+  Top = 0
+  Width = 500
+  Height = 236
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = ()
+  Translat.ScanedProps.Props = (
+    'btOk.Caption'
+    1
+    'ОК'
+    'btOk.Hint'
+    1
+    ''
+    'dbgMain.Hint'
+    1
+    ''
+    'miAnswerBalance.Caption'
+    1
+    'Ответ сервера на запрос банса'
+    'miAnswerBalance.Hint'
+    1
+    ''
+    'miAnswerPrice.Caption'
+    1
+    'Ответ сервера на запрос цены'
+    'miAnswerPrice.Hint'
+    1
+    ''
+    'Panel1.Caption'
+    1
+    'Panel1'
+    'Panel1.Hint'
+    1
+    '')
+  Translat.LangDict.Cols = ()
+  Translat.LangDict.Words = ()
+  BorderStyle = bsDialog
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object Panel1: TO4Panel
+    Left = 1
+    Top = 194
+    Width = 498
+    Height = 41
+    Align = alBottom
+    BorderSides = []
+    Caption = 'Panel1'
+    ParentCtl3D = False
+    TabOrder = 0
+    Transparent = False
+    object btOk: TO4Button
+      Left = 415
+      Top = 9
+      Width = 75
+      Height = 25
+      Caption = 'Закрыть'
+      ModalResult = 1
+      TabOrder = 0
+      O4Action = actNone
+    end
+  end
+  object dbgMain: TO4DBGrid
+    Left = 1
+    Top = 1
+    Width = 498
+    Height = 193
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    DragDisabled = False
+    O4MDSource = TVS
+    PopupMenu = PopupMenu1
+    ReadOnly = True
+    TabOrder = 1
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'SMSAcount'
+        Title.Caption = 'SMS аккаунт'
+        Width = 118
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.10.2013'
+      end
+      item
+        O4FieldName = 'Баланс'
+        Title.Caption = 'Баланс'
+        Width = 118
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.10.2013'
+      end
+      item
+        O4FieldName = 'Цена'
+        Title.Caption = 'Цена'
+        Width = 118
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.10.2013'
+      end
+      item
+        O4FieldName = 'КоличествоSMS'
+        Title.Caption = 'Количество SMS'
+        Width = 118
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '15.10.2013'
+      end>
+  end
+  object TVS: TO4TableValueSource
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 74
+    Top = 103
+  end
+  object PopupMenu1: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    Left = 158
+    Top = 93
+    object miAnswerBalance: TO4MenuItem
+      Caption = 'Ответ сервера на запрос банса'
+      ImageIndex = 76
+      VPAOnClick.EventName = 'miAnswerBalance_Click'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miAnswerPrice: TO4MenuItem
+      Caption = 'Ответ сервера на запрос цены'
+      ImageIndex = 35
+      VPAOnClick.EventName = 'miAnswerPrice_Click'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+  end
+end

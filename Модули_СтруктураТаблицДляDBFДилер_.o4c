@@ -1,0 +1,73 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, ConstNames, InitColors;
+
+procedure CreateStructureDic(Dic: ICValueTable; DicName : String);
+procedure CreateStructureDoc(Docs: ICValueTable; DocsList : ICValueTable; DocName : String);
+
+implementation
+
+procedure CreateStructureDic(Dic: ICValueTable; DicName : String);
+Begin
+  Case DicName Of
+    'Товары':
+      begin
+        Dic.AddColumn('КатегорияКод_D', vtcString, 20);
+        Dic.AddColumn('Код', vtcString, 20);
+        Dic.AddColumn('НазвТовара', vtcString, 150);
+        Dic.AddColumn('ЕдИзм', vtcLink, 0);
+        Dic.AddColumn('ЕдИзмНазвание_D', vtcString, 20);
+        Dic.AddColumn('Валюта', vtcLink, 0);      
+        Dic.AddColumn('ВалютаКод_D', vtcString, 3);
+        Dic.AddColumn('ОптЦена', vtcFft, 7);
+        Dic.AddColumn('Информация', vtcMemo, 0);
+        Dic.AddColumn('Услуга', vtcInteger, 0);
+        Dic.AddColumn('БезКоличества', vtcInteger, 0);
+//        Dic.AddColumn('Группа', vtcString, 100);
+        Dic.AddColumn('ШтрихКод', vtcString, 15);
+//        Dic.AddColumn('СвойТовар', vtcBoolean, 0);
+        Dic.Open;
+      end;
+    'Валюта':
+      begin
+        Dic.AddColumn('Код', vtcString, 3);
+        Dic.AddColumn('Название', vtcString, 50);
+        Dic.AddColumn('КурсНацБанка',vtcFft,6);
+        Dic.AddColumn('КурсНаличный', vtcFft, 6);
+        Dic.Open;
+      end;
+  end;
+end;
+
+procedure CreateStructureDoc(Docs, DocsList: ICValueTable; DocName : String);
+Var
+  DocObj : ICDocuments;
+Begin
+  Case DocName Of
+  'ЧекВНаклПрихода':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('Сумма', vtcFft, 2);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 2);
+      Docs.Open;
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('Цена', vtcFft, 7);
+      DocsList.Open;
+    end;
+  end;
+end;
+
+end.

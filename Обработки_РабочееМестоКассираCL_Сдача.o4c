@@ -1,0 +1,58 @@
+interface
+
+uses
+  System;
+
+implementation
+var
+  Interval : Integer;
+
+procedure tbCloseNakl_Click(Sender: TObject);
+begin
+  Form.ModalResult := mrOk;
+  Form.Close;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  lbSdacha.Caption := FormatFloat('0.00', VarAsDec(Params[0]));
+  Interval := VarAsInt(Params[1]);
+  if Interval>0 then
+    begin
+      tbCloseNakl.Caption := ' Îê ('+IntToStr(Interval)+')';
+      TimerExit.Enabled := True;
+    end;
+end;
+
+procedure TimerExit_Timer(Sender: TObject);
+begin
+  if Interval<>0 then
+    begin
+      dec(Interval);
+      tbCloseNakl.Caption := ' Îê ('+IntToStr(Interval)+')';
+    end
+  else
+    begin
+      Form.ModalResult := mrOk;
+      Form.Close;
+    end;
+end;
+
+procedure MenuItem1_Click(Sender: TObject);
+begin
+  Form.ModalResult := mrOk;
+  Form.Close;
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ToolBar8:TO4ToolBar
+tbCloseNakl:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+Panel2:TO4Panel
+lbSdacha:TO4Label
+TimerExit:TO4Timer
+PopupMenu1:TO4PopupMenu
+MenuItem1:TO4MenuItem

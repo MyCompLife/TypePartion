@@ -1,0 +1,66 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+var
+  UseConst : IC4VPAConst;
+  LinkDoc : Variant;
+  TblGood : ICValueTable;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      UseConst := GetConstants;
+      Params.SetColumnFormat('Цена', UseConst.ФорматЦеныГРН);
+      Params.SetColumnFormat('Количество', UseConst.ФорматКол);
+      Params.UseDataSource(CtrlToVar(TVSGood));
+      LinkDoc := Params;
+      TblGood := Params;
+    end;
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  LinkDoc.Locate('Товар', InParams);
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Код;Товар');
+      miSortByCode.Checked := True;
+      miSortByName.Checked := False;
+    end;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Товар;Код');
+      miSortByCode.Checked := False;
+      miSortByName.Checked := True;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+DBGrid1:TO4DBGrid
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem

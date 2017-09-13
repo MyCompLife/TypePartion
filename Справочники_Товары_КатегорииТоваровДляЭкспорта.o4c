@@ -1,0 +1,112 @@
+interface
+
+uses
+  System, DispIntf, РаботаСКомпонентамиVCL;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  Opt : ICOptions;
+  UseLevels : Boolean;
+
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := True; //VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign));
+  MasterData.Params[prmInterfaceType] := itCategoryMain;
+  MasterData.Params['UseLevel'] := True;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign, UseLevels);
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+
+procedure pmiUseNoLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+
+procedure pmiUseNoLevel_Click(Sender : TObject);
+begin
+  MasterData.Params['UseLevel'] := False;
+end;
+
+procedure pmiUseLevel_Click(Sender : TObject);
+begin
+  MasterData.Params['UseLevel'] := True;
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+Var
+  TempTbl: ICValueTable;
+begin
+  if MasterData.HasParam('CtgListID') then
+    dbtCtg.Checks := MasterData.Params['CtgListID'];
+end;
+
+procedure MenuItem2_Click(Sender: TObject);
+var Dic: ICDictionary;
+begin
+  Dic := CreateObject('Справочники.Товары');
+  Dic.UseParent(MasterData);
+  Dic.Select;
+  while Dic.SelectNext do
+    begin
+      Dic.Edit;
+      Dic.ОтображатьНаСайте := true;
+      Dic.Post;
+      Dic.ApplyUpdates;
+    end;
+  MasterData.ApplyUpdates;
+end;
+
+procedure MenuItem3_Click(Sender: TObject);
+var Dic: ICDictionary;
+begin
+  Dic := CreateObject('Справочники.Товары');
+  Dic.UseParent(MasterData);
+  Dic.Select;
+  while Dic.SelectNext do
+    begin
+      Dic.Edit;
+      Dic.ОтображатьНаСайте := false;
+      Dic.Post;
+      Dic.ApplyUpdates;
+    end;
+  MasterData.ApplyUpdates;
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbtCtg:TO4DBTreeView
+pmCtg:TO4PopupMenu
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+MDS:TO4DataSource

@@ -1,0 +1,248 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 272
+  Height = 412
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'pmiAddBros.Caption'
+    0
+    #1'-1'#1'Добавить'
+    'pmiAddBros.Hint'
+    0
+    #1'-1'#1'Добавить'
+    'pmiAddChild.Caption'
+    0
+    #1'-1'#1'Добавить подуровень'
+    'pmiAddChild.Hint'
+    0
+    #1'-1'#1'Добавить подуровень'
+    'pmiAddLevel.Caption'
+    0
+    #1'-1'#1'Добавить'
+    'pmiAddLevel.Hint'
+    0
+    #1'-1'#1'Добавить'
+    'pmiAddSubLevel.Caption'
+    0
+    #1'-1'#1'Добавить подуровень'
+    'pmiAddSubLevel.Hint'
+    0
+    #1'-1'#1'Добавить подуровень'
+    'pmiDelLevel.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'pmiDelLevel.Hint'
+    0
+    #1'-1'#1'Удалить'
+    'pmiDontUseLevel.Caption'
+    0
+    #1'-1'#1'Просмотр без учета категорий'
+    'pmiDontUseLevel.Hint'
+    0
+    #1'-1'#1'Просмотр без учета категорий'
+    'pmiEditLevel.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'pmiEditLevel.Hint'
+    0
+    #1'-1'#1'Изменить'
+    'pmiUseLevel.Caption'
+    0
+    #1'-1'#1'Просмотр с учетом категорий'
+    'pmiUseLevel.Hint'
+    0
+    #1'-1'#1'Просмотр с учетом категорий'
+    'pmiUseNoLevel.Caption'
+    0
+    #1'-1'#1'Просмотр не принадлежащих к категориям'
+    'tbAddLevel.Caption'
+    0
+    #1'-1'#1'Добавить'
+    'tbAddLevel.Hint'
+    0
+    #1'-1'#1'Добавить'
+    'tbDelLevel.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'tbDelLevel.Hint'
+    0
+    #1'-1'#1'Удалить'
+    'tbEditLevel.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'tbEditLevel.Hint'
+    0
+    #1'-1'#1'Изменить')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Платежи'
+  PopupMenu = pmCtg
+  TabOrder = 0
+  Transparent = True
+  VPAOnClose.EventName = 'Form_Close'
+  object tbrCtg: TO4ToolBar
+    Left = 0
+    Top = 0
+    Width = 272
+    Height = 22
+    AutoSize = True
+    EdgeBorders = []
+    Flat = True
+    Images = ImagesHolder.Bmp16x16
+    TabOrder = 0
+    Transparent = True
+    O4MDSource = MDS
+    object tbAddLevel: TO4ToolButton
+      Left = 0
+      Top = 0
+      Hint = 'Добавить'
+      Caption = 'Добавить'
+      DropdownMenu = pmAddLevels
+      ImageIndex = 12
+      Style = tbsDropDown
+      O4Action = actAddLevel
+    end
+    object tbEditLevel: TO4ToolButton
+      Left = 36
+      Top = 0
+      Hint = 'Изменить'
+      Caption = 'Изменить'
+      ImageIndex = 13
+      O4Action = actEditLevel
+    end
+    object tbDelLevel: TO4ToolButton
+      Left = 59
+      Top = 0
+      Hint = 'Удалить'
+      Caption = 'Удалить'
+      ImageIndex = 14
+      O4Action = actDelLevel
+    end
+  end
+  object dbtCtg: TO4DBTreeView
+    Left = 0
+    Top = 22
+    Width = 272
+    Height = 390
+    Align = alClient
+    BaseImageIndex = 18
+    HideSelection = False
+    Images = ImagesHolder.Bmp16x16
+    Indent = 19
+    SortType = stText
+    TabOrder = 1
+    O4MDSource = MDS
+    UseChecks = True
+    DragEnabled = True
+  end
+  object MDS: TO4DataSource
+    VPAAfterScroll.EventName = 'MDS_VPAAfterScroll'
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    VPAOnLevelChanged.EventName = 'MDS_LevelChanged'
+    Left = 146
+    Top = 162
+  end
+  object pmCtg: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 73
+    Top = 71
+    object miAddLevel: TO4MenuItem
+      Caption = 'Добавить'
+      Hint = 'Добавить'
+      ImageIndex = 23
+      ShortCut = 45
+      O4Action = actAddLevel
+      SortMenuParent = False
+    end
+    object miAddSubLevel: TO4MenuItem
+      Caption = 'Добавить подуровень'
+      Hint = 'Добавить подуровень'
+      ImageIndex = 24
+      O4Action = actAddSubLevel
+      SortMenuParent = False
+    end
+    object miEditLevel: TO4MenuItem
+      Caption = 'Изменить'
+      Hint = 'Изменить'
+      ImageIndex = 13
+      ShortCut = 113
+      O4Action = actEditLevel
+      SortMenuParent = False
+    end
+    object miDelLevel: TO4MenuItem
+      Caption = 'Удалить'
+      Hint = 'Удалить'
+      ImageIndex = 14
+      ShortCut = 46
+      O4Action = actDelLevel
+      SortMenuParent = False
+    end
+    object miDelimiter1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miUseLevel: TO4MenuItem
+      Caption = 'Просмотр с учетом категорий'
+      Hint = 'Просмотр с учетом категорий'
+      ShortCut = 117
+      VPAOnClick.EventName = 'miUseLevel_Click'
+      VPABeforeActionClick.EventName = 'miUseLevel_VPABeforeActionClick'
+      O4Action = actUseLevel
+      SortMenuParent = False
+    end
+    object miDontUseLevel: TO4MenuItem
+      Caption = 'Просмотр без учета категорий'
+      Hint = 'Просмотр без учета категорий'
+      ShortCut = 118
+      VPAOnClick.EventName = 'miUseLevel_Click'
+      VPABeforeActionClick.EventName = 'miDontUseLevel_VPABeforeActionClick'
+      O4Action = actDontUseLevel
+      SortMenuParent = False
+    end
+    object miUseNoLevel: TO4MenuItem
+      Caption = 'Просмотр не принадлежащих к категориям'
+      ShortCut = 119
+      VPAOnClick.EventName = 'miUseNoLevel_Click'
+      VPABeforeActionClick.EventName = 'miUseNoLevel_VPABeforeActionClick'
+      O4Action = actUseNoLevel
+      SortMenuParent = False
+    end
+  end
+  object pmAddLevels: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 59
+    Top = 118
+    object miAddBros: TO4MenuItem
+      Caption = 'Добавить'
+      Default = True
+      Hint = 'Добавить'
+      ImageIndex = 23
+      O4Action = actAddLevel
+      SortMenuParent = False
+    end
+    object miAddChild: TO4MenuItem
+      Caption = 'Добавить подуровень'
+      Hint = 'Добавить подуровень'
+      ImageIndex = 24
+      O4Action = actAddSubLevel
+      SortMenuParent = False
+    end
+  end
+end

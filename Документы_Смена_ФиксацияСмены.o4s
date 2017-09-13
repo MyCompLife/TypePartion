@@ -1,0 +1,60 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, СтруктураТаблицДляDBF,
+  РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+implementation
+var
+  AccsGood, AccPart : ISAccs;
+  ApplyTbl : ISValueTable;
+
+procedure ApplyTblToAccs(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+  TblContents : ISValueTable;
+begin     
+  Accept := false;
+  // Остатки
+ { Count := 1;
+  Total := ApplyTbl.LineCount;
+  AccsGood.ClearFieldFilters();
+  ApplyTbl.Select;
+  while ApplyTbl.SelectNext do
+    begin
+      AccsGood.OutcomeDirect(Doc, Doc.ДатаДокумента, Doc.НомСтроки,
+                             ArrayOf(ApplyTbl.@Товар, Doc.ОбъектТорговли, midOutcome),
+                             ApplyTbl.Количество, ApplyTbl.Цена);
+
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        exit;
+      inc(Count);
+    end;    }
+
+
+
+
+{  if VarAsBool(Doc.@Партнер.IsFocused) then
+    begin
+      //взаиморасчеты с партнерами
+      AccPart.Партнер := Doc.Партнер;
+      AccPart.СумОбщ := Doc.Сумма;
+      AccPart.СумПрих := Doc.Сумма;
+      AccPart.Income(Doc, Doc.GetDate, 0);
+    end;}
+
+  Accept := true;
+end;
+
+function GetChangeStateUpEP(ApplyTbls : ISValueTable) : Variant; server;
+begin
+  ApplyTbl := ApplyTbls;
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  Result := EntryPoint(ApplyTblToAccs);
+end;
+
+end.

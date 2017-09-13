@@ -1,0 +1,19 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+var AccsPartGoods, AccsGoods : ISAccs;
+
+procedure FillResultTbl(ResultTbl:ISValueTable; Good, Store:ISDictionary; OnDate:DateTime); server;
+begin                 
+  AccsPartGoods := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGoods.SetFieldFilter('Товар',Good);
+  AccsGoods.SetFieldFilter('Склад',Store);
+  AccsGoods.AppendGroupRestToValueTable(OnDate,'Товар;Партия;КолОбщ',ResultTbl);
+  AccsPartGoods.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;ДатаПр',ResultTbl);
+end;
+
+end.

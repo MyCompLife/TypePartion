@@ -1,0 +1,83 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+var
+  V : IcProcessing;
+  Constants : IC4VPAConst;
+  FormHeight : integer;
+  PriceTypes : string;
+  ctrlTemp : TComponent; 
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);  
+var i : integer;
+begin
+  V := mean;
+  Constants := GetConstants; 
+  PriceTypes := Constants.“ипы÷ен;
+  if StrLength(PriceTypes) > 0 then
+    for i := 1 to StrLength(PriceTypes) do
+      begin
+        ctrlTemp := Form.FindComponent('pnPrice' + PriceTypes[i]);
+        if not IsNil(ctrlTemp) then
+          (ctrlTemp as TO4Panel).Visible := true;
+      end;
+  cbPrice0.Checked := pnPrice0.Visible;
+  cbPrice1.Checked := pnPrice1.Visible;
+  cbPrice2.Checked := pnPrice2.Visible;
+
+  FormHeight := pnBottom.Height+40;
+  if pnPrice0.Visible then
+    FormHeight := FormHeight + pnPrice0.Height;
+  if pnPrice1.Visible then
+    FormHeight := FormHeight + pnPrice1.Height;
+  if pnPrice2.Visible then
+    FormHeight := FormHeight + pnPrice2.Height;
+  Form.Parent.Height := FormHeight;
+end;
+
+
+procedure btOK_Click(Sender: TObject);
+var   Percent1, Percent2, Percent3 : Decimal;
+begin
+ Percent1 := StrToDecDef(edPercent0.Text,-1);
+ Percent2 := StrToDecDef(edPercent1.Text,-1);
+ Percent3 := StrToDecDef(edPercent2.Text,-1);
+
+ if Percent1<0 then
+   ShowMessage('% наценки цены не может быть < 0')
+ else
+ if Percent2<0 then
+   ShowMessage('% наценки цены ќпт не может быть < 0')
+ else
+ if Percent3<0 then
+   ShowMessage('% наценки цены  р.ќпт не может быть < 0')
+ else
+   begin
+     V.Params['Percent1'] := Percent1;
+     V.Params['Percent2'] := Percent2;
+     V.Params['Percent3'] := Percent3;
+     V.Params['UsePrice1'] := cbPrice0.Checked;
+     V.Params['UsePrice2'] := cbPrice1.Checked;
+     V.Params['UsePrice3'] := cbPrice2.Checked;
+     Form.ModalResult := mrOK;
+   end;
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pnBottom:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnPrice0:TO4Panel
+edPercent0:TO4Edit
+cbPrice0:TO4CheckBox
+pnPrice1:TO4Panel
+edPercent1:TO4Edit
+cbPrice1:TO4CheckBox
+pnPrice2:TO4Panel
+edPercent2:TO4Edit
+cbPrice2:TO4CheckBox

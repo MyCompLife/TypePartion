@@ -1,0 +1,136 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation
+
+Var
+  MasterTbl, DocListTbl : ISValueTable;
+  AccsGood, AccsPartGood : ISAccs;
+  Constants : IS4VPAConst;
+  Part : Extended;
+  PTbl : ISValueTable;
+  DateFrom, DateTo : DateTime;
+  TypeRepport: Integer;
+  Store, GoodDic: ISDictionary;
+  PartionList : ISValueList;
+
+Procedure CreateSrvObjects(GoodDicS, StoreS : Variant; DateFromS, DateToS :DateTime ;PartionTblS, DocListTblS: ISValueTable; TypeRepportS: Integer); server;
+begin
+  GoodDic := GoodDicS;
+  DateFrom := DateFromS;
+  DateTo := DateToS;
+  Store := StoreS;
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGood.ClearFieldBuffers;
+  AccsGood.ClearFieldFilters;
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  MasterTbl := PartionTblS;
+  DocListTbl := DocListTblS;
+  Constants := GetConstants;
+  TypeRepport := TypeRepportS;
+end;
+
+procedure AssignMotionToDocListTbl; server;
+var
+  FieldsStr: String;
+begin
+  AccsGood.OutcomeMotionWithMinus := True;
+  AccsGood.SetFieldFilter('Товар',GoodDic);
+  AccsGood.SetFieldFilter('Склад',Store);
+  AccsGood.AppendGroupMotionToValueTable(DateFrom, DateTo + 0.99999, amtBoth, 'Товар;Склад;MotionSign;'+
+           'Партия;Document;Date;СумОтп;СумОтпНДС;КолОбщ;СумВх;СумВхНДС;СумНац',
+           -1, DocListTbl);
+  DocListTbl.DoGetMeanNames('Document', 'DNames');
+  DocListTbl.DoCalculation('Цена', 'СумОтп/КолОбщ');
+  DocListTbl.DoGetLinks('Партнер=Document.Партнер;Отпуск=Document.Отпуск;НомерДокумента=Document.НомерДокумента');
+  DocListTbl.DoGetLinks('НазвПартнера=Партнер.ПолноеНазвание');
+  DocListTbl.DoCalculation('Sort','0');
+  PartionList := CreateObject('СписокЗначений');
+  DocListTbl.GroupToList('Партия',PartionList);
+  AccsGood.ClearFieldBuffers;
+  AccsGood.ClearFieldFilters;
+  AccsGood.IncludeZeroRest := true;
+  AccsGood.SetFieldFilter('Товар',GoodDic);
+  AccsGood.SetFieldFilter('Склад',Store);
+  AccsGood.AppendGroupRestToValueTable(DateTo + 0.99999, 'Партия;Товар;Склад;КолОбщ;СумВх;СумВалВх', MasterTbl);
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ДатаПр;Валюта;ВхЦенаБезНДС;ВхЦенаВал', MasterTbl);
+  if TypeRepport = 0 then
+    MasterTbl.GroupBy('Склад','КолОбщ;СумВх;СумВалВх');
+  DocListTbl.SortBy('Партия');
+  MasterTbl.Select;
+  if TypeRepport = 1 then // удалить нулевые партии без движения
+    while MasterTbl.SelectNext Do
+      begin
+        if MasterTbl.КолОбщ = 0 then
+          begin
+            DocListTbl.SetRange(MasterTbl.Партия, MasterTbl.Партия);
+            if DocListTbl.LineCount = 0 then
+              begin
+                MasterTbl.Delete;
+                MasterTbl.Select;
+              end;
+          end;
+      end;
+end;
+
+procedure GroupStoreMasterTbl; server;
+begin
+end;
+
+procedure GroupPartMasterTbl; server;
+begin
+end;
+
+procedure SetRestFromBeginAndEndDates; server;
+var
+  Accept : boolean;
+  MotionCnt : Decimal;
+  TotalTbl : ISValueTable;
+  FieldsStr: String;
+begin
+  TotalTbl := CreateObject('ТаблицаЗначений');
+  case TypeRepport of
+    0: FieldsStr := 'Склад';
+    1: FieldsStr := 'Партия;Склад';
+  end;
+  DocListTbl.SortBy(FieldsStr);
+  MasterTbl.Select;
+  While VarAsBool(MasterTbl.SelectNext) do
+    begin
+      case TypeRepport of
+        0: DocListTbl.SetRange(MasterTbl.Склад,MasterTbl.Склад);
+        1: DocListTbl.SetRange(ArrayOf(MasterTbl.Партия,MasterTbl.Склад),ArrayOf(MasterTbl.Партия,MasterTbl.Склад));
+      end;
+      if DocListTbl.LineCount = 0 then
+        begin
+          DocListTbl.Append;
+            DocListTbl.Sort := -1;
+            DocListTbl.Партия := MasterTbl.Партия;
+            DocListTbl.Склад := MasterTbl.Склад;
+            DocListTbl.НазвПартнера := 'Движение за период отсутствует';
+          DocListTbl.Post;
+          continue;
+        end;
+      MotionCnt := DocListTbl.Total('КолОбщ');
+      DocListTbl.CopyTo('',TotalTbl);
+      DocListTbl.Append;
+        DocListTbl.Sort := -1;
+        DocListTbl.Партия := MasterTbl.Партия;
+        DocListTbl.Склад := MasterTbl.Склад;
+        DocListTbl.КолОбщ := MasterTbl.КолОбщ - MotionCnt;
+        DocListTbl.НазвПартнера := 'Остаток на начало периода';
+      DocListTbl.Post;
+
+      DocListTbl.Append;
+        DocListTbl.Sort := 1;
+        DocListTbl.Партия := MasterTbl.Партия;
+        DocListTbl.Склад := MasterTbl.Склад;
+        DocListTbl.КолОбщ := MasterTbl.КолОбщ;
+        DocListTbl.НазвПартнера := 'Остаток на конец периода';
+      DocListTbl.Post;
+    end;
+end;
+
+end.

@@ -1,0 +1,150 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений;
+
+const
+  errParamProcAbsentInList = 'Обработка "%s" отсутствует в списке';
+  errParamProcAbsentInDatabase = 'Обработка "%s" отсутствует в базе данных';
+  errParamProcHasntAdditProps = 'Обработка "%s" не имеет дополнительных свойств';
+  errParamProcHasntAdditUserProps = 'Обработка "%s" не имеет дополнительных свойств пользователя';
+  prmnParamProcAdditProperties = 'ParamProcAdditProps';
+  DoReconnectToChangesTakeEffect = 'Для того, чтобы изменения вошли в силу, ' +
+    'перезагрузите программу';
+  errUnknown = 'Неизвестная ошибка';
+  errAdditionalPropsNotDefined = 'Не определены или неправильно определены дополнительные свойства обработки "%s"';
+  // суффиксы форм параметр. обработок
+  frmsfPrmPrcAdditParams = 'ДопПараметры';
+  frmsfPrmPrcAdditUserParams = 'ДопПараметрыПользователя';
+  prmnPrcSign = 'PrcSign'; // GetSign для обработки
+  errAtProcInvokingErrorRaised = 'При выполнении функции "%s"%sвозникла ошибка "%s"'; // второй параметр = #13#10
+  infProcInvokedSuccesfully = 'Функция "%s" выполнена без ошибок';
+  errFunctionNotSupported = 'Для данной обработки "%s"%sпереданная функция "%s" не поддерживается'; // поскольку GetSign для обработки пока не доступен, вместо первого параметра используется prmnPrcSign; второй параметр = #13#10
+  errParametrizedProcNotLocked = 'Параметризированная обработка не подключена';
+
+function InvokeParamProcFunction(PrcParametrized : ICProcessing; ProcName : string;
+  var LogText : string; InvokeException : Boolean = True;
+  InParams, NilProcError : Variant = '') : Variant;
+procedure SaveProcIDFromList(DicInvoker : ICDictionary; edList : To4Edit;
+  ProcIDField : string; DoRaise : Boolean);
+procedure ReadPrmPrcAdditionalSettings(DicInvoker : ICDictionary; ProcIDPref,
+  ProcIDField, AdditSettField : string; TblReadPropsNow : ICValueTable);
+function CreatePrmProcByDict(DicInvoker : ICDictionary; ProcIDPref, ProcIDField : string;
+  var PrcParametrized : ICProcessing) : string;
+function ReadPrmPrcAdditionalUserSettings(DicInvoker : ICDictionary; ProcIDPref,
+  ProcIDField : string) : Integer;
+
+implementation
+
+//******************************************************************************
+// ф-ция по работе с параметризированной обработкой, в которой ведется log-система и учет ошибок
+// функция ExecProc доп. интерфейса обязана возвращать массив со структурой:
+// ArrayOf(Результат (если вызывается функция), Название процедуры)
+
+function InvokeParamProcFunction(PrcParametrized : ICProcessing; ProcName : string;
+  var LogText : string; InvokeException : Boolean = True;
+  InParams, NilProcError : Variant = '') : Variant;
+var
+  OutParam : Variant;
+  msgException : string;
+begin
+  if IsNil(PrcParametrized) then
+    begin
+      Result := Null;
+      if InvokeException then
+        begin
+          if VarAsStr(NilProcError) = '' then
+            msgException := errParametrizedProcNotLocked
+          else
+            msgException := NilProcError;
+          raise(Trans(msgException));
+        end;
+    end
+  else
+    begin
+      try
+        OutParam := Null;
+        PrcParametrized.ExecProc(Null, ProcName, InParams, OutParam);
+        if IsArray(OutParam) then
+          msgException := ''
+        else
+          msgException := GetTranslation(errFunctionNotSupported,
+            ArrayOf(PrcParametrized.Params[prmnPrcSign], #13#10, ProcName));
+      except
+        if IsArray(OutParam) then
+          ProcName := OutParam[1];
+        OutParam := Null;
+        msgException := GetTranslation(errAtProcInvokingErrorRaised, ArrayOf(ProcName, #13#10, ExceptMessage));
+      end;
+      if (msgException = '') then
+        msgException := GetTranslation(infProcInvokedSuccesfully, ArrayOf(OutParam[1]))
+      else
+        if InvokeException then
+          raise(VarAsStr(msgException));
+      Result := OutParam;
+      LogText := msgException;
+    end;
+end;
+
+procedure SaveProcIDFromList(DicInvoker : ICDictionary; edList : To4Edit;
+  ProcIDField : string; DoRaise : Boolean);
+begin
+  if (edList.Items.IndexOf(edList.Text) <> -1) then
+    DicInvoker._Default[ProcIDField] := edList.Text
+  else
+    if DoRaise then
+      raise(VarAsStr(GetTranslation(errParamProcAbsentInList, ArrayOf(edList.Text))));
+end;
+
+function CreatePrmProcByDict(DicInvoker : ICDictionary; ProcIDPref, ProcIDField : string; var PrcParametrized : ICProcessing) : string;
+begin
+  Result := StrDelSpace(StrTrim(DicInvoker._Default[ProcIDField]));
+  try
+    PrcParametrized := CreateObject('Обработки.' + ProcIDPref + Result);
+  except
+    raise(VarAsStr(GetTranslation(errParamProcAbsentInDatabase,
+      ArrayOf(DicInvoker._Default[ProcIDField]))));
+  end;
+end;
+
+procedure ReadPrmPrcAdditionalSettings(DicInvoker : ICDictionary; ProcIDPref,
+  ProcIDField, AdditSettField : string; TblReadPropsNow : ICValueTable);
+var
+  PrcParametrized : ICProcessing;
+  ObjectID : string;
+begin
+  ObjectID := CreatePrmProcByDict(DicInvoker, ProcIDPref, ProcIDField, PrcParametrized);
+  //
+  if TblReadPropsNow.Find(ArrayOf(AdditSettField, DicInvoker._Default[ProcIDField])) then
+    PrcParametrized.Params[prmnParamProcAdditProperties] := TblReadPropsNow.Properties
+  else
+    PrcParametrized.Params[prmnParamProcAdditProperties] := Null;
+  // обработка дополнительных параметров в диалоговом окне
+  case PrcParametrized.Execute(frmsfPrmPrcAdditParams + ObjectID, Null) of
+    mrOk :
+      begin
+        DicInvoker._Default[AdditSettField] := PrcParametrized.Params[prmnParamProcAdditProperties];
+        AssignReadPropsNow(TblReadPropsNow, DicInvoker, AdditSettField,
+          DicInvoker._Default[ProcIDField]);
+      end;
+    mrNone :
+      ShowMessage(GetTranslation(errParamProcHasntAdditProps, ArrayOf(DicInvoker._Default[ProcIDField])));
+  end;
+end;
+
+function ReadPrmPrcAdditionalUserSettings(DicInvoker : ICDictionary; ProcIDPref,
+  ProcIDField : string) : Integer;
+var
+  PrcParametrized : ICProcessing;
+  ObjectID : string;
+begin
+  ObjectID := CreatePrmProcByDict(DicInvoker, ProcIDPref, ProcIDField, PrcParametrized);
+  // обработка дополнительных параметров в диалоговом окне
+  Result := PrcParametrized.Execute(frmsfPrmPrcAdditUserParams + ObjectID, Null);
+  if Result = mrNone then
+    ShowMessage(GetTranslation(errParamProcHasntAdditUserProps,
+      ArrayOf(VarAsStr(DicInvoker._Default[ProcIDField]))));
+end;
+
+end.

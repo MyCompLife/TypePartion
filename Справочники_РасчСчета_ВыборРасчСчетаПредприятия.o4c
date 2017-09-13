@@ -1,0 +1,61 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL;
+
+implementation
+
+var
+  MyFirm, MasterData : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MyFirm := CreateObject('Справочники.ВашеПредприятие');
+  MyFirm.Select;
+  MyFirm.SelectNext;
+  MasterData := MDS.GetMean;
+  MasterData.UseMasterAndSelect(MyFirm);
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if VarAsBool(MasterData.Активность) then
+    Index1 := 36;
+end;
+{$D+}
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itInPlaceForMain;
+  MakeStandartInterface(MasterData, Form, '', '');
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

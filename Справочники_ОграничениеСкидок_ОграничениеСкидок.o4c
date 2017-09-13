@@ -1,0 +1,97 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –абота—о—правочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  listPriceType: ICValueList;
+  PriceTypes: String;
+  Constants : IC4VPAConst;
+  LockCalc : Boolean;
+  DiscountLimits : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  LockCalc := true;
+  MasterData := MDS.GetMean;
+  Constants := CreateObject(' онстанты');
+  DiscountLimits := CreateObject('—правочники.ќграничение—кидок');
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+end;
+
+procedure Form_Open(Sender : TObject);
+var i : integer;
+begin
+ lbTitle.Caption := SetTitleCaption(ArrayOf(dbeName.Text), '');
+ listPriceType := CreateObject('ValueList');
+  PriceTypes := Constants.“ипы÷ен;
+  if StrLength(PriceTypes) > 0 then
+    for i:= 1 to StrLength(PriceTypes) do
+      case StrToInt(PriceTypes[i]) of
+        0: listPriceType.AddValue('÷ена',0);
+        1: listPriceType.AddValue('ќпт÷ена',1);
+        2: listPriceType.AddValue(' рќпт÷ена',2);
+      end;
+ LockCalc := true;
+ listPriceType.UseControl(ctrlToVar(edPriceType));
+  if MasterData.“ип÷ены = '' then
+    MasterData.“ип÷ены := listPriceType.GetStr(0);
+  listPriceType.CurIndex := listPriceType.FindByStr(MasterData.“ип÷ены); 
+ LockCalc := false;
+end;
+
+procedure edPriceType_Change(Sender: TObject);
+begin
+ if LockCalc then exit;
+ MasterData.“ип÷ены := listPriceType.GetStr(listPriceType.CurIndex);
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+ if VarAsInt(MasterData.—кидка)>0 then
+   MasterData.—кидка := - MasterData.—кидка;
+ DiscountLimits.SetFieldFilter('“овар','=',MasterData.“овар,'','',Null);
+ DiscountLimits.SetFieldFilter('“ип÷ены','=',MasterData.“ип÷ены,'','',Null);
+ DiscountLimits.Select;
+ While DiscountLimits.SelectNext do 
+  if not IsObjEQ(DiscountLimits, MasterData) then
+   raise('“ака€ запись уже есть в справочнике');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label5:TO4Label
+Label4:TO4Label
+Label1:TO4Label
+Label11:TO4Label
+dbeName:TO4DBEdit
+dbeProc:TO4DBEdit
+dbeComent:TO4DBEdit
+edPriceType:TO4Edit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnTitle:TO4Panel
+lbTitle:TO4Label
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem

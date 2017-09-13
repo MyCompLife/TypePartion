@@ -1,0 +1,217 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты;
+
+const
+  FieldsList = '“овар; од;≈д»зм;—клад;ѕарти€; олЌач;—умЌачЅезЌƒ—;—умЌачЌƒ—;—умЌач;' +
+    ' олѕрих;—умѕрихЅезЌƒ—;—умѕрихЌƒ—;—умѕрих;' +
+    ' ол–асх;—ум–асхЅезЌƒ—;—ум–асхЌƒ—;—ум–асх;' +
+    '—ум–асхЅезЌƒ—¬х;—ум–асхЌƒ—¬х;—ум–асх¬х;' +
+    ' олќст;—умќстЅезЌƒ—;—умќстЌƒ—;—умќст;' +
+    ' ол¬озврѕокуп;—ум¬озврЅезЌƒ—ѕокуп;—ум¬озврЌƒ—ѕокуп;—ум¬озврѕокуп;' +
+    '—ум¬озврЅезЌƒ—¬хѕокуп;—ум¬озврЌƒ—¬хѕокуп;—ум¬озвр¬хѕокуп;' +
+    ' ол¬озврѕост;—ум¬озврЅезЌƒ—ѕост;—ум¬озврЌƒ—ѕост;—ум¬озврѕост;' +
+    ' ол¬озвр–еал;—ум¬озврЅезЌƒ—–еал;—ум¬озврЌƒ—–еал;—ум¬озвр–еал;' +
+    ' ол¬озврѕост–еал;—ум¬озврЅезЌƒ—ѕост–еал;—ум¬озврЌƒ—ѕост–еал;—ум¬озврѕост–еал;' +
+    ' ол—пис;—ум—писЅезЌƒ—;—ум—писЌƒ—;—ум—пис;' +
+    ' ол¬ѕрих;—ум¬ѕрихЅезЌƒ—;—ум¬ѕрихЌƒ—;—ум¬ѕрих;' +
+    ' ол¬–асх;—ум¬–асхЅезЌƒ—;—ум¬–асхЌƒ—;—ум¬–асх;' +
+    ' ол он;—ум онЅезЌƒ—;—ум онЌƒ—;—ум он;' +
+    '—умЌац;—умЌацЌачало;CondField';
+  GoodLinksList = ' олЌач;—умЌач¬х;' +
+    ' олѕрих;—умѕрих¬х;—умѕрих¬хЌƒ—;' +
+    ' ол¬озвр;—ум¬озвр¬х;—ум¬озврќтп;—ум¬озврќтпЌƒ—;—ум¬озврЌац;' +
+    ' олќст;—умќст¬х;' +
+    ' ол–евиз;—ум–евиз¬х;' +
+    ' ол–асх;—ум–асх¬х;—ум–асхќтп;—ум–асхќтпЌƒ—;—ум–асхЌац;' +
+    ' ол¬озврѕост;—ум¬озврѕост¬х;—ум¬озврѕост¬хЌƒ—;' +
+    ' ол—пис;—ум—пис¬х;' +
+    '—умѕереоц;' +
+    ' ол он;—ум он¬х;' +
+    '—умЌац;—умЌацЌачало;CondField';
+  GoodLinksListSmall = ' олЌач;—умЌач¬х;' +
+    ' олѕрих;—умѕрих¬х;—умѕрих¬хЌƒ—;' +
+    ' ол–асх;—ум–асх¬х;—ум–асхќтп;—ум–асхќтпЌƒ—;—ум–асхЌац;' +
+    ' ол он;—ум он¬х;' +
+    '—умЌац;—умЌацЌачало;CondField';
+  GoodLinksListAll = ' олЌач;—умЌач¬х;' +
+    ' олѕрих;—умѕрих¬х;—умѕрих¬хЌƒ—;' +
+    ' ол¬ѕрих;—ум¬ѕрих¬х;' +
+    ' ол¬озвр;—ум¬озвр¬х;—ум¬озврќтп;—ум¬озврќтпЌƒ—;—ум¬озврЌац;' +
+    ' олќст;—умќст¬х;' +
+    ' ол–евиз;—ум–евиз¬х;' +
+    ' ол–асх;—ум–асх¬х;—ум–асхќтп;—ум–асхќтпЌƒ—;—ум–асхЌац;' +
+    ' ол¬–асх;—ум¬–асх¬х;' +
+    ' ол¬озврѕост;—ум¬озврѕост¬х;—ум¬озврѕост¬хЌƒ—;' +
+    ' ол—пис;—ум—пис¬х;' +
+    '—умѕереоц;' +
+    ' ол он;—ум он¬х;' +
+    '—умЌац;—умЌацЌачало;CondField';
+  «начени€ЌаЌачало = ' олќбщ= олЌач;—ум¬х=—умЌач¬х;—умЌац=—умЌацЌачало';
+  «начени€Ќа онец = ' олќбщ= ол он;—ум¬х=—ум он¬х;—умЌац';
+  RealInLinksList = ' олЌач;—умЌач¬х;' +
+    ' олѕрих;—умѕрих¬х;—умѕрих¬хЌƒ—;' +
+    ' ол¬озврѕост;—ум¬озврѕост¬х;—ум¬озврѕост¬хЌƒ—;' +
+    ' олќст;—умќст¬х;' +
+    ' ол—пис;—ум—пис¬х;' +
+    ' ол»нв;—ум»нв;' +
+    ' ол он;—ум он¬х;' +
+    '—умЌац;CondField';
+
+procedure LoadPartAttr(AttrPartTbl : ISValueTable; ADR, TLF : ISDictionary; GetName : Boolean = True); server;
+procedure AddTotalRow(ValTbl : ISValueTable; TotalFieldName, ValueFieldsList : string);
+function SetCtgFilter(UseLevel : Boolean; GoodsList : Variant;
+  Items : ISDictionary; AccsGood : ISAccs; FieldName : string) : Boolean;
+procedure DeleteColumnsByCondition(TblCurrent : ISValueTable; CondFieldName, Condition : string);
+function ReplaceDecDelim(OldFormat : string; ReplTo : Char = #0;
+  KnownDelimiters : string = '.;,') : string;
+function ReplaceOneStrWithAnother(Source, StrFrom, StrTo : string) : string;
+
+implementation
+
+procedure LoadPartAttr(AttrPartTbl : ISValueTable; ADR, TLF : ISDictionary; GetName : Boolean = True); server;
+var
+  OnePart : ISDictionary;
+begin
+  if IsNil(ADR) then
+    begin
+      ADR := CreateObject('—правочники.јдреса');
+      TLF := CreateObject('—правочники.“елефоны');
+    end;
+  AttrPartTbl.Select();
+  while AttrPartTbl.SelectNext() do
+    begin
+      OnePart := AttrPartTbl.ѕартнер;
+      if OnePart.IsFocused then
+        begin
+          AttrPartTbl.Edit();
+          if GetName then
+            AttrPartTbl.Ќазвание := GetPartName(OnePart, 1);
+          AttrPartTbl.јдрес := GetActiv(ADR, 'ѕочт»ндекс', OnePart) + GetActiv(ADR, '√ород.Ќазвание', OnePart) + GetActiv(ADR, 'јдрес', OnePart);
+          AttrPartTbl.“елефон := '(' + GetActiv(TLF, ' од√орода', OnePart) + ') ' + GetActiv(TLF, 'Ќомер', OnePart);
+          AttrPartTbl.Post();
+        end;
+    end;
+end;
+
+procedure AddTotalRow(ValTbl : ISValueTable; TotalFieldName, ValueFieldsList : string);
+var
+  V : Variant;
+  i : Integer;
+begin
+  if not IsNil(ValTbl) and (ValTbl.LineCount > 0) then
+    begin
+      V := ValTbl.Total(ValueFieldsList);
+      if ValTbl.SelectLast then
+        begin
+          ValTbl.Append;
+          ValTbl._Default[TotalFieldName] := lblTotal;
+          if StrPos(FieldDelimiter, ValueFieldsList) > 0 then
+            begin
+              for i := 1 to WordCount(ValueFieldsList, FieldDelimiter) do
+                ValTbl._Default[ExtractWord(i, ValueFieldsList, FieldDelimiter)] := V[i - 1];
+            end
+          else
+            ValTbl._Default[ValueFieldsList] := V;
+          ValTbl.Post();
+        end;
+    end;
+end;
+
+function GetGoodLinksList : string; server;
+begin
+  Result := GoodLinksList;
+end;
+
+function GetGoodLinksListSmall : string; server;
+begin
+  Result := GoodLinksListSmall;
+end;
+
+function SetCtgFilter(UseLevel : Boolean; GoodsList : Variant;
+  Items : ISDictionary; AccsGood : ISAccs; FieldName : string) : Boolean;
+var
+  Tbl : ISValueTable;
+begin
+  Result := True;
+  if UseLevel then
+    begin
+      if GoodsList.Count > 0 then //категории
+        AccsGood.SetCtgFieldFilter(FieldName, GoodsList);
+    end
+  else
+    begin
+      Tbl := CreateObject('“аблица«начений');
+      Items.SortByName;
+      Items.Select;
+      if Items.RecordCount > 0 then
+        begin
+          Items.SaveToValueTable('', Tbl, 1, Items.RecordCount);
+          Tbl.GroupToList('Self', GoodsList);
+          nil(Tbl);
+          AccsGood.SetFieldFilter(FieldName, GoodsList);
+        end
+      else
+        Result := False;
+    end;
+end;
+
+procedure DeleteColumnsByCondition(TblCurrent : ISValueTable; CondFieldName, Condition : string);
+var
+  SortedColumns : string;
+  TmpTbl : ISValueTable;
+begin
+  TmpTbl := CreateObject('“аблица«начений');
+  TblCurrent.CopyColumnsTo(TmpTbl);
+  TmpTbl.Open;
+  SortedColumns := TblCurrent.SortedColumns;
+  TblCurrent.SortBy('');
+  try
+    TblCurrent.DoCalculation(CondFieldName, Condition);
+    TblCurrent.SortBy(CondFieldName);
+    TblCurrent.SetRange(0, 0);
+    TblCurrent.AppendTo('', TmpTbl);
+    TblCurrent.CancelRange;
+    TblCurrent.Clear;
+    TmpTbl.AppendTo('', TblCurrent);
+    TmpTbl.Clear;
+  finally
+    TblCurrent.SortBy(SortedColumns);
+  end;
+end;
+
+function ReplaceOneStrWithAnother(Source, StrFrom, StrTo : string) : string;
+var
+  Pos : Integer;
+begin
+  if StrFrom = StrTo then
+    begin
+      Result := Source;
+      exit;
+    end;
+  Result := '';
+  Pos := StrPos(StrFrom, Source);
+  while Pos <> 0 do
+    begin
+      Result := Result + StrCopy(Source, 1, Pos - 1) + StrTo;
+      Source := StrCopy(Source, Pos + StrLength(StrFrom), StrLength(Source)); // сэконмлен подсчет третьего параметра - заведомо большее число
+      Pos := StrPos(StrFrom, Source);
+    end;
+  Result := Result + Source; // остаток
+end;
+
+function ReplaceDecDelim(OldFormat : string; ReplTo : Char = #0;
+  KnownDelimiters : string = '.;,') : string;
+var
+  i : Integer;
+begin
+  Result := OldFormat;
+  if ReplTo = #0 then
+    ReplTo := DecToStr(0.9)[2];
+  if KnownDelimiters <> '' then
+    for i := 1 to WordCount(KnownDelimiters, ';') do
+      Result := ReplaceOneStrWithAnother(Result, ExtractWord(i, KnownDelimiters, ';'), ReplTo);
+end;
+
+end.

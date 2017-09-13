@@ -1,0 +1,76 @@
+interface
+
+uses System, DispIntf, Фиксация, Расчеты;
+
+implementation
+
+var
+ AccPart, AccKassa, AccROutPart, AccRInPart, AccPartDog, AccMag, AccBarter : ISAccs;
+
+procedure ChangeStateUp(Doc:ISDocuments; var Accept : boolean);
+var
+ DocDate : DateTime;
+ Partner : Variant;
+ J : ISJournal;
+ DocCurrentOwner : ISDocuments;
+ Constants : IS4VPAConst;
+ GoWiring : Boolean;
+begin
+ DocDate := Doc.GetDate;
+ AccKassa.ClearFieldBuffers();
+ Constants := GetConstants;
+ GoWiring := true;
+ //остаток по кассе в валюте
+ if (Constants.КодИБ <> 1) and (Doc.КассаПол.Регион.Код <> VarAsStr(Constants.КодИБ)) then
+   GoWiring := false;
+ if GoWiring then
+   begin
+     AccKassa.AssignFields('Валюта;Касса=КассаПол;СумПрих=СуммаВВалюте;СумОбщ=СуммаВВалюте;Дата=ДатаДокумента',Doc);
+     AccKassa.Income(Doc, DocDate, 0);
+   end;
+ GoWiring := true;
+ if (Constants.КодИБ <> 1) and (Doc.КассаОтп.Регион.Код <> VarAsStr(Constants.КодИБ)) then
+   GoWiring := false;
+ if GoWiring then
+   begin
+     AccKassa.AssignFields('Валюта;Касса=КассаОтп;СумПрих=СуммаВВалюте;СумОбщ=СуммаВВалюте;Дата=ДатаДокумента',Doc);
+     AccKassa.Outcome(Doc, DocDate, 0);
+   end;
+ Accept := true;
+end;
+
+function GetChangeStateUpEP(Doc:ISDocuments) : Variant; server;
+begin
+  AccKassa:= CreateObject('Аккумуляторы.ОстаткиПоКассе');
+  Result := EntryPoint(ChangeStateUp);
+end;
+
+procedure DoChangeStateUp(Doc:ISDocuments);
+var
+ Accept : boolean;
+begin
+  Accept := true;
+  case Doc.GetDocState of
+    1 : begin
+      AccKassa:= CreateObject('Аккумуляторы.ОстаткиПоКассе');
+      ChangeStateUp(Doc,Accept);
+    end;
+    2 : begin
+    end;
+  end;
+end;
+
+
+// обработка в бухгалтерии
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : integer);
+begin
+//
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : String;
+          Iteration : integer; var Value : Variant);
+begin
+ //
+end;
+
+end.

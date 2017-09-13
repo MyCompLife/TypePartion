@@ -1,0 +1,812 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСПеременными,
+  РаботаСДокументамиВЖурналах, ПодключениеДопИнтерфейса, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  УстановкаВажныхОбъектов, ПечатьИВыводНаЭкран, Печать, РаботаСFtp, СтруктураТаблицДляDBFДилер, РаботаСТаблицамиDBFДилер,
+  Пользователи, ДополнительныйФункционал;
+
+implementation
+
+var
+  MasterData, ChildPaysOut, ChildPaysIn, ChildNakls, ChildNaklsIn, ChildProxyCards : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MyDocHasOwner, LockCh, PreView : Boolean;
+  Currency : ICDictionary;
+  Tbl, DocsTbl, DocsListTbl, PrintFormsTbl: ICValueTable;
+  PrintList : ICValueList;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+var
+  i : Integer;
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  SetColors(Constants);
+  Options := GetOptions;
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+
+  //ChildPaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  //ChildPaysOut.UseMaster(MasterData);
+  ChildPaysIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  ChildPaysIn.UseMaster(MasterData);
+  Currency := CreateObject('Справочники.Валюты');
+  Tbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure ReceiveEvent(Sender : ICDocuments; SessionID : Integer; CenterName, FromUserID, FromUserName : string;
+  Param : Variant);
+begin
+  // if MasterData.BrowseMode then bFresh_Click(tbRefresh);
+  if GetSessionID <> SessionID then
+    MasterData.Refresh;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;
+  ItemMenu : TO4MenuItem;
+begin
+  MakeInterface(tbrData, Nobody, dbgData);
+  miDocMove.Visible := GetUDASet('viewdocmove');   
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  if IsNil(Users) then
+    Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    begin
+      if VarAsBool(Users.@Регион.IsFocused) and VarAsBool(Users.ОтборПоРегиону) then
+        MasterData.SetFieldFilter('Регион','=',Users.Регион,'','',Null);
+      if VarAsBool(Users.ОтборПоПользователю) then
+        MasterData.SetFieldFilter('Ответственный','=',Users.Служащий,'','',Null);
+    end;
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+//  ChildPaysOut.OpenFormInplace('СписокПодчиненныхПлатежей', CtrlToVar(pPaysOut));
+  ChildPaysIn.OpenFormInplace('СписокПодчиненныхПлатежей', CtrlToVar(pPaysIn));
+  if VarAsBool(Options.GetServerPrm(RefreshOpt)) then
+    MasterData.RegEventReceiver(evNakladn, EntryPoint(ReceiveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  LockCh := True;
+  GetPrintersList(PrintList, edPrinters, MasterData.GetSign);
+
+  MakeUserInterface(MasterData.GetSign, pPrintPrm, PreView, PrintFormsTbl);
+  if not isNil(PrintFormsTbl) then
+    begin
+      btnPrint.Style := tbsDropDown;
+      btnPrint.DropdownMenu := pmPrintForms;
+      if PrintFormsTbl.LineCount = 0 then
+        btnPrint.Enabled := false; //если не указана печ.форма или не спозиционирован документ, тогда блокируется кнопка печати
+      pmiPrintOne.Enabled := btnPrint.Enabled;
+      PrintFormsTbl.DoNumbering('НомСтроки',1,1);
+      PrintFormsTbl.Select;
+      while PrintFormsTbl.SelectNext do
+        begin
+          ItemMenu := form.FindComponent('miPrinForm' + VarAsStr(PrintFormsTbl.НомСтроки)) as TO4MenuItem;
+          ItemMenu.Caption := PrintFormsTbl.ПечФорма;
+          ItemMenu.Visible := true;
+          ItemMenu.Tag := PrintFormsTbl.НомСтроки;
+          if PrintFormsTbl.НомСтроки = 1 then
+            ItemMenu.Default := true;
+        end;
+    end;
+end;
+
+procedure miPrintActive_Click(Sender : TObject);
+begin
+  // MasterData.PrintForm('', false, 0, Null)
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  if LockCh then
+    begin
+      MasterData.SetDocStateRange(NewTab - 1);
+      MasterData.Select;
+    end;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+var
+  V : ICProcessing;
+  PrinterName: String;
+begin
+  V := CreateObject('Обработки.ПечУнивЖурнала'); //ПечУнивЖурналаСКоличеством
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintOnUserDevice('Обработки.ПечУнивЖурнала', 'ПечУнивЖурналаСТипомИВалютой', PrinterName, MasterData, PreView)
+end;
+
+
+procedure btnPrint_Click(Sender: TObject);
+var
+  PrinterName: String;
+  ObjTag : Integer;
+begin
+  if Sender.ClassName = 'TO4ToolButton' then
+    ObjTag := (Sender as TO4ToolButton).Tag;
+  if Sender.ClassName = 'TO4MenuItem' then
+    ObjTag := (Sender as TO4MenuItem).Tag;
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintFormsTbl.SortBy('НомСтроки');
+  if PrintFormsTbl.Find(ObjTag) then
+    PrintOnUserDevice('Обработки.ПечУнивНакладнаяОтпуска', PrintFormsTbl.ПечФорма, PrinterName, MasterData.GetDoc, PreView);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if MasterData.ОплаченоВал > 0 then
+        begin
+          if MasterData.ОплаченоВал < MasterData.СуммаВал then
+            Index1 := 8
+          else
+          if MasterData.ОплаченоВал > MasterData.СуммаВал then
+            Index1 := 7
+          else
+          if MasterData.ОплаченоВал = MasterData.СуммаВал then
+            Index1 := 6;
+        end;
+      if MasterData.GetDocState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9;
+    end;
+end;
+
+procedure sgOrder_GetCellProps(Sender : TObject; aCol, aRow : Integer; aFont : TFont;
+  var Background : TColor; var CellAlignment : TAlignment;
+  var Layout : TTextLayout;
+  var WrapText : Boolean; Selected, Fixed, Highlight : Boolean);
+begin
+  if (aCol > 0) and (aRow > 0) then
+    CellAlignment := taRightJustify;
+  case aRow of
+    0 :
+      CellAlignment := taCenter;
+    1 :
+      aFont.Color := clBlue;
+    2 :
+      aFont.Color := clGreen;
+    3 :
+      aFont.Color := clRed;
+  end;
+end;
+
+procedure dbgData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if MasterData.IsFocused and
+    (MasterData.ПризнакСрокаОплаты <> 0) and
+    (MasterData.СрокОплаты < CurrentDate) and
+    (MasterData.GetDocState > 0) and
+    (MasterData.Оплачено < MasterData.Сумма) and
+    ((MasterData.GetDocSign = 'НакладнаяОтпуска') or (MasterData.GetDocSign = 'НакладнаяПрихода')) then
+    if Highlight then
+      BackColor := NoPaySel
+    else
+      BackColor := NoPayNorm;
+end;
+{$D+}
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+var
+  MyDocName : string;
+begin
+  if MasterData.IsFocused then
+    begin
+      MyDocHasOwner := False;
+      if VarAsBool(MasterData.HasDocOwner) then
+        MyDocName := Trans(server.OrderAfterScroll(MasterData)); //,MyDocHasOwner
+      if MyDocName <> '' then
+        pPays.Enabled := False
+      else
+        pPays.Enabled := True;
+      nbPays.PageIndex := MasterData.Отпуск;
+    end;
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure pmiPrintStore_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      V := CreateObject('Обработки.ПечУнивНаклОтпСклад');
+      V.PrintForm('УнивНаклОтпСклад', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc)
+    end;
+end;
+
+//создание документов по шаблону
+
+procedure pmiCopyDoc_Click(Sender : TObject);
+begin
+  AddDocByTemplate(MasterData);
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  LockCh := False;
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  LockCh := True;
+end;
+
+procedure DBMemo1_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData);
+end;
+
+procedure ToolButton7_Click(Sender : TObject);
+var
+  V : ICProcessing;
+  J : ICJournal;
+  Nakl : ICDocuments;
+  OldDoc : ICDocuments;
+begin
+  OldDoc := MasterData.GetDoc;
+  Nakl := CreateObjectOnDBID('Документы.НакладнаяПрихода', 'default');
+  Nakl.Params['OldDoc'] := OldDoc;
+  Nakl.EditInForm('НакладнаяПрихода', 0);
+end;
+
+procedure pmiExportExcel_Click(Sender : TObject);
+begin
+  ExportGoodsDocToExcel(MasterData.GetDoc, dtInvoice);
+end;
+
+
+//Для пересчета сумм документов
+
+procedure TableCalcFields(Doc : Variant);
+begin
+  CalcLineSumma(Doc);
+end;
+
+procedure ToolButton8_Click(Sender : TObject);
+var
+  Doc : ICDocuments;
+begin
+  MasterData.Select;
+  while MasterData.SelectNext do
+    begin
+      Doc := MasterData.GetDoc;
+      Doc.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+      Doc.Edit;
+      CalcTransSumma(Doc, Constants.ProcentPDV);
+      Doc.Post;
+      Doc.ApplyUpdates;
+    end;
+end;
+//
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case ProcId of
+    GetTemplateDocNames :
+      case MasterData.GetDocSign of
+        'НакладнаяОтпуска' :
+          case VarAsInt(MasterData.Params[TemplateVariant]) of
+            1 :
+              OutParams := ArrayOf(dtOtherDoc, 'НакладнаяОтпускаНаРеализацию');
+            2 :
+              OutParams := ArrayOf(dtOtherDoc, 'ГарантийныйТалонИсх');
+          end;
+        'НакладнаяПрихода' :
+          case VarAsInt(MasterData.Params[TemplateVariant]) of
+            1 :
+              OutParams := ArrayOf(dtOtherDoc, 'НакладнаяПрихНаРеал');
+            2 :
+              OutParams := ArrayOf(dtOtherDoc, 'ГарантийныйТалонВход');
+          end;
+        'НакладнаяПриходаПоСчету', 'НакладнаяПрихНаРеал' :
+          begin
+            if VarAsInt(MasterData.Params[TemplateVariant]) = 2 then
+              OutParams := ArrayOf(dtOtherDoc, 'ГарантийныйТалонВход')
+            else
+              begin
+                OutParams := ArrayOf(dtCancelTemplate);
+                ShowMessage(DontSingleDocum);
+              end;
+          end;
+        'НакладнаяОтпускаПоСчету', 'НакладнаяОтпускаНаРеализацию' :
+          begin
+            if VarAsInt(MasterData.Params[TemplateVariant]) = 2 then
+              OutParams := ArrayOf(dtOtherDoc, 'ГарантийныйТалонИсх')
+            else
+              begin
+                OutParams := ArrayOf(dtCancelTemplate);
+                ShowMessage(DontSingleDocum);
+              end;
+          end;
+        else
+          begin
+            OutParams := ArrayOf(dtCancelTemplate);
+            ShowMessage(DontSingleDocum);
+          end;
+      end;
+  end;
+end;
+
+procedure MDS_VPABeforeDelete(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+ { ChildNakls.CancelRangeByField; //снимаем выборку по полю
+  ChildNakls.SetDateRange(0, 0); //снимаем выборку по дате
+  ChildNakls.SetDocStateRange(-1); //снимаем выборку по состоянию документов
+  ChildNakls.SetDocTypeRange(''); //снимаем выборку по типу документов
+  if ChildNakls.Select then
+    begin //устанавливаем курсор на первую запись в журнале
+      //    if MessageDlg(Trans('Удалить накладные отпуска?'),mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes then
+      while ChildNakls.SelectNext do
+        ChildNakls.GetDoc.Delete; //в цикле удаляем документы
+    end;
+  if ChildNakls.IsFocused then
+    Accept := False; //проверяем не остался ли хотябы один документ
+  //если остался, мастера не удаляем
+  ChildNaklsIn.CancelRangeByField; //снимаем выборку по полю
+  ChildNaklsIn.SetDateRange(0, 0); //снимаем выборку по дате
+  ChildNaklsIn.SetDocStateRange(-1); //снимаем выборку по состоянию документов
+  ChildNaklsIn.SetDocTypeRange(''); //снимаем выборку по типу документов
+  if ChildNaklsIn.Select then
+    while ChildNaklsIn.SelectNext do
+      ChildNaklsIn.GetDoc.Delete; //в цикле удаляем документы
+  if ChildNaklsIn.IsFocused then
+    Accept := False; //проверяем не остался ли хотябы один документ
+  //если остался, мастера не удаляем    }
+end;                             
+
+procedure Form_Close(Sender: TObject);
+begin
+  InvokeAIFunction(CtrlToVar(pnForFiscalPrinter), 'DisconnectToolButton');
+end;
+
+
+
+
+function GetEmplByName(EmplName : string) : ICDictionary;
+Var
+  Respons: ICDictionary;
+begin
+  //  ExtractHumanName(EmplName);
+  if IsNil(Respons) then
+    Respons := CreateObject('Справочники.Служащие');
+  if Respons.FindByField('ПолноеНазвание', EmplName, False) then
+    begin
+      Result := Respons;
+    end
+  else
+    nil(Result);
+end;
+
+procedure miCreateDocBarCode_Click(Sender: TObject);
+Var Doc : ICDocuments;
+begin
+  if MasterData.IsFocused and VarAsBool(MasterData.GetDoc.IsFocused) then
+    begin
+      Doc := CreateObject('Документы.ПечатьШтрихКодов');
+      Doc.Params['DocOwner'] := MasterData.GetDoc;
+      Doc.EditInForm('ПечатьШтрихКодов',0);
+    end;
+end;
+
+procedure miGetNumID_Click(Sender: TObject);
+var
+  Doc : ICDocuments;
+  Num, Code: Integer;
+begin
+  Doc := MasterData.GetDoc;
+  if StdInpInt('Введите BaseID документа', Code) then
+    begin
+      Doc.Edit;
+      Doc.BaseID := Code;
+      Doc.Post;
+      Doc.ApplyUpdates;
+    end;
+  if StdInpInt('Введите NumID документа', Num) then
+    begin
+      Doc.Edit;
+      Doc.NumID := Num;
+      Doc.Post;
+      Doc.ApplyUpdates;
+    end
+end;
+
+procedure miCheck_Click(Sender: TObject);
+var
+  V: ICProcessing;
+  Doc: ICDocuments;
+begin
+ if MasterData.IsFocused and ((MasterData.GetDocSign='НакладнаяПрихода') or (MasterData.GetDocSign='НакладнаяВнутрПеремещ')) and
+   ((VarAsInt( MasterData.Подтверждена)=0) or (MessageDlg('Накладная уже подтверждена! Открыть окно подтверждения?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes)) then
+   begin
+     Doc := MasterData.GetDoc;
+     V := CreateObject('Обработки.ПодтверждениеНаличияТовара');
+     V.Execute('Подтверждение',Doc);
+     MasterData.Refresh;
+    end;
+end;
+
+procedure CreateObjects(DocType: String; Var DHead, DList : ICValueTable);
+Begin
+  DHead := CreateObject('ТаблицаЗначений');
+  DList := CreateObject('ТаблицаЗначений');
+  CreateStructureDoc(DHead, DList, DocType);
+end;
+
+function SoftOpenTable(var Table: Variant; FilePath: String): Boolean;
+var ErrStr: String;
+begin
+  try
+    Table := CreateOLEObject('s4DBtabl.S4VPADBTable');
+    Table.TableName := FilePath;
+    ErrStr := Trans('Открыта таблица ')+ FilePath;
+    Result := True;
+  except
+    Nil(Table);
+    ErrStr := Trans('Ошибка при открытии таблицы ')+FilePath+' !'#13#10+ExceptMessage;
+    Result := False;
+  end;
+end;
+
+procedure CreateDocs(DocName, DbfFieldHeadName, DbfFieldListName, FilePath : String; var Log: TStringList);
+Var
+  Docs, OwnerDoc : ICDocuments;
+  OwnerDic, Currency : ICDictionary;
+  DocsJourn : ICJournal;
+  AllRecCnt, RecCurrent, ColumnCnt, CntWord : Integer;
+  OwnerDocSign, OwnerDicSign, StructurTbl, Str : String;
+  DbfTable: Variant;
+begin
+  CreateObjects('ЧекВНаклПрихода', DocsTbl, DocsListTbl);
+  //-----------------------Распаковка таблицы из файла--------------------------
+  if SoftOpenTable(DbfTable, FilePath) then
+    begin
+     if VarAsBool((not IsNil(DbfTable)) and DbfTable.Active) then
+       begin
+         DbfTable.First;
+         if VarAsBool(DbfTable.HasField(DbfFieldHeadName)) then
+           DocsTbl.PackedData := DbfTable._Default[DbfFieldHeadName];
+         if ((DbfFieldListName <> '') and VarAsBool(DbfTable.HasField(DbfFieldListName))) then  //DbfFieldListName = '' используется в случаи, если у документа нет табл. части
+           DocsListTbl.PackedData := DbfTable._Default[DbfFieldListName];
+       end;
+    end;
+  if DocsTbl.LineCount = 0 then
+    exit;
+  //------------------------Заполнение Link - полей ----------------------------
+  if DbfFieldHeadName <> '' then
+    AppendLinkRecords(DocsTbl,'Head',DocName,pStatusOpers,Log);
+  if DbfFieldListName <> '' then
+    AppendLinkRecords(DocsListTbl,'List',DocName,pStatusOpers,Log);
+  //----------------------------------------------------------------------------_________________________________
+  AllRecCnt := DocsTbl.LineCount;
+  Docs := CreateObject('Документы.' + DocName);
+  Docs.Select;
+  //------------Перекидка записей шапки из таблицы значений в документ----------
+  DocsTbl.Select;
+  While DocsTbl.SelectNext Do
+    begin
+      Docs.Append;
+//----------------Создание структуры полей для перекидки в БД-----------------
+      StructurTbl := StringColumnsWithoutDelIndex(DocsTbl);
+      Docs.AssignFields(StructurTbl,DocsTbl);
+      Docs.Ответственный := GetEmplByName(GetUserName);
+      Docs.Партнер := Constants.ОсновнойПоставщик;
+      Docs.Регион := GetUsersField('Регион');
+      Docs.СкладПр := GetUsersField('Склад');
+      Docs.Отпуск := 0;
+      AddInfoDocsToLog('Add', DocName, DocsTbl, 'Head', Log);
+//-----------------------Заполнение содержимого документа---------------------
+      if (DbfFieldListName <> '') and VarAsBool(Docs.IsFocused) then
+        begin
+          DocsListTbl.SortBy('DocID_D');
+          DocsListTbl.SetRange(DocsTbl.DocID_D, DocsTbl.DocID_D);
+          //--------------Создание структуры полей для перекидки в БД---------------
+          StructurTbl := StringColumnsWithoutDelIndex(DocsListTbl);
+          DocsListTbl.Select;
+          While DocsListTbl.SelectNext do
+            begin
+              Docs.AppendLine;
+              Docs.AssignFields(StructurTbl,DocsListTbl);
+              Docs.ЦенаБезСкидкиНадбавки := Docs.Цена;
+              Docs.ЦенаБезНДС := Docs.Цена;
+              Docs.СтавкаНДС := 0;
+              Docs.НДС := Docs.Цена - Docs.ЦенаБезНДС;
+              Docs.КурсТовара := Docs.Курс;
+              Docs.ВалютаТовара := Docs.Валюта;
+              if Docs.КурсТовара = 0 then //исключение деления на 0
+                begin
+                  Docs.КурсТовара := 1;
+                  Currency := CreateObject('Справочники.Валюты');
+                  Docs.ВалютаТовара := GetNatCurrency(Currency);
+                  Docs.ЦенаВВалюте := Docs.Цена;
+                end;
+              Docs.ЦенаВВалюте := Docs.Цена/Docs.КурсТовара;
+              Docs.Склад := Docs.СкладПр;
+              AddInfoDocsToLog('Add', DocName, DocsListTbl, 'List', Log);
+              Docs.PostLine;
+            end;
+        end;
+      //----------------------------------------------------------------------------
+      Docs.Post;
+      MasterData.Refresh;
+//      if Docs.GetDocState = 0 then
+//        Docs.StateUp;
+    end;
+  StatusText('');
+end;
+
+
+procedure miLoadFromFtpFile_Click(Sender: TObject);
+var
+  res: Integer;
+  FtpDir, LocalDir, File, FileList, ResMeesage: String;
+  HLog, DLog : TStringList;
+  Accept: Boolean;
+  V : ICProcessing;
+  TimeFrom: DateTime;
+  Protokol, CurDoc : ICDocuments;
+  Step : Integer;
+  DocsTbl, DocsListTbl: ICValueTable;
+begin
+  Constants := CreateObject('Константы');
+  if not VarAsBool(Constants.ОсновнойПоставщик.IsFocused) then
+    begin
+      ShowMessage('Не указан поставщик в меню: Параметры -> Настройка обмена');
+      exit;
+    end;
+  try
+    pStatusOpers.Visible := true;
+    TimeFrom := CurrentDateTime;
+    Accept := true;
+    HLog := CreateStringList;
+    DLog := CreateStringList;
+//    DLog.Add(VarAsStr(Step) + ') Соединение с ftp сервером - '+ GetFtpIP);
+//    Accept := InitializationFtpConnect(ResMeesage);
+    DLog.Add(ResMeesage);
+    if not Accept then
+      exit;
+
+    FtpDir := '/' + VarAsStr(Constants.КодИБ) + '/';
+    Inc(Step);
+    DLog.Add(VarAsStr(Step) + ') Получение списка файлов с ftp сервера в дириктории: ' + FtpDir);
+    ResMeesage := GetFileList(FtpDir);
+    DLog.Add(ResMeesage);
+    Accept := ResMeesage <> 'Директория не найдена';
+    if not Accept then
+      exit;
+
+    Inc(Step);
+    DLog.Add(VarAsStr(Step) + ') Выбор файла:');
+    V := CreateObject('Обработки.РаботаСFtp');
+    V.Params['MaskFile'] := '.dbf';
+    if V.Execute('СписокФайлов',ResMeesage) <> mrOk then
+      begin
+        DLog.Add('Выбор файла отменен, процесс импорта прерван.');
+        Accept := false;
+      end;
+    if not Accept then
+      exit;
+    // Нужно VarAsStr(V.Params['File']); разбить на файл и дирикторию
+    FileList := VarAsStr(V.Params['File']);
+    File := ExtractWord(WordCount(FileList,'/'),FileList,'/');
+    FtpDir := StrCopy(FileList,1,StrLength(FileList) - StrLength(File));
+    DLog.Add(File);
+
+    Inc(Step);
+    LocalDir := ExtractFilePath(RunPath)+'Tempftp\';
+    DLog.Add(VarAsStr(Step) + ') Проверка локальной директории: ' + LocalDir);
+    if not DirectoryExists(LocalDir) then
+      MkDir(LocalDir);
+    if not Accept then
+      exit;
+
+    Inc(Step);
+    DLog.Add(VarAsStr(Step) + ') Копирование файла с ftp-сервера: ' + FtpDir + File);
+    Accept := CopyFileFromFtp(LocalDir + File, FtpDir + File, ResMeesage);
+    DLog.Add(ResMeesage);
+    if not Accept then
+      exit;
+    Accept := CopyFileFromFtp(LocalDir + StrCopy(File,1,StrLength(File)-4) + '.DBT', FtpDir + StrCopy(File,1,StrLength(File)-4) + '.DBT', ResMeesage);
+    DLog.Add(ResMeesage);
+    if not Accept then
+      exit;
+
+    Inc(Step);
+    DLog.Add(VarAsStr(Step) + ') Заполнение документа из файла: ' + LocalDir + File);
+    CreateDocs('НакладнаяПрихода', 'HeadDoc', 'ListDoc', LocalDir + File, DLog);
+
+//    ParsFile(LocalDir + V.Params['File']);
+
+    Inc(Step);
+    DLog.Add(VarAsStr(Step) + ') Удаление файла с ftp-ресурса: ' + FtpDir + File);
+    Accept := DeleteFileFromFtp(FtpDir + File, ResMeesage);
+    DLog.Add(ResMeesage);
+    if not Accept then
+      exit;
+    Accept := DeleteFileFromFtp(FtpDir + StrCopy(File,1,StrLength(File)-4) + '.DBT', ResMeesage);
+    DLog.Add(ResMeesage);
+    if not Accept then
+      exit;
+
+    ResMeesage := 'Импорт выполнен успешно';
+    DLog.Add(ResMeesage);
+
+  finally
+    if not Accept then
+      DLog.Add('******************** Импорт выполнен с ошибками ********************');
+    HLog.Add('Ответственный: '+ GetUserName);
+    HLog.Add('Файл '+ LocalDir + File);
+    HLog.Add('Время начала '+ VarAsStr(TimeFrom));
+    HLog.Add('Время окончания '+ VarAsStr(CurrentTime));
+//    HLog.Add('Работа с документом: '+ VarAsStr(CurDoc.GetName) + ' №' + VarAsStr(CurDoc.GetNumber));
+    Protokol := CreateObject('Документы.ПротоколОбмена');
+    Protokol.Select;
+    Protokol.Append;
+    Protokol.ЭкспортИмпорт := 'Импорт';
+    Protokol.Шапка := HLog.Text;
+    Protokol.Документы := DLog.Text;
+//    Protokol.Ошибки := ELog;
+    Protokol.Post;
+    Protokol.ApplyUpdates;
+    if Accept then
+      ResMeesage := 'Импорт выполнен успешно!'
+    else
+      ResMeesage := 'Импорт прерван или выполнен с ошибками!';
+    V := CreateObject('Обработки.РаботаСFtp');
+    if V.Execute('ЗавершениеПроцесса',ResMeesage) = mrOk then
+      Protokol.EditInForm('протокол',2);
+    ftpManagerClose;
+    pStatusOpers.Visible := false;
+  end;
+end;
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  SaveUserActivePrinter(PrinterName, MasterData.GetSign);
+//  Options.SetServerPrm('АктивныйПринтер' + MasterData.GetSign + Form.Caption, PrinterName);
+end;
+
+procedure miPrice_Click(Sender: TObject);
+var
+  V : ICProcessing;
+  Doc : ICDocuments;
+begin
+  Doc := MasterData.GetDoc;
+  V := CreateObject('Обработки.ПрайсЛист');
+  V.PrintForm('Прайс',not VarAsBool(Options.GetServerPrm(DirectPrint)) , MasterData.GetDoc);
+//  V.Execute('ПрайсЛист', Doc);
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miFillTaxGroup_Click(Sender: TObject);
+var P : ICProcessing;
+    Doc : ICDocuments;
+begin
+ if MasterData.IsFocused then
+   begin
+      Doc := MasterData.GetDoc;
+      P := CreateObject('Обработки.Диалоги');
+      if Doc.SetSrvToClientPos and (P.Execute('ВыборНалоговойГруппыТовара',Null)=mrOK) and P.HasParam('TaxGroup') then
+        begin
+          if MasterData.RunThreadProcess(server.FillGoodTaxGroupEP(Doc.SrvMean,VarAsInt(P.Params['TaxGroup'])),
+                                         'Заполнение налоговой группы') then
+            begin
+              ShowMessage('Налоговоя группа заполнена!');
+            end
+          else
+            ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+        end;
+   end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+btnPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbSelect:TO4ToolButton
+tbDelimiter3:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tsState:TO4TabSet
+pnAdditInterface:TO4Panel
+pnForFiscalPrinter:TO4Panel
+pStatusOpers:TO4Panel
+pPrintPrm:TO4Panel
+Label4:TO4Label
+btSaveActivPrinter:TO4Button
+edPrinters:TO4Edit
+Panel2:TO4Panel
+Splitter3:TO4Splitter
+pPays:TO4Panel
+Label2:TO4Label
+nbPays:TO4Notebook
+pPaysIn:TO4Panel
+pPaysOut:TO4Panel
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+miCopyDoc:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+pmiExportExcel:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem
+MenuItem4:TO4MenuItem
+miCreateDocBarCode:TO4MenuItem
+miPrice:TO4MenuItem
+miCheck:TO4MenuItem
+MenuItem6:TO4MenuItem
+miGetNumID:TO4MenuItem
+miFillTaxGroup:TO4MenuItem
+pmAddDoc:TO4PopupMenu
+miNaklIn:TO4MenuItem
+miLoadFromFtpFile:TO4MenuItem
+pmPrintForms:TO4PopupMenu
+miPrinForm1:TO4MenuItem
+miPrinForm2:TO4MenuItem
+miPrinForm3:TO4MenuItem
+miPrinForm4:TO4MenuItem
+miPrinForm5:TO4MenuItem
+miPrinForm6:TO4MenuItem
+miPrinForm7:TO4MenuItem
+miPrinForm8:TO4MenuItem
+miPrinForm9:TO4MenuItem
+miPrinForm10:TO4MenuItem

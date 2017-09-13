@@ -1,0 +1,623 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСSMS, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+     LinkDict, SMSConfigDic, TelDic, TextMessDic : ICDictionary;
+     MasterData, OldDoc: ICDocuments;
+     lockCalc, lockChange : Boolean;
+     TextMessage, ServerAnswer, ErrorStr : string;
+     DisableSMSCharWaring, CyrilicCharPresent, AddDoc  : Boolean;
+     SMSCount : integer;
+     CursorVis : TCursor;
+     ContentsTbl : ICValueTable;
+
+procedure CreateObjects;
+begin
+ SMSConfigDic := CreateObject('Справочники.SMSНастройки');
+ TelDic := CreateObject('Справочники.Телефоны');
+ TextMessDic := CreateObject('Справочники.SMSШаблоныСообщений');
+ ContentsTbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure RefreshControlEnable;
+begin
+ if MasterData.LinesCount>0 then
+  begin                         
+   mTextMessage.Enabled := true;
+   tbDel.Enabled := true;
+   tbClear.Enabled := true;
+   tbResetAllStatus.Enabled := true;
+   tbResetStatus.Enabled := true;
+  end
+ else
+  begin
+   mTextMessage.Enabled := false;
+   tbDel.Enabled := false;
+   tbClear.Enabled := false;
+   tbResetAllStatus.Enabled := false;
+   tbResetStatus.Enabled := false;
+  end;
+end;
+
+procedure CalcFields;
+begin
+  if lockCalc then
+    exit;  
+  CalcTotalSumSMSDoc(MasterData);
+ end;
+
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+  lockCalc := true;   
+  CreateObjects;
+end;
+
+
+procedure miFizPart_Click(Sender: TObject);
+begin
+ with Sender as TO4MenuItem do
+  begin
+   case Tag of
+    0:   // Физ.Лица
+     begin
+      LinkDict := MasterData.OpenDropSource('Справочники.ФизЛица', 'ПодборФизЛицДляSMS', MasterData);
+      miFizPart.Checked := true;
+      miUroPart.Checked := false;
+      miEmplPart.Checked := false;
+     end;
+    1:   // ЮрЛица
+     begin
+      LinkDict := MasterData.OpenDropSource('Справочники.ЮрПартнеры', 'ПодборПартнеровДляSMS', MasterData);
+      miFizPart.Checked := false;
+      miUroPart.Checked := true;
+      miEmplPart.Checked := false;
+     end;
+    2:   // служащие
+     begin
+      LinkDict := MasterData.OpenDropSource('Справочники.Служащие', 'ПодборСлужащегоДляSMS', MasterData);
+      miFizPart.Checked := false;
+      miUroPart.Checked := false;
+      miEmplPart.Checked := true;
+     end;
+   end;
+  end;
+end;
+
+procedure tbSource_Click(Sender: TObject);
+begin
+  if miFizPart.Checked then
+    LinkDict := MasterData.OpenDropSource('Справочники.ФизЛица', 'ПодборФизЛицДляSMS', MasterData)
+  else
+  if miUroPart.Checked then
+    LinkDict := MasterData.OpenDropSource('Справочники.ЮрПартнеры', 'ПодборПартнеровДляSMS', MasterData)
+  else
+  if miEmplPart.Checked then
+    LinkDict := MasterData.OpenDropSource('Справочники.Служащие', 'ПодборСлужащегоДляSMS', MasterData);
+end;
+
+procedure MDS_Append(Sender: TObject);    
+var TmpTbl : ICValueTable;
+    Number, ColumnList : string;  
+    i: integer;
+begin   
+ AddDoc := true;
+ MasterData.ИспОбщТекстСообщения := true;
+ MasterData.ОбщТекстСообщения := '';
+ if SMSConfigDic.FindByField('Активность',-1,false) then
+  begin
+   MasterData.SMSНастройки := SMSConfigDic;
+   MasterData.Отправитель := SMSConfigDic.Отправитель;
+   //UpdatePriceByDic(SMSConfigDic, ServerAnswer);
+   MasterData.ЦенаSMS := SMSConfigDic.ЦенаSMS;
+  end;
+ if (MasterData.HasParam('OldDoc')) and IsObjFocused(MasterData.Params['OldDoc']) then
+  begin
+      Number := MasterData.НомерДокумента;
+      OldDoc := MasterData.Params['OldDoc'];
+      TmpTbl := CreateObject('ValueTable');
+      OldDoc.SaveHead('', TmpTbl);
+      MasterData.LoadHead('', TmpTbl);
+      MasterData.ДатаДокумента := CurrentDateTime;
+      MasterData.НомерДокумента := Number;
+      MasterData.СуммаПотраченная := 0;
+      MasterData.СтатусДокумента := 0;
+      OldDoc.SaveContents('',TmpTbl);  
+      TmpTbl.DoCalculation('MessageID','''''');
+      TmpTbl.DoCalculation('ОтветСервера','''''');
+      TmpTbl.DoCalculation('СтатусСообщения','''создано''');
+      TmpTbl.DoCalculation('КодСтатусаСообщения','0');
+      // Создаем список полей табличной части документа без поля ДатаОтправки
+      ColumnList := '';
+      for i:=1 to TmpTbl.GetColumnCount-1 do
+       if not (StrLowerCase(TmpTbl.GetColumnName(i))='датаотправки') then
+        ColumnList := ColumnList + TmpTbl.GetColumnName(i) + ';';
+      if StrCopy(ColumnList,StrLength(ColumnList),1)=';' then
+       StrDelete(ColumnList,StrLength(ColumnList),1);
+      MasterData.LoadContents(ColumnList, TmpTbl);
+  end;  
+ MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+end;
+
+
+
+procedure   InsertAllTelPart(Source: Variant);  //Вставить все SMS-телефоны партнера
+var Tel : string;
+begin
+ if VarAsBool(Source.IsFocused) then
+   begin
+    TelDic.SetFieldFilter('SMSРассылка','=',true,'','',Null);
+    TelDic.UseMasterAndSelect(Source);
+    TelDic.Select;
+    While TelDic.SelectNext do
+     InsertLineToSMSDoc(MasterData,TelDic.Номер,Source);
+   end;
+
+end;
+
+
+procedure TVS_Drop(Source: Variant; var Accept: boolean);
+begin
+ if VarAsBool(Source.IsType('Справочники')) then
+   InsertAllTelPart(Source) //Все телефоны партнера
+ else
+ if VarAsBool(Source.IsType('ТаблицаЗначений')) then
+   InsertLineToSMSDoc(MasterData, VarAsStr(Source.Номер),Source.Партнер);   // только выбраный номер
+end;
+
+
+
+procedure TVS_StartDrop(Source: Variant; var Accept: boolean);
+begin
+ lockCalc := true;
+ lockChange := true;
+end;
+
+procedure TVS_EndDrop(Source: Variant);
+begin
+ lockChange := false;
+ lockCalc := false;
+ CalcFields;
+ RefreshcontrolEnable;
+ MasterData.LastLine;
+end;
+
+procedure UpdateTextMessageComment;
+var  CyrilicCharPresentText : string;
+begin
+ if CyrilicCharPresent then
+  CyrilicCharPresentText := ' (Кирилица)'
+ else
+  CyrilicCharPresentText := ' (Латиница)';
+ TextMessageCommentLabel.Caption :=  'Количество символов: '+ VarAsStr(StrLength(TextMessage))+
+                                      ' Количество SMS: ' +  VarAsStr(SMSCount) + CyrilicCharPresentText;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+
+begin
+ if lockChange then
+   exit;
+ lockChange := true;
+ case StrLowerCase(FieldName) of
+ 'smsнастройки' :
+   begin
+    if SMSConfigDic.Find(MasterData.SMSНастройки) then
+     begin
+      UpdatePriceByDic(SMSConfigDic, ServerAnswer);
+      MasterData.ЦенаSMS := SMSConfigDic.ЦенаSMS;
+      MasterData.Отправитель := SMSConfigDic.Отправитель;
+     end
+    else
+      MasterData.ЦенаSMS := 0;   
+      CalcFields;
+    end;
+ end; //case
+  lockChange := false;
+end;
+
+
+procedure cbGeneralTextMessage_Click(Sender: TObject);
+begin
+ CursorVis := WaitCursorStart;
+ lockChange := true;
+ if cbGeneralTextMessage.Checked then
+  begin // Использовать общий текст сообщения
+   mGeneralTextMessage.Visible := true;
+   mTextMessage.Visible := false;
+   TextMessage :=MasterData.ОбщТекстСообщения;
+  end
+ else
+  begin // Не использовать общий текст сообщения
+   mGeneralTextMessage.Visible := false;
+   mTextMessage.Visible := true;
+   TextMessage :=MasterData.ТекстСообщения;
+  end;
+  MasterData.ИспОбщТекстСообщения := VarAsBool(cbGeneralTextMessage.Checked,false);
+  CheckValidTextMessage(TextMessage, DisableSMSCharWaring, CyrilicCharPresent, SMSCount);
+  UpdateTextMessageComment;
+  CalcFields;
+  lockChange := false;
+  SetCursor(CursorVis);  
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  mGeneralTextMessage.Lines.Text := MasterData.ОбщТекстСообщения;
+  cbGeneralTextMessage.Checked := MasterData.ИспОбщТекстСообщения;     
+  RefreshcontrolEnable;
+  CalcFields;
+  UpdateTextMessageComment; 
+  lockCalc := false;
+  lockChange := false;
+end;
+
+procedure tbResetStatus_Click(Sender: TObject);
+begin
+  lockCalc:=true;
+  MasterData.EditLine;
+  MasterData.messageid := '';
+  MasterData.ответсервера := '';
+  MasterData.статуссообщения := 'создано';
+  MasterData.кодстатусасообщения := 0;
+  MasterData.PostLine;
+  MasterData.СтатусДокумента := 0;
+  lockCalc:=false;
+end;
+
+procedure tbResetAllStatus_Click(Sender: TObject);
+begin
+ MasterData.DisableTableControls;
+ MasterData.SelectLines;
+ While MasterData.SelectNextLine do
+  tbResetStatus_Click(Form);   
+ MasterData.SelectLines;
+ MasterData.EnableTableControls;
+end;
+
+procedure tbClear_Click(Sender: TObject);
+begin
+ if MessageDlg('Вы действительно хотите удалить все SMS-сообщения?',mtInformation,ArrayOf(mbYes,mbNo))=mrYes then
+  begin        
+   lockCalc := true;
+   lockChange := true;
+   MasterData.ClearContents;
+   lockCalc := false;
+   lockChange := false;
+   RefreshcontrolEnable;
+   CalcFields;
+  end;
+end;
+
+procedure btOK_Click(Sender: TObject);  
+var ProgressBar : TO4ProgressBar;
+    GoodSMSCount : integer;
+begin
+  MasterData.DisableTableControls;
+  lockCalc := true;
+  lockChange := true;
+  ErrorStr := '';
+  if CheckValidSMSdocument(MasterData,ErrorStr,true) then
+   try    
+    MasterData.Post;
+    MasterData.ApplyUpdates;
+   finally                  
+    lockCalc := false;
+    lockChange := true;
+    MasterData.EnableTableControls; 
+    with (Sender as TO4Button) do
+     begin
+      if (Tag=1) and (VarAsInt(MasterData.СтатусДокумента,0) = 0) then
+       begin
+        if SendSMSDocument(MasterData,GoodSMSCount,ProgressBar) then
+          ShowMessage('Документ SMS-рассылки отправлен')
+        else
+         ShowMessage('Документ сохранен, но его не удалось отправить!');
+       end;
+     end;
+    Form.ModalResult := mrOk;
+    Form.Close;
+   end
+  else
+   ShowMessage(ErrorStr);
+  lockCalc := false;
+  lockChange := false;
+  MasterData.EnableTableControls;
+end;
+
+{$D-}
+procedure DTGMain_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if not MasterData.IsFocused then
+    exit;  
+  if VarAsStr(MasterData.MessageId,'') = '' then
+   exit;
+  if (VarAsInt(MasterData.КодСтатусаСообщения,-1) = 0) or
+     (VarAsInt(MasterData.КодСтатусаСообщения,-1) = 1) or
+     (VarAsInt(MasterData.КодСтатусаСообщения,-1) = 2)  then
+    Index1 := 117
+  else
+  if (VarAsInt(MasterData.КодСтатусаСообщения,-1) = 3) or
+     (VarAsInt(MasterData.КодСтатусаСообщения,-1) = 50) or
+     (VarAsInt(MasterData.КодСтатусаСообщения,-1) = 10)  then
+    Index1 := 52
+  else
+    Index1 := 125;
+end;
+{$D+}
+
+procedure TDS_VPAAfterDelete(Sender: TObject);
+begin
+   if lockCalc then exit;
+   RefreshcontrolEnable;
+   CalcFields;
+end;
+
+procedure TDS_VPAAfterScroll(Sender: TObject);
+begin
+  if lockChange then exit;
+  try
+    lockChange := true;
+    mTextMessage.Lines.Text := MasterData.ТекстСообщения;
+  finally
+    lockChange := false;
+  end;
+end;
+
+procedure mTextMessage_Change(Sender: TObject);
+begin
+ if cbGeneralTextMessage.Checked then exit;
+ if lockChange then exit;
+  TextMessage := mTextMessage.Lines.Text;
+  CheckValidTextMessage(TextMessage, DisableSMSCharWaring, CyrilicCharPresent, SMSCount);
+  UpdateTextMessageComment;
+  try
+     MasterData.ТекстСообщения := TextMessage;
+  except    
+     MasterData.EditLine;
+     MasterData.ТекстСообщения := TextMessage;
+  end;
+   if MasterData.КоличествоSMS <>  SMSCount then
+     begin
+      MasterData.КоличествоSMS :=  SMSCount;
+      CalcFields;
+     end;
+
+
+end;
+
+procedure mGeneralTextMessage_Change(Sender: TObject);
+begin
+ if not cbGeneralTextMessage.Checked then exit;
+  TextMessage := mGeneralTextMessage.Lines.Text;
+  CheckValidTextMessage(TextMessage, DisableSMSCharWaring, CyrilicCharPresent, SMSCount);
+  UpdateTextMessageComment;
+  MasterData.ОбщТекстСообщения := TextMessage;
+  if MasterData.КоличествоSMSОбщТекст<>SMSCount then
+    begin
+      MasterData.КоличествоSMSОбщТекст :=  SMSCount;
+      CalcFields;
+    end;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+ TextMessage := mGeneralTextMessage.Lines.Text;
+ CheckValidTextMessage(TextMessage, DisableSMSCharWaring, CyrilicCharPresent, SMSCount);   
+ if DisableSMSCharWaring then
+  ShowMessage('В тексте общего сообщения были запрещенные символы! Они были удалены!');
+ MasterData.ОбщТекстСообщения := TextMessage;
+end;
+
+
+procedure TDS_Append(Sender: TObject);
+begin
+   RefreshcontrolEnable;
+end;
+
+
+procedure tbShablon_Click(Sender: TObject);
+var DefName : string;
+begin
+ if TextMessDic.SelectInForm('ВыборТекстаSMSСообщения', DefName, Null) then
+  if cbGeneralTextMessage.Checked then
+     mGeneralTextMessage.Lines.Text := DefName
+   else
+      mTextMessage.Lines.Text := DefName;
+end;
+
+procedure tbShabonSave_Click(Sender: TObject);      
+ var DefName : string;
+begin
+ if StdInpStr('Введите имя шаблона',DefName) then
+   try
+    TextMessDic.Append;
+    TextMessDic.Code := DefName;
+    if cbGeneralTextMessage.Checked then
+      TextMessDic.Name := mGeneralTextMessage.Lines.Text
+     else
+      TextMessDic.Name := mTextMessage.Lines.Text;
+    TextMessDic.Post;
+    TextMessDic.ApplyUpdates;
+   finally
+    ShowMessage('Шаблон текста сообщения добавлен');
+   end;
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+var Accept : boolean;
+begin
+ if StrLowerCase(ProcID)='append' then
+  begin
+     TVS_StartDrop(Caller, Accept); 
+     InsertLineToSMSDoc(MasterData, InParams[0],InParams[1]);
+     TVS_EndDrop(Caller)
+  end;
+end;
+
+procedure miTel_Click(Sender: TObject); 
+var DefName : string;
+begin
+    TelDic.SetFieldFilter('SMSРассылка','=',true,'','',Null);
+    if IsObjFocused(MasterData.Партнер) then
+     TelDic.UseMaster(MasterData.Партнер)
+    else
+      TelDic.UseMaster(Null);
+    if TelDic.SelectInForm('Просмотртелефонов',DefName, Null) then
+     try
+      MasterData.EditLine;
+      MasterData.НомерТелефона := StrOnlyDigitTel(TelDic.Номер);
+      MasterData.PostLine;
+     except
+      ShowMessage('Не выбрана запись в табличной части документа!');
+     end;
+end;
+
+procedure tbCheckPartTel_Click(Sender: TObject);  
+var ErrorStr : string;  
+    MessageProc : ICProcessing; 
+begin    
+ if MasterData.LinesCount=0 then
+   ShowMessage('Документ пустой!')
+ else
+ try
+   ErrorStr := '';  
+   lockChange := true;  
+   lockCalc := true;
+   MasterData.DisableTableControls;
+   MasterData.SaveContents('',ContentsTbl);
+   ContentsTbl.Select;
+   While ContentsTbl.SelectNext do
+     if VarAsStr(ContentsTbl.НомерТелефона)='' then
+         ErrorStr := ErrorStr + IntToStr(ContentsTbl.ORDNUM)+'  '+ VarAsStr(ContentsTbl.ПолноеНазваниеПартнера)+#13;
+   if ErrorStr='' then
+     ShowMessage('Все номера телефонов заполнены!')
+   else
+     begin
+       MessageProc := CreateObject('Обработки.РаботаСSMS'); 
+       if MessageProc.Execute('СписокПартнеровБезТелефона',ErrorStr)=mrOK then
+         begin
+           ContentsTbl.Select;  
+           if ContentsTbl.SelectFirst then
+             While not ContentsTbl.EOF do
+               if VarAsStr(ContentsTbl.НомерТелефона)=''  then
+                 ContentsTbl.Delete
+               else
+                 ContentsTbl.SelectNext;
+           MasterData.ClearContents; 
+           ContentsTbl.DoNumbering('ORDNUM',1,1);
+           MasterData.LoadContents('',ContentsTbl);
+         end;
+     end;
+ finally     
+   lockChange := false; 
+   lockCalc := false;
+   MasterData.EnableTableControls;
+   RefreshcontrolEnable;
+   CalcFields;
+ end;
+
+end;
+
+procedure miMoveAll_Click(Sender: TObject);
+var tmpAccept : boolean;
+    OutParam : Variant;
+begin
+ if IsNil(LinkDict) then
+   ShowMessage('Откройте справочник партнеров!')
+ else
+   try
+     TVS_StartDrop(Null, tmpAccept);  
+     TelDic.SetFieldFilter('SMSРассылка','=',true,'','',Null);
+     LinkDict.ExecProc(MasterData, 'moveall', Null, OutParam);  
+     LinkDict.Select;
+     While LinkDict.SelectNext do
+       begin
+         TelDic.UseMasterAndSelect(LinkDict);
+         TelDic.Select;
+         While TelDic.SelectNext do
+          InsertLineToSMSDoc(MasterData,TelDic.Номер,LinkDict);
+       end;
+   finally
+     TVS_EndDrop(Null); 
+     LinkDict.ExecProc(MasterData, 'stop', Null, OutParam);
+   end;
+
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+pnTool:TO4Panel
+ToolBar3:TO4ToolBar
+tbDel:TO4ToolButton
+tbClear:TO4ToolButton
+tbResetStatus:TO4ToolButton
+tbResetAllStatus:TO4ToolButton
+tbCheckPartTel:TO4ToolButton
+Panel1:TO4Panel
+ToolBar2:TO4ToolBar
+tbSource:TO4ToolButton
+cbGeneralTextMessage:TO4CheckBox
+DTGMain:TO4DocTableGrid
+pnBottom:TO4Panel
+Label5:TO4Label
+Label6:TO4Label
+Label8:TO4Label
+Label10:TO4Label
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Button1:TO4Button
+eTotalMesCount:TO4DBEdit
+eTotalSMSCount:TO4DBEdit
+eDocSum:TO4DBEdit
+PaySum:TO4DBEdit
+Panel3:TO4Panel
+Panel2:TO4Panel
+Label3:TO4Label
+Label26:TO4Label
+Label7:TO4Label
+Label4:TO4Label
+Label9:TO4Label
+eRespons:TO4DBEdit
+eComent:TO4DBEdit
+eSender:TO4DBEdit
+eSMSConfig:TO4DBEdit
+eSMSPrice:TO4DBEdit
+Panel5:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label11:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+ToolBar1:TO4ToolBar
+tbShablon:TO4ToolButton
+tbShabonSave:TO4ToolButton
+Panel4:TO4Panel
+mGeneralTextMessage:TO4Memo
+mTextMessage:TO4Memo
+Panel6:TO4Panel
+TextMessageCommentLabel:TO4Label
+PopupMenu1:TO4PopupMenu
+miFizPart:TO4MenuItem
+miUroPart:TO4MenuItem
+miEmplPart:TO4MenuItem
+MDS:TO4DataSource
+TDS:TO4DocContentsSource
+pmTel:TO4PopupMenu
+miTel:TO4MenuItem
+miMoveAll:TO4MenuItem

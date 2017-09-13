@@ -1,0 +1,39 @@
+interface
+
+uses
+  System, DispIntf;
+
+componentlist
+  Form : TO4PrintForm;
+
+implementation
+
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+var
+  Vtbl : ICValueTable;
+begin
+  Vtbl := CreateObject('ТаблицаЗначений');
+  Vtbl.Close;
+  Form.GetParams[3].CopyTo('',Vtbl);
+  Vtbl.Open;
+  lbTitle.Caption := 'Журнал результатов с '+VarAsStr(Form.GetParams[0])+' по '+VarAsStr(Form.GetParams[1]);
+  lbName.Caption := VarAsStr(Form.GetParams[2]);
+  ChartBalans.Chart.SeriesList.Series[0].Clear;
+  ChartBalans.Chart.SeriesList.Series[1].Clear;
+  ChartBalans.Chart.SeriesList.Series[0].Active := false;
+  ChartBalans.Chart.SeriesList.Series[1].Active := false;
+  Vtbl.Select;
+  While Vtbl.SelectNext do
+    begin
+      ChartBalans.Chart.SeriesList.Series[0].AddXY(RoundDate(Vtbl.DATE,rdDay,false),Vtbl._Default[VarAsStr(Form.GetParams[4])],VarAsStr(RoundDate(Vtbl.DATE,rdDay,false)),clRed);//+'-('+VarAsStr(Vtbl._Default[VarAsStr(Form.GetParams[4])])+')'
+      ChartBalans.Chart.SeriesList.Series[1].AddXY(RoundDate(Vtbl.DATE,rdDay,false),Vtbl._Default[VarAsStr(Form.GetParams[4])],VarAsStr(RoundDate(Vtbl.DATE,rdDay,false)),clRed);//+'-('+VarAsStr(Vtbl._Default[VarAsStr(Form.GetParams[4])])+')'
+    end;
+  ChartBalans.Chart.SeriesList.Series[VarAsInt(Form.GetParams[5])].Active := true;
+end;
+
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+lbTitle:TRBLabel
+lbName:TRBLabel
+ChartBalans:TRBChart

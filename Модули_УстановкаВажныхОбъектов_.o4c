@@ -1,0 +1,79 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+function FindDefStore(Store : IObject) : IObject;
+function GetAStore(Store : IObject) : IObject;
+// получение валюты
+function GetCurrency(DicCurrency : IObject = ''; ActiveField : string = 'НацВалюта';
+  DoAppend : Boolean = True; ActiveValue : Variant = -1) : Variant;
+function GetMyFirm(MYFRequired : Boolean = True) : ICDictionary;
+
+implementation
+
+const
+  infFirmInfoMissing = 'Нет данных о Вашем предприятии. Желаете ли Вы определить ' +
+    'их сейчас?';
+  errCompanyInfoMissing = 'Не определена информация Вашего предприятия!';
+
+var
+  DicGlMYF : ICDictionary;
+
+function FindDefStore(Store : IObject) : IObject;
+begin
+  if IsNil(Store) then
+    Store := CreateObject('Справочники.Склады');
+  Result := server.FindDefStore(Store);
+end;
+
+function GetAStore(Store : IObject) : IObject;
+begin
+  if IsNil(Store) then
+    Store := CreateObject('Справочники.Склады');
+  Result := server.GetAStore(Store);
+end;
+
+function GetCurrency(DicCurrency : IObject = ''; ActiveField : string = 'НацВалюта';
+  DoAppend : Boolean = True; ActiveValue : Variant = -1) : Variant;
+var
+  DicActive : ICDictionary;
+begin
+  if not IsObject(DicCurrency) then
+    DicCurrency := CreateObject('Справочники.Валюты');
+  DicCurrency.Select;
+  DicActive := GetActiveObject(DicCurrency, ActiveField, ActiveValue);
+  if IsNil(DicActive) then
+    if DoAppend then
+      begin
+        DicCurrency.Append;
+        DicCurrency.Код := 'ГРН';
+        DicCurrency.Название := 'Гривна Украины';
+        DicCurrency.НацВалюта := -1;
+        if ActiveField <> 'НацВалюта' then
+          DicCurrency._Default[ActiveField] := ActiveValue;
+        DicCurrency.SetTimedValue('КурсНацБанка', CurrentDateTime, 1);
+        DicCurrency.SetTimedValue('КурсНаличный', CurrentDateTime, 1);
+        DicCurrency.Post;
+        DicCurrency.ApplyUpdates;
+        Result := DicCurrency;
+      end
+    else
+      Result := Null
+  else
+    Result := DicActive;
+end;
+
+function GetMyFirm(MYFRequired : Boolean = True) : ICDictionary;
+begin
+  if IsNil(DicGlMYF) then
+    DicGlMYF := CreateObject('Справочники.ВашеПредприятие');
+  Result := DicGlMYF;
+  if not (DicGlMYF.Select and DicGlMYF.SelectNext) and
+    (MessageDlg(Trans(infFirmInfoMissing), mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes) then
+    DicGlMYF.EditInForm('ВашеПредприятие', dmAppend);
+  if not (DicGlMYF.Select and DicGlMYF.SelectNext) and MYFRequired then
+    raise(Trans(errCompanyInfoMissing));
+end;
+
+end.

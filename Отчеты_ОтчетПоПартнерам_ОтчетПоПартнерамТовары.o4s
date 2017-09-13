@@ -1,0 +1,121 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+var
+  DateFrom, DateTo : DateTime;
+  Partner : ISDictionary;
+  GoodsTbl, DocsTbl, tmpDocsTbl, DocContetnsTbl : ISValueTable;
+  AccsPart : ISAccs;
+  Count, Total : integer;
+  tmpDoc : ISDocuments;
+  AnalitDic : Variant;
+
+procedure CreateSrvObjects; server;
+begin
+ AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+ tmpDocsTbl := CreateObject('ValueTable');
+ tmpDocsTbl.AddColumn('Document', vtcLink, 0);
+ tmpDocsTbl.AddColumn('Date', vtcDateTime, 0);
+ tmpDocsTbl.AddColumn('MotionSign', vtcInteger, 20);    
+ tmpDocsTbl.AddColumn('DocSign', vtcString, 64);
+ tmpDocsTbl.Open;
+
+ DocContetnsTbl := CreateObject('ValueTable');
+ DocContetnsTbl.Open;
+
+end;
+
+
+
+procedure GetRunReport(Doc : ISReport; var Accept : Boolean);
+begin
+ AccsPart.ClearFieldBuffers();
+ AccsPart.ClearFieldFilters();
+ AccsPart.SetFieldFilter('Партнер', Partner);
+ if IsObjFocused(AnalitDic) then
+  AccsPart.SetFieldFilter('АналитикаВзаиморасчета', AnalitDic);
+ tmpDocsTbl.Clear;
+ AccsPart.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+      'Document;Date;MotionSign', -1, tmpDocsTbl); 
+ tmpDocsTbl.DoGetMeanNames('Document','DocSign');
+ tmpDocsTbl.Select;
+ Count := 1;
+ Total := tmpDocsTbl.LineCount;
+ while tmpDocsTbl.SelectNext do
+  begin
+    DocContetnsTbl.Clear;
+    case VarAsStr(tmpDocsTbl.DocSign,'') of
+     'Товарный чек','Накладная отпуска по счету', 'Накладная отпуска' :
+       begin
+         tmpDocsTbl.Document.SaveContents('Товар;Цена;Количество',DocContetnsTbl);
+         DocContetnsTbl.Select;
+         While DocContetnsTbl.SelectNext do
+          begin
+           DocsTbl.Append;
+           DocsTbl.Товар := DocContetnsTbl.@Товар;
+           DocsTbl.Цена := DocContetnsTbl.Цена;
+           DocsTbl.Количество := DocContetnsTbl.Количество;
+           DocsTbl.КолОтпуск := DocContetnsTbl.Количество;
+           DocsTbl.СумОтпуск := DocContetnsTbl.Количество*DocContetnsTbl.Цена;
+           DocsTbl.КолВозврат := 0;
+           DocsTbl.СумВозврат := 0;
+           DocsTbl.Document := tmpDocsTbl.@Document;
+           DocsTbl.Date := tmpDocsTbl.Date;
+           DocsTbl.MotionSign := tmpDocsTbl.MotionSign;
+           DocsTbl.Post;
+          end;
+       end;
+     'Возврат от покупателей' :
+       begin
+         tmpDocsTbl.Document.SaveContents('Товар;Цена;Количество',DocContetnsTbl);
+         DocContetnsTbl.Select;
+         While DocContetnsTbl.SelectNext do
+          begin
+           DocsTbl.Append;
+           DocsTbl.Товар := DocContetnsTbl.@Товар;      
+           DocsTbl.Цена := DocContetnsTbl.Цена;
+           DocsTbl.Количество := DocContetnsTbl.Количество;
+           DocsTbl.КолВозврат := DocContetnsTbl.Количество;
+           DocsTbl.СумВозврат := DocContetnsTbl.Количество*DocContetnsTbl.Цена;
+           DocsTbl.КолОтпуск := 0;
+           DocsTbl.СумОтпуск := 0;
+           DocsTbl.Document := tmpDocsTbl.@Document;
+           DocsTbl.Date := tmpDocsTbl.Date;
+           DocsTbl.MotionSign := tmpDocsTbl.MotionSign;
+           DocsTbl.Post;
+          end;
+       end;
+    end; // case
+
+    // отправка сообщения клиенту
+    if Count mod 10 = 0 then
+     begin
+      Doc.NotifyClient(msgProceed, Count, Total);
+      if Doc.Terminated then break;
+     end;
+    inc(Count);
+  end; // while
+
+  DocsTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  DocsTbl.GroupToMaster('Товар;Код;ЕдИзм','КолОтпуск;СумОтпуск;КолВозврат;СумВозврат',GoodsTbl);
+
+
+end;
+
+function GetRunReportEP(GoodsTbls, DocsTbls : ISValueTable;
+          DateFroms, DateTos : DateTime; Partners : ISDictionary; AnalitDicS:Variant): Variant; server;
+begin
+ GoodsTbl := GoodsTbls;
+ DocsTbl := DocsTbls;
+ DateFrom := RoundDate(DateFroms,rdDay,false);
+ DateTo := RoundDate(DateTos,rdDay,true);
+ Partner := Partners;   
+ AnalitDic := AnalitDicS;
+ Result := EntryPoint(GetRunReport);
+
+end;
+
+end.

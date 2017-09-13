@@ -1,0 +1,88 @@
+interface
+
+uses 
+  System, DispIntf, »нтерфейс, –асчеты;
+
+implementation
+
+var
+  MasterData : ICPlan;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4Toolbar;
+  Nogrid : TO4DBGrid;
+begin
+  MakeInterface(tbMain, Nobody, Nogrid);
+end;
+
+procedure pmiLoad_Click(Sender : TObject);
+begin
+  if OpenDialog.Execute then
+    MasterData.LoadFromFile(OpenDialog.FileName);
+end;
+
+procedure pmiSave_Click(Sender : TObject);
+begin
+  if SaveDialog.Execute then
+    MasterData.SaveToFile(SaveDialog.FileName);
+end;
+
+{$D-}
+procedure dbgAccount_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+ if MasterData.IsFocused then
+   if MasterData.IsSingle then
+     Index1 := 3
+   else
+     Index1 := MasterData.IsActive - 1
+end;
+{$D+}
+
+procedure tbDel_Click(Sender : TObject);
+begin
+  if VarAsBool(GetOptions.GetServerPrm(DelAck)) and
+    (MessageDlg(Trans('”далить запись?'), mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo) then
+    exit;
+  MDS.ActionClick(actDel);
+end;
+
+procedure tbPrint_Click(Sender:TObject);
+begin
+  MasterData.PrintForm('ѕечѕлан—четов', True, 0, Null)
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  tbDel.Enabled := MasterData.IsFocused;
+  pmiDelete.Enabled := MasterData.IsFocused;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgAccount:TO4DBGrid
+tbMain:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDel:TO4ToolButton
+ToolButton4:TO4ToolButton
+TbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbParam:TO4ToolButton
+MDS:TO4DataSource
+OpenDialog:TO4OpenDialog
+SaveDialog:TO4SaveDialog
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrint:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiLoad:TO4MenuItem
+pmiSave:TO4MenuItem

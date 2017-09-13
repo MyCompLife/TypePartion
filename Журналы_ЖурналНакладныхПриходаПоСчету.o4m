@@ -1,0 +1,168 @@
+object TJournMeanClass
+  BuhJourn = False
+  Comment = 'Журнал накладных прихода по счету'
+  DocsToAdd.Strings = (
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|00A42160F33E5A40')
+  Fields = <
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftDateTime
+      Description = 'Дата'
+      DisplayFormat = 'dd.mm.yyyy'
+      DSID = 'DATE'
+      Kind = lfkSystem
+      Name = 'ДатаДокумента'
+      Order = 0
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = True
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftString
+      Description = 'Номер'
+      DSID = 'NUMBER'
+      Kind = lfkSystem
+      Name = 'НомерДокумента'
+      Order = 1
+      Prec = 0
+      Required = False
+      Size = 20
+      Sortable = True
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = True
+      DataType = lftString
+      Description = 'Документ'
+      DSID = 'DOCNAME'
+      Kind = lfkSystem
+      Name = 'Документ'
+      Order = 2
+      Prec = 0
+      Required = False
+      Size = 64
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftLink
+      Description = 'Ответственный'
+      DSID = 'F1'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00A42160F33E5A40|F2')
+      Name = 'Ответственный'
+      Order = 3
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftFFT
+      Description = 'Сумма без НДС'
+      DisplayFormat = '0.00##'
+      DSID = 'F3'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00A42160F33E5A40|F4')
+      Name = 'СуммаБезНДС'
+      Order = 4
+      Prec = 2
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftFFT
+      Description = 'Сумма НДС'
+      DisplayFormat = '0.00##'
+      DSID = 'F4'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00A42160F33E5A40|F5')
+      Name = 'СуммаНДС'
+      Order = 5
+      Prec = 2
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftFFT
+      Description = 'Сумма с НДС'
+      DisplayFormat = '0.00##'
+      DSID = 'F2'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00A42160F33E5A40|F3')
+      Name = 'Сумма'
+      Order = 6
+      Prec = 2
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftFFT
+      Description = 'Сумма в валюте'
+      DSID = 'F5'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00A42160F33E5A40|F8')
+      Name = 'СуммаВал'
+      Order = 7
+      Prec = 2
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end>
+  Forms = <
+    item
+      Comment = 'Список подчиненных накладных прихода'
+      FormType = 'Lists'
+      ForSelect = False
+      ForTree = False
+      ID = '0044A5FC7C854740'
+      Name = 'СписокПодчиненныхНакладных'
+    end>
+  FrameSize = 100
+  LinkJourn = True
+  MapList.Strings = (
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|00A42160F33E5A40')
+  Sign = 'ЖурналНакладныхПриходаПоСчету'
+  StateNames.Strings = (
+    'Оформляемые'
+    'Завершенные'
+    'В архив')
+  StringID = '0030D3E79DC84740'
+end

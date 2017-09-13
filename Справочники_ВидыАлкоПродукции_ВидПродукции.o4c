@@ -1,0 +1,67 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  Constants : IC4VPAConst;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure SetFormTitleCaption;
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeCode.Text + ', ', dbeTypeProd.Text), '')
+end;
+
+procedure dbeFields_Change(Sender : TObject);
+begin
+  SetFormTitleCaption;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  SetFormTitleCaption;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  Case rgTypeEd.ItemIndex of
+    0: MasterData.Множитель := 10000;
+    1: MasterData.Множитель := 1000000;
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+MainPanel:TO4Panel
+Label1:TO4Label
+Label5:TO4Label
+dbeCode:TO4DBEdit
+dbeTypeProd:TO4DBEdit
+rgTypeEd:TO4RadioGroup
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pnTitle:TO4Panel
+lbTitle:TO4Label
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

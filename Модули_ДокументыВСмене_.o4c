@@ -1,0 +1,58 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСПеременными, РаботаСОбъектами, СтруктураТаблицДляDBF, РаботаСТаблицамиЗначений;
+
+function DelDocFromChangeDoc(Data, ChangeDoc : ICDocuments):boolean;
+
+implementation   
+
+function DelDocFromChangeDoc(Data, ChangeDoc : ICDocuments):boolean;
+var TblContents, DocNumIDTbl: ICValueTable;
+    TypeDoc : integer;
+    DocNumID : string;
+begin
+ Result := false;
+ ChangeDoc.Edit;
+ ChangeDoc.SelectLines;
+ if ChangeDoc.FindLineBy('Документ',Data) then
+   begin     
+     DocNumID := VarAsStr(ChangeDoc.DocNumID);
+     TypeDoc := VarAsInt(ChangeDoc.ТипДокумента);
+     ChangeDoc.DeleteLine;
+     TblContents := CreateObject('ValueTable');
+     CreateStructureBLOBField(TblContents, 'таб_товарыпочекам');
+     ReadPropsFromBLOB(TblContents,ChangeDoc.Таб_ТоварыПоЧекам);
+     DocNumIDTbl := CreateObject('ТаблицаЗначений');
+     ChangeDoc.SaveContents('DocNumID;СуммаДокумента;ТипДокумента;',DocNumIDTbl);
+     DocNumIDTbl.SortBy('ТипДокумента');
+     if TblContents.SelectFirst then
+       While not TblContents.EOF do
+         if (TblContents.ТипДокумента=TypeDoc) and (TblContents.NumID=DocNumID) then
+           TblContents.Delete
+         else
+           TblContents.SelectNext;
+     DocNumIDTbl.SetRange(0,0);
+     ChangeDoc.СуммаПродаж := DocNumIDTbl.Total('СуммаДокумента');
+     DocNumIDTbl.SetRange(1,1);
+     ChangeDoc.СуммаВозвратов := DocNumIDTbl.Total('СуммаДокумента');
+     ChangeDoc.Сумма := ChangeDoc.СуммаПродаж + ChangeDoc.СуммаВозвратов;
+     ChangeDoc.СуммаОплатыНал := ChangeDoc.Total('СуммаОплатыНалДокумента');
+     ChangeDoc.СуммаОплатыКарт := ChangeDoc.Total('СуммаОплатыКартДокумента');
+     ChangeDoc.Таб_ТоварыПоЧекам := WritePropsToBlob(TblContents);
+     ChangeDoc.Post;
+     ChangeDoc.ApplyUpdates;
+     Data.Edit;
+     Data.Смена := Null;
+     Data.Post;
+     Data.ApplyUpdates;
+     Result := true;
+   end
+ else
+   begin
+     ChangeDoc.Cancel;
+     Result := true;
+   end;
+end;
+
+end.

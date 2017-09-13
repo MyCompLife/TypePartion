@@ -1,0 +1,96 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var
+  MasterData : ICDocuments;
+  Tbl : ICValueTable;
+  Today : DateTime;
+  i : integer;
+procedure Form_BeginPrint(PrintForm: TO4PrintForm);
+begin
+   MasterData := Form.GetParams;
+   Tbl := CreateObject('ТаблицаЗначений');
+   i := 1;
+end;
+
+procedure Structure1_Tbl1_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  Today := CurrentDate;
+  Label21.Caption := DateToStr(Today);
+  Label15.Caption := MasterData.GetName + ' №: ';
+  with Table do
+    begin
+    Value['NUMBER'] := MasterData.НомерДокумента;
+    Value['Date'] := MasterData.ДатаДокумента;
+    end;
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар','');
+  Tbl.SortBy('Товар');
+  Tbl.DoGetLinks('ЕдИзм=Товар.ЕдИзм');
+  Tbl.Select;
+end;
+
+procedure Structure1_ROOT_DET_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Товар.Код;
+      Value['Name'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['OutPrice'] := Tbl.Товар.Цена;
+      Value['OptPrice'] := Tbl.Товар.ОптЦена;
+      BarCode.Text := Tbl.Товар.Код;
+   end;
+  if i mod 2 = 0 then
+    BarCode.left := 100
+  else
+    BarCode.left := 50;
+  inc(i)
+end;
+
+procedure Structure1_ROOT_DET_GetCount(Table: TRBTable; var Count: Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+procedure DetailBand1_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+
+  //ShowMessage(IntToStr(BarCode.Width) +'  '+IntToStr(BarCode.left));
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label14:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label13:TRBLabel
+Label15:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label18:TRBLabel
+DetailBand1:TRBDetailBand
+Label4:TRBLabel
+SysData1:TRBSysData
+Label9:TRBLabel
+Label8:TRBLabel
+Label12:TRBLabel
+Label5:TRBLabel
+BarCode:TRBBarCode
+Label19:TRBLabel
+Structure1:TRBStructure

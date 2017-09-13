@@ -1,0 +1,47 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation
+
+Var
+  TblConsgGoodFilter, GoodStoreTbl : ISValueTable;
+  AccsGood, AccsPartGood : ISAccs;
+  Constants : IS4VPAConst;
+
+Procedure CreateSrvObjects(CGoodStoreTbl: ISValueTable); server;
+begin                                   
+  GoodStoreTbl := CGoodStoreTbl;
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGood.ClearFieldBuffers;
+  AccsGood.ClearFieldFilters;
+  Constants := GetConstants;
+end;
+
+Procedure GetReportData(cGood: Variant; DateTo: DateTime); server;
+Var
+  Count, TotalCount : Integer;
+  PTbl : ISValueTable;
+Begin
+  PTbl := CreateObject('ТаблицаЗначений');
+  GoodStoreTbl.CopyColumnsTo(PTbl);
+  GoodStoreTbl.CancelRange;
+  GoodStoreTbl.Clear;
+  AccsGood.IncludeZeroRest := true;
+  if IsObjFocused(cGood) then
+    AccsGood.SetFieldFilter('Товар',cGood);
+  AccsGood.AppendGroupRestToValueTable(DateTo + 0.99999, 'Товар;Склад;КолОбщ', PTbl);
+  PTbl.Select;
+  While PTbl.SelectNext Do
+    begin
+      if (PTbl.КолОбщ <> 0) then
+        begin
+          GoodStoreTbl.Append;
+          GoodStoreTbl.AssignFields('Товар;Склад;КолОбщ',PTbl);
+          GoodStoreTbl.Post;
+        end;
+    end;
+End;
+
+end.

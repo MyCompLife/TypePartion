@@ -1,0 +1,313 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  ChangeLock, HasOwner, isSave : Boolean;
+  Constants : IC4VPAConst;
+  MasterData : ICDocuments;
+  LockRadioGroup, DropMode, LockCalc, AddDoc  : Boolean;
+  Currency, LinkDict, linkDictMan, AnalitDic : ICDictionary;
+  CursorVis : TCursor;
+  tbl : ICValueTable;
+  Options : ICOptions;
+
+procedure CreateObjects;
+begin                  
+  Options := GetOptions;
+  Constants := GetConstants;
+  Currency := CreateObject('Справочники.Валюты');
+  AnalitDic := CreateObject('Справочники.АналитикаВзаиморасчета');
+  tbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure CalcSums;
+begin
+  MasterData.SaveContents('Сумма;Долг', tbl);
+  tbl.CopyDataToServer;
+  MasterData.СуммаДок := server.GetAllSums(tbl.SrvMean);
+  if MasterData.КурсДок <> 0 then
+    MasterData.СуммаДокВал := MasterData.СуммаДок / MasterData.КурсДок;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  LockCalc := False;
+  CreateObjects;
+end;
+
+procedure TDS_StartDrop(Source : Variant; var Accept : Boolean);
+begin
+  LockCalc := True;
+  MasterData.UpdateLine(True);
+  DropMode := True;
+  MasterData.TableAutoCalcFields := False;
+  CursorVis := WaitCursorStart;
+end;                
+
+procedure AddLinePartner(Source, AnalitDic : Variant);
+begin
+  MasterData.AppendLine();
+  MasterData.Партнер := Source; 
+  MasterData.АналитикаВзаиморасчета := AnalitDic;
+  MasterData.ДатаРасчетов := CurrentDateTime;
+  if not Currency.FindByField('Активность', VarAsInt(True), True) then
+    Currency := GetNatCurrency(Currency);
+  if Currency.IsFocused then
+    begin
+      MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаРасчетов);
+      MasterData.Валюта := Currency;
+    end;
+  MasterData.Долг := 0;
+  rgPartner.ItemIndex := -VarAsInt(MasterData.Долг);
+  MasterData.PostLine();
+end;
+
+procedure TDS_Drop(Source : Variant; var Accept : Boolean);
+begin
+ if cbUseAnalit.Checked then
+   begin
+     AnalitDic.UseMaster(Source);
+     if AnalitDic.Select then
+       While AnalitDic.SelectNext do 
+        if not MasterData.FindLineBy('Партнер;АналитикаВзаиморасчета', ArrayOf(Source,AnalitDic)) then
+          AddLinePartner(Source,AnalitDic);
+   end
+ else
+ if not MasterData.FindLineBy('Партнер', Source) then
+  AddLinePartner(Source,Null);
+end;
+
+procedure TDS_EndDrop(Source : Variant);
+begin
+  DropMode := False;
+  LockCalc := False;
+  SetCursor(CursorVis);
+  MasterData.TableAutoCalcFields := True;
+  CalcSums;
+end;
+
+procedure TDS_VPAAfterPost(Sender : TObject);
+begin
+  if not DropMode then
+    CalcSums;
+end;
+
+procedure eTransSummaNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    eRespons.Enabled := GetUDASet('changeresp');
+end;
+
+procedure ePriceNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateLine(True);
+end;
+
+procedure TDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  if ChangeLock or DropMode then
+    exit;
+  try
+    ChangeLock := True;
+    case StrLowerCase(FieldName) of
+      'сумма' :
+        if MasterData.Курс <> 0 then
+          MasterData.СуммаВВалюте := Value / MasterData.Курс;
+      'суммаввалюте' :
+        if MasterData.Курс <> 0 then
+          MasterData.Сумма := Value * MasterData.Курс;
+      'курс' :
+        if Value <> 0 then
+          MasterData.СуммаВВалюте := MasterData.Сумма / Value;
+      'валюта' :
+        if VarAsBool(MasterData.@Валюта.IsFocused) then
+          begin
+            MasterData.Курс := MasterData.Валюта.GetTimedValue(Constants.UsedCurs, MasterData.ДатаРасчетов);
+            if MasterData.Курс <> 0 then
+              MasterData.СуммаВВалюте := MasterData.Сумма / MasterData.Курс;
+          end;
+    end;
+  finally
+    ChangeLock := False
+  end
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  if ChangeLock then
+    exit;
+  try
+    ChangeLock := True;
+    case StrLowerCase(FieldName) of
+      'валютадок' :
+        begin
+          if VarAsBool(MasterData.@ВалютаДок.IsFocused) then
+            MasterData.КурсДок := MasterData.ВалютаДок.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+          if MasterData.КурсДок <> 0 then
+            MasterData.СуммаДокВал := MasterData.СуммаДок / MasterData.КурсДок;
+        end;
+    end;
+  finally
+    ChangeLock := False
+  end
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin          
+  AddDoc := true;
+  MasterData.TableAutoCalcFields := False;
+  LockCalc := True;
+  try
+    if not Currency.FindByField('Активность', VarAsInt(True), True) then
+      Currency := GetNatCurrency(Currency);
+    if Currency.IsFocused then
+      begin
+        MasterData.КурсДок := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+        MasterData.ВалютаДок := Currency;
+      end;
+    MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+  finally
+    LockCalc := False;
+    MasterData.TableAutoCalcFields := True;
+  end;
+end;
+
+procedure MenuItem4_Click(Sender : TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.ЮрПартнеры', 'ПодборПартнеров', Null);
+end;
+
+procedure MenuItem5_Click(Sender : TObject);
+begin
+  LinkDictMan := MasterData.OpenDropSource('Справочники.ФизЛица', 'ПодборФизЛиц', Null);
+end;
+
+procedure rgPartner_Click(Sender : TObject);
+begin
+  if not LockRadioGroup and VarAsBool(MasterData.@Партнер.IsFocused) then
+    begin
+      MasterData.EditLine();
+      MasterData.Долг := -rgPartner.ItemIndex;
+      MasterData.PostLine();
+    end;
+end;
+
+procedure TDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  LockRadioGroup := True;
+  try
+    rgPartner.ItemIndex := -VarAsInt(MasterData.Долг);
+  finally
+    LockRadioGroup := False
+  end;
+  if miLinkDict.Checked then
+    begin
+      if not IsNil(LinkDict) then
+        LinkDict.Find(MasterData.@Партнер);
+      if not IsNil(LinkDictMan) then
+        LinkDictMan.Find(MasterData.@Партнер);
+    end;
+end;
+
+procedure miLinkDict_Click(Sender : TObject);
+begin
+  miLinkDict.Checked := not miLinkDict.Checked;
+end;
+
+procedure MenuItem7_Click(Sender : TObject);
+begin
+  LinkDictMan := MasterData.OpenDropSource('Справочники.Служащие', 'ПросмотрСлужащих', Null);
+end;
+
+procedure MenuItem8_Click(Sender : TObject);
+begin
+  LinkDictMan := MasterData.OpenDropSource('Справочники.Банки', 'ПросмотрБанков', Null);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel4:TO4Panel
+Label26:TO4Label
+Label1:TO4Label
+Label2:TO4Label
+eRespons:TO4DBEdit
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+cbUseAnalit:TO4CheckBox
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel5:TO4Panel
+GroupBox1:TO4GroupBox
+Label5:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+Label6:TO4Label
+DBEdit3:TO4DBEdit
+DBEdit1:TO4DBEdit
+DBEdit2:TO4DBEdit
+DBEdit4:TO4DBEdit
+Panel1:TO4Panel
+rgPartner:TO4RadioGroup
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+Panel7:TO4Panel
+ToolBar1:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbParam:TO4ToolButton
+dbgListData:TO4DBGrid
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+pmList:TO4PopupMenu
+miLinkDict:TO4MenuItem
+miDelRec:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem6:TO4MenuItem
+MenuItem9:TO4MenuItem
+MenuItem10:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem
+pmDrop:TO4PopupMenu
+MenuItem4:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem7:TO4MenuItem
+MenuItem8:TO4MenuItem

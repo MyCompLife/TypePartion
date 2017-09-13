@@ -1,0 +1,810 @@
+object Form: TO4Form
+  Left = 0
+  Top = 0
+  Width = 496
+  Height = 588
+  HelpContext = 26002
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    264)
+  Translat.ScanedProps.Props = (
+    'cbMoving.Caption'
+    0
+    #1'-1'#1'только товар, который был в движении'
+    'eGoodModel.EditMask'
+    1
+    ''
+    'eGoodModel.Hint'
+    1
+    ''
+    'eGoodModel.Period.StrStartDate'
+    1
+    '18.08.2010'
+    'eGoodModel.Period.Text'
+    1
+    ''
+    'eGoodModel.Text'
+    1
+    ''
+    'ePartnerType.Items[  0]'
+    0
+    #1'-1'#1'Предприятие'
+    'ePartnerType.Items[  1]'
+    0
+    #1'-1'#1'Физическое лицо'
+    'ePartnerType.Text'
+    0
+    #1'-1'#1'Предприятие'
+    'GroupBox2.Caption'
+    0
+    #1'-1'#1' На складе '
+    'GroupBox3.Caption'
+    0
+    #1'-1'#1' Поставщик '
+    'Label1.Caption'
+    0
+    #1'-1'#1'Категории товаров'
+    'Label1.Hint'
+    1
+    ''
+    'Label2.Caption'
+    0
+    #1'-1'#1'Список товаров'
+    'lDateFrom.Caption'
+    0
+    #1'-1'#1' Период: с '
+    'lDateTo.Caption'
+    0
+    #1'-1'#1' по '
+    'MenuItem1.Caption'
+    1
+    'MenuItem1'
+    'MenuItem1.Hint'
+    1
+    ''
+    'miApr.Caption'
+    0
+    #1'-1'#1'  Апрель'
+    'miAug.Caption'
+    0
+    #1'-1'#1'  Август'
+    'miDec.Caption'
+    0
+    #1'-1'#1'  Декабрь'
+    'miFeb.Caption'
+    0
+    #1'-1'#1'  Февраль'
+    'miFirstHalfYear.Caption'
+    0
+    #1'-1'#1'Первое полугодие'
+    'miJan.Caption'
+    0
+    #1'-1'#1'  Январь'
+    'miJul.Caption'
+    0
+    #1'-1'#1'  Июль'
+    'miJun.Caption'
+    0
+    #1'-1'#1'  Июнь'
+    'miLastYear.Caption'
+    0
+    #1'-1'#1'Предыдущий год'
+    'miMar.Caption'
+    0
+    #1'-1'#1'  Март'
+    'miMay.Caption'
+    0
+    #1'-1'#1'  Май'
+    'miNov.Caption'
+    0
+    #1'-1'#1'  Ноябрь'
+    'miOct.Caption'
+    0
+    #1'-1'#1'  Октябрь'
+    'miSecondHalfYear.Caption'
+    0
+    #1'-1'#1'Второе полугодие'
+    'miSep.Caption'
+    0
+    #1'-1'#1'  Сентябрь'
+    'miThisYear.Caption'
+    0
+    #1'-1'#1'Текущий год'
+    'Panel5.Caption'
+    1
+    'Panel5'
+    'Panel5.Hint'
+    1
+    ''
+    'tbExcel.Hint'
+    0
+    #1'-1'#1'Экспорт в Excel'
+    'tbPrint.Caption'
+    0
+    #1'-1'#1'Печатать'
+    'tbPrint.Hint'
+    0
+    #1'-1'#1'Печатать'
+    'tbRun.Caption'
+    0
+    #1'-1'#1'Выполнить отчет'
+    'tbRun.Hint'
+    0
+    #1'-1'#1'Выполнить отчет'
+    'tbSelectDates.Caption'
+    0
+    #1'-1'#1'Выбор периода'
+    'tbSelectDates.Hint'
+    0
+    #1'-1'#1'Выбор периода'
+    'tbXTools.Caption'
+    0
+    #1'-1'#1'Инструменты'
+    'tbXTools.Hint'
+    0
+    #1'-1'#1'Показать/спрятать панель инструментов'
+    'XGrid1.Hint'
+    1
+    ''
+    'XGrid1.PageNumbering.Format'
+    1
+    '- %d -')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = (
+    0
+    #1'-1'#1' Поставщик '#1'1058'#1' Постачальник')
+  BevelOuter = bvNone
+  BorderWidth = 5
+  Caption = 'Form'
+  PopupMenu = PopupMenu1
+  TabOrder = 0
+  HelpFile = 'reports'
+  Transparent = True
+  VPAOnOpen.EventName = 'Form_Open'
+  VPAOnExecute.EventName = 'Form_Execute'
+  object Label2: TO4Label
+    Left = 5
+    Top = 58
+    Width = 486
+    Height = 13
+    Align = alTop
+    Caption = 'Список товаров'
+    Color = clActiveCaption
+    Font.Charset = RUSSIAN_CHARSET
+    Font.Color = clCaptionText
+    Font.Height = -11
+    Font.Name = 'MS Sans Serif'
+    Font.Style = [fsBold]
+    ParentColor = False
+    ParentFont = False
+  end
+  object Panel1: TO4Panel
+    Left = 5
+    Top = 71
+    Width = 486
+    Height = 64
+    Align = alTop
+    BevelSides = [sdLeft, sdRight]
+    BorderSides = []
+    TabOrder = 0
+    Transparent = False
+    object GroupBox2: TO4GroupBox
+      Left = 155
+      Top = 1
+      Width = 187
+      Height = 41
+      Caption = ' На складе '
+      TabOrder = 1
+      object eStores: TO4Edit
+        Left = 6
+        Top = 14
+        Width = 174
+        Height = 21
+        EditStyle = fesSimple
+        Period.Enabled = False
+        Period.StrStartDate = '31.12.1899'
+        TabOrder = 0
+        Text = 'eStores'
+      end
+    end
+    object cbMoving: TO4CheckBox
+      Left = 162
+      Top = 47
+      Width = 223
+      Height = 17
+      Caption = 'только товар, который был в движении'
+      TabOrder = 2
+      WordWrap = False
+    end
+    object Panel5: TO4Panel
+      Left = 1
+      Top = 1
+      Width = 154
+      Height = 41
+      BorderSides = []
+      BevelOuter = bvNone
+      Caption = 'Panel5'
+      TabOrder = 0
+      Transparent = False
+      object Label1: TO4Label
+        Left = 0
+        Top = 0
+        Width = 45
+        Height = 41
+        Align = alLeft
+        Alignment = taCenter
+        Caption = 'Модель: '
+        Layout = tlCenter
+      end
+      object eGoodModel: TO4Edit
+        Left = 73
+        Top = 11
+        Width = 70
+        Height = 21
+        EditStyle = fesInteger
+        Period.Enabled = False
+        Period.StrStartDate = '18.08.2010'
+        PopupMenu = PopupMenu1
+        TabOrder = 0
+      end
+    end
+  end
+  object XGrid: TO4XGrid
+    Left = 777
+    Top = 114
+    Width = 845
+    Height = 190
+    DefaultColWidth = 95
+    ReadOnly = True
+    Font.Charset = RUSSIAN_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -11
+    Font.Name = 'Arial'
+    Font.Style = []
+    Options = [xgoShowSections, xgoRangeSelect, xgoRowSizing, xgoColSizing, xgoThumbTracking]
+    TabOrder = 1
+    Visible = False
+    PrinterSettings.Copies = 1
+    PrinterSettings.Duplex = False
+    PrinterSettings.FirstPage = 0
+    PrinterSettings.LastPage = 0
+    PrinterSettings.OutputBin = Auto
+    Page.Columns = 1
+    Page.Orientation = poLandscape
+    Page.PaperSize = A4
+    Page.Values = (
+      100
+      2100
+      100
+      2970
+      100
+      100
+      0)
+    PageNumbering.Alignment = taCenter
+    PageNumbering.Format = '- %d -'
+    PageNumbering.OnPageBottom = False
+    PageNumbering.Visible = True
+    O4MDSource = TableValueSource1
+    Calc = False
+    SizeSettings = {
+      0100000022000000010000000B00000001000000010000000100000001000000
+      00000000000000000000000000000000}
+    Rows = {}
+    Columns = {}
+    CellsFormat = {2100000000000000000000000000000040420F0040420F00FFFFFFFF}
+    CellsData = {2100000000000000000040420F0040420F00FFFFFFFF}
+    CellsDataCalc = {2100000000000000000040420F0040420F00FFFFFFFF}
+    RowsDsgn = {0100001D0002000005000800001300}
+    ColumnsDsgn = {0100001D0002000029001F00006600}
+    CellsSectionsDsgn = {
+      03486564010000000400000003446574060000000600000005546F74616C0800
+      0000080000000553746F72650A0000000A0000000000}
+    CellsFormatDsgn = {
+      2100000020000000000000000080230019000000000000000000000019000000
+      0000000000000000100000000010000000000000100000000012120002000000
+      0900000000211200010000000900000000111200010000000900000000111200
+      0300000009000000002112000000000009000000001112000200000009000000
+      0022020008000000090000000012210000004000090000000021210000004000
+      0900000000112100000040000900000000222000040000000900000000121100
+      0000000001000000002111000000000009000000001211000000000005000000
+      0011110000000000050000000021110000000000050000000000000000000000
+      0500000024022200004022001100000024202200004022001100000024122200
+      0040220005000000241122000040220005000000242122000040220005000000
+      2502220000402200510000002520220000402200110000002512220000402200
+      050000002511220000402200050000002521220000402200050000002C212200
+      0040220005000000000000000000000040420F0040420F00010000000000F87F
+      010002000200020003000300030003000300030003000400FFFF030000000000
+      FF7F050006000500070005000800070005000700050008000800080006000500
+      0100FFFF07000500070005000800080008000600050007000500080007000500
+      06000900020000E00A0007000B00FFFF040000000000FF7F0C000D000C000E00
+      0C000E000E000C000E000C000E000E000E000D000C000100FFFF0E000C000E00
+      0C000E000E000E000D000C000E000C000E000E000C000D000D00020000E00E00
+      0E000F00FFFF060000000000FF7F100011001200130012001300130012001300
+      1200130013001300140012000100FFFF13001200130012001300130013001400
+      12001300120013001300120014001400020000E0130013001400FFFF07000000
+      010001001500FFFF080000000000FF7F16001700180019001800190019001800
+      190018001900190019001A0018000100FFFF1900180019001800190019001900
+      1A001800190018001900190018001A001A00020000E0190019001A00FFFF0900
+      0000010001001500FFFF0A0000000000FF7F1B001C001D001E001D001E001E00
+      1D001E001D001E001E001E001F001D000100FFFF1E001D001E001D001E001E00
+      1E001F001D001E001D001E001E001D001F001F00020000E01E001E002000FFFF
+      FFFFFFFF}
+    CellsDataDsgn = {
+      2100000000000000000040420F0040420F00010000000000004008270000C4E2
+      E8E6E5EDE8E520F2EEE2E0F0E020E220F0E0E7F0E5E7E520F1EAEBE0E4202D20
+      F2EEE2E0F0FFFF030000000000A15408050000D2EEE2E0F008090000CDE020ED
+      E0F7E0EBEE08060000CFF0E8F5EEE4080A0000C2ED2E20EFF0E8F5EEE4081600
+      00C2EEE7E2F0E0F220EEF220EFEEEAF3EFE0F2E5EBE5E9080D0000C2E2EEE420
+      EEF1F2E0F2EAEEE20100A550080E0000D0E5E2E8E7E8FF20F2EEE2E0F0E00806
+      0000D0E0F1F5EEE4080A0000C2ED2E20F0E0F1F5EEE408130000C2EEE7E2F0E0
+      F220EFEEF1F2E0E2F9E8EAE0EC080F0000D1EFE8F1E0EDE8E520F2EEE2E0F0E0
+      080A0000CFE5F0E5EEF6E5EDEAE0020000A008080000CDE020EAEEEDE5F6080D
+      0000D1F3ECECE020EDE0F6E5EDEAE8FFFF040000000000FF7F08030000CAEEE4
+      08060000C5E42EE8E7EC080A0000CAEEEBE8F7E5F1F2E2EE080D0000D1F3ECEC
+      E020E1E5E720CDC4D1080A0000CAEEEBE8F7E5F1F2E2EE080D0000D1F3ECECE0
+      20E1E5E720CDC4D108090000D1F3ECECE020CDC4D1080A0000CAEEEBE8F7E5F1
+      F2E2EE080D0000D1F3ECECE020E1E5E720CDC4D1080A0000CAEEEBE8F7E5F1F2
+      E2EE08100000D1F3ECECE020E2F52EE1E5E720CDC4D108050000D1F3ECECE008
+      090000D1F3ECECE020CDC4D108070000CDE0F6E5EDEAE0080A0000CAEEEBE8F7
+      E5F1F2E2EE0100FFFF080D0000D1F3ECECE020E1E5E720CDC4D1080A0000CAEE
+      EBE8F7E5F1F2E2EE080D0000D1F3ECECE020E1E5E720CDC4D1080A0000CAEEEB
+      E8F7E5F1F2E2EE08100000D1F3ECECE020E2F52EE1E5E720CDC4D108050000D1
+      F3ECECE008090000D1F3ECECE020CDC4D108070000CDE0F6E5EDEAE0080A0000
+      CAEEEBE8F7E5F1F2E2EE080D0000D1F3ECECE020E1E5E720CDC4D1080A0000CA
+      EEEBE8F7E5F1F2E2EE080D0000D1F3ECECE020E1E5E720CDC4D108090000D1F3
+      ECECE020CDC4D1080A0000CAEEEBE8F7E5F1F2E2EE080D0000D1F3ECECE020E1
+      E5E720CDC4D108050000D1F3ECECE0020000C0080A0000CAEEEBE8F7E5F1F2E2
+      EE080D0000D1F3ECECE020E1E5E720CDC4D1FFFF0A0000000000004008050000
+      D1EAEBE0E4FFFFFFFFFFFF}
+    StartNewPage = {}
+  end
+  object XGridTools: TXGridTools
+    Left = 5
+    Top = 135
+    Width = 486
+    Height = 26
+    Align = alTop
+    Buttons = [xtbFont, xtbSize, xtbBold, xtbItalic, xtbUnderline, xtbDelim1, xtbLayouts, xtbDelim2, xtbBorder, xtbBorders, xtbDelim3, xtbColors, xtbDelim4, xtbLines, xtbRCNum, xtbFix, xtbGroup, xtbDelim5, xtbInsDel, xtbLock, xtbDelim6]
+    XGrid = XGrid
+    Visible = False
+  end
+  object tbrData: TO4ToolBar
+    Left = 5
+    Top = 5
+    Width = 486
+    Height = 53
+    AutoSize = True
+    ButtonWidth = 113
+    EdgeBorders = [ebLeft, ebTop, ebRight]
+    EdgeOuter = esNone
+    Flat = True
+    HotImages = ImagesHolder.Bmp16x16
+    Images = ImagesHolder.Bmp16x16
+    List = True
+    ShowCaptions = True
+    TabOrder = 3
+    object tbRun: TO4ToolButton
+      Left = 0
+      Top = 0
+      Hint = 'Выполнить отчет'
+      AutoSize = True
+      Caption = 'Выполнить отчет'
+      ImageIndex = 47
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbRun_Click'
+    end
+    object ToolButton2: TO4ToolButton
+      Left = 117
+      Top = 0
+      Width = 8
+      Caption = 'ToolButton2'
+      ImageIndex = 10
+      Style = tbsSeparator
+      O4Action = actNone
+    end
+    object tbXTools: TO4ToolButton
+      Left = 125
+      Top = 0
+      Hint = 'Показать/спрятать панель инструментов'
+      Caption = 'Инструменты'
+      ImageIndex = 44
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbXTools_Click'
+    end
+    object tbExcel: TO4ToolButton
+      Left = 238
+      Top = 0
+      Hint = 'Экспорт в Excel'
+      AutoSize = True
+      ImageIndex = 164
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbExcel_Click'
+    end
+    object ToolButton1: TO4ToolButton
+      Left = 0
+      Top = 0
+      Width = 8
+      Caption = 'ToolButton1'
+      ImageIndex = 2
+      Wrap = True
+      Style = tbsSeparator
+      O4Action = actNone
+    end
+    object Panel4: TO4Panel
+      Left = 0
+      Top = 30
+      Width = 260
+      Height = 21
+      AutoSize = True
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object lDateFrom: TO4Label
+        Left = 0
+        Top = 4
+        Width = 56
+        Height = 13
+        Caption = ' Период: с '
+        Layout = tlCenter
+      end
+      object lDateTo: TO4Label
+        Left = 150
+        Top = 4
+        Width = 18
+        Height = 13
+        Caption = ' по '
+        Layout = tlCenter
+      end
+      object eDateFrom: TO4Edit
+        Left = 58
+        Top = 0
+        Width = 90
+        Height = 21
+        EditStyle = fesDate
+        Period.Enabled = False
+        Period.StrStartDate = '31.12.1899'
+        TabOrder = 0
+        VPAOnChange.EventName = 'eDateFrom_Change'
+      end
+      object eDateTo: TO4Edit
+        Tag = 1
+        Left = 170
+        Top = 0
+        Width = 90
+        Height = 21
+        EditStyle = fesDate
+        Period.Enabled = False
+        Period.StrStartDate = '31.12.1899'
+        TabOrder = 1
+        VPAOnChange.EventName = 'eDateFrom_Change'
+      end
+    end
+    object tbSelectDates: TO4ToolButton
+      Left = 260
+      Top = 30
+      Hint = 'Выбор периода'
+      Caption = 'Выбор периода'
+      DropdownMenu = pmDates
+      ImageIndex = 160
+      Style = tbsDropDown
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbSelectDates_Click'
+    end
+  end
+  object XGrid1: TO4XGrid
+    Left = 5
+    Top = 161
+    Width = 486
+    Height = 422
+    Align = alClient
+    DefaultColWidth = 95
+    ReadOnly = True
+    Font.Charset = RUSSIAN_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -11
+    Font.Name = 'Arial'
+    Font.Style = []
+    Options = [xgoShowSections, xgoRangeSelect, xgoRowSizing, xgoColSizing, xgoThumbTracking]
+    TabOrder = 4
+    PrinterSettings.Copies = 1
+    PrinterSettings.Duplex = False
+    PrinterSettings.FirstPage = 0
+    PrinterSettings.LastPage = 0
+    PrinterSettings.OutputBin = Auto
+    Page.Columns = 1
+    Page.Orientation = poLandscape
+    Page.PaperSize = A4
+    Page.Values = (
+      100
+      2100
+      100
+      2970
+      100
+      100
+      0)
+    PageNumbering.Alignment = taCenter
+    PageNumbering.Format = '- %d -'
+    PageNumbering.OnPageBottom = False
+    PageNumbering.Visible = True
+    O4MDSource = TableValueSource1
+    Calc = False
+    SizeSettings = {
+      0100000003000000010000000B00000001000000010000000100000001000000
+      00000000000000000000000000000000}
+    Rows = {}
+    Columns = {}
+    CellsFormat = {2100000000000000000000000000000040420F0040420F00FFFFFFFF}
+    CellsData = {2100000000000000000040420F0040420F00FFFFFFFF}
+    CellsDataCalc = {2100000000000000000040420F0040420F00FFFFFFFF}
+    RowsDsgn = {0100001D0002000013000800001300}
+    ColumnsDsgn = {010000D8000200004700}
+    CellsSectionsDsgn = {
+      044865643101000000040000000444657431060000000600000005546F74616C
+      08000000080000000653746F7265310A0000000A0000000000}
+    CellsFormatDsgn = {
+      2100000E23232320232323202323302E30300010000000000000000080220019
+      0000000000000000800200190000000000000000000000090000000012220000
+      0040000900000000112200000040000900000000212200000040000900000000
+      1211000000000001000000002211000000000009000000002211000000000005
+      0100000000000000000000000100002402220000402200110000002422220000
+      4022001100000024222200004022000501000025022200004022005100000025
+      2222000040220011000000252222000040220005010000000000000000000040
+      420F0040420F000100000000000070010002000200FFFF030000000000007003
+      0003000300FFFF0400000000000070040005000600FFFF060000000000007007
+      0008000900FFFF07000000000000100A00FFFF08000000000000700B000C000D
+      00FFFF09000000000000100A00FFFF0A000000000000700E000F001000FFFFFF
+      FFFFFF}
+    CellsDataDsgn = {
+      2100000000000000000040420F0040420F00010000000000004008100000C4E2
+      E8E6E5EDE8E520F2EEE2E0F0E020FFFF040000000000007008080000CEEFE5F0
+      E0F6E8FF080A0000CAEEEBE8F7E5F1F2E2EE08050000D1F3ECECE0FFFF0A0000
+      000000004008050000D1EAEBE0E4FFFFFFFFFFFF}
+    StartNewPage = {}
+  end
+  object TableValueSource1: TO4TableValueSource
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 323
+    Top = 284
+  end
+  object pmDates: TO4PopupMenu
+    Left = 637
+    Top = 20
+    object miFirstHalfYear: TO4MenuItem
+      Caption = 'Первое полугодие'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem7: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miFirstQuartal: TO4MenuItem
+      Tag = 1
+      Caption = 'I квартал'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miJan: TO4MenuItem
+      Tag = 2
+      Caption = '  Январь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miFeb: TO4MenuItem
+      Tag = 3
+      Caption = '  Февраль'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miMar: TO4MenuItem
+      Tag = 4
+      Caption = '  Март'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem9: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSecondQuartal: TO4MenuItem
+      Tag = 5
+      Caption = 'II квартал'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miApr: TO4MenuItem
+      Tag = 6
+      Caption = '  Апрель'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miMay: TO4MenuItem
+      Tag = 7
+      Caption = '  Май'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miJun: TO4MenuItem
+      Tag = 8
+      Caption = '  Июнь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem14: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miLastYear: TO4MenuItem
+      Tag = 9
+      Caption = 'Предыдущий год'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSecondHalfYear: TO4MenuItem
+      Tag = 10
+      Break = mbBarBreak
+      Caption = 'Второе полугодие'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem17: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miThirdQuartal: TO4MenuItem
+      Tag = 11
+      Caption = 'III квартал'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miJul: TO4MenuItem
+      Tag = 12
+      Caption = '  Июль'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miAug: TO4MenuItem
+      Tag = 13
+      Caption = '  Август'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSep: TO4MenuItem
+      Tag = 14
+      Caption = '  Сентябрь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem22: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miFourthQuartal: TO4MenuItem
+      Tag = 15
+      Caption = 'IV квартал'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miOct: TO4MenuItem
+      Tag = 16
+      Caption = '  Октябрь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miNov: TO4MenuItem
+      Tag = 17
+      Caption = '  Ноябрь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miDec: TO4MenuItem
+      Tag = 18
+      Caption = '  Декабрь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem27: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miThisYear: TO4MenuItem
+      Tag = 19
+      Caption = 'Текущий год'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+  end
+  object PopupMenu1: TO4PopupMenu
+    Left = 91
+    Top = 91
+    object MenuItem1: TO4MenuItem
+      Caption = 'MenuItem1'
+      ShortCut = 13
+      VPAOnClick.EventName = 'tbRun_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+  end
+end

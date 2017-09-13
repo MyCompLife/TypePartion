@@ -1,0 +1,52 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation  
+
+var
+  AccKassa : ISAccs;
+  Currency : ISDictionary;
+
+procedure CreateObjects; server;
+begin
+  AccKassa := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+  Currency := CreateObject('Справочники.Валюты');
+  Currency := GetNatCurrency(Currency);
+  AccKassa.SetFieldFilter('Валюта', Currency); //платежи только в нац. валюте!
+  nil(Currency);
+end;
+
+procedure GetDocs(OnDate : DateTime; TblKassa : ISValueTable); server;
+var
+  TmpTbl : ISValueTable;
+begin
+  TmpTbl := CreateObject('ТаблицаЗначений');
+  TblKassa.CopyColumnsTo(TmpTbl);
+  AccKassa.AppendMotionToValueTable(RoundDate(OnDate, rdDay, False),
+    RoundDate(OnDate, rdDay, True) - 0.00001, amtBoth,
+    'Document=Документ;СумОбщ=Сумма;MotionSign=Тип', -1, TmpTbl);
+  TmpTbl.DoGetLinks('Партнер=Документ.Партнер');
+  TblKassa.SortBy('Документ');
+  TmpTbl.Select;
+  while TmpTbl.SelectNext do
+    begin
+      if TblKassa.Find(TmpTbl.Документ) then
+        begin
+          TmpTbl.Edit;
+          TmpTbl.Назначение := TblKassa.Назначение;
+          TmpTbl.Post;
+        end
+      else
+        if VarAsBool(TmpTbl.@Партнер.IsFocused) then
+          begin
+            TmpTbl.Edit;
+            TmpTbl.Назначение := TmpTbl.Партнер.ПолноеНазвание;
+            TmpTbl.Post;
+          end
+    end;
+  TmpTbl.CopyTo('', TblKassa);
+end;
+
+end.

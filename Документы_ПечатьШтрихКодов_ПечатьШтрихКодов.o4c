@@ -1,0 +1,418 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, ДополнительныйФункционал;
+
+implementation
+
+
+var
+  ChangeLock, HasOwner, ScrollLock, DropMode, LockCalc, isSave : Boolean;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MasterData : ICDocuments;
+  cvtICalc, GoodTbl : ICValueTable;
+  Stores, InputStores : ICValueList;
+  LinkDict, Units : ICDictionary;
+  PrcImportFromExcel : ICProcessing;
+  CursorVis : TCursor;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  GoodTbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  CreateObjects;
+  MasterData.SetSrvTableOnCalcFields(server.GetCalcParams);
+end;
+
+procedure btnBrowser_Click(Sender : TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.Товары', 'ПросмотрТоваров', Null);
+end;
+
+procedure miGoodStore_Click(Sender : TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.Товары', 'ПодборТоваровСоСкладов', Null);
+end;
+
+procedure TDS_StartDrop(Source : Variant; var Accept : Boolean);
+begin
+  if nbList.PageIndex = 0 then
+    begin
+      LockCalc := True;
+      MasterData.UpdateLine(True);
+      DropMode := True;
+      ScrollLock := True;
+      MasterData.TableAutoCalcFields := False;
+      CursorVis := WaitCursorStart;
+    end
+  else
+    begin
+      Accept := False;
+      SetCursor(CursorVis);
+    end;
+end;
+
+procedure CalcCount(var Count : Decimal; s : string; var Accept : Boolean);
+begin
+  if VarAsBool(Options.GetServerPrm(CountAck)) and not StdInpDec(inpGoodCount + s, Count) then
+    Accept := MessageDlg(EnterAsk, mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo;
+end;
+
+procedure TDS_Drop(Source : Variant; var Accept : Boolean);
+var
+  Count : Decimal;
+  s : string;
+begin
+  Count := 1;
+  S := VarAsStr(Source.NameField);
+  if rgTypePrice.ItemIndex = -1 then
+    begin
+      ShowMessage('Не выбран тип цены!');
+      exit;
+    end;
+  if not MasterData.FindLineBy('Товар', Source) then
+    begin
+      if not cbxCount.Checked then
+        begin
+          CalcCount(Count, S, Accept);
+          if not Accept then
+            exit;
+       end;
+      MasterData.AppendLine;
+      MasterData.Товар := Source;
+      MasterData.AssignFields('Код;ЕдИзм', Source);
+      MasterData.Количество := Count;
+      case rgTypePrice.Items.Strings[rgTypePrice.ItemIndex] of
+        'Розничная':
+                        MasterData.Цена := Source.Цена;
+        'Оптовая':
+                        MasterData.Цена := Source.ОптЦена;
+        'Крупнооптовая':
+                        MasterData.Цена := Source.КрОптЦена;
+      end;
+
+      MasterData.Цена := Source.ОптЦена;
+      MasterData.PostLine;
+    end;
+end;
+
+procedure TDS_EndDrop(Source : Variant);
+begin
+  LockCalc := False;
+  SetCursor(CursorVis);
+  MasterData.TableAutoCalcFields := True;
+  DropMode := False;
+  ScrollLock := False;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  PriceTypes: String;
+  i: Integer;
+
+begin
+  PriceTypes := Constants.ТипыЦен;
+  rgTypePrice.Items.Clear;
+  if StrLength(PriceTypes) > 0 then
+    for i := 1 to StrLength(PriceTypes) do
+      begin
+        case PriceTypes[i] of
+          '0':
+              rgTypePrice.Items.Add('Розничная');
+          '1':
+              rgTypePrice.Items.Add('Оптовая');
+          '2':
+              rgTypePrice.Items.Add('Крупнооптовая');
+        end;
+      end;
+  case VarAsStr(MasterData.ТипЦены) of
+    'Цена':
+           PriceTypes := 'Розничная';
+    'ОптЦена':
+           PriceTypes := 'Оптовая';
+    'КрОптЦена':
+           PriceTypes := 'Крупнооптовая';
+  end;
+  i := rgTypePrice.Items.IndexOf(PriceTypes);
+  if i>=0 then
+    rgTypePrice.ItemIndex:= i;
+  cbxCount.Checked := VarAsBool(Options.GetServerPrm('ШтучныйОтпускТовара ' + MasterData.Getsign));
+  miFocusedOnCode.ShortCut := GetShortCut;
+end;
+
+procedure MDS_Append(Sender : TObject);  
+var DocOwner : ICDocuments; 
+    ContentTbl : ICValueTable;
+begin
+ try
+  LockCalc := True;
+  MasterData.Партнер := GetEmplByName(GetUserName, eRespons);
+  MasterData.ТипЦены := 'Цена';
+  if MasterData.HasParam('DocOwner') then
+    begin
+      DocOwner := MasterData.Params['DocOwner'];
+      if IsObjFocused(DocOwner) and  (DocOwner.LinesCount>0) and 
+         DocOwner.HasField('Товар') and DocOwner.HasField('Количество') then
+        begin 
+          ContentTbl := CreateObject('ТаблицаЗначений');
+          ContentTbl.AddColumn('Товар',vtcLink,0);  
+          ContentTbl.AddColumn('ЕдИзм',vtcLink,0);
+          ContentTbl.AddColumn('Количество',vtcFFT,5);
+          ContentTbl.AddColumn('Цена',vtcFFT,7);   
+          ContentTbl.AddColumn('Код',vtcString,20);
+          ContentTbl.Open;
+          DocOwner.AppendLinesTo('Товар;Количество',ContentTbl);
+          ContentTbl.GroupBy('Товар','Количество'); 
+          ContentTbl.DoGetLinks('Цена=Товар.ОптЦена;ЕдИзм=Товар.ЕдИзм;Код=Товар.Код');
+          MasterData.LoadContents('Товар;Количество;Цена;ЕдИзм;Код',ContentTbl);
+        end;
+    end; 
+  finally
+    LockCalc := False;
+  end;
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  GoodTbl.SortBy('Код;Товар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  GoodTbl.SortBy('Товар;Код');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure miLinkDict_Click(Sender : TObject);
+begin
+  miLinkDict.Checked := not miLinkDict.Checked;
+end;
+
+
+procedure miAddGroup_Click(Sender: TObject);
+var
+  CtgDic, GoodDic: ICDictionary;
+  defName: String;
+  Accs: ICAccs;
+begin
+  CtgDic := CreateObject('Справочники.Товары');
+  GoodDic := CreateObject('Справочники.Товары');
+  Accs :=  CreateObject('Аккумуляторы.ОстаткиТоваров');
+  CtgDic.IncludeOnlyLevels(true);
+  if CtgDic.SelectInForm('ВыборКатегории', defName, Null) then
+    begin 
+      LockCalc := True;
+      MasterData.UpdateLine(True);
+      DropMode := True;
+      ScrollLock := True;
+      MasterData.TableAutoCalcFields := False;
+      CursorVis := WaitCursorStart;
+
+      GoodDic.UseParent(CtgDic);
+      GoodDic.Select;
+      while GoodDic.SelectNext do
+        begin
+          Accs.CalcGroupRestDirect(RoundDate(MasterData.GetDate,rdDay,true),GoodDic);
+          if Accs.КолОбщ > 0 then
+            begin
+              MasterData.AppendLine;
+              MasterData.Товар := GoodDic;
+              MasterData.AssignFields('Код;ЕдИзм', GoodDic);
+              MasterData.Количество := 1;
+              MasterData.Цена := GoodDic.ОптЦена;
+              MasterData.PostLine;
+            end;
+        end; 
+      LockCalc := False;
+      SetCursor(CursorVis);
+      MasterData.TableAutoCalcFields := True;
+      DropMode := False;
+      ScrollLock := False;
+    end;
+end;
+
+function FindGoodByCode(Code: String; Var Source: ICDictionary): boolean;
+var
+  Find: Boolean;
+  FieldName : string;
+begin
+  result := false;
+  Source := CreateObject('Справочники.ШтрихКодыТоваров');
+  if Source.FindByCode(Code, false) then
+    begin
+      Source := Source._GetOwner;
+      if not IsNil(Source) and Source.IsFocused then
+        Find := true;
+    end;
+  if not Find then
+    begin
+      Source := CreateObject('Справочники.Товары');
+      if StrLength(Code) > 10 then
+        FieldName := 'ШтрихКод'
+      else
+        FieldName := 'Код';
+      if not Source.FindByField(FieldName,Code, false) then
+        begin
+          PlaySound('BarCodeError');
+          ShowMessage('Товар с кодом: ' + Code + ', не найден');
+          exit;
+        end;
+    end;
+  result := true;
+end;
+
+procedure miCode_Click(Sender: TObject);
+var
+  Count : Decimal;
+  s : string;
+  Dic : ICDictionary;
+  Accept : Boolean;
+begin
+  Count := 1;
+  Accept := true;
+  Dic := CreateObject('Справочники.Товары');
+
+  if FindGoodByCode(eCode.Text, Dic) then
+    begin
+      S := VarAsStr(Dic.NameField);
+      if not MasterData.FindLineBy('Товар', Dic) then
+        begin
+          if not cbxCount.Checked then
+            begin
+              CalcCount(Count, S, Accept);
+              if not Accept then
+                exit;
+           end;
+          MasterData.AppendLine;
+          MasterData.Товар := Dic;
+          MasterData.AssignFields('Код;ЕдИзм', Dic);
+          MasterData.Количество := Count;
+          MasterData.Цена := Dic.ОптЦена;
+          MasterData.PostLine;
+        end;
+  end;
+  eCode.Text := '';
+end;
+
+procedure cbxCount_Click(Sender: TObject);
+begin
+  SaveUserActiveCountOne('ШтучныйОтпускТовара ' + MasterData.Getsign, cbxCount.Checked);
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if rgTypePrice.ItemIndex >= 0 then
+    case rgTypePrice.Items.Strings[rgTypePrice.ItemIndex] of
+      'Розничная':
+                      MasterData.ТипЦены := 'Цена';
+      'Оптовая':
+                      MasterData.ТипЦены := 'ОптЦена';
+      'Крупнооптовая':
+                      MasterData.ТипЦены := 'КрОптЦена';
+    end
+  else
+    ShowMessage('Не выбран тип цены!');
+
+end;
+
+procedure tbChangeCount_Click(Sender: TObject);
+Var
+  TblContents : IcValueTable;
+  x : Integer;
+begin
+  TblContents := Createobject('ValueTable');
+  StdInpInt('Укажите множитель к количеству штрихкодов:', x);
+  if x>0 then
+    try
+      MasterData.DisableTableControls;
+      MasterData.SaveContents('',TblContents);
+      MasterData.ClearContents;
+      TblContents.DoCalculation('Количество',IntToStr(x));
+      MasterData.LoadContents('',TblContents); 
+    finally
+      MasterData.EnableTableControls;
+    end;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+nbList:TO4Notebook
+dbgListData:TO4DBGrid
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+Panel7:TO4Panel
+ToolBar1:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbParam:TO4ToolButton
+tbChangeCount:TO4ToolButton
+Panel3:TO4Panel
+MainPanel:TO4Panel
+Label17:TO4Label
+CodePanel:TO4Panel
+eCode:TO4Edit
+cbxCount:TO4CheckBox
+pnImportFromExcel:TO4Panel
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel4:TO4Panel
+nbHeader:TO4Notebook
+Label1:TO4Label
+Label2:TO4Label
+Label26:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+rgTypePrice:TO4RadioGroup
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+pmList:TO4PopupMenu
+miLinkDict:TO4MenuItem
+miDelRec:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+miAddGroup:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem
+pmCode:TO4PopupMenu
+miCode:TO4MenuItem
+miFocusedOnCode:TO4MenuItem
+pmSource:TO4PopupMenu
+miDropFromDict:TO4MenuItem
+miGoodStore:TO4MenuItem

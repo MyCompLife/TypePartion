@@ -1,0 +1,1509 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, InitColors, –асчеты,
+  –абота—“аблицами«начений, ѕользователи,
+  Ќумераци€ƒокументов, –абота—“аблицами«наченийCL, –абота—ƒокументамиCL, ƒополнительный‘ункционал, –абота—∆урналом»зменений;
+
+implementation
+
+procedure eCurrencyDoc_Change(Sender : TObject); forward;
+procedure TDS_FieldChange(FieldName : string; Value : Variant); forward;
+
+var
+  ChangeLock, ScrollLock, DropMode, LockCalc, isSave : Boolean;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  Proc : Variant;
+  MasterData : ICDocuments;
+  cvtICalc, GoodTbl : ICValueTable;
+  Currency, Store, Units, LinkDict, NatCurrency, AnalitPartDic : ICDictionary;
+  CursorVis : TCursor;
+  AddDoc : Boolean;
+
+  PriceTbl, tmpPriceTbl, TblGoods : ICValueTable;
+  PricesTypeCount : integer;
+  PriceTblFields : string;
+  PriceChangeLock : Boolean;      
+
+procedure RefreshAnalitVCL;
+var AnalitVisible : Boolean;
+begin
+ AnalitVisible := false;
+ if VarAsBool(MasterData.@ѕартнер.IsFocused) then
+   begin
+     AnalitPartDic.UseMaster(MasterData.ѕартнер);
+     AnalitVisible :=  AnalitPartDic.Select;
+   end;
+ dbeAnalit.Visible := AnalitVisible;
+ lbAnalit.Visible := AnalitVisible;
+end;
+
+procedure FilltsTable;
+begin
+ tsTable.Tabs.Clear;
+ tsTable.Tabs.Add('ƒетально');
+ tsTable.Tabs.Add('ѕереоценка');
+ if VarAsBool(MasterData.ќзƒокќснов) then
+   tsTable.Tabs.Add('ƒокумент основание');
+ tsTable.TabIndex := 0;
+end;
+
+procedure CalcSumOpt(Data : ICDocuments);
+Var
+  TblDocContents: ICValueTable;
+begin
+  if Data.HasField('—уммаќпт¬¬алюте') then
+    begin
+      if IsNil(TblDocContents) then
+        TblDocContents := CreateObject('ValueTable')
+      else
+        TblDocContents.Close;
+      Data.SaveContents('', TblDocContents);
+      TblDocContents.DoCalculation('—умма—трокиќпт', 'ќпт÷ена *  оличество');
+      Data.—уммаќпт¬¬алюте := TblDocContents.Total('—умма—трокиќпт');
+    end;
+end;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  Currency := CreateObject('—правочники.¬алюты');
+  Units := CreateObject('—правочники.”паковки');
+  Store := CreateObject('—правочники.—клады');
+  GoodTbl := CreateObject('“аблица«начений');
+  cvtICalc := CreateObject('“аблица«начений');
+  AnalitPartDic := CreateObject('—правочники.јналитика¬заиморасчета');
+  PricesTypeCount:=StrLength(Constants.“ипы÷ен);
+  tmpPriceTbl  := CreateObject('“аблица«начений');
+
+  NatCurrency := CreateObject('—правочники.¬алюты');
+  NatCurrency := GetNatCurrency(NatCurrency);
+
+
+  TblGoods := CreateObject('“аблица«начений');
+  TblGoods.AddColumn('Ќом—троки', vtcString, 20);
+  TblGoods.AddColumn(' од', vtcInteger, 0);
+  TblGoods.AddColumn('“овар', vtcLink, 0);
+  TblGoods.AddColumn('≈д»зм', vtcLink, 0);
+  TblGoods.AddColumn('—прав÷ены»зм', vtcInteger, 0);
+  TblGoods.AddColumn('ƒл€»мейдж', vtcInteger, 0);
+  TblGoods.Open;
+
+  PriceTbl := CreateObject('“аблица«начений');
+  PriceTbl.AddColumn('“овар', vtcLink, 0);
+  PriceTbl.AddColumn('¬х÷ена', vtcFFT, 7);
+  PriceTbl.AddColumn('¬х÷ена√рн', vtcFFT, 7);
+  PriceTbl.AddColumn('¬х÷ена—трокиƒок', vtcFFT, 7);
+  PriceTbl.AddColumn('“ип÷ены', vtcString, 20);
+  PriceTbl.AddColumn('¬алюта', vtcLink, 0);
+  PriceTbl.AddColumn('¬алюта—трокиƒок', vtcLink, 0);
+  PriceTbl.AddColumn(' урс', vtcFFT, 6);
+  PriceTbl.AddColumn('÷ена—пр', vtcFFT, 2);
+  PriceTbl.AddColumn('÷ена—пр√рн', vtcFFT, 2);
+  PriceTbl.AddColumn('ѕрЌац', vtcFFT, 2);
+  PriceTbl.AddColumn('÷ена–еком', vtcFFT, 2);
+  PriceTbl.AddColumn('÷ена–еком√рн', vtcFFT, 2);
+  PriceTbl.AddColumn('—прав÷ены»зм', vtcInteger, 0);
+  PriceTbl.SetColumnFormat('¬х÷ена','0.00#####');
+  PriceTbl.SetColumnFormat('¬х÷ена√рн;÷ена—пр√рн;÷ена–еком√рн;÷ена—пр;÷ена–еком','0.00');
+  PriceTbl.SetColumnFormat(' урс','0.######');
+  PriceTbl.Open;
+  PriceTblFields := StringColumnsWithoutDelIndex(PriceTbl);
+  PriceTbl.CopyColumnsTo(tmpPriceTbl);
+  PriceChangeLock := false;
+
+end;
+
+procedure CheckControls;
+begin
+  if MasterData.LinesCount() = 0 then
+    begin
+      eGoodStore.Enabled := False;
+      eDetTax.Enabled := False;
+      eCountPack.Enabled := False;
+      ePack.Enabled := False;
+      edStore.Enabled := true;
+      edRegion.Enabled := true;
+    end
+  else
+    begin
+      eGoodStore.Enabled := True;
+      eDetTax.Enabled := True;
+      eCountPack.Enabled := True;
+      ePack.Enabled := True;
+      edStore.Enabled := true;
+      edStore.Enabled := false;
+      edRegion.Enabled := false;
+    end;
+end;
+{$D-}
+procedure TableCalcFields(Doc : ICDocuments);
+begin
+  if lockCalc then
+    exit;
+  CalcLineSumma(Doc); //находитс€ в модуле –асчЄты
+end;
+
+procedure CalcFields(Doc : ICDocuments);
+begin
+  if lockCalc then
+    exit;
+  GetCalcValSumma(Doc); //находитс€ в модуле –асчЄты
+end;
+{$D+}
+procedure CalcLocalDocSumByTableChange;
+begin
+  try
+    DropMode := True;
+    ScrollLock := True;
+    MasterData.TableAutoCalcFields := False;
+    TDS.VPAOnFieldChange.EventName := ''; //блокировка изменени€ пол€ в табл. части документа
+    MDS.VPAOnFieldChange.EventName := ''; //блокировка изменени€ пол€ в шапке документа
+    MasterData.SaveTableBookmark;
+    MasterData.DisableTableControls;
+    CalcTransSumma(MasterData, Constants.ProcentPDV);
+    CalcSumOpt(MasterData);
+  finally       
+    MasterData.GotoTablebookmark(True);
+    MasterData.EnableTableControls;
+    DropMode := False;
+    ScrollLock := False;
+    MasterData.TableAutoCalcFields := True;
+    TDS.VPAOnFieldChange.EventName := 'TDS_FieldChange';
+    MDS.VPAOnFieldChange.EventName := 'MDS_FieldChange';
+
+  end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  LockCalc := False;
+  CreateObjects;
+  server.CreateSrvObjects;
+  edTax.Text := FloatToStr(Constants.ProcentPDV);
+  SetColors(Constants);
+  MasterData.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+  MasterData.SetOnCalcFields(EntryPoint(CalcFields));
+  MasterData.SetSrvTableOnCalcFields(server.GetCalcParams);
+end;
+
+procedure tbSource_Click(Sender: TObject);
+begin
+  if not VarAsBool(MasterData.@—кладѕр.IsFocused) then
+    begin
+      ShowMessage('”кажите склад');
+      exit;
+    end;
+  if not VarAsBool(MasterData.@–егион.IsFocused) then
+    begin
+      ShowMessage('”кажите регион');
+      exit;
+    end;
+  LinkDict := MasterData.OpenDropSource('—правочники.“овары', 'ѕросмотр“оваров', 0);
+end;
+
+procedure miBrowser_Click(Sender : TObject);
+begin
+  if not VarAsBool(MasterData.@—кладѕр.IsFocused) then
+    begin
+      ShowMessage('”кажите склад');
+      exit;
+    end;
+  if not VarAsBool(MasterData.@–егион.IsFocused) then
+    begin
+      ShowMessage('”кажите регион');
+      exit;
+    end;
+  LinkDict := MasterData.OpenDropSource('—правочники.“овары', 'ѕросмотр“оваров', (Sender as TO4MenuItem).Tag);
+end;
+
+procedure TDS_StartDrop(Source : Variant; var Accept : Boolean);
+begin
+  if nbList.PageIndex = 0 then
+    begin
+      LockCalc := True;
+      MasterData.UpdateLine(True);
+      DropMode := True;
+      ScrollLock := True;
+      MasterData.TableAutoCalcFields := False;
+      MasterData.DisableTableControls;
+      CursorVis := WaitCursorStart;
+    end
+  else
+    begin
+      Accept := False;
+      SetCursor(CursorVis);
+    end;
+end;
+
+function GetCtgHasPercent(OneGood : ICDictionary) : boolean;
+var CtgName : string;
+    Child, Ctg : ICDictionary;
+begin
+  Result := false;
+  Child := OneGood;
+  Ctg := OneGood.GetParent;
+  if Ctg.ѕроцентЌаценкиѕо атег <> 0 then
+     Result := true;
+end;
+
+function GetCtgPercent(OneGood : ICDictionary) : variant;
+var
+  Child, Ctg : ICDictionary;
+begin
+  Result := 0;
+  Child := OneGood;
+  Ctg := OneGood.GetParent;
+  if Ctg.ѕроцентЌаценкиѕо атег <> 0 then
+     Result := Ctg.ѕроцентЌаценкиѕо атег;
+end;
+
+procedure TDS_Drop(Source : Variant; var Accept : Boolean);
+var
+  Count : Decimal;
+  s : string;
+begin
+  if not VarAsBool(MasterData.@—кладѕр.IsFocused) then
+    begin
+      Accept := False;
+      ShowMessage('”кажите склад');
+      exit;
+    end;
+  if not VarAsBool(MasterData.@–егион.IsFocused) then
+    begin
+      Accept := False;
+      ShowMessage('”кажите регион');
+      exit;
+    end;
+  if VarAsBool(Source.IsType('“аблица«начений')) then
+    begin
+      ShowMessage(DontMoveThat);
+      Accept := False;
+      exit;
+    end;
+{
+  if not GetCtgHasPercent(Source) then
+    begin
+      ShowMessage('Ќе указана категори€ товара, или % = 0');
+      exit;
+    end;
+}
+  Count := 1;
+  S := VarAsStr(Source.NameField);
+  Store := MasterData.—кладѕр;
+  if not Accept then
+    exit;
+  //перемещение из справочника товаров
+  if not MasterData.FindLineBy('“овар;—клад;÷ена', ArrayOf(Source, Store, Source.¬х÷ена)) then
+    begin
+      if cbxCount.Checked or (StdInpDec(inpGoodCount + s, Count) and (Count>0)) then
+        AppendGoodIn(MasterData, Null, Source, Store, Units, Count);
+    end;
+end;
+
+procedure TDS_EndDrop(Source : Variant);
+begin
+  LockCalc := False;
+  SetCursor(CursorVis); 
+  MasterData.EnableTableControls;
+  CalcLocalDocSumByTableChange;
+  MasterData.TableAutoCalcFields := True;
+  DropMode := False;
+  ScrollLock := False;
+end;
+
+procedure TDS_VPAAfterPost(Sender : TObject);
+begin
+  if not DropMode then
+    CalcLocalDocSumByTableChange;
+  CheckControls;
+end;
+
+procedure tbsHeader_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbHeader.PageIndex := NewTab;
+end;
+
+procedure FillPriceTbl;
+begin
+ try
+   PriceTbl.UseDataSource(0);
+   PriceTbl.Clear;
+   TblGoods.UseDataSource(0);
+   TblGoods.Clear;
+
+
+   MasterData.DisableTableControls;
+   GetPricesTblByNaklIn(MasterData,TblGoods, PriceTbl,cbRoundPrice5zent.Checked);
+
+ finally
+   MasterData.EnableTableControls;
+   //PriceTbl.SetColumnFormat('¬х÷ена','0.00#####');
+   TblGoods.UseDataSource(CtrlToVar(TVSGoods));
+   PriceTbl.UseDataSource(CtrlToVar(TVSPrices));
+ end;
+end;
+
+procedure tsTable_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+Var
+  V: ICProcessing;
+begin
+  case NewTab of
+   1 :
+     begin
+       if (TblGoods.LineCount=0) and (MasterData.LinesCount>0) then
+         FillPriceTbl;
+       TblGoods.SelectFirst;
+     end;
+   2:
+     begin
+       V := CreateObject('ќбработки.ѕодбор»зЌаклѕрих≈ксель');
+       V.Params['NaklPrih'] := MasterData;
+       V.OpenFormInplace('ƒокќснов',CtrlToVar(nbList.PageClass[2]));   
+
+     end;
+   end;
+  nbList.PageIndex := Newtab;
+  MasterData.SetOnCalcFields(EntryPoint(CalcFields));
+end;
+
+procedure eTransSummaNT_Change(Sender : TObject);
+begin
+  if ChangeLock or DropMode then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure dbeCourse_Change1(Sender : TObject);
+Var
+ TblContents : ICValueTable;
+begin
+  if ChangeLock or DropMode then //VarAsBool(MasterData.BrowseMode) or
+    exit;
+
+  LockCalc := True;
+  MasterData.UpdateLine(True);
+  DropMode := True;
+  ScrollLock := True;
+  MasterData.TableAutoCalcFields := False;
+  CursorVis := WaitCursorStart;
+
+  TblContents := CreateObject('“аблица«начений');
+  TblContents.Open;
+  MasterData.SaveContents('',TblContents);
+  TblContents.CopyDataToServer;
+  Server.ChangeTbl(TblContents.SrvMean, MasterData);
+  TblContents.CopyDataFromServer;
+  MasterData.LoadContents('',TblContents);
+  TDS_EndDrop(null);
+  MasterData.UpdateRecord(True);
+end;
+
+procedure cbUseTransPerc_Click(Sender : TObject);
+begin
+  MasterData.»спѕроцент“рансп := cbUseTransPerc.Checked;
+  eTransPerc.Enabled := cbUseTransPerc.Checked;
+  CalcLocalDocSumByTableChange; //расчеты
+end;
+
+procedure eTransPerc_Change(Sender : TObject);
+begin
+  CalcLocalDocSumByTableChange;
+end;
+
+procedure Form_Open(Sender : TObject);
+var 
+  ColumnCnt, ColumnTotal : integer;
+  ColumnsName : string;
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    begin
+      eTransPerc.Enabled := MasterData.»спѕроцент“рансп;
+      ePayDate.Enabled := MasterData.ѕризнак—рокаќплаты;
+      eData.Enabled := GetUDASet('ChangeDate');
+      eRespons.Enabled := GetUDASet('changeresp');
+      CheckControls;
+      edRegion.Enabled := not GetUsersBlockedField('Ѕлокировка¬ыбора–егиона');
+      edStore.Enabled := not GetUsersBlockedField('Ѕлокировка¬ыбора—клада');
+    end;     
+  RefreshAnalitVCL;
+  cbRoundPrice5zent.Checked := VarAsBool(MasterData.ѕереоценкаќкруг5коп);
+  cbUseTransPerc.Checked := MasterData.»спѕроцент“рансп;
+  nbList.PageIndex := 0;
+  nbHeader.PageIndex := 0;
+  nbSumms.PageIndex := 0;
+  cbPayDate.Checked := MasterData.ѕризнак—рокаќплаты;
+  eCurrencyDoc_Change(eCurrencyDoc);
+  Currency := CreateObject('—правочники.¬алюты');
+  if not Currency.FindByField('Ќац¬алюта', VarAsInt(True), True) then
+    Currency := GetNatCurrency(Currency);
+  rgCalcSum.ItemIndex := MasterData.ћетод–асчета;
+
+  Label3.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  eSumma.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  Label15.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  eCurrencyDoc.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  Label19.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  eCourseDoc.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  ToolBar2.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  lSummaV.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  eSummaV.Visible := not GetUsersBlockedField('Ќеќтображать¬х—уммы');
+  if GetUsersBlockedField('Ќеќтображать¬х—уммы') then
+    begin
+      lCnt.Left := 51;
+      eCnt.Left := 113;
+      lSummaOptV.Left := 2;
+      eSummaOptV.Left := 113;
+
+      tbParam.Visible := false;
+      tbrSource.Visible := false;
+
+      dbgListData.AutoAlign := false;
+      ColumnTotal := dbgListData.PosColumns.Count;
+      for ColumnCnt := ColumnTotal downto 1 do
+        dbgListData.PosColumns.Delete(ColumnCnt-1);
+      ColumnsName := 'Ќом—троки*є*20| од* од товара*50|“овар*Ќазвание товара*200|'+
+                     '≈д»зм*≈д. изм.*30| оличество* ол-во*40|—клад*—клад*100|ќпт÷ена*ќптова€ цена*40';
+      ColumnTotal := WordCount(ColumnsName,'|');
+      for ColumnCnt := 1 to ColumnTotal do
+       begin
+         dbgListData.PosColumns.Add;
+        (dbgListData.PosColumns.Items[ColumnCnt-1] as TO4GridColumn).O4FieldName := ExtractWord(1, ExtractWord(ColumnCnt, ColumnsName, '|'), '*');
+        (dbgListData.PosColumns.Items[ColumnCnt-1] as TO4GridColumn).Title.Caption := ExtractWord(2, ExtractWord(ColumnCnt, ColumnsName, '|'), '*');
+        (dbgListData.PosColumns.Items[ColumnCnt-1] as TO4GridColumn).Width := VarAsInt(ExtractWord(3, ExtractWord(ColumnCnt, ColumnsName, '|'), '*'));
+       end;
+     dbgListData.AutoAlign := true;
+    end; 
+  miFocusedOnCode.ShortCut := GetShortCut;
+  cbxCount.Checked := VarAsBool(Options.GetServerPrm('Ўтучныйќтпуск“овара ' + MasterData.Getsign));
+
+
+  ReadPropsFromBLOB(TblGoods, MasterData.ѕереоценка“овары);
+  ReadPropsFromBLOB(PriceTbl, MasterData.ѕереоценка÷ены);
+
+  PriceTbl.SetColumnFormat('¬х÷ена','0.00#####');
+  PriceTbl.SortBy('“овар;“ип÷ены');
+  TblGoods.SortBy('Ќом—троки');
+
+  PriceTbl.UseDataSource(CtrlToVar(TVSPrices));
+  TblGoods.UseDataSource(CtrlToVar(TVSGoods));
+
+  dbgGoods.Width := VarAsInt(Options.GetServerPrm('dbgGoodsWidth'+MasterData.GetSign),360);
+  FilltsTable;
+end;
+
+procedure eLowHigh_Change(Sender : TObject);
+var
+  Res : string;
+begin
+  DropMode := True;
+  ScrollLock := True;
+  LockCalc := True;
+  MasterData.TableAutoCalcFields := False;
+  try
+    Res := VarAsStr(Proc[0]) + VarAsStr(Proc[1]);
+    case Res of
+      '00' :
+        begin
+          MasterData.SelectLines;
+          while MasterData.SelectNextLine do
+            begin
+              MasterData.EditLine;
+              MasterData.ѕроцент—кидкиЌадбавки := -AbsD(Proc[2]);
+              // TDS_FieldChange('ѕроцент—кидкиЌадбавки', Null);
+              CalcPrices('ѕроцент—кидкиЌадбавки', Null, MasterData);
+              MasterData.PostLine;
+            end;
+        end;
+      '01' :
+        begin
+          MasterData.SelectLines;
+          while MasterData.SelectNextLine do
+            begin
+              MasterData.EditLine;
+              MasterData.ѕроцент—кидкиЌадбавки := AbsD(Proc[2]);
+              // TDS_FieldChange('ѕроцент—кидкиЌадбавки', Null);
+              CalcPrices('ѕроцент—кидкиЌадбавки', Null, MasterData);
+              MasterData.PostLine;
+            end;
+        end;
+      '10' :
+        MasterData.ѕроцентќбщий := -AbsD(Proc[2]);
+      '11' :
+        MasterData.ѕроцентќбщий := AbsD(Proc[2]);
+    end;
+  finally
+    DropMode := False;
+    ScrollLock := False;
+    LockCalc := False;
+    MasterData.TableAutoCalcFields := True;
+  end;
+  CalcLocalDocSumByTableChange;
+end;
+
+procedure ePriceNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateLine(True);
+end;
+
+procedure GoodTDSOutFieldChange(MasterData : ICDocuments; FieldName : string; Value : Variant; var ChangeLock : Boolean; DropMode : Boolean);
+begin
+  if (not (ChangeLock or DropMode)) and IsObjFocused(MasterData) then
+    try
+      ChangeLock := True;
+      CalcPrices(FieldName, Value, MasterData);
+      case StrLowerCase(FieldName) of
+        'цена','ценаввалюте','процентнаценкиспр' :
+           MasterData.ќпт÷ена := RoundDec(MasterData.÷ена¬¬алюте * (1+(MasterData.ѕроцентЌаценки—пр / 100)),2);
+        'оптцена' :
+          begin
+            if MasterData.÷ена¬¬алюте <> 0 then
+              MasterData.ѕроцентЌаценки—пр := RoundDec(AbsD(1 - (VarAsDec(MasterData.ќпт÷ена) / VarAsDec(MasterData.÷ена¬¬алюте))) * 100,2);
+          end;
+      end;
+    finally
+      ChangeLock := False
+    end
+end;
+
+procedure TDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  GoodTDSFieldChange(MasterData, FieldName, Value, ChangeLock, DropMode);
+//  GoodTDSOutFieldChange(MasterData, FieldName, Value, ChangeLock, DropMode);
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant); 
+begin
+  isSave := true;
+  GoodMDSFieldChange(MasterData, FieldName, Value, ChangeLock);
+  if not ChangeLock then
+    try   
+     ChangeLock := true;
+     case StrLowerCase(FieldName) of
+      'регион' :   MasterData.—кладѕр := Null;
+      'партнер' :  
+        begin
+          cbPayDate.Checked := MasterData.ѕризнак—рокаќплаты;
+          RefreshAnalitVCL;
+        end;
+     end;
+    finally
+      ChangeLock := false;
+    end;
+
+end;
+
+procedure cbPayDate_Click(Sender : TObject);
+begin
+  MasterData.ѕризнак—рокаќплаты := cbPayDate.Checked;
+  GetNextDateForDocument(MasterData, Constants, False);
+  ePayDate.Enabled := cbPayDate.Checked;
+end;
+
+procedure MDS_Append(Sender : TObject);
+var
+  OldDoc : ICDocuments;
+  Store: ICDictionary;
+  TmpLHead, TmpLContents : ICValueTable;
+  StoreName, Number : string;
+  Accept: Boolean;
+  TypeAdd: String;
+begin
+  AddDoc := true;
+  if MasterData.HasParam('OldDoc') then
+    TypeAdd := 'OldDoc';
+  if MasterData.HasParam('CheckDoc') then
+    TypeAdd := 'CheckDoc';
+  Case TypeAdd of
+    'OldDoc':
+      begin
+        Number := MasterData.Ќомерƒокумента;
+        OldDoc := MasterData.Params[TypeAdd];
+        TmpLHead := CreateObject('ValueTable');
+        OldDoc.SaveHead('', TmpLHead);
+        MasterData.LoadHead('', TmpLHead);
+        OldDoc.SaveContents('', TmpLHead);
+        TmpLHead.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм');
+        MasterData.LoadContents('', TmpLHead);
+        MasterData.ƒатаƒокумента := CurrentDateTime;
+        MasterData.Ќомерƒокумента := Number;
+        MasterData.ќтпуск := 0;
+        GetNextDateForDocument(MasterData, Constants, True);
+        MasterData.ќтветственный := GetEmplByName(GetUserName, eRespons);
+        MasterData.ƒатаƒоверенности := CurrentDate;
+        MasterData.NumID := 0;
+        MasterData.BaseID := 0;
+      end;
+    'CheckDoc':
+      begin
+        OldDoc := MasterData.Params[TypeAdd];
+        Store := CreateObject('—правочники.—клады');
+        if not Store.SelectInForm('¬ыбор—клада', StoreName, null) then
+          exit;
+        MasterData.—кладѕр := Store;
+        MasterData.–егион := Store.–егион;
+        MasterData.¬алюта := OldDoc.¬алюта;
+        MasterData. урс := OldDoc. урс;
+        MasterData.ƒатаƒокумента := CurrentDateTime;
+        MasterData.ќтпуск := 0;
+        GetNextDateForDocument(MasterData, Constants, True);
+        MasterData.ќтветственный := GetEmplByName(GetUserName, eRespons);
+        MasterData.ƒатаƒоверенности := CurrentDate;
+        MasterData.NumID := 0;
+        MasterData.BaseID := 0;
+        MasterData.«аметки := '—оздан на основании документа: „ек ' + VarAsStr(OldDoc.ƒатаƒокумента) + ' є' + OldDoc.Ќомерƒокумента;
+
+        TmpLContents := CreateObject('ValueTable');
+        OldDoc.SaveContents('', TmpLContents);
+        TmpLContents.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм');
+        TmpLContents.Select;
+        Accept := true;
+        TDS_StartDrop(null, Accept);
+        while TmpLContents.SelectNext do
+          begin
+            MasterData.AppendLine;
+            MasterData.—клад := MasterData.—кладѕр;
+            MasterData.—тавкаЌƒ— := 0;
+            MasterData.ѕроцент—кидкиЌадбавки := 0;
+            MasterData.AssignFields(' од;≈д»зм;“овар; оличество;÷ена;÷енаЅезЌƒ—=÷ена;' +
+                                    '÷енаЅез—кидкиЌадбавки=÷ена;;',TmpLContents);
+            MasterData.¬алюта“овара := OldDoc.¬алюта;
+            MasterData. урс“овара := OldDoc. урс;
+            if MasterData. урс“овара <> 0 then
+              MasterData.÷ена¬¬алюте := MasterData.÷ена/MasterData. урс“овара
+            else
+              MasterData.÷ена¬¬алюте := 0;
+            MasterData.ќпт÷ена := MasterData.“овар.ќпт÷ена;
+            MasterData.PostLine;
+          end;
+        TDS_EndDrop(null);
+      end;
+  else
+    begin
+      MasterData.TableAutoCalcFields := False;
+      LockCalc := True;
+      try
+        if not Currency.FindByField('јктивность', VarAsInt(True), True) then
+          Currency := GetNatCurrency(Currency);
+        if Currency.IsFocused then
+          begin
+            MasterData. урс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ƒатаƒокумента);
+            MasterData.¬алюта := Currency;
+          end;
+        MasterData.ќтпуск := 0;
+        GetNextDateForDocument(MasterData, Constants, True);
+        MasterData.ќтветственный := GetEmplByName(GetUserName, eRespons);
+        MasterData.ƒатаƒоверенности := CurrentDate;
+        MasterData.ќснованиеƒоверенности := 'накладна є ' + MasterData.Ќомерƒокумента + ' в≥д ' + DateToStr(MasterData.ƒатаƒокумента) + ' р.';
+        MasterData.ћетод–асчета := VarAsInt(Options.GetServerPrm(CalcSumRule));
+        SetDocDefRegonStore(MasterData,'—кладѕр');
+
+      finally
+        LockCalc := False;
+        MasterData.TableAutoCalcFields := True;
+      end;
+    end;
+  end;
+  MasterData.BaseID := VarAsInt(Constants. од»Ѕ);
+  if MasterData.BaseID = 0 then
+    raise('«аполните код информационной базы в значени€х важных констант');
+end;
+
+procedure ePack_ActionExecute(Sender : TObject);
+var
+  Count : Decimal;
+begin
+  Count := 1;
+  if VarAsBool(Options.GetServerPrm(CountAck)) then
+    StdInpDec(inpPackCount, Count);
+  MasterData. оличество”паковок := Count;
+  MasterData. оличество := MasterData.”паковка. оличество * MasterData. оличество”паковок;
+end;
+
+procedure tsSumms_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbSumms.PageIndex := Newtab;
+end;
+
+procedure bCurrency_Click(Sender : TObject);
+begin
+  ChangeLock := True;
+  DropMode := True;
+  try
+    ChCurrency(MasterData, cvtICalc);
+  finally
+    ChangeLock := False;
+    DropMode := False;
+  end;
+end;
+
+
+
+procedure bCourse_Click(Sender : TObject);
+begin
+  ChangeLock := True;
+  DropMode := True;
+  try
+    ChCourse(MasterData, cvtICalc);
+  finally
+    ChangeLock := False;
+    DropMode := False;
+  end;
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  GoodTbl.SortBy(' од;“овар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  GoodTbl.SortBy('“овар; од');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  if AddDoc then
+      ChangeDoc(clmtAppend,MasterData)
+  else
+    ChangeDoc(clmtEdit,MasterData);
+  MasterData.SendEvent(evNakladn, Unassigned, False);
+end;
+
+procedure TDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if ScrollLock then
+    exit;
+  //CheckControls;
+  if miLinkDict.Checked and not IsNil(LinkDict) then
+    LinkDict.Find(MasterData.@“овар);
+end;
+
+procedure tbLow_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('ќбработки.—кидки');
+      dialog.Execute('—кидки', MasterData);
+      Proc := MasterData.Params['—кидки'];
+    end;
+  if MasterData.HasParam('—кидки') then
+    eLowHigh_Change(tbLow);
+end;
+
+procedure miLinkDict_Click(Sender : TObject);
+begin
+  miLinkDict.Checked := not miLinkDict.Checked;
+end;
+
+procedure MenuItem6_Click(Sender : TObject);
+begin
+  TDS_VPAAfterPost(TDS);
+end;
+
+procedure btnTax_Click(Sender : TObject);
+begin
+  DropMode := True;
+  ScrollLock := True;
+  LockCalc := True;
+  MasterData.TableAutoCalcFields := False;
+  try
+    MasterData.SelectLines;
+    while MasterData.SelectNextLine do
+      begin
+        MasterData.EditLine;
+        MasterData.—тавкаЌƒ— := StrToFloat(edTax.Text);
+        CalcPrices('—тавкаЌƒ—', Null, MasterData);
+        MasterData.PostLine;
+      end;
+  finally
+    DropMode := False;
+    ScrollLock := False;
+    LockCalc := False;
+    MasterData.TableAutoCalcFields := True;
+  end;
+  CalcLocalDocSumByTableChange;
+end;
+
+procedure miProperty_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('ќбработки.—войства“овара');
+      dialog.Execute('—войства“овара', MasterData);
+    end;
+end;
+
+procedure rgCalcSum_Click(Sender : TObject);
+begin
+  MasterData.ћетод–асчета := rgCalcSum.ItemIndex;
+  TDS_VPAAfterPost(TDS);
+end;
+
+
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+  case StrLowerCase(ProcID) of
+    'startdrop' :
+      begin      
+        LockCalc := True;
+        MasterData.UpdateLine(True);
+        DropMode := True;
+        ScrollLock := True;
+        MasterData.TableAutoCalcFields := False;
+        MasterData.DisableTableControls;
+        CursorVis := WaitCursorStart;
+      end;
+    'enddrop' :
+      TDS_EndDrop(null); 
+    'dropfromtable':
+      begin
+        AppendGoodIn(MasterData, InParams, Null, MasterData.—кладѕр, Units, VarAsDec(InParams. оличество));
+      end;
+  end;
+end;
+
+procedure tbChangeCourse_Click(Sender: TObject);
+Var
+  Cours : Decimal;
+  TblContents : ICValueTable;
+begin
+  LockCalc := True;
+  MasterData.UpdateLine(True);
+  DropMode := True;
+  ScrollLock := True;
+  MasterData.TableAutoCalcFields := False;
+  CursorVis := WaitCursorStart;
+  Cours := MasterData. урс;
+  StdInpDec('”кажите курс', Cours);
+  MasterData. урс := Cours;
+  TblContents := CreateObject('“аблица«начений');
+  TblContents.Open;
+  MasterData.SaveContents('',TblContents);
+  TblContents.CopyDataToServer;
+  Server.ChangeTbl(TblContents.SrvMean, MasterData);
+  TblContents.CopyDataFromServer;
+  MasterData.LoadContents('',TblContents);
+  TDS_EndDrop(null);
+  MasterData.UpdateRecord(True);
+end;
+
+procedure eCurrencyDoc_Change(Sender: TObject);
+Var
+  Cours : Decimal;
+  TblContents : ICValueTable;
+begin
+  LockCalc := True;
+  MasterData.UpdateLine(True);
+  DropMode := True;
+  ScrollLock := True;
+  MasterData.TableAutoCalcFields := False;
+  CursorVis := WaitCursorStart;
+  TblContents := CreateObject('“аблица«начений');
+  TblContents.Open;
+  MasterData. урс := MasterData.¬алюта.GetTimedValue(Constants.UsedCurs, MasterData.ƒатаƒокумента);
+  MasterData.SaveContents('',TblContents);
+  TblContents.CopyDataToServer;
+  Server.ChangeTbl(TblContents.SrvMean, MasterData);
+  TblContents.CopyDataFromServer;
+  MasterData.LoadContents('',TblContents);
+  TDS_EndDrop(null);
+  MasterData.UpdateRecord(True);
+end;
+
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if MasterData.NumID = 0 then
+    MasterData.NumID := ”становитьЌомерƒокумента(MasterData, '');
+  MasterData.ќснованиеƒоверенности := 'накладна є ' + MasterData.Ќомерƒокумента +
+                                      ' в≥д ' + DateToStr(MasterData.ƒатаƒокумента) + ' р.';
+  try
+    PriceTbl.DisableControls;
+    TblGoods.DisableControls;
+
+    MasterData.ѕереоценка÷ены := WritePropsToBlob(PriceTbl);
+    MasterData.ѕереоценка“овары := WritePropsToBlob(TblGoods);
+
+  finally
+    PriceTbl.EnableControls;
+    TblGoods.EnableControls;
+
+  end;
+ MasterData.ѕереоценкаќкруг5коп := cbRoundPrice5zent.Checked;
+end;
+
+procedure miChangeStore_Click(Sender: TObject);
+begin
+  MasterData.SelectLines;
+  while MasterData.SelectNextLine do
+    begin
+      MasterData.EditLine;
+      MasterData.—клад := MasterData.—кладѕр;
+      MasterData.PostLine;
+    end;
+end;
+
+procedure miCode_Click(Sender: TObject);
+var
+  Accept: boolean;
+begin
+  if not VarAsBool(MasterData.@—кладѕр.IsFocused) then
+    begin
+      ShowMessage('”кажите склад');
+      exit;
+    end;
+  TDS_StartDrop(null, Accept);
+  AddLineInByCode(MasterData, null, eCode.Text, 'ByCode', cbxCount.Checked);
+  TDS_EndDrop(null);
+  eCode.Text := '';
+end;
+
+procedure miFocusedOnCode_Click(Sender: TObject);
+begin
+  Form.ActiveControl := eCode;
+end;
+
+procedure cbxCount_Click(Sender: TObject);
+begin
+  Options.SetServerPrm('Ўтучныйќтпуск“овара ' + MasterData.Getsign, cbxCount.Checked);
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+ Options.SetServerPrm('dbgGoodsWidth'+MasterData.GetSign,dbgGoods.Width);
+
+end;
+
+procedure TVSGoods_VPATimedAfterScroll(Sender: TObject);
+begin
+  if TblGoods.IsFocused then
+    begin
+      PriceTbl.SetRange(TblGoods.@“овар,TblGoods.@“овар);
+      PriceTbl.SelectFirst;
+    end;
+
+end;
+
+procedure TVSPrices_FieldChange(FieldName: string; Value: Variant);
+begin
+  if PriceChangeLock then exit;
+  try
+    PriceChangeLock := true;
+    case StrLowerCase(FieldName) of
+     'ценареком' :
+       begin   
+         if IsObjEQ(NatCurrency,PriceTbl.@¬алюта) and cbRoundPrice5zent.Checked then
+           begin
+             PriceTbl.ценареком := RoundTo5Cop(PriceTbl.ценареком);
+             PriceTbl.ценарекомгрн := PriceTbl.ценареком;
+           end
+         else
+           PriceTbl.ценарекомгрн := VarAsDec(PriceTbl.ценареком) * VarAsDec(PriceTbl. урс);
+         if VarAsDec(PriceTbl.¬х÷ена)<>0 then
+           PriceTbl.ѕрЌац := (VarAsDec(PriceTbl.ценареком) / VarAsDec(PriceTbl.¬х÷ена) - 1)*100;
+       end;
+     'ценарекомгрн' :
+       begin
+        if VarAsDec(PriceTbl. урс)<>0 then
+          PriceTbl.ценареком := VarAsDec(PriceTbl.÷ена–еком√рн) / VarAsDec(PriceTbl. урс);
+         if VarAsDec(PriceTbl.¬х÷ена)<>0 then
+           PriceTbl.ѕрЌац := (VarAsDec(PriceTbl.ценареком) / VarAsDec(PriceTbl.¬х÷ена) - 1)*100;
+       end;
+     'прнац' :
+       begin
+
+         if IsObjEQ(NatCurrency,PriceTbl.@¬алюта) and cbRoundPrice5zent.Checked then
+           begin
+             PriceTbl.ценареком :=  RoundTo5Cop(VarAsDec(PriceTbl.¬х÷ена) * (1+PriceTbl.ѕрЌац/100));
+             PriceTbl.ценарекомгрн := PriceTbl.ценареком;
+           end
+         else
+           begin
+             PriceTbl.ценареком :=  VarAsDec(PriceTbl.¬х÷ена) * (1+PriceTbl.ѕрЌац/100);
+             PriceTbl.ценарекомгрн := VarAsDec(PriceTbl.ценареком) * VarAsDec(PriceTbl. урс);
+           end;
+
+       end;
+     'валюта' :
+       if VarAsBool(PriceTbl.@¬алюта.IsFocused) then
+         begin
+           PriceTbl. урс := PriceTbl.¬алюта.GetTimedValue(' урсЌаличный',MasterData.ƒатаƒокумента);
+           if VarAsDec(PriceTbl. урс)<>0 then
+             begin
+               if IsObjEQ(NatCurrency,PriceTbl.@¬алюта) and cbRoundPrice5zent.Checked then
+                 PriceTbl.÷ена–еком := RoundTo5Cop(VarAsDec(PriceTbl.÷ена–еком√рн) / VarAsDec(PriceTbl. урс))
+               else
+                 PriceTbl.÷ена–еком := RoundDec(VarAsDec(PriceTbl.÷ена–еком√рн) / VarAsDec(PriceTbl. урс),7);
+
+               PriceTbl.÷ена—пр := RoundDec(VarAsDec(PriceTbl.÷ена—пр√рн) / VarAsDec(PriceTbl. урс),7);
+               if IsObjEQ(PriceTbl.@¬алюта—трокиƒок, PriceTbl.@¬алюта, false) then
+                 PriceTbl.¬х÷ена := VarAsDec(PriceTbl.¬х÷ена—трокиƒок)
+               else
+                 PriceTbl.¬х÷ена := RoundDec(VarAsDec(PriceTbl.¬х÷ена√рн) / VarAsDec(PriceTbl. урс),7);
+             end;
+         end;
+    end;
+  finally
+    PriceChangeLock := false;
+  end;
+
+end;
+
+{$D-}
+procedure dbgPrices_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+ if PriceTbl.IsFocused then
+   begin
+     if (VarAsDec(PriceTbl.÷ена—пр)<>VarAsDec(PriceTbl.÷ена–еком)) or (PriceTbl.ѕрЌац<=0) then
+       Index1 := 49;
+     if VarAsBool(PriceTbl.—прав÷ены»зм) then
+       Index2 := 52;
+   end;
+end;
+
+procedure dbgGoods_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+ if TblGoods.IsFocused then
+   begin
+     if VarAsBool(TblGoods.ƒл€»мейдж) then
+       Index1 := 49;
+     if VarAsBool(TblGoods.—прав÷ены»зм) then
+       Index2 := 52;
+   end;
+
+end;
+
+procedure dbgPrices_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if PriceTbl.IsFocused then
+   begin
+     if VarAsDec(PriceTbl.÷ена—пр)<>VarAsDec(PriceTbl.÷ена–еком) then
+       if Highlight then
+         begin
+           BackColor := BlZeroSel;
+           DrawFont.Color := BlFZeroSel;
+         end
+       else
+         begin
+           BackColor := BlZero;
+           DrawFont.Color := BlFZero;
+         end;
+   end;
+end;
+
+procedure dbgGoods_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if TblGoods.IsFocused then
+   begin
+       if Highlight then
+         begin
+           BackColor := clHighlight;
+           DrawFont.Color := clWindow;
+         end
+   end;
+
+end;
+{$D+}
+
+procedure btFillPriceTbl_Click(Sender: TObject);
+begin
+  FillPriceTbl;
+  TblGoods.SelectFirst;
+  MasterData.¬ыполнениеѕереоценки := False;
+end;
+
+procedure ChangeImIdentfOfTblGoods ;
+begin
+  TblGoods.DoCalculation('ƒл€»мейдж','0');
+  TblGoods.Select;
+  while TblGoods.SelectNext do
+    begin
+      PriceTbl.SetRange(TblGoods.@“овар, TblGoods.@“овар);
+      PriceTbl.Select;
+      while PriceTbl.SelectNext do
+        if (VarAsDec(PriceTbl.÷ена—пр)<>VarAsDec(PriceTbl.÷ена–еком)) or (PriceTbl.ѕрЌац<=0) then
+          begin
+            TblGoods.Edit;
+            TblGoods.ƒл€»мейдж := true;
+            TblGoods.Post;
+          end;
+
+    end;
+  TblGoods.SelectFirst;
+
+end;
+
+procedure btChangeAllPrice_Click(Sender: TObject);
+Var
+  V : IcProcessing;
+  TypePriceChange : String;
+begin
+ if MessageDlg('ќбновить цены в справочнике дл€ всех товаров документа"?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+    try
+      CursorVis := WaitCursorStart;
+      V := CreateObject('ќбработки.¬ыбор÷еныƒл€ѕечЌаклѕрих');
+      if PricesTypeCount>1 then
+        begin
+          if (V.Execute('¬ыбор“ипа÷ен',Null)=mrOk) and (V.HasParam('TypePrices')) then
+            begin
+              TypePriceChange := VarAsStr(V.Params['TypePrices']);
+              if TypePriceChange='' then
+                exit;
+            end
+          else
+            exit;
+        end;
+      PriceTbl.DisableControls;
+      PriceTbl.CopyDataToServer;
+      TblGoods.DisableControls;
+      TblGoods.CopyDataToServer;
+
+      if MasterData.RunThreadProcess(server.ChangeDicPricesAllEP(TblGoods.SrvMean, PriceTbl.SrvMean, TypePriceChange),'»зменение цен в справочнике') then
+        begin
+          PriceTbl.CopyDataFromServer;
+          TblGoods.CopyDataFromServer;
+
+          PriceTbl.SrvMean.Clear;
+          TblGoods.SrvMean.Clear;
+
+          if server.GetActionGoodPresent then
+            ShowMessage('÷ены товаров участвующих в акции не изменены!');
+          if not IsNil(LinkDict) then
+            LinkDict.Refresh;
+          ChangeImIdentfOfTblGoods ;
+        end;
+      MasterData.¬ыполнениеѕереоценки := True;
+
+    finally
+      SetCursor(CursorVis);
+      PriceTbl.EnableControls;
+      TblGoods.EnableControls;
+    end;
+end;
+
+procedure btChangePrice_Click(Sender: TObject);
+Var
+  V : IcProcessing;
+  TypePriceChange : String;
+begin
+ if TblGoods.IsFocused and VarAsBool(TblGoods.@“овар.IsFocused) then
+   begin
+     if (MessageDlg('ќбновить цены в справочнике дл€ текущего товара"?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+       try
+         CursorVis := WaitCursorStart;
+
+         V := CreateObject('ќбработки.¬ыбор÷еныƒл€ѕечЌаклѕрих');
+         if PricesTypeCount>1 then
+           begin
+             if (V.Execute('¬ыбор“ипа÷ен',Null)=mrOk) and (V.HasParam('TypePrices')) then
+               begin
+                 TypePriceChange := VarAsStr(V.Params['TypePrices']);
+                 if TypePriceChange='' then
+                   exit;
+               end
+             else
+               exit;
+           end;
+
+         PriceTbl.DisableControls;
+         TblGoods.DisableControls;
+         tmpPriceTbl.Clear;
+         PriceTbl.AppendTo(PriceTblFields,tmpPriceTbl);
+
+
+         tmpPriceTbl.CopyDataToServer;
+         TblGoods.CopyDataToServer;
+         if MasterData.RunThreadProcess(server.ChangeDicPricesAllEP(TblGoods.SrvMean, tmpPriceTbl.SrvMean, TypePriceChange),'»зменение цен в справочнике') then
+           begin
+             tmpPriceTbl.CopyDataFromServer;
+             TblGoods.CopyDataFromServer;
+             tmpPriceTbl.SrvMean.Clear;
+             TblGoods.SrvMean.Clear;
+             PriceTbl.SortBy('“овар;“ип÷ены');
+             tmpPriceTbl.Select;
+             while tmpPriceTbl.SelectNext do
+               if PriceTbl.Find(ArrayOf(tmpPriceTbl.“овар,tmpPriceTbl.“ип÷ены )) then
+                 begin
+                   PriceTbl.Edit;
+                   PriceTbl.AssignFields(PriceTblFields,tmpPriceTbl);
+                   PriceTbl.Post;
+                 end;
+             if not IsNil(LinkDict) then
+               LinkDict.Refresh;
+             ChangeImIdentfOfTblGoods
+           end;
+         MasterData.¬ыполнениеѕереоценки := True;
+
+       finally
+         SetCursor(CursorVis);
+         PriceTbl.EnableControls;
+         TblGoods.EnableControls;
+      end;
+   end;
+
+end;
+
+procedure tbAddByCodePost_Click(Sender: TObject);
+Var
+  V : IcProcessing;
+begin
+ if not VarAsBool(MasterData.@—кладѕр.IsFocused) then
+   ShowMessage('”кажите склад')
+ else
+ if not VarAsBool(MasterData.@–егион.IsFocused) then
+   ShowMessage('”кажите регион')
+ else
+ if not VarAsBool(MasterData.@ѕартнер.IsFocused) then
+   ShowMessage('”кажите партнера')
+ else
+   begin
+     V := CreateObject('ќбработки.ѕодбор»зЌаклѕрих≈ксель');
+     V.Execute('‘орма»мпортаѕрихода',MasterData);
+     FilltsTable;
+   end;
+end;
+
+
+
+procedure miSetFocusedPricesGrid_Click(Sender: TObject);  
+var tmpColumn : TO4GridColumn;
+begin
+ dbgPrices.SetFocus;
+end;
+
+procedure miSetFocusedGoodsGrid_Click(Sender: TObject);
+begin
+  dbgGoods.SetFocus;
+end;
+
+procedure tbFillPercent_Click(Sender: TObject);
+var P: ICProcessing;
+begin
+ if PriceTbl.LineCount>0 then
+   begin
+     P := CreateObject('ќбработки.ƒиалоги');
+     if (P.Execute('¬водЌаценок',Null)=mrOK) then
+       try
+         PriceTbl.DisableControls;
+         PriceTbl.SortBy('“ип÷ены');
+         if VarAsBool(P.HasParam('UsePrice1')) and VarAsBool(P.Params['UsePrice1']) then
+           begin
+             PriceTbl.SetRange('÷ена','÷ена');
+             PriceTbl.DoCalculation('ѕрЌац',VarAsStr(VarAsDEc(P.Params['Percent1'])));
+           end;
+         if VarAsBool(P.HasParam('UsePrice2')) and VarAsBool(P.Params['UsePrice2']) then
+           begin
+             PriceTbl.SetRange('ќпт÷ена','ќпт÷ена');
+             PriceTbl.DoCalculation('ѕрЌац',VarAsStr(VarAsDEc(P.Params['Percent2'])));
+           end;
+         if VarAsBool(P.HasParam('UsePrice3')) and VarAsBool(P.Params['UsePrice3']) then
+           begin
+             PriceTbl.SetRange(' рќпт÷ена',' рќпт÷ена');
+             PriceTbl.DoCalculation('ѕрЌац',VarAsStr(VarAsDEc(P.Params['Percent3'])));
+           end;
+
+         PriceTbl.CancelRange;
+         PriceTbl.DoCalculation('÷ена–еком','¬х÷ена*(1+ѕрЌац/100)');
+
+         PriceTbl.Select;
+         While PriceTbl.SelectNext do  
+          if IsObjEQ(NatCurrency,PriceTbl.@¬алюта) and cbRoundPrice5zent.Checked then
+           begin
+             PriceTbl.Edit;
+             PriceTbl.÷ена–еком := RoundTo5Cop(PriceTbl.÷ена–еком);
+             PriceTbl.Post;
+           end;
+
+       finally
+         PriceTbl.CancelRange;
+         PriceTbl.SortBy('“овар;“ип÷ены');
+         TVSGoods_VPATimedAfterScroll(Form);
+         PriceTbl.EnableControls;
+       end;
+   end;
+end;
+
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('«акрить документ без сохранени€?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel4:TO4Panel
+nbHeader:TO4Notebook
+Label1:TO4Label
+Label2:TO4Label
+Label6:TO4Label
+Label26:TO4Label
+Label22:TO4Label
+Label35:TO4Label
+lbAnalit:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+ePartner:TO4DBEdit
+GroupBox7:TO4GroupBox
+cbPayDate:TO4CheckBox
+ePayDate:TO4DBEdit
+rgCalcSum:TO4RadioGroup
+eRespons:TO4DBEdit
+edStore:TO4DBEdit
+edRegion:TO4DBEdit
+dbeanalit:TO4DBEdit
+Label8:TO4Label
+Label24:TO4Label
+Label25:TO4Label
+cbUseTransPerc:TO4CheckBox
+eTransPerc:TO4DBEdit
+eTransSummaNT:TO4DBEdit
+eTransTax:TO4DBEdit
+eTransSumma:TO4DBEdit
+Label27:TO4Label
+ePosr:TO4DBEdit
+Label30:TO4Label
+Label31:TO4Label
+Label32:TO4Label
+Label33:TO4Label
+eThrought:TO4DBEdit
+eNum:TO4DBEdit
+eFrom:TO4DBEdit
+emAbout:TO4DBMemo
+tbsHeader:TO4TabSet
+nbList:TO4Notebook
+dbgListData:TO4DBGrid
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+Panel7:TO4Panel
+tbToolsPanel:TO4ToolBar
+tbDelete:TO4ToolButton
+tbParam:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbAddByCodePost:TO4ToolButton
+MainPanel:TO4Panel
+Label37:TO4Label
+CodePanel:TO4Panel
+eCode:TO4Edit
+cbxCount:TO4CheckBox
+Splitter1:TO4Splitter
+dbgGoods:TO4DBGrid
+Panel10:TO4Panel
+dbgPrices:TO4DBGrid
+Panel11:TO4Panel
+ToolBar4:TO4ToolBar
+ToolButton1:TO4ToolButton
+btChangePrice:TO4ToolButton
+Panel1:TO4Panel
+ToolBar3:TO4ToolBar
+tbPriceGridParam:TO4ToolButton
+btFillPriceTbl:TO4ToolButton
+btChangeAllPrice:TO4ToolButton
+tbFillPercent:TO4ToolButton
+Panel3:TO4Panel
+cbRoundPrice5zent:TO4CheckBox
+tsTable:TO4TabSet
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+tbLow:TO4Button
+Panel5:TO4Panel
+tsSumms:TO4TabSet
+nbSumms:TO4Notebook
+Label3:TO4Label
+lSummaV:TO4Label
+DBText2:TO4DBText
+Label29:TO4Label
+Label36:TO4Label
+Label15:TO4Label
+Label19:TO4Label
+lSummaOptV:TO4Label
+lCnt:TO4Label
+eSumma:TO4DBEdit
+eSummaV:TO4DBEdit
+dbeWeight:TO4DBEdit
+dbeSquare:TO4DBEdit
+eCurrencyDoc:TO4DBEdit
+eCourseDoc:TO4DBEdit
+ToolBar2:TO4ToolBar
+tbChangeCourse:TO4ToolButton
+eSummaOptV:TO4DBEdit
+eCnt:TO4DBEdit
+Label10:TO4Label
+Label16:TO4Label
+Label17:TO4Label
+Label18:TO4Label
+Label11:TO4Label
+Label12:TO4Label
+Label9:TO4Label
+eDetTax:TO4DBEdit
+eSummaNT:TO4DBEdit
+eSummaTax:TO4DBEdit
+eSummaGood:TO4DBEdit
+ePack:TO4DBEdit
+eCountPack:TO4DBEdit
+eGoodStore:TO4DBEdit
+GroupBox1:TO4GroupBox
+Label7:TO4Label
+Label14:TO4Label
+btnTax:TO4Button
+edTax:TO4Edit
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+TVSGood:TO4TableValueSource
+TVSStore:TO4TableValueSource
+pmList:TO4PopupMenu
+miLinkDict:TO4MenuItem
+miDelRec:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem
+miProperty:TO4MenuItem
+MenuItem4:TO4MenuItem
+miChangeStore:TO4MenuItem
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+pmSave:TO4PopupMenu
+MenuItem6:TO4MenuItem
+miFocusedOnCode:TO4MenuItem
+pmCode:TO4PopupMenu
+miCode:TO4MenuItem
+pmDropDown:TO4PopupMenu
+MenuItem8:TO4MenuItem
+MenuItem9:TO4MenuItem
+MenuItem10:TO4MenuItem
+TVSGoods:TO4TableValueSource
+TVSPrices:TO4TableValueSource
+pmGoodsTbl:TO4PopupMenu
+miFillPriceTbl:TO4MenuItem
+miChangeAllPrice:TO4MenuItem
+miSetFocusedPricesGrid:TO4MenuItem
+pmPriceTbl:TO4PopupMenu
+miChangePrice:TO4MenuItem
+miSetFocusedGoodsGrid:TO4MenuItem

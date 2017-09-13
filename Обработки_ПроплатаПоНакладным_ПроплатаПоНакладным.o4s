@@ -1,0 +1,226 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var 
+  PartTbl,DocsTbl : ISValueTable;
+  DocNakl : ISDocuments;
+  PackDic, Partner: ISDictionary;
+  AccsPart, AccsDoc : ISAccs;
+  PaysOut, NaklReturn : ISJournal;
+
+procedure CreateSrvObjets; server;
+begin
+  DocNakl := CreateObject('ƒокументы.Ќакладна€ќтпуска');
+  PackDic := CreateObject('—правочники.”паковки');
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  NaklReturn := CreateObject('∆урналы.∆урналѕодч¬озвратовќтѕокупател€');
+  NaklReturn.SetDocMultiStateRange('1;2;');
+
+  AccsDoc := CreateObject('јккумул€торы.–асчетыѕоƒокументам');
+end;
+
+procedure CreateTbl(Proc : ISProcessing; var Accept : Boolean);
+var
+  Count, Total: integer;
+  PartnerDic : ISDictionary;
+  TmpTbl : IsValueTable;
+  DateTo : DateTime;
+  NaklDoc : IsDocuments;
+  NaklJournal : IsJournal;
+  SumPart, PaysDoc, HowPayDoc : Decimal;
+  ZaglNakl : Boolean;
+begin
+  Accept := false;
+  PartTbl.Clear;
+  DocsTbl.Clear;
+
+  TmpTbl := CreateObject('“аблица«начений');
+  TmpTbl.AddColumn('',
+
+  AccsDoc.SetFieldFilter('ѕартнер');
+  AccsDoc.AppendGroupRestToValueTable(400000,'ƒок;ѕартнер;¬алюта;—умќбщ¬ал;—умѕрих¬ал;—ум–асх¬ал',TmpTbl);
+  TmpTbl.SortBy('—ум–асх¬ал');
+  TmpTbl.SetRange(0,0);
+  TmpTbl.DoCalculation('—ум–асх¬ал','');
+
+
+
+
+
+  NaklJournal := CreateObject('∆урналы.∆урналЌакладных');
+  NaklJournal.SetDocMultiStateRange('1;2;3');
+  NaklJournal.SetDocTypeRange('ƒокументы.Ќакладна€ќтпуска');
+
+  PartnerDic := CreateObject('—правочники.ёрѕартнеры');
+
+  PartnerDic.SetFieldFilter('ѕоказ¬¬заиморасчетах','=',false,'','',Null);
+  PartnerDic.SetFieldFilter('ћаршрут','=',Partner,'','',Null);
+  PartnerDic.Select;
+  PartnerDic.SaveToValueTable('Self',TmpTbl,0,PartnerDic.RecordCount);
+  TmpTbl.AppendTo('Self=ѕартнер',PartTbl);
+  Nil(PartnerDic);
+
+  PartnerDic := CreateObject('—правочники.‘изЋица');
+  PartnerDic.SetFieldFilter('ћаршрут','=',Partner,'','',Null);
+  PartnerDic.Select;
+  PartnerDic.SaveToValueTable('Self',TmpTbl,0,PartnerDic.RecordCount);
+  TmpTbl.AppendTo('Self=ѕартнер',PartTbl);
+
+
+  DateTo := RoundDate(CurrentDate,rdDay,true)-0.000001;
+  DocsTbl.SortBy('ƒокумент');
+  PartTbl.Select;
+  Count := 0;
+  Total := PartTbl.LineCount;
+  While PartTbl.SelectNext do
+    begin
+       AccsPart.CalcGroupRestDirect(DateTo, PartTbl.@ѕартнер);
+       PartTbl.Edit;
+       PartTbl.—умма := AccsPart.—умќбщ;
+       PartTbl.Post;
+       if AccsPart.—умќбщ<>0 then
+         begin
+           SumPart := VarAsDec(AccsPart.—умќбщ);
+           NaklJournal.SetFieldFilter('ѕартнер','=',PartTbl.@ѕартнер,'','',Null);
+           NaklJournal.SortByField('-ƒатаƒокумента');
+           NaklJournal.Select;
+           ZaglNakl :=True;
+           while (SumPart>0) and ZaglNakl do
+             begin
+               if not NaklJournal.SelectNext then
+                 begin
+                   ZaglNakl := False;
+                   continue;
+                 end;
+               NaklDoc := NaklJournal.GetDoc;
+               PaysOut.UseMaster(NaklDoc);
+               NaklReturn.UseMaster(NaklDoc);
+               PaysDoc := PaysOut.Total('—умма');
+               HowPayDoc := NaklDoc.—умма - PaysDoc-NaklReturn.Total('—умма');
+               if HowPayDoc<>0 then
+                 begin
+                   SumPart := SumPart-HowPayDoc;
+                   DocsTbl.Append;
+                   DocsTbl.ѕартнер := PartTbl.ѕартнер;
+                   DocsTbl.ƒокумент := NaklDoc;
+                   DocsTbl.ќплачено := PaysDoc;
+                   DocsTbl.ƒолжны := HowPayDoc;
+                   DocsTbl.Post;
+                 end;
+             end;
+         end;
+       inc(Count);
+       Proc.NotifyClient('ќбработка документов',Count,Total);
+       if Proc.Terminated then
+         exit;
+    end;
+  DocsTbl.DoGetLinks('—умма=ƒокумент.—умма;ƒатаƒокумента=ƒокумент.ƒатаƒокумента;Ќомерƒокумента=ƒокумент.Ќомерƒокумента');
+  DocsTbl.DoNumbering('ѕоискЌомер',1,1);
+  Accept := not Proc.Terminated;
+end;
+
+function CreateTblEP(PartTblS,DocsTblS:ISValueTable; PartnerS:IsDictionary) : Variant; server;
+begin
+  PartTbl := PartTblS;
+  DocsTbl :=DocsTblS;
+  Partner := PartnerS;
+  Result := EntryPoint(CreateTbl);
+end;
+ 
+
+function —формироватьѕлатежѕоƒокументу(DocOwner : Variant) : Decimal; server;
+var
+  AccsPartRealiz : ISAccs;
+  Pays, Nakls, Orders : ISJournal;
+  V : Variant;
+  “амѕроц—уммаƒекл, ѕошл—уммаƒекл, —уммаЌƒ—ƒекл, ќпл“ам : Decimal;
+begin
+  if DocOwner.GetType() <> 'Dictionaries;—правочники;ƒов≥дники' then
+    begin
+      if (DocOwner.ќтпуск = 1) then
+        Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп')
+      else
+        Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+      Pays.UseMaster(DocOwner);
+      Pays.SetDocMultiStateRange('1;2;');
+      if DocOwner.GetSign = '¬ыплатаЅольничных_D' then
+        Result := DocOwner.—уммаЅольничные - Pays.Total('—умма')
+      else
+        Result := DocOwner.—умма - Pays.Total('—умма');
+    end
+  else
+    begin
+      case VarAsStr(DocOwner.GetSign) of
+        '–еализаторы', '–еализаторы‘арм' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—–еализаторами');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := AccsPartRealiz.—умќбщ - AccsPartRealiz.—ум—пис + AccsPartRealiz.—ум—кидки;
+          end;
+        'ѕостЌа–еализацию', 'ѕостЌа–еализацию‘арм' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—ум—пис + AccsPartRealiz.—умќпл;
+          end;
+        'ќбъектыѕроизводства' :
+          Result := 0;
+        'ƒоговѕоставки' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчетыѕоƒоговорам');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := AccsPartRealiz.—ум–асх + AccsPartRealiz.—ум¬озвр + AccsPartRealiz.—умќпл;
+          end;
+        '“орговые“очки' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—“орг“очками');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—ум—пис + AccsPartRealiz.—умќпл;
+          end;
+        'Ѕартер' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчетыѕоЅартеру');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := AccsPartRealiz.—умќбщ;
+          end;
+        ' онтракт»мпорт' :
+          begin
+            “амѕроц—уммаƒекл := 0;
+            ѕошл—уммаƒекл := 0;
+            —уммаЌƒ—ƒекл := 0;
+            Orders := CreateObject('∆урналы.∆урнал‘актур');
+            Nakls := CreateObject('∆урналы.∆урналЌаклѕрих»мп');
+            if VarAsBool(DocOwner.IsFocused) then
+              begin
+                Orders.SetDocStateRange(1);
+                Orders.UseMaster(DocOwner);
+                Orders.Select();
+                while Orders.SelectNext() do
+                  begin
+                    Nakls.SetDocStateRange(1);
+                    Nakls.UseMaster(Orders);
+                    Nakls.Select();
+                    V := Nakls.Total('“амѕроц—уммаƒекл;ѕошл—уммаƒекл;—уммаЌƒ—ƒекл');
+                    “амѕроц—уммаƒекл := “амѕроц—уммаƒекл + V[0];
+                    ѕошл—уммаƒекл := ѕошл—уммаƒекл + V[1];
+                    —уммаЌƒ—ƒекл := —уммаЌƒ—ƒекл + V[2];
+                  end;
+              end;
+            Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+            Pays.SetDocMultiStateRange('1;2;');
+            Pays.UseMaster(DocOwner);
+            Pays.Select();
+            while Pays.SelectNext() do
+              ќпл“ам := ќпл“ам + Pays.—умма;
+            Result := “амѕроц—уммаƒекл + ѕошл—уммаƒекл + —уммаЌƒ—ƒекл - ќпл“ам;
+          end;
+      end;
+    end;
+end;
+
+end.

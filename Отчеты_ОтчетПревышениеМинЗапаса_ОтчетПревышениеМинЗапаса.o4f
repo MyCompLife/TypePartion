@@ -1,0 +1,363 @@
+object Form: TO4Form
+  Left = 0
+  Top = 0
+  Width = 740
+  Height = 428
+  HelpContext = 26001
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    281
+    360)
+  Translat.ScanedProps.Props = (
+    'cbMinCount.Caption'
+    0
+    
+      #1'-1'#1'Показывать только товар с минимальным запасом'#1'1058'#1'Показати ' +
+      'тільки товар з мінімальним запасом'
+    'cbShowZero.Caption'
+    0
+    
+      #1'-1'#1'Показывать только зарезервированный товар'#1'1058'#1'Показати тіль' +
+      'ки зарезервований товар'
+    'Label1.Caption'
+    0
+    #1'-1'#1'Список товара'#1'1058'#1'Список товару'
+    'Label2.Caption'
+    1
+    'Категории товаров'
+    'Label2.Hint'
+    1
+    ''
+    'pGoodsCtg.Caption'
+    1
+    'pGoodsCtg'
+    'pGoodsCtg.Hint'
+    1
+    ''
+    'Splitter1.Hint'
+    1
+    ''
+    'tbExcel.Hint'
+    0
+    #1'-1'#1'Экспорт в Excel'
+    'tbPrint.Caption'
+    0
+    #1'-1'#1'Печатать'
+    'tbPrint.Hint'
+    0
+    #1'-1'#1'Печатать'
+    'tbRun.Caption'
+    0
+    #1'-1'#1'Выполнить отчет'
+    'tbRun.Hint'
+    0
+    #1'-1'#1'Выполнить отчет'
+    'tbXTools.Caption'
+    0
+    #1'-1'#1'Инструменты'
+    'tbXTools.Hint'
+    0
+    #1'-1'#1'Показать/спрятать панель инструментов')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = (
+    0
+    
+      #1'-1'#1'Показывать только зарезервированный товар'#1'1058'#1'Показати тіль' +
+      'ки зарезервований товар'
+    0
+    
+      #1'-1'#1'Показывать только товар с минимальным запасом'#1'1058'#1'Показати ' +
+      'тільки товар з мінімальним запасом'
+    0
+    #1'-1'#1'Список товара'#1'1058'#1'Список товару')
+  BevelOuter = bvNone
+  BorderWidth = 5
+  Caption = 'Form'
+  TabOrder = 0
+  HelpFile = 'main'
+  Transparent = True
+  VPAOnOpen.EventName = 'Form_Open'
+  VPAOnExecute.EventName = 'Form_Execute'
+  object Panel1: TO4Panel
+    Left = 5
+    Top = 28
+    Width = 730
+    Height = 40
+    Align = alTop
+    BevelSides = [sdLeft, sdRight]
+    BorderSides = []
+    TabOrder = 0
+    Transparent = False
+    object Label3: TO4Label
+      Left = 52
+      Top = 7
+      Width = 71
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Товар на дату'
+    end
+    object eDate: TO4Edit
+      Left = 128
+      Top = 3
+      Width = 121
+      Height = 21
+      EditStyle = fesDate
+      Period.Enabled = False
+      Period.StrStartDate = '31.12.1899'
+      TabOrder = 0
+    end
+    object cbShowZero: TO4CheckBox
+      Left = 268
+      Top = 5
+      Width = 264
+      Height = 17
+      Caption = 'Показывать только зарезервированный товар'
+      TabOrder = 1
+      WordWrap = False
+    end
+    object cbMinCount: TO4CheckBox
+      Left = 268
+      Top = 21
+      Width = 292
+      Height = 17
+      Caption = 'Показывать только товар с минимальным запасом'
+      TabOrder = 2
+      WordWrap = False
+    end
+  end
+  object Panel2: TO4Panel
+    Left = 5
+    Top = 68
+    Width = 730
+    Height = 355
+    Align = alClient
+    BevelSides = [sdTop]
+    BorderSides = []
+    TabOrder = 1
+    Transparent = True
+    object Label1: TO4Label
+      Left = 1
+      Top = 1
+      Width = 728
+      Height = 13
+      Align = alTop
+      Caption = 'Список товара'
+      Color = clActiveCaption
+      Font.Charset = RUSSIAN_CHARSET
+      Font.Color = clCaptionText
+      Font.Height = -11
+      Font.Name = 'MS Sans Serif'
+      Font.Style = [fsBold]
+      ParentColor = False
+      ParentFont = False
+    end
+    object Splitter1: TO4Splitter
+      Left = 186
+      Top = 40
+      Width = 3
+      Height = 314
+      Cursor = crHSplit
+      Transparent = True
+    end
+    object XGridTools: TXGridTools
+      Left = 1
+      Top = 14
+      Width = 728
+      Height = 26
+      Align = alTop
+      Buttons = [xtbFont, xtbSize, xtbBold, xtbItalic, xtbUnderline, xtbDelim1, xtbLayouts, xtbDelim2, xtbBorder, xtbBorders, xtbDelim3, xtbColors, xtbDelim4, xtbLines, xtbRCNum, xtbFix, xtbGroup, xtbDelim5, xtbInsDel, xtbLock, xtbDelim6]
+      XGrid = XGrid
+      Visible = False
+    end
+    object XGrid: TO4XGrid
+      Left = 189
+      Top = 40
+      Width = 540
+      Height = 314
+      Align = alClient
+      DefaultColWidth = 95
+      ReadOnly = True
+      Font.Charset = RUSSIAN_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -11
+      Font.Name = 'Arial'
+      Font.Style = []
+      Options = [xgoShowSections, xgoRangeSelect, xgoRowSizing, xgoColSizing, xgoThumbTracking]
+      TabOrder = 1
+      PrinterSettings.Copies = 1
+      PrinterSettings.Duplex = False
+      PrinterSettings.FirstPage = 0
+      PrinterSettings.LastPage = 0
+      PrinterSettings.OutputBin = Auto
+      Page.Columns = 1
+      Page.Orientation = poLandscape
+      Page.PaperSize = A4
+      Page.Values = (
+        100
+        2100
+        100
+        2970
+        100
+        100
+        0)
+      PageNumbering.Alignment = taCenter
+      PageNumbering.Format = '- %d -'
+      PageNumbering.OnPageBottom = False
+      PageNumbering.Visible = True
+      O4MDSource = TableValueSource1
+      Calc = False
+      SizeSettings = {
+        010000000B000000010000000B00000001000000010000000100000001000000
+        00000000000000000000000000000000}
+      Rows = {}
+      Columns = {}
+      CellsFormat = {2100000000000000000000000000000040420F0040420F00FFFFFFFF}
+      CellsData = {2100000000000000000040420F0040420F00FFFFFFFF}
+      CellsDataCalc = {2100000000000000000040420F0040420F00FFFFFFFF}
+      RowsDsgn = {0100001D0002000010000800001300}
+      ColumnsDsgn = {0100001D00020000650003000029000B00007300}
+      CellsSectionsDsgn = {
+        03486564010000000400000003446574060000000600000005546F74616C0800
+        0000080000000000}
+      CellsFormatDsgn = {
+        210000001B000000000000000A80230011000000000000000B80230011000000
+        0000000009802300110000000000000006802300110000000000000007802300
+        1100000000000000058023001100000000121200020000000900000000111200
+        0300000009000000002112000100000009000000000222000200000029000000
+        0000220003000000290000000020220001000000290000000022220008000000
+        2900000000122100000040000900000000112100000040000900000000212100
+        0000400009000000002222000000000029000000002222000400000029000000
+        0000000000004000290000000012110000000000010000000011110000000000
+        0000000000211100000000000900000000121100000000000500000024022200
+        0040220011000000240022000040220011000000242022000040220011000000
+        241222000040220005000000000000000000000040420F0040420F0001000000
+        0000F07F01000200020002000200020002000200020002000300FFFF02000000
+        0000F07F04000500050005000500050005000500050005000600FFFF03000000
+        0000F07F0700080009000A000B000C000D000D000A000B000C00FFFF04000000
+        0000F07F0E000F00100011001100110012001200110011001100FFFF05000000
+        000040001300FFFF060000000000F07F14001500160017001700170017001700
+        170017001700FFFF080000000000F07F180019001A001B001B001B001B001B00
+        1B001B001B00FFFFFFFFFFFF}
+      CellsDataDsgn = {
+        2100000000000000000040420F0040420F000100000000000040081E0000CFF0
+        E5E2FBF8E5EDE8E520ECE8EDE8ECE0EBFCEDEEE3EE20E7E0EFE0F1E0FFFF0300
+        00000000F04F08050000D2EEE2E0F008060000D0E5E7E5F0E208170000CDE5EE
+        EFEBE0F7E5EDEDEEE520EAEEEBE8F7E5F1F2E2EE08150000CEEFEBE0F7E5EDED
+        EEE520EAEEEBE8F7E5F1F2E2EE08140000CCE8EDE8ECE0EBFCEDEEE5202020EA
+        EEEB2DE2EE08090000C220EDE0EBE8F7E8E808080000CDE5F5E2E0F2EAE00815
+        0000CDE5EEEFEBE0F7E5EDEDE0FF20EDE5F5E2E0F2EAE008130000CEEFEBE0F7
+        E5EDEDE0FF20EDE5F5E2E0F2EAE0FFFF040000000000F07F08030000CAEEE408
+        080000CDE0E7E2E0EDE8E508060000C5E42EE8E7EC08050000CEE1F9E8E9080B
+        0000CDE520EEEFEBE0F7E5EDEE08080000CEEFEBE0F7E5EDEE08090000CAB3EB
+        FCEAB3F1F2FC08090000CAB3EBFCEAB3F1F2FC08050000CEE1F9E5E5080B0000
+        CDE520EEEFEBE0F7E5EDEE08120000CEEFEBE0F7E5EDEE2FCEF2E3F0F3E6E5ED
+        EEFFFFFFFFFFFF}
+      StartNewPage = {}
+    end
+    object pGoodsCtg: TO4Panel
+      Left = 1
+      Top = 40
+      Width = 185
+      Height = 314
+      Align = alLeft
+      BorderSides = []
+      Caption = 'pGoodsCtg'
+      TabOrder = 2
+      Transparent = False
+      object Label2: TO4Label
+        Left = 1
+        Top = 1
+        Width = 183
+        Height = 13
+        Align = alTop
+        Caption = 'Категории товаров'
+        Color = clActiveCaption
+        Font.Charset = RUSSIAN_CHARSET
+        Font.Color = clCaptionText
+        Font.Height = -11
+        Font.Name = 'MS Sans Serif'
+        Font.Style = [fsBold]
+        ParentColor = False
+        ParentFont = False
+      end
+    end
+  end
+  object tbrData: TO4ToolBar
+    Left = 5
+    Top = 5
+    Width = 730
+    Height = 23
+    AutoSize = True
+    ButtonWidth = 113
+    EdgeBorders = [ebLeft, ebTop, ebRight]
+    EdgeOuter = esNone
+    Flat = True
+    HotImages = ImagesHolder.Bmp16x16
+    Images = ImagesHolder.Bmp16x16
+    List = True
+    ShowCaptions = True
+    TabOrder = 2
+    object tbRun: TO4ToolButton
+      Left = 0
+      Top = 0
+      Hint = 'Выполнить отчет'
+      AutoSize = True
+      Caption = 'Выполнить отчет'
+      ImageIndex = 47
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbRun_Click'
+    end
+    object tbPrint: TO4ToolButton
+      Tag = 4
+      Left = 117
+      Top = 0
+      Hint = 'Печатать'
+      AutoSize = True
+      Caption = 'Печатать'
+      Enabled = False
+      ImageIndex = 93
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbPrint_Click'
+    end
+    object ToolButton2: TO4ToolButton
+      Left = 195
+      Top = 0
+      Width = 8
+      Caption = 'ToolButton2'
+      ImageIndex = 10
+      Style = tbsSeparator
+      O4Action = actNone
+    end
+    object tbXTools: TO4ToolButton
+      Left = 203
+      Top = 0
+      Hint = 'Показать/спрятать панель инструментов'
+      Caption = 'Инструменты'
+      ImageIndex = 44
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbXTools_Click'
+    end
+    object tbExcel: TO4ToolButton
+      Left = 316
+      Top = 0
+      Hint = 'Экспорт в Excel'
+      AutoSize = True
+      ImageIndex = 164
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbExcel_Click'
+    end
+  end
+  object TableValueSource1: TO4TableValueSource
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 242
+    Top = 281
+  end
+end

@@ -1,0 +1,350 @@
+interface
+
+uses
+  System, DispIntf, ConstNames;
+
+type
+  // тип - битовая структура (record), поля нумеруются с 0-вого бита
+  TIntegerRecord = Integer;
+
+const
+  // кодировки текста
+  cpDos866 = -1;
+  cpDos1125 = 0;
+  cpWin1251 = 1;
+  // константа смещения по времени для границ отчетов - меньше 1 с
+  TimeShift = 0.00001;
+  tirUnused = 0; // универсальное значение поля любого дескриптора TIntegerRecord. Обозначает - поле не используется
+
+function DoEVENSymbolsCount(Text : string; EvenCharSet : string = #39#34#96) : string;
+function DecodeByPage(Text : string; DecodePage : Integer;
+  EvenCharSet : string = #39#34#96) : string; // раскодировать
+function EncodeByPage(Text : string; EncodePage : Integer) : string; // закодировать
+function ReplaceDescrByParams(SourceStr : string; Params : Variant = '';
+  ReplStr : string = '%s'; DoRaise : Boolean = True) : string;
+function GetTranslation(SourceStr : string; Params : Variant = '';
+  DoRaise : Boolean = True; TransID : Integer = -1) : string;
+function GetDecDelimiter : Char;
+function ReplaceDecDelim(OldFormat : string; KnownDelimiters : string = '.;,';
+  ReplTo : Char = #0) : string;
+// вторая версия ф-ции изменения decimal-разделителя в decimal-стринге
+function ReplaceDecDelim2(OldFormat : string; ReplTo : Char = #0;
+  KnownDelimiters : string = '.;,;'#0) : string;
+procedure FillArray(var ArrCurrent : Variant; Value : Variant);
+function ReplaceOneStrWithAnother(Source, StrFrom, StrTo : string) : string;
+function FillStrByChar(OneChar : Char; Count : Integer) : string;
+function GetFileExt(FileName : string) : string;
+function ArrayLength(arrVariable : Variant; Dim : Integer = 1) : Integer;
+function FillVariableToArray(V : Variant) : Variant;
+function MakeDelimitedValue(Sources : Variant; Delim : Char = ';';
+  AppendEmpty : Boolean = False) : string;
+function InvertString(Source : string) : string;
+function GetStrSymbol(Source : string; Index : Integer = 0; Revert : Boolean = False) : string;
+function GetFieldValueFromRecord(RecValue : TIntegerRecord; PrevFieldsShift, FieldSize : Integer) : TIntegerRecord;
+function SetFieldValueToRecord(FieldValue : TIntegerRecord; PrevFieldsShift : Integer) : TIntegerRecord;
+function DefaultVariant(vtType : TValueTableColumnType) : Variant;
+
+implementation
+
+const
+  // сообщения
+  errWrongParamCountPassed = 'Неправильно передано количество параметров%s' +
+    'в дескриптор подстановки "%s" с подстановкой "%s":%s' +
+    '%s при %s возможных'; // 6 параметров, 2, 4 - #13#10
+
+function ReplaceOneStrWithAnother(Source, StrFrom, StrTo : string) : string;
+var
+  Pos : Integer;
+begin
+  if StrFrom = StrTo then
+    begin
+      Result := Source;
+      exit;
+    end;
+  Result := '';
+  Pos := StrPos(StrFrom, Source);
+  while Pos <> 0 do
+    begin
+      Result := Result + StrCopy(Source, 1, Pos - 1) + StrTo;
+      Source := StrCopy(Source, Pos + StrLength(StrFrom), StrLength(Source)); // сэконмлен подсчет третьего параметра - заведомо большее число
+      Pos := StrPos(StrFrom, Source);
+    end;
+  Result := Result + Source; // остаток
+end;
+
+function ChangeSymbolsAtDecoding(s : string; EncodePage : Integer) : string;
+begin
+  s := ReplaceOneStrWithAnother(s, #161, #178); // 'Ў' -> 'І'
+  s := ReplaceOneStrWithAnother(s, #162, #179); // 'ў' -> 'і'
+  if EncodePage = cpDos1125 then
+    begin
+      s := ReplaceOneStrWithAnother(s, #175, #170); // 'Ї' -> 'Є'
+      s := ReplaceOneStrWithAnother(s, #191, #186); // 'ї' -> 'є'
+      s := ReplaceOneStrWithAnother(s, #176, #175); // '°' -> 'Ї'
+      s := ReplaceOneStrWithAnother(s, #149, #191); // '•' -> 'ї'
+    end;
+  Result := s;
+end;
+
+function ChangeSymbolsAtEncoding(s : string; EncodePage : Integer) : string;
+begin
+  s := ReplaceOneStrWithAnother(s, #178, #73); // 'І' -> 'I'(анг.)
+  s := ReplaceOneStrWithAnother(s, #179, #105); // 'і' -> 'i'(анг.)
+  if EncodePage = cpDos1125 then
+    begin
+      s := ReplaceOneStrWithAnother(s, #175, #176); // 'Ї' -> '°'
+      s := ReplaceOneStrWithAnother(s, #191, #149); // 'ї' -> '•'
+      s := ReplaceOneStrWithAnother(s, #170, #175); // 'Є' -> 'Ї'
+      s := ReplaceOneStrWithAnother(s, #186, #191); // 'є' -> 'ї'
+    end;
+  Result := s;
+end;
+
+procedure DoEVENSymbolCount(var s : string; Sym : Char; ReplStr : string = #39#39);
+var
+  AssistInt : Integer;
+begin
+  AssistInt := WordCount(s, Sym);
+  if AssistInt mod 2 = 0 then
+    begin
+      AssistInt := StrLength(s) - StrLength(ExtractWord(AssistInt, s, Sym));
+      StrDelete(s, AssistInt, 1);
+      StrInsert(ReplStr, s, AssistInt);
+    end;
+end;
+
+function DoEVENSymbolsCount(Text : string; EvenCharSet : string = #39#34#96) : string;
+var
+  i : Integer;
+begin
+  Result := Text;
+  for i := 1 to StrLength(EvenCharSet) do
+    DoEVENSymbolCount(Result, EvenCharSet[i]);
+end;
+
+function DecodeByPage(Text : string; DecodePage : Integer;
+  EvenCharSet : string = #39#34#96) : string; // раскодировать
+begin
+  case DecodePage of
+    cpDos866, cpDos1125 :
+      Result := ChangeSymbolsAtDecoding(OemToAnsiStr(Text), DecodePage);
+    cpWin1251 :
+      Result := Text;
+  end;
+  // для прав. ввода
+  if EvenCharSet <> '' then
+    Result := DoEVENSymbolsCount(Result, EvenCharSet);
+end;
+
+function EncodeByPage(Text : string; EncodePage : Integer) : string; // закодировать
+begin
+  case EncodePage of
+    cpDos866, cpDos1125 :
+      Result := AnsiStrToOem(ChangeSymbolsAtEncoding(Text, EncodePage));
+    cpWin1251 :
+      Result := Text;
+  end;
+end;
+
+function GetTempPath(SubPath : string = 'Temp') : string; server;
+begin
+  Result := ExtractFilePath(RunPath) + SubPath;
+  if not DirectoryExists(Result) then
+    ForceDir(Result);
+end;
+
+function ReplaceDescrByParams(SourceStr : string; Params : Variant = '';
+  ReplStr : string = '%s'; DoRaise : Boolean = True) : string;
+var
+  i, AssistInt : Integer;
+begin
+  if IsArray(Params) then
+    begin
+      Result := '';
+      // разбитие на куски
+      for i := ArrayLow(Params) to ArrayHigh(Params) do
+        begin
+          AssistInt := StrPos(ReplStr, SourceStr);
+          if AssistInt = 0 then
+            break;
+          Result := Result + StrCopy(SourceStr, 1, AssistInt - 1) + VarAsStr(Params[i]);
+          SourceStr := StrCopy(SourceStr, AssistInt + StrLength(ReplStr), StrLength(SourceStr)); // сэконмлен подсчет третьего параметра - заведомо большее число
+        end;
+      if (i < ArrayHigh(Params) + 1) and DoRaise then // невозможно подставить все параметры - НЕКУДА
+        raise(VarAsStr(ReplaceDescrByParams(Trans(errWrongParamCountPassed),
+          ArrayOf(#13#10, SourceStr, ReplStr, #13#10, IntToStr(ArrayHigh(Params) + 1 - ArrayLow(Params)), IntToStr(i - ArrayLow(Params))))))
+      else
+        Result := Result + SourceStr; // остаток
+    end
+  else
+    Result := SourceStr;
+end;
+
+function GetTranslation(SourceStr : string; Params : Variant = '';
+  DoRaise : Boolean = True; TransID : Integer = -1) : string;
+
+begin
+  // сам перевод
+  if TransID = -1 then
+    SourceStr := Trans(SourceStr);
+  //
+  Result := ReplaceDescrByParams(SourceStr, Params, '%s', DoRaise);
+end;
+
+function GetDecDelimiter : Char;
+begin
+  Result := DecToStr(0.9)[2];
+end;
+
+function ReplaceDecDelim(OldFormat : string; KnownDelimiters : string = '.;,';
+  ReplTo : Char = #0) : string;
+var
+  i : Integer;
+begin
+  Result := OldFormat;
+  if ReplTo = #0 then
+    ReplTo := DecimalSeparator;
+  if KnownDelimiters <> '' then
+    for i := 1 to WordCount(KnownDelimiters, ';') do
+      Result := ReplaceOneStrWithAnother(Result, ExtractWord(i, KnownDelimiters, ';'), ReplTo);
+end;
+
+// вторая версия ф-ции изменения decimal-разделителя в decimal-стринге
+
+function ReplaceDecDelim2(OldFormat : string; ReplTo : Char = #0;
+  KnownDelimiters : string = '.;,;'#0) : string;
+var
+  i : Integer;
+  OneReplDelim : Char;
+begin
+  Result := OldFormat;
+  if ReplTo = #0 then
+    ReplTo := DecimalSeparator;
+  if KnownDelimiters <> '' then
+    for i := 1 to WordCount(KnownDelimiters, ';') do
+      begin
+        OneReplDelim := ExtractWord(i, KnownDelimiters, ';')[1];
+        if OneReplDelim = #0 then
+          OneReplDelim := DecimalSeparator;
+        Result := ReplaceOneStrWithAnother(Result, OneReplDelim, ReplTo);
+      end;
+end;
+
+procedure FillArray(var ArrCurrent : Variant; Value : Variant);
+var
+  i : Integer;
+begin
+  for i := ArrayLow(ArrCurrent) to ArrayHigh(ArrCurrent) do
+    ArrCurrent[i] := Value;
+end;
+
+function FillStrByChar(OneChar : Char; Count : Integer) : string;
+begin
+  Result := '';
+  while Count > 0 do
+    begin
+      Result := Result + OneChar;
+      dec(Count);
+    end;
+end;
+
+function GetFileExt(FileName : string) : string; server;
+var
+  AssistInt : Integer;
+begin
+  AssistInt := StrLength(ExtractFilePath(FileName));
+  FileName := StrCopy(FileName, AssistInt + 1, StrLength(FileName) - AssistInt);
+  AssistInt := WordCount(FileName, '.');
+  if AssistInt = 1 then
+    Result := ''
+  else
+    Result := StrLowerCase(ExtractWord(AssistInt, FileName, '.'));
+end;
+
+function DeleteServerFile(FileName : string) : Boolean; server;
+begin
+  Result := DeleteFile(FileName);
+end;
+
+function GetTime : DateTime; server;
+begin
+  Result := CurrentDateTime;
+end;
+
+function ArrayLength(arrVariable : Variant; Dim : Integer = 1) : Integer;
+begin
+  Result := ArrayHigh(arrVariable, Dim) - ArrayLow(arrVariable, Dim) + 1;
+end;
+
+function FillVariableToArray(V : Variant) : Variant;
+begin
+  if IsArray(V) then
+    Result := V
+  else
+    Result := ArrayOf(V);
+end;
+
+function MakeDelimitedValue(Sources : Variant; Delim : Char = ';';
+  AppendEmpty : Boolean = False) : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := ArrayLow(Sources) to ArrayHigh(Sources) do
+    if AppendEmpty or (Sources[i] <> '') then
+      Result := Result + Delim + Sources[i];
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+function InvertString(Source : string) : string;
+var
+  i : Integer;
+begin
+  for i := 1 to StrLength(Source) do
+    Result := VarAsStr(Source[i]) + Result;
+end;
+
+function GetStrSymbol(Source : string; Index : Integer = 0; Revert : Boolean = False) : string;
+begin
+  if Revert then
+    if Index = 0 then
+      Result := InvertString(Source)
+    else
+      Result := StrCopy(Source, StrLength(Source) - Index + 1, 1)
+  else
+    if Index = 0 then
+      Result := Source
+    else
+      Result := StrCopy(Source, Index, 1);
+end;
+
+//******************************************************************************
+// макросы по работе с типом TIntegerRecord
+
+function GetFieldValueFromRecord(RecValue : TIntegerRecord; PrevFieldsShift, FieldSize : Integer) : TIntegerRecord;
+begin
+  Result := (RecValue div Bits(PrevFieldsShift)) and (Bits(FieldSize) - 1);
+end;
+
+function SetFieldValueToRecord(FieldValue : TIntegerRecord; PrevFieldsShift : Integer) : TIntegerRecord;
+begin
+  Result := Bits(PrevFieldsShift) * FieldValue;
+end;
+//******************************************************************************
+
+function DefaultVariant(vtType : TValueTableColumnType) : Variant;
+begin
+  case vtType of
+    vtcLink :
+      Result := Null;
+    vtcInteger, vtcFloat, vtcFFT, vtcDate, vtcDateTime, vtcTime :
+      Result := 0;
+    vtcString, vtcBlob, vtcMemo :
+      Result := '';
+    vtcBoolean :
+      Result := False;
+  end;
+end;
+
+end.

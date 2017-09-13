@@ -1,0 +1,241 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, »нтерфейс, –асчеты;
+
+implementation
+
+var
+  CursorVis : TCursor;
+  DateFrom, DateTo : DateTime;
+  UseConst : IC4VPAConst;
+  AccsGood, AccsGoodRes : ICAccs;
+  InTbl, OutTbl, StoreTbl, RezTbl : ICValueTable;
+  GoodDict, Currency : ICDictionary;
+
+procedure CreateObjects;
+begin
+  UseConst := GetConstants;
+  AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsGoodRes := CreateObject('јккумул€торы.“овары¬–езерве');
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  InPriceNt, InPrice, InHdPrice : Decimal;
+  Units, √–Ќ, ¬ал¬х, ¬алќтп : string;
+begin
+  CreateObjects;
+  server.CreateSrvObjects;
+  if Params.GetType() = 'Dictionaries;—правочники;ƒов≥дники' then
+    GoodDict := Params
+  else
+    GoodDict := Params.“овар;
+  if VarAsBool(GoodDict.IsFocused) then
+    begin
+      Currency := CreateObject('—правочники.¬алюты');
+      if Currency.FindByField('Ќац¬алюта', VarAsInt(True), True) then
+        √–Ќ := Currency. од;
+      if VarAsBool(GoodDict.@¬алюта¬х÷ены.IsFocused) then
+        ¬ал¬х := GoodDict.¬алюта¬х÷ены. од;
+      if VarAsBool(GoodDict.@¬алќтп÷ены.IsFocused) then
+        ¬алќтп := GoodDict.¬алќтп÷ены. од;
+      AccsGood.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), GoodDict);
+      AccsGoodRes.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), GoodDict);
+      if VarAsBool(GoodDict.≈д»зм.IsFocused) then
+        Units := GoodDict.≈д»зм.Value;
+      lbCount.Caption := FloatToStr(AccsGood. олќбщ) + ' ' + Units;
+      lbReserv.Caption := FloatToStr(AccsGoodRes. олќбщ) + ' ' + Units;
+      if AccsGood. олќбщ > 0 then
+        begin
+          InPriceNt := AccsGood.—ум¬х / AccsGood. олќбщ;
+          InPrice := (AccsGood.—ум¬х + AccsGood.—ум¬хЌƒ—) / AccsGood. олќбщ;
+          InHdPrice := AccsGood.—ум¬ал¬х / AccsGood. олќбщ;
+        end
+      else
+        begin
+          InPriceNt := GoodDict.¬х÷енаЅезЌƒ—;
+          InPrice := GoodDict.¬х÷ена;
+          InHdPrice := GoodDict.¬х÷ена¬ал;
+        end;
+      lInPriceNt.Caption := FormatFloat(UseConst.‘ормат÷ены√–Ќ, InPriceNt) + ' ' + √–Ќ;
+      lInPrice.Caption := FormatFloat(UseConst.‘ормат÷ены√–Ќ, InPrice) + ' ' + √–Ќ;
+      lInHdPrice.Caption := FormatFloat(UseConst.‘ормат÷ены√–Ќ, InHdPrice) + ' ' + ¬ал¬х;
+      lOutPriceNt.Caption := FormatFloat(UseConst.‘ормат÷ены√–Ќ, GoodDict.÷енаЅезЌƒ—) + ' ' + ¬алќтп;
+      lOutPrice.Caption := FormatFloat(UseConst.‘ормат÷ены√–Ќ, GoodDict.÷ена) + ' ' + ¬алќтп;
+      if InPriceNt <> 0 then
+        lOverPct.Caption := FormatFloat(UseConst.‘ормат—ум√–Ќ, GoodDict.÷енаЅезЌƒ— / InPriceNt * 100 - 100);
+      lCode.Caption := GoodDict. од;
+      lName.Caption := GoodDict.Ќазв“овара;
+      mNotes.Lines.Add(GoodDict.»нформаци€);
+    end;
+end;
+
+procedure tsInfo_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  case NewTab of
+    1 :
+      begin
+        if IsNil(InTbl) then
+          begin
+            InTbl := CreateObject('“аблица«начений');
+            InTbl.AddColumn('ѕартнер', vtcLink, 0);
+            InTbl.AddColumn('Document', vtcLink, 0);
+            InTbl.AddColumn(' олќбщ', vtcFFt, 5);
+            InTbl.AddColumn('—ум¬х', vtcFFt, 4);
+            InTbl.AddColumn('—ум¬ал¬х', vtcFFt, 4);
+            InTbl.Open();
+            SetFormatStdColumnsList(InTbl, ' олќбщ;—ум¬х;—ум¬ал¬х');
+            InTbl.CopyDataToServer();
+            GoodDict.SetSrvToClientPos;
+            server.GetInDoc(InTbl.SrvMean, GoodDict.SrvMean);
+            InTbl.CopyDataFromServer();
+            InTbl.SrvMean.Clear;
+            InTbl.SortBy('ѕартнер');
+            InTbl.UseDataSource(CtrlToVar(TVSIn));
+          end;
+      end;
+    2 :
+      begin
+        if IsNil(OutTbl) then
+          begin
+            OutTbl := CreateObject('“аблица«начений');
+            OutTbl.AddColumn('ѕартнер', vtcLink, 0);
+            OutTbl.AddColumn('Document', vtcLink, 0);
+            OutTbl.AddColumn(' олќбщ', vtcFFt, 5);
+            OutTbl.AddColumn('—умќтп', vtcFFt, 4);
+            OutTbl.AddColumn('—ум¬алќтп', vtcFFt, 4);
+            OutTbl.Open();
+            SetFormatStdColumnsList(OutTbl, ' олќбщ;—умќтп;—ум¬алќтп');
+            OutTbl.CopyDataToServer();
+            GoodDict.SetSrvToClientPos;
+            server.GetOutDoc(OutTbl.SrvMean, GoodDict.SrvMean);
+            OutTbl.CopyDataFromServer();
+            OutTbl.SrvMean.Clear;
+            OutTbl.SortBy('ѕартнер');
+            OutTbl.UseDataSource(CtrlToVar(TVSOut));
+          end;
+      end;
+    3 :
+      begin
+        if IsNil(StoreTbl) then
+          begin
+            StoreTbl := CreateObject('“аблица«начений');
+            StoreTbl.AddColumn('—клад', vtcLink, 0);
+            StoreTbl.AddColumn(' олќбщ', vtcFFt, 5);
+            StoreTbl.Open();
+            SetFormatStdColumnsList(StoreTbl, ' олќбщ');
+            StoreTbl.CopyDataToServer();
+            GoodDict.SetSrvToClientPos;
+            server.GetStore(StoreTbl.SrvMean, GoodDict.SrvMean);
+            StoreTbl.CopyDataFromServer();
+            StoreTbl.SrvMean.Clear;
+            StoreTbl.SortBy('—клад');
+            StoreTbl.UseDataSource(CtrlToVar(TVSStore));
+          end;
+      end;
+    4 :
+      begin
+        if IsNil(RezTbl) then
+          begin
+            RezTbl := CreateObject('“аблица«начений');
+            RezTbl.AddColumn('ѕартнер', vtcLink, 0);
+            RezTbl.AddColumn('—чет', vtcLink, 0);
+            RezTbl.AddColumn(' олќбщ', vtcFFt, 5);
+            RezTbl.AddColumn('ƒата', vtcDate, 0);
+            RezTbl.Open();
+            SetFormatStdColumnsList(RezTbl, ' олќбщ');
+            RezTbl.CopyDataToServer();
+            GoodDict.SetSrvToClientPos;
+            server.GetRez(RezTbl.SrvMean, GoodDict.SrvMean);
+            RezTbl.CopyDataFromServer();
+            RezTbl.SrvMean.Clear;
+            RezTbl.SortBy('ѕартнер');
+            RezTbl.UseDataSource(CtrlToVar(TVSRez));
+          end;
+      end;
+  end;
+
+  nbInfo.PageIndex := NewTab;
+end;
+
+procedure EditPartner(PartnerToEdit : ICDictionary);
+var
+  Part : ICDictionary;
+begin
+  if PartnerToEdit.IsFocused then
+    begin
+      Part := CreateObject('—правочники.' + PartnerToEdit.GetSign);
+      if Part.Find(PartnerToEdit) then
+        Part.EditInForm('', 1);
+    end;
+end;
+
+procedure dbgIn_DblClick(Sender : TObject);
+begin
+  EditPartner(InTbl.ѕартнер);
+end;
+
+procedure DBGrid2_DblClick(Sender : TObject);
+begin
+  EditPartner(OutTbl.ѕартнер);
+end;
+
+procedure btCancel_Click(Sender : TObject);
+begin
+  GoodDict.Edit;
+  GoodDict.»нформаци€ := mNotes.Lines.Text;
+  GoodDict.Post;
+  GoodDict.ApplyUpdates;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+Panel3:TO4Panel
+btCancel:TO4Button
+Panel4:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+lCode:TO4Label
+lName:TO4Label
+Panel1:TO4Panel
+nbInfo:TO4Notebook
+Panel6:TO4Panel
+Label5:TO4Label
+mNotes:TO4Memo
+Panel5:TO4Panel
+Label6:TO4Label
+Label7:TO4Label
+Label8:TO4Label
+lbCount:TO4Label
+lbReserv:TO4Label
+GroupBox1:TO4GroupBox
+Label11:TO4Label
+Label12:TO4Label
+Label13:TO4Label
+lInPriceNt:TO4Label
+lInPrice:TO4Label
+lInHdPrice:TO4Label
+GroupBox2:TO4GroupBox
+Label10:TO4Label
+lOverPct:TO4Label
+Label9:TO4Label
+Label14:TO4Label
+lOutPriceNt:TO4Label
+lOutPrice:TO4Label
+dbgIn:TO4DBGrid
+Panel10:TO4Panel
+Label3:TO4Label
+Panel11:TO4Panel
+Label4:TO4Label
+DBGrid2:TO4DBGrid
+Panel7:TO4Panel
+Label15:TO4Label
+DBGrid1:TO4DBGrid
+DBGrid3:TO4DBGrid
+tsInfo:TO4TabSet
+TVSOut:TO4TableValueSource
+TVSIn:TO4TableValueSource
+TVSStore:TO4TableValueSource
+TVSRez:TO4TableValueSource

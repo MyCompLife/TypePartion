@@ -1,0 +1,175 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+const
+  //************ 27.03.12 Snizhok ****************//
+  GoodLinksListAll = 'КолОбщ;Сумма';
+
+implementation
+
+var
+  AccsGood, AccsPartGood : ISAccs;
+  TblPartGood, GoodsTbl, StoreTbl : ISValueTable;
+  PartGoodList, PartList, GoodsList, FilterList : ISValueList;
+  Partner, Store : Variant;
+  DateFrom, DateTo : DateTime;
+  ShowCodeUnitname : Boolean;
+  OnlyMoving, UseLevel, GroupModel : Boolean;
+  Items : ISDictionary;   
+  MasterTable, GroupTbl, tmpTbl: ISValueTable;  
+  Motion: Integer;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+end;
+
+procedure SetGoods(Doc : ISReport; var Accept : Boolean);
+var
+  Dims : Double;
+  b : Boolean;
+  tmpTbl: ISValueTable; 
+  Journ: ISJournal;    
+  Total, Count: Integer; 
+  tmp: ISValueTable;
+begin
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+
+  GoodsTbl.Clear();
+  GoodsTbl.SortBy('');
+
+  //категории
+  if not SetCtgFilter(UseLevel, GoodsList, Items, AccsGood, 'Товар') then
+    begin
+      Accept := True;
+      exit;
+    end;
+
+  Journ := CreateObject('Журналы.ЖурналПеремещенияТовара');
+  Journ.SetDateRange(DateFrom, DateTo);
+  Journ.SetDocMultiStateRange('1;2');
+
+  if Motion = 0 then
+    begin
+      Journ.SetFieldFilter('СкладОтп','=',Store,'','',Null);
+      Journ.SetDocTypeRange('Документы.НакладнаяВнутрПеремещ');
+    end
+  else
+    Journ.SetFieldFilter('СкладПр','=',Store,'','',Null);
+
+  Journ.Select;
+  Total := Journ.RecordCount;
+  Count := 1;
+  while Journ.SelectNext do
+    begin
+       if Motion = 0 then
+         AccsGood.AppendDocMotionToValueTable(Journ.GetDoc,amtIncome,'Товар;Склад;КолОбщ;СумВх=Сумма',GoodsTbl)
+       else
+         AccsGood.AppendDocMotionToValueTable(Journ.GetDoc,amtOutcome,'Товар;Склад;КолОбщ;СумВх=Сумма',GoodsTbl);
+
+      Doc.NotifyClient('Обработано: ' + VarAsStr(Count) + ' | ' + VarAsStr(Total), Count, Total);
+      inc(Count);
+    end;
+
+  GoodsTbl.GroupBy('Товар;Склад','КолОбщ;Сумма');
+  GoodsTbl.SortBy('Товар;Склад');
+  GoodsTbl.DoGetLinks('Код=Товар.Код;КодПост=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  if GroupModel then
+    begin
+      GoodsTbl.DoGetLinks('Модель=Товар.Код');
+      GoodsTbl.DoCalculation('Код','Модель');
+      GoodsTbl.GroupBy('Код;ЕдИзм;Склад;КодПост;Тип','КолОбщ;Сумма');
+    end;
+  Accept := True;
+end;
+
+function GetRunReportEP(GoodsTbls : ISValueTable; GoodLists : ISValueList;
+  Stores: Variant; UseLevels : Boolean;
+  AItems : ISDictionary;
+  DateFroms, DateTos : DateTime; GroupModels : Boolean; MotionS: Integer) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;
+  GoodsList := GoodLists;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  GroupModel := GroupModels;
+  UseLevel := UseLevels;
+  Store := Stores;
+  Motion := MotionS;
+  Result := EntryPoint(SetGoods);
+end;
+
+function GetGoodLinksList : string; server;
+begin
+  Result := GoodLinksListAll;
+end;
+
+procedure FillDetTbl(Doc : ISReport; var Accept : Boolean);
+var
+  StoreName: String;
+  Total, Count: Integer;
+begin     
+    if not GroupModel then
+      begin
+        StoreTbl.GroupBy('Товар;Склад','КолОбщ;Сумма');
+        StoreTbl.GroupToMaster('Товар;Склад','',MasterTable);
+        MasterTable.GroupToMaster('Товар','',GroupTbl);
+        StoreTbl.SortBy('Товар;Склад');
+      end
+    else
+      begin
+        StoreTbl.GroupBy('Код;Склад','КолОбщ;Сумма');
+        StoreTbl.GroupToMaster('Код;Склад','',MasterTable);
+        MasterTable.GroupToMaster('Код','',GroupTbl);
+        StoreTbl.SortBy('Код;Склад');
+      end;
+    MasterTable.SortBy('Склад'); 
+    if not GroupModel then
+      GroupTbl.SortBy('Товар')
+    else
+      GroupTbl.SortBy('Код');
+    GroupTbl.Select;
+    Total := GroupTbl.LineCount;
+    Count := 1;
+    while GroupTbl.SelectNext do
+      begin
+        tmpTbl.Append;
+        if not GroupModel then
+          tmpTbl.Товар := GroupTbl.Товар
+        else
+          tmpTbl.Код := GroupTbl.Код;
+        MasterTable.Select;
+        while MasterTable.SelectNext do
+          begin
+            if StoreTbl.SelectFirst then
+              begin
+                StoreName := ReplaceOneStrWithAnother(MasterTable.Склад.NameField,' ','');
+                tmpTbl._Default[StoreName] := StoreTbl.КолОбщ;
+                tmpTbl._Default[StoreName + 'Sum'] := StoreTbl.Сумма;
+              end;
+          end;
+        tmpTbl.Post;
+        Doc.NotifyClient('Обработано: ' + VarAsStr(Count) + ' | ' + VarAsStr(Total), Count, Total);
+        inc(Count);
+      end; 
+    if not GroupModel then
+      tmpTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+    Accept := true;
+end; 
+
+function FillTbl(StoreTblS, MasterTableS, GroupTblS, tmpTblS: ISValueTable): Variant; server;
+begin
+  StoreTbl := StoreTblS;
+  MasterTable := MasterTableS;
+  GroupTbl := GroupTblS;
+  tmpTbl := tmpTblS;
+  Result := EntryPoint(FillDetTbl);
+end;
+
+end.

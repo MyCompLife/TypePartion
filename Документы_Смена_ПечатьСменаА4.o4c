@@ -1,0 +1,94 @@
+interface
+
+uses
+ System, DispIntf, Расчеты;
+
+implementation
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  Options : ICOptions;
+
+procedure Form_BeginPrint(PrintForm: TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  Options := GetOptions;
+  PrintForm.Page.LeftMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('LeftMargin ПечатьСмена'), '5'));
+  PrintForm.Page.TopMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('TopMargin ПечатьСмена'), '5'));
+
+end;
+
+procedure Structure_ME_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  if VarAsStr(GetActiv(ADR, 'Город.Название', MYF)) <> '' then
+    Table.Value['ADDRESS'] := GetActiv(ADR, 'Город.Название', MYF) + ', ' + GetActiv(ADR, 'Адрес', MYF)
+  else
+    Table.Value['ADDRESS'] := GetActiv(ADR, 'Адрес', MYF);
+  if VarAsStr(GetActiv(TLF, 'КодГорода', MYF)) <> '' then
+    Table.Value['PHONE'] := '(' + GetActiv(TLF, 'КодГорода', MYF) + ') ' + GetActiv(TLF, 'Номер', MYF)
+  else
+    Table.Value['PHONE'] := GetActiv(TLF, 'Номер', MYF);
+  Table.Value['Site'] := MYF.Сайт;
+end;
+
+procedure Structure_Hed_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+ with Table do
+    begin
+     Value['NUMBER'] := MasterData.НомерДокумента;  
+     Value['Date'] := DateToStr(MasterData.ДатаДокумента);
+     if VarAsBool(MasterData.@Ответственный.IsFocused) then
+       Value['Respons'] := MasterData.Ответственный.NameField;
+     if VarAsBool(MasterData.@Регион.IsFocused) then
+       Value['Region'] := MasterData.Регион.NameField;
+     if VarAsBool(MasterData.@Касса.IsFocused) then
+       Value['Kass'] := MasterData.Касса.NameField;   
+     if VarAsBool(MasterData.@Склад.IsFocused) then
+       Value['Store'] := MasterData.Склад.NameField;
+     Value['DocSumOut'] := MasterData.СуммаПродаж;
+     Value['DocSumReturn'] := MasterData.СуммаВозвратов;
+     Value['DocSumTotal'] := MasterData.Сумма;   
+     Value['PaySumKass'] := MasterData.СуммаОплатыНал;
+     Value['PaySumCard'] := MasterData.СуммаОплатыКарт;
+     Value['PaySumTotal'] := MasterData.Сумма;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndMyFirm:TRBBand
+Label41:TRBLabel
+Label6:TRBLabel
+Label16:TRBLabel
+Label7:TRBLabel
+bndDocHed:TRBBand
+Label1:TRBLabel
+lbDocNum:TRBLabel
+Label3:TRBLabel
+lbDocDate:TRBLabel
+Label2:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+lbRegion:TRBLabel
+lbStore:TRBLabel
+lbKass:TRBLabel
+lbRespons:TRBLabel
+Label15:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Structure:TRBStructure

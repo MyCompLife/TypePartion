@@ -1,0 +1,74 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, Пользователи;
+
+implementation
+
+var
+  Respons: ICDictionary;
+  V: ICProcessing;
+  TypeChange : string;
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+  V.Params['Accept'] := false;
+  TypeChange := VarAsStr(Params);
+  if TypeChange='' then
+   TypeChange := 'цена';
+  Respons := GetDictUser;
+end;
+
+procedure miBarCode_Click(Sender: TObject);
+begin
+  Form.ActiveControl := edPass;
+end;
+
+procedure miFindPass_Click(Sender: TObject);
+begin
+  if (VarAsStr(Respons.Пароль)=edPass.Text) then
+    begin
+      if (VarAsBool(Respons.РазрешитьИзменениеЦены) and (StrLowerCase(TypeChange)='цена')) or
+         (VarAsBool(Respons.РазрешитьИзмПроцентаСкидки) and (StrLowerCase(TypeChange)='процент')) then
+        begin
+          btOK.Enabled := true; 
+          lbAlert.Caption := '';
+        end
+      else
+        begin
+          if StrLowerCase(TypeChange)='цена' then
+           lbAlert.Caption := 'Вам запрещено изменять цену в чеке!'
+          else
+           lbAlert.Caption := 'Вам запрещено изменять процент скидки в чеке!';
+          btOK.Enabled := false;
+        end;
+    end
+  else     
+    begin
+      btOK.Enabled := false;
+      lbAlert.Caption := '';
+    end;
+end;
+
+
+procedure btOK_Click(Sender: TObject);
+begin
+  V.Params['Accept'] := true;
+end;
+
+procedure btCancel_Click(Sender: TObject);
+begin
+  V.Params['Accept'] := false;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+lbAlert:TO4Label
+pnBottom:TO4Panel
+pnButtons:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+edPass:TO4Edit
+pmPass:TO4PopupMenu
+miBarCode:TO4MenuItem

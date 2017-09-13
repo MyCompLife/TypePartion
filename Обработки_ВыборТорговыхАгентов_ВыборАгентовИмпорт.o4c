@@ -1,0 +1,246 @@
+interface
+
+uses
+  System, DispIntf, РаботаСFtp;
+
+implementation
+Var
+  TblAgents : IcValueTable;
+  AgentCount : integer;
+  V : IcProcessing;
+
+procedure SetAndroidSettingsDictDefaultValues(var AndroidSettingsDict : ICDictionary);
+begin
+  server.SetAndroidSettingsDictDefaultValues(AndroidSettingsDict.SrvMean);
+  AndroidSettingsDict.Select;
+  AndroidSettingsDict.SelectNext;
+end;
+
+
+procedure GetAndroidSettingsDict(var AndroidSettingsDict : ICDictionary);
+begin
+  if IsNil(AndroidSettingsDict) then
+    begin
+      AndroidSettingsDict := CreateObject('Справочники.НастройкиДляAndroid');
+      if AndroidSettingsDict.Select then
+        AndroidSettingsDict.SelectNext
+      else
+        SetAndroidSettingsDictDefaultValues(AndroidSettingsDict);
+    end;
+end;
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+
+begin
+  V:= Mean;
+end;
+
+procedure Form_Open(Sender: TObject);
+Var
+  CommercialAgents : ICDictionary;
+  XMLDocPath, XMLDocFullName, XMLDocZipFullName, XMLDocPathFTP  : String;
+  i : Integer;
+  ResMeesage, FileList : String;
+  AndroidSettingsDict : ICDictionary;
+begin
+  GetAndroidSettingsDict(AndroidSettingsDict);
+
+  CommercialAgents := CreateObject('Справочники.ТорговыеАгенты');
+  TblAgents := CreateObject('ValueTable');
+  TblAgents.AddColumn('Номер', vtcInteger,0);
+  TblAgents.AddColumn('Агент', vtcLink,0);
+  TblAgents.AddColumn('ПолноеНазвание', vtcString,255);
+
+  TblAgents.AddColumn('ОперационнаяСистема', vtcInteger,0);
+  TblAgents.AddColumn('FileName', vtcString,255);
+  TblAgents.AddColumn('IsFile', vtcBoolean,0);
+  TblAgents.AddColumn('IsSelected', vtcInteger,0);
+  TblAgents.Open;
+  i:=0;
+  if InitFtpConnectKPK(AndroidSettingsDict.АдресСервераFTP,AndroidSettingsDict.ИмяПользователяFTP,AndroidSettingsDict.ПарольFTP, ResMeesage)  then
+    begin
+      CommercialAgents.Select;
+      While CommercialAgents.SelectNext do
+        begin
+          inc(i);
+          TblAgents.Append;
+          TblAgents.Агент := CommercialAgents;
+          TblAgents.ОперационнаяСистема := CommercialAgents.ОперационнаяСистема;
+          TblAgents.ПолноеНазвание := CommercialAgents.Служащий.ПолноеНазвание;
+          XMLDocPath := CommercialAgents.ПутьИмпортаПК;
+          XMLDocFullName := XMLDocPath + 'To1C' + '.zip';
+          if FileExists(XMLDocFullName) then
+            DeleteFile(XMLDocFullName);
+          XMLDocPathFTP := '/'+CommercialAgents.Логин+'/';
+
+          XMLDocZipFullName := XMLDocPathFTP + 'To1C' + '.zip';
+          FileList := GetFileList(XMLDocPathFTP);
+          if StrPos(XMLDocZipFullName,FileList)>0 then
+            begin
+              TblAgents.IsFile := True;
+              TblAgents.FileName := XMLDocZipFullName;
+              TblAgents.IsSelected := -1;
+
+          end
+        else
+          begin
+            TblAgents.IsFile := False;
+            TblAgents.FileName := XMLDocZipFullName+' - файл не найден';
+            TblAgents.IsSelected := 0;
+          end;
+          TblAgents.Номер := i;
+          TblAgents.Post;
+        end;
+      AgentCount := i;
+    end
+  else
+    ShowMessage('Нет связи с FTP-сервером'+#13+ResMeesage);
+  TblAgents.SortBy('Номер');
+  TblAgents.UseDataSource(CtrlToVar(TVS));
+  TblAgents.SelectFirst;
+
+end;
+
+
+procedure btCancel_Click(Sender: TObject);
+begin
+  Form.ModalResult := mrCancel;
+  Form.Close;
+end;
+
+procedure btOk_Click(Sender: TObject);
+Var
+  SendTbl : IcValueTable;
+
+begin
+  SendTbl := CreateObject('ValueTable');
+  SendTbl.Open;
+  TblAgents.CopyColumnsTo(SendTbl);
+  TblAgents.SortBy('IsSelected');
+  TblAgents.SetRange(-1,-1);
+  TblAgents.AppendTo('',SendTbl);
+  V.Params['AgentsTable'] := SendTbl;
+  Form.ModalResult := mrOk;
+  Form.Close;
+
+end;
+
+
+
+procedure btDelFiles_Click(Sender: TObject);
+begin
+  TblAgents.Select;
+  while TblAgents.SelectNext do
+    if VarAsBool(TblAgents.IsSelected) and VarAsBool(TblAgents.IsFile) then
+      begin
+        if DeleteFile(VarAsStr(TblAgents.FileName)) then
+          begin
+            TblAgents.Edit;
+            TblAgents.IsFile := False;
+            TblAgents.Post;
+            (Form.FindComponent('tbA' + VarAsStr(TblAgents.Номер)) as TO4ToolButton).ImageIndex := 26;
+           end;
+      end;
+end;
+
+procedure tbDelFile_Click(Sender: TObject);
+Var
+  ResMeesage : String;
+begin
+  if TblAgents.IsFocused and VarAsBool(TblAgents.IsFile) then
+    begin
+      if DeleteFileFromFtp(VarAsStr(TblAgents.FileName),ResMeesage) then
+        Begin
+          TblAgents.Edit;
+          TblAgents.FileName := TblAgents.FileName +' - файл не найден';
+          TblAgents.IsFile := False;
+          TblAgents.IsSelected := 0;
+          TblAgents.Post;
+        end
+      else
+        showMessage(ResMeesage);
+    end; 
+
+end;
+
+{$D-}
+procedure DBGrid1_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if TblAgents.IsFocused then
+    if VarAsBool(TblAgents.IsSelected) then
+      Index1 := 16
+    else
+      Index1 := -1;
+end;
+{$D+}
+procedure DBGrid1_DblClick(Sender: TObject);
+begin
+  if TblAgents.IsFocused then
+    if VarAsBool(TblAgents.IsSelected) then
+      begin
+        TblAgents.Edit;
+        TblAgents.IsSelected := False;
+        TblAgents.Post;
+      end
+    else
+      begin
+        TblAgents.Edit;
+        TblAgents.IsSelected := True;
+        TblAgents.Post;
+      end;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  ftpManagerClose;
+end;
+
+
+
+procedure tbCheckAll_Click(Sender: TObject);
+begin
+  TblAgents.UseDataSource(Null);
+  TblAgents.Select;
+  While TblAgents.SelectNext do
+    begin
+      TblAgents.Edit;
+      TblAgents.IsSelected := -1;
+      TblAgents.Post;
+    end;
+
+  TblAgents.UseDataSource(CtrlToVar(TVS));
+  TblAgents.SelectFirst;
+
+end;
+
+procedure tbUnCheckAll_Click(Sender: TObject);
+begin
+  TblAgents.UseDataSource(Null);
+  TblAgents.Select;
+  While TblAgents.SelectNext do
+    begin
+      TblAgents.Edit;
+      TblAgents.IsSelected := 0;
+      TblAgents.Post;
+    end;
+
+  TblAgents.UseDataSource(CtrlToVar(TVS));
+  TblAgents.SelectFirst;
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+Panel2:TO4Panel
+btCancel:TO4Button
+btOk:TO4Button
+DBGrid1:TO4DBGrid
+tbrData:TO4ToolBar
+tbCheck:TO4ToolButton
+tbCheckAll:TO4ToolButton
+tbUnCheckAll:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbDelFile:TO4ToolButton
+TVS:TO4TableValueSource

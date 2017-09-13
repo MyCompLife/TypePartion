@@ -1,0 +1,77 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  ApplyTbl : ICValueTable;
+  AccsGood : ICAccs;
+  FullName : string;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniFix, FixAck);
+  if Accept then
+    case Doc.GetDocState of
+      0 :
+        begin
+          ApplyTbl := CreateObject('ТаблицаЗначений');
+          AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+          CheckAllRestrictions(Doc, ApplyTbl, FullName, Accept, True);
+        end;
+      1 :
+        ;
+    end;
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+var
+  Constants : IC4VPAConst;
+begin
+  Constants := GetConstants;
+  case Doc.GetDocState of
+    1 :
+      begin
+        if VarAsBool(Constants.UseReserv) then
+          begin
+            if not Doc.RunThreadProcess(server.GetChangeStateUpEP(AccsGood.SrvMean, ApplyTbl.SrvMean, True), UniFixProgress + FullName) then
+              raise(emsgFixFail);
+          end
+        else
+          begin
+            if not Doc.RunThreadProcess(server.GetChangeStateUpEP(AccsGood.SrvMean, ApplyTbl.SrvMean, False), UniFixProgress + FullName) then
+              raise(emsgFixFail);
+          end;  
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.SendEvent(evCount, Unassigned, False);
+        if VarAsBool(Constants.UseReserv) then
+          Doc.SendEvent(evResCount, Unassigned, False);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniUnFix, FixAck);
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin               
+  ChangeDoc(clmtStateDown, Doc);
+  Doc.SendEvent(evCount, Unassigned, False);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniDel, DelAck);
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

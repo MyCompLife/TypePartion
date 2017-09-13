@@ -1,0 +1,93 @@
+interface
+
+uses
+    System, DispIntf, Расчеты;
+
+implementation  
+
+var  PeopleTbl : ICValueTable;
+
+procedure CreateObjects;
+begin
+  PeopleTbl := CreateObject('ТаблицаЗначений');
+  PeopleTbl.AddColumn('НомерСтроки',vtcInteger,0);
+  PeopleTbl.AddColumn('Дата',vtcDate,0);
+  PeopleTbl.AddColumn('ДатаВыборки',vtcDate,0);
+  PeopleTbl.AddColumn('ПолноеНазвание',vtcString,200);
+  PeopleTbl.AddColumn('Телефон',vtcString,30);
+  PeopleTbl.AddColumn('Годовщина',vtcInteger,0);
+  PeopleTbl.AddColumn('Месяц',vtcInteger,0);
+  PeopleTbl.AddColumn('День',vtcInteger,0);
+  PeopleTbl.Open;
+end;
+
+procedure ВыполнитьОтчет;
+var
+  MasterDict : ICDictionary;
+  NumStr : Integer;
+begin
+  CreateObjects;
+  NumStr := 0;
+  Server.CreateObjects;
+  PeopleTbl.Clear;
+  PeopleTbl.CopyDataToServer;
+  Server.AssignPeopleTbl(PeopleTbl.SrvMean);
+  PeopleTbl.CopyDataFromServer;
+  PeopleTbl.Select;
+
+
+  PeopleTbl.SortBy('ДатаВыборки;ПолноеНазвание');
+  PeopleTbl.DoNumbering('НомерСтроки',1,1);
+
+  XGrid.ClearAll;
+  XGrid.AddSection('HedResp');
+  PeopleTbl.AddToXGrid(CtrlToVar(XGrid), 'DetResp', 'НомерСтроки;Дата;ПолноеНазвание;Телефон;Годовщина;Месяц;День' , 1, PeopleTbl.LineCount);
+  XGrid.Cell(1,1).Value := 'День народження: ' +
+                           FormatDateTime('dd.mm.yyyy', CurrentDate);
+end;
+
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+procedure tbXTools_Click(Sender: TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+//
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  ВыполнитьОтчет;
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+//
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+tbrData:TO4ToolBar
+tbPrint:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbXTools:TO4ToolButton
+ToolButton5:TO4ToolButton
+XGridTools:TXGridTools
+XGrid:TO4XGrid

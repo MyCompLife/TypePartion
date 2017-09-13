@@ -1,0 +1,90 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, ФиксацияCL, ФиксацияПрибылиИЗатрат;
+
+implementation
+
+var
+  AccsGoods, AccsPart, AccsPartGood, AccsGoodCurrent, AccsGoodMotion : ISAccs;
+  ApplyTbl : ISValueTable;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc:ISDocuments);
+var
+  DocDate : DateTime;
+  Col : Decimal;
+  Dimensions, Fields, Resources: Variant;
+  Currency: ISDictionary;
+  PartGoodID : Double;
+  GoWiring : Boolean;
+begin   
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  ApplyTbl := CreateObject('ТаблицаЗначений');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  Constants := GetConstants;
+  SetFldToApplyTbl(ApplyTbl);
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+    if not VarAsBool(Doc.Товар.Услуга) then
+      CreateApplyTableExternal(Doc.Товар, Doc, ApplyTbl, AccsGoods, AccsPartGood);
+  ApplyTbl.Select;
+  While ApplyTbl.SelectNext do
+    begin
+      GoWiring := true;
+      if (Constants.КодИБ <> 1) and (Doc.СкладОтп.Регион.Код <> VarAsStr(Constants.КодИБ)) then
+        GoWiring := false;
+      if GoWiring then
+        begin
+          //**************************Отпуск товаров**************************
+          //----oстатки товаров-----------------------------------------------
+          MakeGoodMotion(AccsGoods, ApplyTbl, ApplyTbl.Партия, midInternalOutcome);
+          //----остатки товара на сегодня-------------------------------------
+          MakeGoodMotionCurrent(AccsGoodCurrent, Doc, ApplyTbl, midOutcome, ApplyTbl.КолОбщ);
+        end;
+      ApplyTbl.Edit;
+      ApplyTbl.Склад := Doc.@СкладПр;
+      ApplyTbl.Post;
+      GoWiring := true;
+      if (Constants.КодИБ <> 1) and (Doc.СкладПр.Регион.Код <> VarAsStr(Constants.КодИБ)) then
+        GoWiring := false;
+      if GoWiring then
+        begin
+          //**************************Приход товаров**************************
+          if (Constants.КодИБ <> 1) and (Doc.СкладПр.Регион.Код = VarAsStr(Constants.КодИБ)) then
+            begin
+              ApplyTbl.Edit;
+              ApplyTbl.Партия := AppendGoodsConsignAtIncome(ApplyTbl, Doc, AccsPartGood);
+              ApplyTbl.Post;
+            end;
+          //----oстатки товаров-----------------------------------------------
+          MakeGoodMotion(AccsGoods, ApplyTbl, ApplyTbl.Партия, midInternalIncome);
+          //----остатки товара на сегодня-------------------------------------
+          MakeGoodMotionCurrent(AccsGoodCurrent, Doc, ApplyTbl, midIncome, ApplyTbl.КолОбщ);
+        end;
+    end;
+  Doc.Edit;
+  Doc.СуммаВх := ApplyTbl.Total('СумВх');
+  if VarAsDec(Doc.Курс)>0 then
+    Doc.СуммаВхВВалюте := VarAsDec(Doc.СуммаВх) / VarAsDec(Doc.Курс);
+  Doc.Post;
+end;
+
+procedure GetChangeStateUpEP (Doc : ISDocuments); server;
+begin
+
+  ChangeStateUp(Doc)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+begin
+  case Doc.GetDocState of
+    1 :
+        ChangeStateUp(Doc);
+    2 :
+      ;
+  end;
+end;
+
+end.

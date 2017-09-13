@@ -1,0 +1,115 @@
+interface
+
+uses System, ConstNames, DispIntf, –асчеты, ‘иксаци€, –абота—∆урналом»зменений;
+
+implementation
+
+var
+  ApplyTbl : ICValueTable;
+  AccsGood, AccsPart : ICAccs;
+  FullName : string;
+
+procedure CanChangeStateUp(Data : ICDocuments; var Accept : Boolean);
+var
+  MinTbl, TblContents : ICValueTable;
+  ViewWarning : ICProcessing;
+begin
+  FullName := CanFixDel(Data, Accept, DecGood, UniFix, FixAck);
+  {if Accept then
+    begin
+      MinTbl := CreateObject('“аблица«начений');
+      TblContents := CreateObject('“аблица«начений');
+      Data.SaveContents('', TblContents);
+      TblContents.CopyDataToServer;
+      server.CreateMinTbl(MinTbl.SrvMean, TblContents.SrvMean);
+      MinTbl.CopyDataFromServer;
+      if (MinTbl.LineCount > 0) then
+        if GetUDASet('OverGoodStore') then
+          begin
+            ViewWarning := CreateObject('ќбработки.ѕревышение ол“овараЌа—кладах');
+            Accept := ViewWarning.Execute('ѕревышение ол“овЌа—кладах', MinTbl) = mrOK;
+          end
+        else
+          begin
+            ShowMessage(TakeHimAway);
+            Accept := False;
+          end;
+    end; }
+end;
+
+procedure RecieveEvent(Sender : ICDocuments; CenterName, FromUserName : string;
+  Param : Variant);
+begin
+  //
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+var
+  Options : ICOptions;
+begin
+  Options := GetOptions;
+  case Doc.GetDocState of
+    1 :
+      begin
+        if not Doc.RunThreadProcess(server.GetChangeStateUpEP, UniFixProgress + FullName) then
+          raise(emsgFixFail); 
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.RegEventReceiver(evCount, EntryPoint(RecieveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+        Doc.SendEvent(evCount, Unassigned, False);
+      end;
+    2 : ;
+  end;
+end;
+
+procedure CanChangeStateDown(Data : Variant; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Data, Accept, IncGood, UniUnFix, FixAck);
+end;
+
+procedure DoChangeStateDown(Doc : Variant);
+var
+  Options : ICOptions;
+begin     
+  ChangeDoc(clmtStateDown, Doc);
+  Options := GetOptions;
+  Doc.RegEventReceiver(evCount, EntryPoint(RecieveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+  Doc.SendEvent(evCount, Unassigned, False);
+end;
+
+procedure CanDelete(Data : Variant; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Data, Accept, IncGood, UniDel, DelAck);
+  if Accept then
+    ChangeDoc(clmtDelete, Data);
+end;
+
+procedure DoDelete(Doc : Variant);
+var
+  Options : ICOptions;
+begin   
+  Options := GetOptions;
+  Doc.RegEventReceiver(evCount, EntryPoint(RecieveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+  Doc.SendEvent(evCount, Unassigned, False);
+end;
+
+procedure CanChangeBuhStateUp(Data : Variant; var Accept : Boolean);
+var
+  IDoc : ICDocuments;
+begin
+  IDoc := Data;
+  if (not IDoc.ISGroupAction) or (IDoc.FirstInGroupAction) then
+    begin
+      IDoc.BuhWizard := CreateObject('Ѕух”чет.Ѕух”чет').CreateWizard();
+      Accept := IDoc.BuhWizard.OpenAskForm(Data);
+    end
+  else
+    Accept := IDoc.BuhWizard.AsceptUp;
+end;
+
+procedure DoChangeBuhStateUp(Doc : ICDocuments);
+begin
+  Doc.BuhWizard.DocStateUp(Doc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

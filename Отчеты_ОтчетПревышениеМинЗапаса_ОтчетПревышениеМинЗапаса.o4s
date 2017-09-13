@@ -1,0 +1,120 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  AccsGood, AccsGoodRes : ISAccs;
+  Date : DateTime;
+  Good : ISDictionary;
+  GoodsTbl, DocsTbl : ISValueTable;
+  Товар : Variant;
+  ShowZero, MinCount, ShowCodeUnitname : Boolean;
+  PaysOut : ISJournal;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGoodRes := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  // Good := CreateObject('Справочники.Товары');
+  DocsTbl := CreateObject('ValueTable');
+  DocsTbl.Close();
+  DocsTbl.AddColumn('Date', vtcDateTime, 0);
+  DocsTbl.AddColumn('Document', vtcLink, 0);
+  DocsTbl.AddColumn('MotionSign', vtcInteger, 0);
+  DocsTbl.AddColumn('КолОбщ', vtcFFt, 5);
+  DocsTbl.Open();
+  PaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  PaysOut.SetDocStateRange(1);
+end;
+
+procedure SetGoods(Doc : ISReport; var Accept : Boolean);
+var
+  b, DoCalc, IsIncomeMotion, IsOutcomeMotion : Boolean;
+  sum : Decimal;
+begin
+  GoodsTbl.Clear();
+  GoodsTbl.SortBy('Товар');
+  Good.Select();
+  while Good.SelectNext() do
+    begin
+      AccsGoodRes.ClearFieldBuffers();
+      AccsGoodRes.ClearFieldFilters();
+      AccsGood.ClearFieldBuffers();
+      AccsGood.ClearFieldFilters();
+      AccsGoodRes.SetFieldFilter('Товар', Good);
+      AccsGoodRes.CalcGroupRestDirect(Date, Good);
+      if MinCount then
+        DoCalc := Good.МинЗапас > 0
+      else
+        DoCalc := True;
+
+      if DoCalc then
+        begin
+          AccsGood.CalcGroupRestDirect(Date, Good);
+          b := True;
+          if ShowZero then
+            b := AccsGoodRes.КолОбщ <> 0;
+          if b and ((Good.МинЗапас + AccsGoodRes.КолОбщ) > AccsGood.КолОбщ) then
+            begin
+              GoodsTbl.Append();
+              GoodsTbl.Товар := Good;
+              GoodsTbl.МинНал := Good.МинЗапас;
+              GoodsTbl.КолОбщ := AccsGoodRes.КолОбщ;
+              GoodsTbl.Наличие := AccsGood.КолОбщ;
+              if VarAsDec(GoodsTbl.Наличие) < (VarAsDec(GoodsTbl.МинНал) + VarAsDec(GoodsTbl.КолОбщ)) then
+                GoodsTbl.НехвОбщ := VarAsDec(GoodsTbl.МинНал) +
+                  VarAsDec(GoodsTbl.КолОбщ) - VarAsDec(GoodsTbl.Наличие);
+              //находим движение по этому товару
+              DocsTbl.Clear();
+              AccsGoodRes.AppendGroupMotionToValueTable(0, Date, amtBoth,
+                'Document;Date;КолОбщ;MotionSign', -1, DocsTbl);
+              DocsTbl.DoCalculation('КолОбщ', 'КолОбщ*MotionSign');
+              DocsTbl.GroupBy('Document;Date', 'КолОбщ');
+              DocsTbl.SortBy('Date;Document');
+              DocsTbl.Select();
+              sum := 0;
+              while DocsTbl.SelectNext() do
+                begin
+                  PaysOut.UseMaster(DocsTbl.Document);
+                  sum := PaysOut.Total('Сумма');
+                  if sum > 0 then
+                    GoodsTbl.КолОпл := VarAsDec(GoodsTbl.КолОпл) + VarAsDec(DocsTbl.КолОбщ)
+                  else
+                    GoodsTbl.КолНеопл := VarAsDec(GoodsTbl.КолНеопл) + VarAsDec(DocsTbl.КолОбщ);
+                end;
+              if GoodsTbl.Наличие < (VarAsDec(GoodsTbl.МинНал) + VarAsDec(GoodsTbl.КолОпл)) then
+                GoodsTbl.НехвОпл := VarAsDec(GoodsTbl.МинНал) + VarAsDec(GoodsTbl.КолОпл)
+                  - VarAsDec(GoodsTbl.Наличие);
+              GoodsTbl.НехвНеопл := VarAsDec(GoodsTbl.НехвОбщ) - VarAsDec(GoodsTbl.НехвОпл);
+              GoodsTbl.Post();
+
+              // отправка сообщения клиенту
+              Doc.NotifyClient(msgProceed, 1, 2);
+              if Doc.Terminated then
+                break;
+            end;
+        end;
+    end;
+  GoodsTbl.GroupBy('Товар', 'МинНал;КолОбщ;Наличие;КолОпл;КолНеопл;НехвОбщ;НехвОпл;НехвНеопл');
+  GoodsTbl.SortBy('Товар');
+  if ShowCodeUnitname then
+    GoodsTbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Accept := True; //not Doc.Terminated;
+end;
+
+function GetRunReportEP(GoodsTbls : ISValueTable; GoodDicts : ISDictionary; Dates : DateTime;
+  ShowZeros, MinCounts : Boolean; ShowCodeUnitnames : Boolean) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;
+  Date := RoundDate(Dates, rdDay, True);
+  ShowZero := ShowZeros;
+  MinCount := MinCounts;
+  ShowCodeUnitname := ShowCodeUnitnames;
+  Good := GoodDicts;
+  Result := EntryPoint(SetGoods);
+end;
+
+end.

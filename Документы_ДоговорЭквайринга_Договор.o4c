@@ -1,0 +1,138 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, Пользователи, НумерацияДокументов, Reports, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MasterData : ICDocuments;
+  ChangeLock, isSave: Boolean;
+  AddDoc : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  Options := GetOptions;
+  Constants := GetConstants;
+end;
+
+procedure MDS_Append(Sender: TObject);
+var
+  Date, DateFrom, DateTo : DateTime;
+begin  
+  AddDoc := true;
+  Date := CurrentDate;
+  MasterData.Регион := GetUsersField('Регион');
+  MasterData.BaseID := VarAsInt(Constants.КодИБ);
+  MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+  if MasterData.BaseID = 0 then
+    raise('Заполните код информационной базы в значениях важных констант');
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if MasterData.NumID = 0 then
+    MasterData.NumID := УстановитьНомерДокумента(MasterData, '');
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    begin
+      eData.Enabled := GetUDASet('ChangeDate');
+      eRespons.Enabled := GetUDASet('changeresp');
+      eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+      if eRegion.Enabled then
+        if MasterData.LinesCount > 0 then
+          eRegion.Enabled := false;
+    end;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+ // GoodMDSFieldChange(MasterData, FieldName, Value, ChangeLock);
+end;
+
+procedure miActive_Click(Sender: TObject);
+Var
+  TempTbl: ICValueTable;
+  CurrentLine: Integer;
+begin
+  TempTbl := CreateObject('ТаблицаЗначений');
+  CurrentLine := MasterData.НомСтроки;
+  MasterData.SaveContents('', TempTbl);
+  TempTbl.DoCalculation('Активность','0');
+  TempTbl.SortBy('НомСтроки');
+  if TempTbl.Find(CurrentLine) then
+    begin
+      TempTbl.Edit;
+      TempTbl.Активность := VarAsInt(true);
+      TempTbl.Post;
+    end;
+  MasterData.LoadContents('', TempTbl);
+end;
+
+{$D-}
+procedure dbgListData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if MasterData.IsFocused then
+    if VarAsBool(MasterData.Активность) then
+      Index1 := 36;
+end;
+{$D+}
+procedure TDS_Append(Sender: TObject);
+begin
+  if MasterData.НомСтроки = 1 then
+    MasterData.Активность := VarAsInt(true);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and VarAsBool(Options.GetServerPrm('CloseAck')) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label6:TO4Label
+Label35:TO4Label
+Label7:TO4Label
+Label3:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+eRegion:TO4DBEdit
+ePartner:TO4DBEdit
+eSelfAcc:TO4DBEdit
+Panel2:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+dbgListData:TO4DBGrid
+ToolBar2:TO4ToolBar
+tbAdd:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton2:TO4ToolButton
+MDS:TO4DataSource
+TDS:TO4DocContentsSource
+pmContent:TO4PopupMenu
+miActive:TO4MenuItem

@@ -1,0 +1,35 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+     
+procedure SetCitizenOfUkraine(Employee : ISDictionary; var Accept : Boolean);
+var
+  Count, Total : Integer;
+begin
+  Employee.Select;
+  Total := Employee.RecordCount;
+  while Employee.SelectNext do
+    begin
+      Employee.Edit;
+      Employee.√ражданин”краины := 1;
+      Employee.Post;
+      if Employee.Terminated then
+        begin
+          Accept := False;
+          exit;
+        end;
+      inc(Count);
+      Employee.NotifyClientEx(1, Trans('ќбработано: ') + IntToStr(Count) + Trans(' из ') + IntToStr(Total), Count, Total);
+    end;
+  Accept := not Employee.Terminated;
+end;
+
+function SetCitizenOfUkraineEP : Variant; server;
+begin
+  Result := EntryPoint(SetCitizenOfUkraine);
+end;
+
+end.

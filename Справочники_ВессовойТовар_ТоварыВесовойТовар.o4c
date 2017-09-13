@@ -1,0 +1,228 @@
+interface
+
+uses
+  System, DispIntf, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL;
+
+implementation 
+var
+  MasterData : ICDictionary;
+  OwnerDic : Variant;
+
+procedure tbRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+  
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+  MasterData.SortByField('НомПозиции');
+  MasterData.SetSrvOnCalcFields(server.SrvCalcFieldsEP);
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+//  MasterData.Params[prmInterfaceType] := itMainForm;
+//  MakeStandartInterface(MasterData, Form, 'tbrData', 'dbgData');
+
+end;
+
+procedure miRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure tbLevelUp_Click(Sender: TObject);
+Var
+  i: Integer;
+  TmpDic, OwnerDic : ICDictionary;
+
+begin
+  OwnerDic := MasterData._GetOwner;
+  TmpDic := CreateObject('Справочники.ВессовойТовар');
+  TmpDic.UseMaster(OwnerDic);
+  TmpDic.Select;
+  i:= MasterData.НомПозиции;
+  if i-1<>0 then
+    If  VarAsBool(TmpDic.FindByField('НомПозиции',i-1,false)) then
+      begin
+        MasterData.Edit;
+        MasterData.НомПозиции:=i-1;
+        MasterData.Post;
+        TmpDic.Edit;
+        TmpDic.НомПозиции:=i;
+        TmpDic.Post;
+        MasterData.ApplyUpdates;
+        TmpDic.ApplyUpdates;
+        MasterData.Refresh;
+      end
+    else
+      begin
+        MasterData.Edit;
+        MasterData.НомПозиции:=i-1;
+        MasterData.Post;
+        MasterData.ApplyUpdates;
+        MasterData.Refresh;
+      end;
+
+end;
+
+procedure tbLevelDown_Click(Sender: TObject);
+Var
+  i,j: Integer;
+  TmpDic, OwnerDic : ICDictionary;
+begin
+  OwnerDic := MasterData._GetOwner;
+  TmpDic := CreateObject('Справочники.ВессовойТовар');
+  TmpDic.UseMaster(OwnerDic);
+  TmpDic.Select;
+  OwnerDic.SetSrvToClientPos;
+  j:= Server.GetEndPosition(OwnerDic.SrvMean);
+  i:= MasterData.НомПозиции;
+  if i<>j then
+    If  VarAsBool(TmpDic.FindByField('НомПозиции',i+1,false)) then
+      begin
+        MasterData.Edit;
+        MasterData.НомПозиции:=i+1;
+        MasterData.Post;
+        TmpDic.Edit;
+        TmpDic.НомПозиции:=i;
+        TmpDic.Post;
+        MasterData.ApplyUpdates;
+        TmpDic.ApplyUpdates;
+        MasterData.Refresh;
+      end
+    else
+      begin
+        MasterData.Edit;
+        MasterData.НомПозиции:=i+1;
+        MasterData.Post;
+        MasterData.ApplyUpdates;
+        MasterData.Refresh;
+      end;
+end;
+
+procedure miRenumberingGood_Click(Sender: TObject);
+Var
+  Owner : Variant;
+begin
+  Owner := MasterData._GetOwner;
+  MasterData.ApplyUpdates;
+  if  IsObjFocused(Owner) then
+    begin
+      Server.RenumberingDicAfterDelete(Owner);
+      MasterData.Refresh;
+    end;
+
+end;
+
+procedure MDS_VPAAfterDelete(Sender: TObject);
+begin
+  MasterData.ApplyUpdates;
+  if  IsObjFocused(OwnerDic) then
+    begin
+      Server.RenumberingDicAfterDelete(OwnerDic);
+      MasterData.Refresh;
+    end;
+end;
+
+procedure MDS_VPABeforeDelete(Source: Variant; IsGroup: boolean; var Accept: boolean);
+begin
+  OwnerDic := MasterData._GetOwner;
+end;
+
+procedure tbGroupAddAdd_Click(Sender: TObject);
+Var
+  V : IcProcessing; 
+  SelGoodsTbl : IcValueTable; 
+  DicMaster : IcDictionary;
+begin
+  V := CreateObject('Обработки.РаботаСВесами');
+  if (V.Execute('ГруппДобавлТовара',Null)=mrOk) And V.HasParam('SelGoodsTbl') then
+    begin
+      SelGoodsTbl := V.Params['SelGoodsTbl'];
+      V.Params['SelGoodsTbl'] := Null;
+      if SelGoodsTbl.LineCount>0 then
+        begin
+          MasterData.DisableControls;
+          SelGoodsTbl.Select;
+          While SelGoodsTbl.selectNext do
+            begin
+              MasterData.Append;
+              DicMaster := MasterData._GetOwner;
+              DicMaster.SetSrvToClientPos;
+              MasterData.НомПозиции := Server.GetNextNumberForSort(DicMaster.SrvMean);
+              MasterData.Товар := SelGoodsTbl.Товар;
+              MasterData.Название := SelGoodsTbl.Название;
+              MasterData.Код := SelGoodsTbl.Код;
+              MasterData.Post;
+              MasterData.ApplyUpdates;
+            end;
+          MasterData.EnableControls;
+        end;
+    end;
+
+end;
+
+procedure miMoveByGroup_Click(Sender: TObject);
+Var
+  GroupDic : IcDictionary;
+  DefName : String; 
+  OldMasterDic : Variant;
+begin
+  GroupDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+  if GroupDic.SelectInForm('ПодборГруппы',DefName,Null) then
+    begin
+      OldMasterDic := MasterData._GetOwner;
+      MasterData.SelectBookmarks;
+      GroupDic.SetSrvToClientPos;
+      while MasterData.SelectNextBookmark do
+        begin
+          MasterData.Edit;
+          MasterData.SetMaster(GroupDic);
+          MasterData.НомПозиции := Server.GetNextNumberForSort(GroupDic.SrvMean);
+
+          MasterData.Post;
+          MasterData.ApplyUpdates;
+        end;
+      Server.RenumberingDicAfterDelete(OldMasterDic);
+      MasterData.Refresh;
+    end;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if MasterData.IsFocused and VarAsBool(MasterData.ПометкаУдаление) then
+    Index1 := 51;
+end;
+{$D+}
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel2:TO4Panel
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbGroupAddAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbLevelUp:TO4ToolButton
+tbLevelDown:TO4ToolButton
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miMoveByGroup:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+MenuItem1:TO4MenuItem
+miRenumberingGood:TO4MenuItem

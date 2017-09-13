@@ -1,0 +1,37 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation  
+
+var 
+  V: ICProcessing;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;    
+  eValue.Text := VarAsStr(Params[0],'0');
+  lMessage.Caption :=' ' +  VarAsStr(Params[1],'Введите значение:');
+end;
+
+procedure Button2_Click(Sender: TObject);
+begin
+  if VarAsDec(eValue.Text,-1)>0 then
+    begin
+      V.Params['Value'] := VarAsDec(eValue.Text,0);
+      Form.ModalResult := mrOK;
+      Form.Close;
+    end
+  else
+    ShowMessage('Введено не верное значение!');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lMessage:TO4Label
+Button1:TO4Button
+Button2:TO4Button
+eValue:TO4Edit
+pmBarCode:TO4PopupMenu
+miBarCode:TO4MenuItem

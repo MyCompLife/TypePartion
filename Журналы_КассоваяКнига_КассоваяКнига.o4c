@@ -1,0 +1,124 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation 
+
+var
+  MasterData : ICJournal;
+  Doc : ICDocuments;
+  Options : ICOptions;
+  LockCh : Boolean;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  Doc := MasterData.GetDoc;
+  Doc.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), Null);
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean();
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+  Options := GetOptions;
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), 1, Null);
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  i : Byte;
+  Nobody : TO4ToolBar; // заглушка на NIL
+begin
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  MasterData.DefineSelectParams(True);
+  MakeInterface(tbrData, Nobody, dbgData);
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  LockCh := True;
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  LockCh := False;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  if LockCh then
+    exit;
+  MasterData.SetDocStateRange(NewTab - 1);
+  MasterData.Select;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin           
+  if MasterData.IsFocused then
+    if MasterData.GetDocState > 0 then
+      Index1 := 10
+    else
+      Index1 := 9;
+end;
+{$D+}
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+end;
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tsState:TO4TabSet
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiRefresh:TO4MenuItem
+MDS:TO4DataSource
+miInfoChange:TO4MenuItem

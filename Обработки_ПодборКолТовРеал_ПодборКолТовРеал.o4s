@@ -1,0 +1,199 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  AccsGoodReal, AccsPartGood, AccsGood : ISAccs;
+  Date : DateTime;
+  Constants : IS4VPAConst;
+
+procedure GetStoreListMag(TblGood : ISValueTable; Partner : Variant; Doc : ISDocuments;
+  All : Integer; Store : ISDictionary); server;
+var
+  Good, Currency : ISDictionary;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AccsGoodReal := CreateObject('Аккумуляторы.ОстаткиТоваровВРознице');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  Currency := CreateObject('Справочники.Валюты');
+  Constants := CreateObject('Константы');
+  AccsGoodReal.ClearFieldFilters();
+  AccsGoodReal.IncludeZeroRest := False;
+  AccsGoodReal.SetFieldFilter('Партнер', Partner);
+  AccsGoodReal.AppendGroupRestToValueTable(Date,
+    'Товар;Цена;Партия;КолОбщ=Количество', TblGood);
+  TblGood.GroupBy('Товар;Цена;Партия', 'Количество'); //;КолРасх;СумОбщ;СумРасх;СумОбщ
+  TblGood.SortBy('Товар;Цена;Партия');
+  TblGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  if VarAsBool(Constants.НДСплат) then
+    TblGood.DoGetLinks('СтавкаНДС=Товар.СтавкаНДС')
+  else
+    TblGood.DoCalculation('СтавкаНДС', '0');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ВхЦенаБезНДС', TblGood); //;ВхЦенаБезНДС;Валюта;ВхЦенаВал=ЦенаВВалюте
+  TblGood.Select;
+  while TblGood.SelectNext do
+    begin
+      TblGood.Edit;
+      if All = 1 then
+        TblGood.Количество := 1
+      else
+        if All = 2 then
+          TblGood.Количество := 0;
+      TblGood.ЦенаБезНДС := GetPriceNT(TblGood.Цена, TblGood.СтавкаНДС);
+      TblGood.ЦенаБезСкидкиНадбавки := TblGood.Цена;
+      TblGood.НДС := TblGood.Цена - TblGood.ЦенаБезНДС;
+      TblGood.ВалютаТовара := GetNatCurrency(Currency);
+      TblGood.КурсТовара := 1;
+      TblGood.ЦенаВВалюте := TblGood.Цена;
+      if (Doc.GetSign() = 'ВозвратОтТоргТочки') and IsObjFocused(Store) then
+        TblGood.Склад := Store;
+      if TblGood.HasField('ЦенаБезСкидкиНадбавки') then
+        TblGood.ЦенаБезСкидкиНадбавки := TblGood.Цена;
+      TblGood.Post;
+    end;
+end;
+
+procedure GetStoreListReal(TblGood : ISValueTable; Partner : Variant; Doc : ISDocuments;
+  All : Integer; Store : ISDictionary); server;
+var
+  Good : ISDictionary;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AccsGoodReal := CreateObject('Аккумуляторы.ОстаткиТоваровНаРеализаторах');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  Constants := CreateObject('Константы');
+  AccsGoodReal.ClearFieldFilters();
+  AccsGoodReal.IncludeZeroRest := False;
+  AccsGoodReal.SetFieldFilter('Партнер', Partner);
+  AccsGoodReal.AppendGroupRestToValueTable(Date,
+    'Товар;Цена;Партия;ВалютаТовара;КурсТовара;ЦенаВВалюте;КолОбщ=Количество', TblGood);
+  TblGood.GroupBy('Товар;Цена;Партия;ВалютаТовара;КурсТовара;ЦенаВВалюте', 'Количество'); //;КолРасх;СумОбщ;СумРасх;СумОбщ
+  TblGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  if VarAsBool(Constants.НДСплат) then
+    TblGood.DoGetLinks('СтавкаНДС=Товар.СтавкаНДС')
+  else
+    TblGood.DoCalculation('СтавкаНДС', '0');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ВхЦенаБезНДС', TblGood); //;ВхЦенаБезНДС;Валюта;ВхЦенаВал=ЦенаВВалюте
+  TblGood.Select;
+  while TblGood.SelectNext do
+    begin
+      TblGood.Edit;
+      if (Doc.GetSign() = 'ИнвентНаРеал') then
+        TblGood.КоличествоДо := TblGood.Количество;
+      if All = 1 then
+        TblGood.Количество := 1
+      else
+        if All = 2 then
+          TblGood.Количество := 0;
+      TblGood.ЦенаБезНДС := GetPriceNT(TblGood.Цена, TblGood.СтавкаНДС);
+      TblGood.НДС := TblGood.Цена - TblGood.ЦенаБезНДС;
+      if TblGood.HasField('ЦенаБезСкидкиНадбавки') then
+        TblGood.ЦенаБезСкидкиНадбавки := TblGood.Цена;
+      if (Doc.GetSign() = 'ВозвратОтРеализатора') and IsObjFocused(Store) then
+        TblGood.Склад := Store;
+      if (Doc.GetSign() = 'ДокументИзмЦенРеал') then
+        begin
+          TblGood.ОтпЦена := TblGood.Цена;
+          TblGood.ОтпВалютаТовара := TblGood.ВалютаТовара;
+          TblGood.ОтпВалЦена := TblGood.ЦенаВВалюте;
+          TblGood.ОтпКурсТовара := TblGood.КурсТовара;
+        end;
+      TblGood.Post;
+    end;
+end;
+
+procedure GetListFromReal(TblGood : ISValueTable; Partner : Variant; Doc : ISDocuments;
+  All : Integer; Store : ISDictionary); server;
+var
+  Good : ISDictionary;
+  PartList : ISValueList;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AccsGoodReal := CreateObject('Аккумуляторы.ОстаткиТоваровНаПостРеал');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  PartList := CreateObject('СписокЗначений');
+  Constants := CreateObject('Константы');
+  AccsGoodReal.ClearFieldFilters();
+  AccsGoodReal.IncludeZeroRest := False;
+  AccsGoodReal.SetFieldFilter('Партнер', Partner);
+  AccsGoodReal.AppendGroupRestToValueTable(Date,
+    'Товар;Партия;КолОбщ=Количество', TblGood);
+  TblGood.GroupBy('Товар;Партия', 'Количество');
+  if (Doc.GetSign() = 'ВозвратПостНаРеал') or (Doc.GetSign() = 'ИнвентПостНаРеал') then
+    begin
+      TblGood.GroupToList('Партия', PartList);
+      AccsGood.SetFieldFilter('Партия', PartList);
+      TblGood.Clear;
+      AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Склад;Партия;КолОбщ=Количество', TblGood);
+      if TblGood.HasField('ВхЦенаБезНДС') then
+        AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ВхЦенаБезНДС', TblGood);
+    end;
+  TblGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ВхЦенаБезНДС=ЦенаБезНДС;Валюта=ВалютаТовара;ВхЦенаВал=ЦенаВВалюте;СтавкаНДС', TblGood); //;ВхЦенаБезНДС;Валюта;ВхЦенаВал=ЦенаВВалюте
+  TblGood.Select;
+  while TblGood.SelectNext do
+    begin
+      TblGood.Edit;
+      if (Doc.GetSign() = 'ИнвентПостНаРеал') then
+        TblGood.НаличиеТовара := TblGood.Количество;
+      if All = 1 then
+        TblGood.Количество := 1
+      else
+        if All = 2 then
+          TblGood.Количество := 0
+        else
+          if TblGood.Количество < 0 then
+            TblGood.Количество := 0;
+      TblGood.Цена := GetPrice(TblGood.ЦенаБезНДС, TblGood.СтавкаНДС);
+      TblGood.НДС := TblGood.Цена - VarAsDec(TblGood.ЦенаБезНДС);
+      if TblGood.HasField('ЦенаБезСкидкиНадбавки') then
+        TblGood.ЦенаБезСкидкиНадбавки := TblGood.Цена;
+      TblGood.Post;
+    end;
+end;
+
+procedure GetStoreListDog(TblGood : ISValueTable; Partner : Variant; Doc : ISDocuments;
+  All : Integer; Store : ISDictionary); server;
+var
+  Good : ISDictionary;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AccsGoodReal := CreateObject('Аккумуляторы.ОстаткиТоваровПоДоговорам');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  Constants := CreateObject('Константы');
+  AccsGoodReal.ClearFieldFilters();
+  AccsGoodReal.IncludeZeroRest := False;
+  AccsGoodReal.SetFieldFilter('Партнер', Partner);
+  AccsGoodReal.AppendGroupRestToValueTable(Date,
+    'Товар;Цена;Партия;ВалютаТовара;КурсТовара;ЦенаВВалюте;КолОбщ=Количество', TblGood);
+  TblGood.GroupBy('Товар;Цена;Партия;ВалютаТовара;КурсТовара;ЦенаВВалюте', 'Количество'); //;КолРасх;СумОбщ;СумРасх;СумОбщ
+  TblGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  if VarAsBool(Constants.НДСплат) then
+    TblGood.DoGetLinks('СтавкаНДС=Товар.СтавкаНДС')
+  else
+    TblGood.DoCalculation('СтавкаНДС', '0');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ВхЦенаБезНДС', TblGood); //;ВхЦенаБезНДС;Валюта;ВхЦенаВал=ЦенаВВалюте
+  TblGood.Select;
+  while TblGood.SelectNext do
+    begin
+      TblGood.Edit;
+      if All = 1 then
+        TblGood.Количество := 1
+      else
+        if All = 2 then
+          TblGood.Количество := 0;
+      TblGood.ЦенаБезНДС := GetPriceNT(TblGood.Цена, TblGood.СтавкаНДС);
+      TblGood.НДС := TblGood.Цена - TblGood.ЦенаБезНДС;
+      if (Doc.GetSign() = 'ВозвратДогПост') and IsObjFocused(Store) then
+        TblGood.Склад := Store;
+      if TblGood.HasField('ЦенаБезСкидкиНадбавки') then
+        TblGood.ЦенаБезСкидкиНадбавки := TblGood.Цена;
+      TblGood.Post;
+    end;
+end;
+
+end.

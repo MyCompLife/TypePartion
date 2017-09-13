@@ -1,0 +1,84 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСПеременными, РаботаСОбъектами, ДополнительныйФункционал;
+
+implementation
+Var
+  MasterProc : IcProcessing;
+  PrintFormsLSt, PrintList : IcValueList;
+  Options: ICOptions;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+VAr
+  PrintForms, OneForm : String;
+  i : Integer;
+begin
+  MasterProc := Mean;
+  Options := GetOptions;
+  PrintForms:= MasterProc.GetPrintForms;
+  PrintFormsLSt := CreateObject('ValueList');
+  PrintFormsLSt.AddValue('','');
+  for i:=1 to WordCount(PrintForms,';')-1 do
+    Begin
+      OneForm := ExtractWord(i,PrintForms,';');
+      PrintFormsLSt.AddValue(ExtractWord(2,OneForm,'|'),ExtractWord(1,OneForm,'|'));
+    end;
+  PrintFormsLSt.UseControl(CtrlToVar(edPrintForm));
+  If VarAsStr(Options.GetLocalPrm('WorkPlacePrintForm'))<>'' then
+    edPrintForm.ItemIndex := PrintFormsLSt.FindByValue(VarAsStr(Options.GetLocalPrm('WorkPlacePrintForm')))
+  else
+    edPrintForm.ItemIndex :=0;
+
+  edLeftMargin.Text := VarAsStr(Options.GetLocalPrm('WorkPlacePrintFormLeftMargin'), '0');
+  if edLeftMargin.Text='' then
+    edLeftMargin.Text :='0';
+  edTopMargin.Text := VarAsStr(Options.GetLocalPrm('WorkPlacePrintFormTopMargin'), '0');
+  if edTopMargin.Text='' then
+    edTopMargin.Text :='0';
+
+  GetPrintersList(PrintList, edPrinters, 'WeightWorkPlace');
+  cbPreviewPrintForm.Checked := VarAsBool(Options.GetLocalPrm('WorkPlacePreviewPrintForm'));
+
+end;
+
+procedure btOK_Click(Sender: TObject);
+Var
+  PrintName : String;
+
+begin
+  if edPrintForm.ItemIndex<>0 then
+    Options.SetLocalPrm('WorkPlacePrintForm',PrintFormsLSt.GetValue(edPrintForm.ItemIndex))
+  else
+    begin
+      ShowMessage('Не выбрана печатная форма!');
+      exit;
+    end;
+
+  Options.SetLocalPrm('WorkPlacePrintFormLeftMargin',StrToIntDef(edLeftMargin.Text,0));
+  Options.SetLocalPrm('WorkPlacePrintFormTopMargin',StrToIntDef(edTopMargin.Text,0));
+
+  if PrintList.CurIndex <> -1 then
+    PrintName := PrintList.GetStr(PrintList.CurIndex);
+  SetPrintNameForCurPrintForm('WeightWorkPlace', PrintName);
+  Options.SetLocalPrm('WorkPlacePreviewPrintForm',cbPreviewPrintForm.Checked);
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+Label1:TO4Label
+edPrintForm:TO4Edit
+Panel3:TO4Panel
+Label4:TO4Label
+edPrinters:TO4Edit
+Panel4:TO4Panel
+Label2:TO4Label
+Label3:TO4Label
+edLeftMargin:TO4Edit
+edTopMargin:TO4Edit
+Panel2:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+cbPreviewPrintForm:TO4CheckBox

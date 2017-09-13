@@ -1,0 +1,46 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+
+function GetNextNumberForSort(OwnerDic : Variant) : Integer; server;
+var
+  DicCurrent : ISDictionary;
+begin
+
+  DicCurrent := CreateObject('Справочники.ГруппыВесовогоТовара');
+  DicCurrent.SortByField('НомПозиции');
+  if not IsNull(OwnerDic) then
+    DicCurrent.UseMaster(OwnerDic);
+  DicCurrent.Select;
+  if VarAsBool(DicCurrent.SelectPrior) then
+    begin
+      if not (IsNull(DicCurrent._Default['НомПозиции']) or (VarAsInt(DicCurrent._Default['НомПозиции']) <= 0)) then
+        Result := VarAsInt(DicCurrent._Default['НомПозиции']) + 1
+      else
+        Result :=  1;
+    end
+  else
+    Result := 1;
+end;
+
+procedure MoveGoodsWithOwnerGroups(Owner,DicCurrent : IsDictionary);server;
+var
+  WGoodsDic : IsDictionary;
+begin
+  WGoodsDic := CreateObject('Справочники.ВессовойТовар');
+  WGoodsDic.UseMaster(Owner);
+  WGoodsDic.Select;
+  while WGoodsDic.SelectNext do
+    begin
+      WGoodsDic.Edit;
+      WGoodsDic.SetMaster(DicCurrent);
+      WGoodsDic.Post;
+      WGoodsDic.ApplyUpdates;
+    end;
+end;
+
+end.

@@ -1,0 +1,67 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  Pk : Integer;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := CreateObject('Справочники.Города');
+  Pk := Form.GetPrintKind;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  MD : ICDictionary;
+begin
+  if Index = 0 then
+    if Pk = 0 then
+      begin
+        MasterData := Form.GetMean;
+        MasterData.SelectBookmarks;
+        MasterData.SortByName;
+      end
+    else
+      begin
+        if Pk = pkWindow then
+          MasterData.AssignSelectParams(Form.GetMean);
+        MasterData.SortByName;
+        MasterData.Select;
+      end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['POSTCODE'] := MasterData.ПочтИндекс;
+      Value['NAME'] := MasterData.Название;
+      Value['PHONECODE'] := MasterData.ТелКод;
+      MD := GetRootParent(MasterData);
+      if MD.IsFocused then
+        Value['CNAME'] := MD.Название
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+Label2:TRBLabel
+Label3:TRBLabel
+Label7:TRBLabel
+Label9:TRBLabel
+Band2:TRBBand
+Label1:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label8:TRBLabel
+Structure1:TRBStructure

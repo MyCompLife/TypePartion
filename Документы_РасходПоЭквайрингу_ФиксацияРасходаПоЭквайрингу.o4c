@@ -1,0 +1,55 @@
+interface
+
+uses
+  System, ConstNames, DispIntf, Расчеты, Фиксация,
+  РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  FullName : string;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecBank, UniFix, FixAck);
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+begin
+  case Doc.GetDocState of
+    1 :
+      begin
+        if not Doc.RunThreadProcess(server.GetChangeStateUpEP(Doc.SrvMean), UniFixProgress + FullName) then
+          raise(emsgFixFail); 
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.SendEvent(evBank, Unassigned, False);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecBank, UniUnFix, FixAck);
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin  
+  ChangeDoc(clmtStateDown, Doc);
+  Doc.SendEvent(evBank, Unassigned, False);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecBank, UniDel, DelAck); 
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoDelete(Doc : ICDocuments);
+begin  
+  Doc.SendEvent(evBank, Unassigned, False);
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

@@ -1,0 +1,514 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, InitColors;
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  Constants : IC4VPAConst;
+  BalanceAllTbl, BalanceTbl, TblFiltrAO1, TblFiltrAO2 : ICValueTable;
+  V : ICReport;
+  DateFrom, DateTo : DateTime;
+  XGridTitlesName, XGridColumnsName : string;
+  InOutCome : integer;
+  ListFiltrAO1 : ICValueList;
+  LinkFiltrAO2  : Variant;
+  ParamsReport : ICDictionary;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  ParamsReport := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');
+  ParamsReport.Select;
+  BalanceAllTbl := CreateObject('ТаблицаЗначений');
+  BalanceAllTbl.Close();
+  BalanceAllTbl.AddColumn('Код', lftString, 10);
+  BalanceAllTbl.AddColumn('Статья', lftString, 200);
+  BalanceAllTbl.AddColumn('Аналитика1', lftLink, 0);
+  BalanceAllTbl.AddColumn('Аналитика2', lftLink, 0);
+  BalanceAllTbl.AddColumn('РегионНазвание', vtcString, 200);
+  BalanceAllTbl.AddColumn('Регион', vtcLink, 0);
+  BalanceAllTbl.AddColumn('ТоварУслугаПартнер', lftString, 200);
+  BalanceAllTbl.AddColumn('Документ', vtcLink, 0);
+  BalanceAllTbl.AddColumn('Период', lftString, 100);
+  BalanceAllTbl.AddColumn('Количество', vtcFft, 7);
+  BalanceAllTbl.AddColumn('СуммаВВал', vtcFft, 7);
+  BalanceAllTbl.AddColumn('Валюта', lftLink, 0);
+  BalanceAllTbl.AddColumn('Курс', vtcFft, 2);
+  BalanceAllTbl.AddColumn('Сумма', vtcFft, 7);
+  BalanceAllTbl.AddColumn('DocDate', vtcDateTime, 0);
+  BalanceAllTbl.AddColumn('MotionSign', vtcInteger, 0);
+  BalanceAllTbl.AddColumn('SortType', vtcInteger, 0); 
+  BalanceAllTbl.AddColumn('Number', vtcInteger, 0);
+  BalanceAllTbl.Open();
+  BalanceTbl := CreateObject('ТаблицаЗначений');
+  BalanceTbl.Close();
+  BalanceAllTbl.CopyColumnsTo(BalanceTbl);
+  BalanceTbl.Open();    
+  BalanceTbl.SetColumnFormat('Сумма','0.00');
+  BalanceTbl.SetColumnFormat('СуммаВВал','0.00');
+  BalanceAllTbl.SetColumnFormat('Сумма','0.00');
+  BalanceAllTbl.SetColumnFormat('СуммаВВал','0.00');
+  TblFiltrAO1 := CreateObject('ТаблицаЗначений');
+  TblFiltrAO1.Close();
+  TblFiltrAO1.AddColumn('Статья', lftString, 200);
+  TblFiltrAO1.AddColumn('Аналитика1', lftLink, 0);
+  TblFiltrAO1.Open();
+  TblFiltrAO2 := CreateObject('ТаблицаЗначений');
+  TblFiltrAO2.Close();
+  TblFiltrAO2.AddColumn('Код', lftString, 50);
+  TblFiltrAO2.AddColumn('Аналитика2', lftLink, 0);
+  TblFiltrAO2.Open();
+end;
+
+function CreateTitleStr(StrIn : String) : String;
+var
+  i: Integer;
+  StrOut : String;
+begin
+  for i := 1 to WordCount(StrIn,';') Do
+    Begin
+      Case ExtractWord(i,StrIn,';') of
+       // + поле String            
+       'РегионНазвание' : StrOut := StrOut + 'Регион;';
+       'Статья' : StrOut := StrOut + 'Статья;';
+       'Аналитика1' : StrOut := StrOut + 'Аналитика №1;';
+       // + поле String
+       'ТоварУслугаПартнер' : StrOut := StrOut + 'Аналитика №2;';
+       'Аналитика2' : StrOut := StrOut + 'Аналитика №2;';
+       'Валюта' : StrOut := StrOut + 'Валюта;';
+       'СуммаВВал' : StrOut := StrOut + 'Сумма в вал.;';
+       'Курс' : StrOut := StrOut + 'Курс;';
+       'Сумма' : StrOut := StrOut + 'Сумма в Грн;';
+       'Количество' : StrOut := StrOut + 'Кол-во;';
+       'Документ' : StrOut := StrOut + 'Документ;';
+       'Период' : StrOut := StrOut + 'Период;';
+      end;
+    end;
+  StrDelete(StrOut, StrLength(StrOut),1);
+  Result := StrOut;
+end;
+
+procedure CreateXGridTbl;
+Var
+  AO1,AO2,AO3,DET,RES : String;
+  CntField : String;
+begin
+  CreateObjects;
+  if cbAO3.Checked then
+    AO3 := 'РегионНазвание;';
+  if cbAO1.Checked then
+    AO1 := 'Статья;'; // Аналитика1
+  if cbAO2.Checked then
+    AO2 := 'ТоварУслугаПартнер;'; //  Аналитика2
+  if cbDet.Checked then
+    begin
+      if rgPeriodKind.ItemIndex = 0 then
+        DET := 'Документ;'
+      else
+        DET := 'Период;';
+    end;
+  // Значения (суммы)
+  if cbCnt.Checked then
+    CntField := 'Количество;'
+  else
+    CntField := '';
+  if cbAO2.Checked or cbDet.Checked then
+    RES := CntField + 'Сумма';
+  if cbAO1.Checked and not(cbAO2.Checked) and not(cbDet.Checked) then  // при условии что нажата только первая аналитика
+    RES := CntField + 'Сумма';
+  if not(cbAO1.Checked) and not(cbAO2.Checked) and not(cbDet.Checked) then  // при условии что аналитика вообще не отмечена
+    RES :=   ''+ CntField + 'Сумма';
+
+  //Создаем структуру XGrid
+  XGridColumnsName := AO3 + AO1 + AO2 + DET + RES + ';Валюта;Курс;СуммаВВал';
+  XGridTitlesName := CreateTitleStr(XGridColumnsName);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  tbShowTools.Visible := GetUDASet('XTools');
+  server.CreateSrvObjects;
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+end;
+
+procedure AddColumnsTable;
+Var
+  i : integer;
+begin
+  i := 1;
+  while i <= WordCount(XGridTitlesName,';') do
+    begin
+      XGrid.Cell(3, i).Value := ExtractWord(i,XGridTitlesName,';');
+      inc(i);
+    end;
+end;
+
+procedure GetValueTbl;
+Var
+  i, j, Znamenatel, SortType : Integer;
+  TotalSum, TotalSumAll : Decimal;
+  tmpTbl: ICValueTable;
+  Currency: ICDictionary;
+begin
+  try
+    CursorVis := WaitCursorStart;
+    if rbInCome.Checked then InOutCome := 1
+      else if rbOutCome.Checked then InOutCome := -1
+        else InOutCome := 0;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    CreateXGridTbl;
+    AddColumnsTable;
+    BalanceAllTbl.Clear;
+    BalanceTbl.Clear;
+    BalanceTbl.CopyDataToServer();
+    BalanceAllTbl.CopyDataToServer();
+    TblFiltrAO1.Clear;
+    TblFiltrAO1.CopyDataToServer();
+    TblFiltrAO2.Clear;
+    TblFiltrAO2.CopyDataToServer();    
+    tmpTbl := CreateObject('ValueTable');
+    tmpTbl.AddColumn('Сумма',vtcFFT,2);
+    tmpTbl.Open;        
+    tmpTbl.CopyDataToServer;
+    V.RunThreadProcess(Server.GetRunReportEP(BalanceAllTbl.SrvMean, BalanceTbl.SrvMean, DateFrom, DateTo, cbAO1.Checked, cbAO2.Checked,
+                                             edAO2.Text, rgPeriodKind.ItemIndex, InOutCome, TblFiltrAO1.SrvMean, TblFiltrAO2.SrvMean,
+                                             edFiltrAO1.Text, edFiltrAO2.Text, LinkFiltrAO2, ParamsReport.ОтображатьКодТовара, cbGroup.Checked, cbAO3.Checked, tmpTbl.SrvMean),ReportRunning);
+    BalanceAllTbl.CopyDataFromServer;
+    BalanceTbl.CopyDataFromServer;
+    TblFiltrAO1.CopyDataFromServer;
+    TblFiltrAO2.CopyDataFromServer;
+    tmpTbl.CopyDataFromServer;
+    {
+    if cbAO1.Checked then inc(Znamenatel);
+    if cbAO2.Checked then inc(Znamenatel);
+    if cbDet.Checked then inc(Znamenatel);
+    if Znamenatel = 0 then Znamenatel := 1;
+    }
+    TotalSumAll := tmpTbl.Total('Сумма');
+
+    tmpTbl.close;
+    tmpTbl.AddColumn('Регион',vtcLink,0);
+    tmpTbl.Open;
+    SortType := 1;
+    BalanceTbl.GroupTo('Регион','',tmpTbl);
+    if cbAO3.Checked then
+      begin
+        BalanceTbl.SortBy('Регион');
+        tmpTbl.Select;
+        while tmpTbl.SelectNext do
+          begin
+            BalanceTbl.SetRange(tmpTbl.Регион,tmpTbl.Регион);
+            BalanceTbl.Select;
+            while BalanceTbl.SelectNext do
+              begin
+                BalanceTbl.Edit;
+                BalanceTbl.SortType := SortType + 1;
+                BalanceTbl.Post;
+              end;
+            TotalSum := TotalSumAll;
+            BalanceTbl.Append;
+            BalanceTbl.Регион := tmpTbl.Регион;
+            if VarAsBool(BalanceTbl.@Регион.IsFocused) then
+              BalanceTbl.РегионНазвание := BalanceTbl.Регион.Название;
+            BalanceTbl.SortType := SortType;                         
+            if VarAsBool(tmpTbl.@Регион.IsFocused) then
+              BalanceTbl._Default[ExtractWord(1,XGridColumnsName,';')] := tmpTbl.Регион.Название;
+            BalanceTbl.Сумма := TotalSum;
+            BalanceTbl.Post;
+            inc(SortType,2);
+          end;
+        BalanceTbl.CancelRange;
+      end;
+    //-----заполнение списка фильтра1 для вывода в Edit-------------------------
+    ListFiltrAO1 := CreateObject('СписокЗначений');
+    ListFiltrAO1.AddValue(edFiltrAO1.Text,Null);
+    if edFiltrAO1.Text <> '-Нет-' then ListFiltrAO1.AddValue('-Нет-',Null);
+    if cbAO1.Checked then
+      begin
+        TblFiltrAO1.SortBy('Статья');
+        TblFiltrAO1.Select;
+        while TblFiltrAO1.SelectNext do
+          begin
+            if TblFiltrAO1.Статья <> edFiltrAO1.Text then
+              if TblFiltrAO1.Статья <> '' then
+                ListFiltrAO1.AddValue(TblFiltrAO1.Статья,TblFiltrAO1);
+          end;
+      end;
+    ListFiltrAO1.UseControl(CtrlToVar(edFiltrAO1));
+    ListFiltrAO1.CurIndex := 0;
+    //--------------------------------------------------------------------------
+    //-----заполнение параметров отображения фильтра2---------------------------
+    edFiltrAO1.Enabled := cbAO1.Checked;
+    cbGroup.Enabled := cbAO1.Checked;
+    if cbAO2.Checked then
+      begin
+        TblFiltrAO2.SortBy('Аналитика2');
+        if edFiltrAO2.Text <> '-Нет-' then
+          begin
+            if edAO2.Text = 'Товары/Услуги' then edFiltrAO2.Text := TblFiltrAO2.Аналитика2.НазвТовара
+            else edFiltrAO2.Text := TblFiltrAO2.Аналитика2.ПолноеНазвание;
+          end
+        else edFiltrAO2.Text := '-Нет-';
+        edFiltrAO2.Enabled := true;
+      end
+    else
+      begin
+        TblFiltrAO2.SortBy('Аналитика2');
+        edFiltrAO2.Text := '-Нет-';
+        edFiltrAO2.Enabled := false;
+      end;
+    //--------------------------------------------------------------------------
+ //--------------------Итоговая строка--------------------
+    BalanceTbl.SelectLast;
+    BalanceTbl.Append;
+    BalanceTbl.SortType := SortType;
+    BalanceTbl._Default[ExtractWord(1,XGridColumnsName,';')] := 'Итого:';
+    BalanceTbl.Сумма := RoundDec(TotalSumAll,2);
+    BalanceTbl.Post;
+
+    BalanceTbl.SortBy('SortType');
+    BalanceTbl.SelectFirst;
+    BalanceTbl.AddToXGrid(CtrlToVar(XGrid), 'Tbls', XGridColumnsName , 0, BalanceTbl.LineCount);
+  //------------------------ Форматирование колонок --------------------
+    for i := 4 to BalanceTbl.LineCount+3 do
+      begin
+        for j := 1 to WordCount(XGridColumnsName,';') do
+          begin
+            case ExtractWord(j,XGridColumnsName,';') of
+              'РегионНазвание': begin
+                  XGrid.Cell(i, j).Alignment := taLeftJustify;
+                  if (VarAsStr(XGrid.Cell(i,j).Value) <> '') and (VarAsStr(XGrid.Cell(i,j).Value) <> 'Итого:') then
+                    begin
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).BkColor := ParamsReport.ФонАналитика3; // розмір   колір фону   стиль
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).FontSize := ParamsReport.РозмерШрифтаАнвлитики3;
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).FontStyle := VarAsInt(ParamsReport.СтильШрифтаАнвлитики3);
+                    end;
+                end;
+              'Статья': begin
+                  XGrid.Cell(i, j).Alignment := taLeftJustify;
+                  Currency := CreateObject('Справочники.Валюты');       
+                  if Currency.FindByCode(XGrid.Cell(i,j).Value,false) then
+                    begin 
+                      XGrid.Cells(i,1,i,1).Alignment := taCenter;
+                    end
+                  else if (VarAsStr(XGrid.Cell(i,j).Value) <> '') and (VarAsStr(XGrid.Cell(i,j).Value) <> 'Итого:') then
+                    begin
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).BkColor := ParamsReport.ФонАналитика1; // розмір   колір фону   стиль
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).FontSize := ParamsReport.РозмерШрифтаАнвлитики1;
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).FontStyle := VarAsInt(ParamsReport.СтильШрифтаАнвлитики1);
+                    end;
+                end;
+              'ТоварУслугаПартнер': begin
+                  XGrid.Cell(i, j).Alignment := taLeftJustify;
+                  if (VarAsStr(XGrid.Cell(i,j).Value) <> '') and (VarAsStr(XGrid.Cell(i,j).Value) <> 'Итого:') then
+                    begin
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).BkColor := ParamsReport.ФонАналитика2; // розмір   колір фону   стиль
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).FontSize := ParamsReport.РозмерШрифтаАнвлитики2;
+                      XGrid.Cells(i,1,i,WordCount(XGridTitlesName,';')).FontStyle := VarAsInt(ParamsReport.СтильШрифтаАнвлитики2);
+                    end;
+                end;
+              'Период','Документ': XGrid.Cell(i, j).Alignment := taLeftJustify;
+              'Валюта': XGrid.Cell(i, j).Alignment := taCenter;
+              'СуммаВВал','Курс','Сумма': XGrid.Cell(i, j).DisplayFormat := '0.00';
+          end;
+        end;
+      end; 
+    XGrid.ColCount := WordCount(XGridTitlesName,';');
+    XGrid.Cells(4, 1, XGrid.RowCount, 3).AdjustColWidths(0);
+
+    XGrid.Cells(XGrid.RowCount, 1, XGrid.RowCount, XGrid.ColCount).FontSize := 12;
+    XGrid.Cells(XGrid.RowCount, 1, XGrid.RowCount, XGrid.ColCount).FontStyle := 1;
+    XGrid.Cells(XGrid.RowCount, 1, XGrid.RowCount, XGrid.ColCount).BkColor := 13303754;
+    XGrid.Cells(XGrid.RowCount, 1, XGrid.RowCount, XGrid.ColCount).RowHeight := 25;
+
+    if XGrid.ColCount = 2 then XGrid.FixedColCount := 1;
+    if (XGrid.ColCount = 3)or(XGrid.ColCount = 7)or(XGrid.ColCount = 4) then XGrid.FixedColCount := 2;
+    if XGrid.ColCount = 8 then XGrid.FixedColCount := 3;
+    XGrid.Cells(1, 1, 1, 1).Value := XGrid.Cells(1, 1, 1, 1).Value + ' ' + DateToStr(DateFrom) + '-' + DateToStr(DateTo);
+    CursorVis := crDefault;
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+begin
+  GetValueTbl;
+  tbPrint.Enabled := True;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(V.GetActiveFormComment(), True);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools1.Visible := not XGridTools1.Visible;
+  if XGridTools1.Visible then
+    tbShowTools.ImageIndex := 98
+  else
+    tbShowTools.ImageIndex := 44;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure cbDet_Click(Sender : TObject);
+begin
+  rgPeriodKind.Enabled := cbDet.Checked;
+  if cbDet.Checked = false then rgPeriodKind.ItemIndex := -1;
+  if cbDet.Checked then rgPeriodKind.ItemIndex := 0;
+end;
+
+procedure tbShowTools_Click(Sender : TObject);
+begin
+  XGridTools1.Visible := not XGridTools1.Visible;
+  if XGridTools1.Visible then
+    tbShowTools.ImageIndex := 98
+  else
+    tbShowTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+procedure edDetAO1_Change(Sender : TObject);
+begin
+  GetValueTbl;
+end;
+
+procedure edDetAO2_ComboClick(Sender : TObject);
+begin
+  GetValueTbl;
+end;
+
+procedure cbAO1_Click(Sender : TObject);
+begin
+  if cbAO1.Checked = false then edFiltrAO1.Text := '-Нет-';
+  edFiltrAO1.Enabled := cbAO1.Checked;
+  cbGroup.Enabled := cbAO1.Checked;
+end;
+
+procedure edDetAO2_ActionExecute(Sender : TObject);
+var AutoFiltr : ICProcessing;
+begin
+  AutoFiltr := CreateObject('Обработки.АвтоЗаполнение');
+  if Bits(AutoFiltr.Execute('Фильтр', TblFiltrAO2)) = Bits(mrOk) then
+    begin
+      if edAO2.Text = 'Товары/Услуги' then edFiltrAO2.Text := TblFiltrAO2.Аналитика2.НазвТовара
+      else edFiltrAO2.Text := TblFiltrAO2.Аналитика2.ПолноеНазвание;
+      LinkFiltrAO2 := TblFiltrAO2.Аналитика2;
+      GetValueTbl;
+    end;
+end;
+
+procedure edDetAO2_ActionClear(Sender : TObject);
+begin
+  LinkFiltrAO2 := Null;
+  edFiltrAO2.Text := '-Нет-';
+  GetValueTbl;
+end;
+
+procedure cbAO2_Click(Sender : TObject);
+begin
+  edFiltrAO2.Text := '-Нет-';
+  edFiltrAO2.Enabled := cbAO2.Checked;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbShowTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+Panel8:TO4Panel
+Label1:TO4Label
+Label4:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel1:TO4Panel
+Label2:TO4Label
+Label3:TO4Label
+cbAO1:TO4CheckBox
+cbAO2:TO4CheckBox
+edAO2:TO4Edit
+rgPeriodKind:TO4RadioGroup
+cbDet:TO4CheckBox
+edAO1:TO4Edit
+GroupBox1:TO4GroupBox
+rbInCome:TO4RadioButton
+rbOutCome:TO4RadioButton
+rbInOutCome:TO4RadioButton
+edFiltrAO1:TO4Edit
+edFiltrAO2:TO4Edit
+cbCnt:TO4CheckBox
+cbGroup:TO4CheckBox
+cbAO3:TO4CheckBox
+XGridTools1:TXGridTools
+GRD1:TO4XGrid
+XGrid:TO4XGrid
+TableValueSource1:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

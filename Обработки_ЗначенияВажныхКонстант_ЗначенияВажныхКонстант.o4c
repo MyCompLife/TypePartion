@@ -1,0 +1,974 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, ”становка онстант, –асчеты, –абота— омпонентамиVCL;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  LockCalc : Boolean;
+  TLZStore, TLZStoreNoCond, TLZTown, AvansPay, Delivary, CurrencyDic : ICDictionary;
+  TLZPDVPay : ICCollection;
+  CollectTbl : ICValueTable;
+  DicSurvMinimals, DicEarningsDeductions : ICDictionary;
+  PriceTypes: String;
+  Price0currLst, Price1currLst, Price2currLst : IcValueList;
+  MasterData : ICProcessing;  
+
+procedure rgTypePrecent_Click(Sender: TObject);
+begin
+  edPrecent1.Enabled := (rgTypePrecent.ItemIndex = 0);
+  edPrecent2.Enabled := (rgTypePrecent.ItemIndex = 0);
+  edPrecent3.Enabled := (rgTypePrecent.ItemIndex = 0);
+end;
+
+procedure EnableUseSat;
+begin
+  cbUseSat.Enabled := cbUseWE.Checked;
+  if not cbUseSat.Enabled then
+    cbUseSat.Checked := False;
+end;
+
+function IsObjFocused(Obj : Variant) : Boolean;
+begin
+  Result := IsObject(Obj) and VarAsBool(Obj.IsFocused);
+end;
+
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  i: Integer;
+  ctrlTemp : TComponent; 
+  VTmp : IcProcessing; 
+  PrintForms : String;
+begin
+  MasterData := Mean;
+  LockCalc := True;
+  try
+    Constants := CreateObject(' онстанты');
+    if VarAsBool(Constants.»спќбщЌаценки) then
+      rgTypePrecent.ItemIndex := 0
+    else
+      rgTypePrecent.ItemIndex := 1;
+    rgTypePrecent_Click(Form);
+    edPrecent1.Text := VarAsStr(Constants.ѕрЌац÷ена);
+    edPrecent2.Text := VarAsStr(Constants.ѕрЌацќпт÷ена);
+    edPrecent3.Text := VarAsStr(Constants.ѕрЌац рќпт÷ена);
+    Price0currLst := CreateObject('ValueList');
+    Price1currLst := CreateObject('ValueList');
+    Price2currLst := CreateObject('ValueList');
+    CurrencyDic  := CreateObject('—правочники.¬алюты');
+    CurrencyDic.Select;
+    while CurrencyDic.SelectNext do
+      begin
+        Price0currLst.AddValue(CurrencyDic. од,CurrencyDic);
+        Price1currLst.AddValue(CurrencyDic. од,CurrencyDic);
+        Price2currLst.AddValue(CurrencyDic. од,CurrencyDic);
+      end;
+    Price0currLst.UseControl(CtrlToVar(eValPrice0));
+    Price1currLst.UseControl(CtrlToVar(eValPrice1));
+    Price2currLst.UseControl(CtrlToVar(eValPrice2));
+
+    if IsObjFocused(Constants.¬алюта÷ена”молч) then
+      Price0currLst.CurIndex := Price0currLst.FindByValue(Constants.¬алюта÷ена”молч)
+    else
+      Price0currLst.CurIndex := Price0currLst.FindByValue(GetActiveCurrency);
+    if IsObjFocused(Constants.¬алютаќпт÷ена”молч) then
+      Price1currLst.CurIndex := Price1currLst.FindByValue(Constants.¬алютаќпт÷ена”молч)
+    else
+      Price1currLst.CurIndex := Price1currLst.FindByValue(GetActiveCurrency);
+    if IsObjFocused(Constants.¬алюта рќпт÷ена”молч) then
+      Price2currLst.CurIndex := Price2currLst.FindByValue(Constants.¬алюта рќпт÷ена”молч)
+    else
+      Price2currLst.CurIndex := Price2currLst.FindByValue(GetActiveCurrency);
+
+    eCodeBase.Text := VarAsStr(Constants. од»Ѕ);
+    eFormatPriceGrn.Text := Constants.‘ормат÷ены√–Ќ;
+    eFormatPriceVal.Text := Constants.‘ормат÷ены¬ал;
+    eFormatSumGrn.Text := Constants.‘ормат—ум√–Ќ;
+    eFormatSumVal.Text := Constants.‘ормат—ум¬ал;
+    eFormatCount.Text := Constants.‘ормат ол;
+    eFormatCurs.Text := Constants.‘ормат урс;
+    //город по умолчанию
+    TLZTown := Constants.јктивный√ород;
+    if TLZTown.IsFocused then
+      eTLZTown.Text := TLZTown.Ќазвание
+    else
+      nil(TLZTown);
+    // форма расчетов в налоговой по умолчанию
+    TLZPDVPay := Constants.‘орма–асчетов;
+    if TLZPDVPay.IsFocused then
+      ePDVPay.Text := TLZPDVPay.Value
+    else
+      nil(TLZPDVPay);
+    if IsNil(TLZPDVPay) then
+      TLZPDVPay := CreateObject(' оллекции.‘ормы–асчетов');
+    CollectTbl := CreateObject('“аблица«начений');
+    CreateCollectionTbl(CollectTbl, TLZPDVPay); //расчеты
+    while CollectTbl.SelectNext() do
+      ePDVPay.Items.Add(CollectTbl. омментарий);
+    // строка - авансовый платеж
+    AvansPay := Constants.јвансовыйѕлатеж;
+    if AvansPay.IsFocused then
+      eAvansPay.Text := AvansPay.Ќазв“овара
+    else
+      nil(AvansPay);
+
+    edMark.Text := Constants.ќтметкаЅезЌƒ—;
+    edMarkService.Text := Constants.ќтметка”слуги¬ЌалЌакладной;
+    rgNalogPrintOptions.ItemIndex := Constants.¬ариантѕечатиЌалЌакладной;
+    cbPrintChoice.Checked := Constants.¬ыбор¬ариантаѕечатиЌалЌакладной;
+
+    ePDV.Text := Constants.ProcentPDV;
+    ePayDate.Text := Constants.PayDate;
+    cbUseWe.Checked := Constants.UseWe;
+    cbUseSat.Checked := Constants.UseSat;
+    rgCourse.ItemIndex := Abs(Constants.UseNalCourse);
+    cbUseReserv.Checked := Constants.UseReserv;
+    gbReserv.Visible := cbUseReserv.Checked;
+    eReservDate.Text := IntTostr(Constants.Reserv);
+    rgZeroProc.ItemIndex := Constants.Ќольѕроц;
+    cbUseDate.Checked := Constants.”четƒата;
+    cbMiddlePrice.Checked := Constants.”четѕо—редней—тоим;
+    cbMiddlePriceExt.Checked := Constants.”четѕо—редней—тоимѕр;
+    cbTaxInPro.Checked := Constants.Ќƒ—ѕроизв;
+    cbPlanCostExt.Checked := Constants.√отѕродукци€ѕоѕлан—ебестоимости;
+    cbFixProdInWithoutDiscout.Checked := Constants.‘иксѕрием√отѕродукцииЅез—писани€;
+
+    cbMoveAll.Checked := Constants.ѕереносить¬се;
+    cbCalcInPrice.Checked := Constants.–асчет¬х÷ены;
+
+    //касса
+    cbShowDebtPartner.Checked := VarAsBool(Constants.ƒолгиѕартнера¬–абћесто ассира);
+    cbCalcRest.Checked := VarAsBool(Constants.–асчет—дачи);
+    cbUseMultiPay.Checked := VarAsBool(Constants.–азрешитьћультиќплату);
+    cbShowCtgInKassWorkPlace.Checked := VarAsBool(Constants.ќтображать атегории¬–абћесто ассира);
+    cbUseFieldAgent.Checked := VarAsBool(Constants.»спѕолеѕосредник¬„еках);
+    if cbUseFieldAgent.Checked then
+      begin 
+        cbReqFieldAgent.Enabled := true;
+        cbReqFieldAgent.Checked := VarAsBool(Constants.ќб€зѕолеѕосредник¬„еках);
+      end;
+    // алкосбор
+    eAlcoSbor.Text := Constants.—тавкаѕојлко—бору;
+
+    //ставки налога на рекламу
+    eAdvertisement1.Text := Constants.—тавкаЌЌ– ол1;
+    eAdvertisementMore1.Text := Constants.—тавкаЌЌ– олЅольше1;
+
+    //валютные платежи
+    eProcBank.Text := Constants.ѕроцентЅанка;
+    eProcPens.Text := Constants.ѕроцентѕенс;
+    cbClient.Checked := Constants. лиент;
+
+    //зарплата
+    edPens.Text := Constants.≈—¬—лужащий;
+    edPensHospital.Text := Constants.≈—¬—лужащийЅольничные;
+    edPensContract.Text := Constants.≈—¬—лужащий онтракт;
+
+    edPensFirm.Text := Constants.≈—¬ѕредпр;
+    edPensInvFirm.Text := Constants.≈—¬ѕредпр»нвалид;
+    edPensHospitalFirm.Text := Constants.≈—¬ѕредпрЅольничные;
+    edPensContractFirm.Text := Constants.≈—¬ѕредпр онтракт;
+
+    //ePctAdd.Text := Constants.—овмѕодоход;
+    eMinNoTax.Text := Constants.Ќеоблагћин;
+    eMinSal.Text := Constants.ћин«арплатаЌач√ода;
+    eMaxSal.Text := Constants.ћакс«арплата;
+    eSurvMin.Text := Constants.ѕрожитћинимумЌач√ода;
+    edIndulgCoef.Text := Constants.ѕереходной оэф—оцЋьготы;
+    edIncomeTaxPercent.Text := Constants.—тавкаЌ‘Ћ;
+    edIncomeTaxPercentOver.Text := Constants.—тавкаЌ‘Ћѕревышение«ѕ;
+    edIncomeTaxCoef.Text := Constants. оефƒл€Ќалога—ƒоходов;
+    edAvansCoef.Text := Constants. оэф¬ыплатыјванса;
+    //eHolDay.Text := Constants.¬ыходные;
+    eChild.Text := Constants.ƒети;
+    eTradeUnion.Text := Constants.ѕрофсоюз;
+    //cbKopTax.Checked := Constants. опейкиѕодоход;
+    chbRegulVyplZP.Checked := Constants.–егул«ѕ;
+    ePostAlim.Text := Constants.ѕочтовый—бор;
+    //chbBazaSoSborom.Checked := Constants.”четЅезработицы¬Ѕазеѕодохода;
+    // выплата налоговов при авансовых платежах
+    cbIncomeTaxAdvance.Checked := (VarAsInt(Constants.¬ыплатыЌалоговјванс) and Bits(1)) <> 0;
+    cbRetireAdvance.Checked := (VarAsInt(Constants.¬ыплатыЌалоговјванс) and Bits(2)) <> 0;
+    cbRetireFirmAdvance.Checked := (VarAsInt(Constants.¬ыплатыЌалоговјванс) and Bits(5)) <> 0;
+    //нерабочие дни
+    chbMonday.Checked := (VarAsInt(Constants.»нформаци€ѕро–абочуюЌеделю) and Bits(2)) <> 0;
+    chbTuesday.Checked := (VarAsInt(Constants.»нформаци€ѕро–абочуюЌеделю) and Bits(3)) <> 0;
+    chbWednesday.Checked := (VarAsInt(Constants.»нформаци€ѕро–абочуюЌеделю) and Bits(4)) <> 0;
+    chbThursday.Checked := (VarAsInt(Constants.»нформаци€ѕро–абочуюЌеделю) and Bits(5)) <> 0;
+    chbFriday.Checked := (VarAsInt(Constants.»нформаци€ѕро–абочуюЌеделю) and Bits(6)) <> 0;
+    chbSaturday.Checked := (VarAsInt(Constants.»нформаци€ѕро–абочуюЌеделю) and Bits(7)) <> 0;
+    chbSunday.Checked := (VarAsInt(Constants.»нформаци€ѕро–абочуюЌеделю) and Bits(1)) <> 0;
+    //
+    edWorkDayHours.Text := VarAsStr(Constants. олво„асов¬–абочийƒень);
+
+    //фармакологи€
+    cbTerm.Checked := Constants.—рок√одности;
+    eDayWarning.Text := Constants.ƒни√одности;
+
+    //дл€ комплектов
+ // склад комплектующих
+    TLZStore := Constants.—клад омпл;
+    if TLZStore.IsFocused then
+      eTLZStore.Text := TLZStore.Ќазвание
+    else
+      nil(TLZStore);
+    // склад брака
+    TLZStoreNoCond := Constants.—кладЅрака;
+    if TLZStoreNoCond.IsFocused then
+      eStoreNoCond.Text := TLZStoreNoCond.Ќазвание
+    else
+      nil(TLZStoreNoCond);
+    eMaxCmp.Text := Constants. ол омплектующих;
+    eCmpName.Text := Constants.CmpName;
+    cbGarTal.Checked := Constants.√арантийный“алонЌа омплект;
+    //–есторан
+    eMinProc.Text := Constants.ћинѕроцентЌаценки;
+    cbRoundSum.Checked := Constants.ќкругл€ть—умму—трокиЅезЌƒ—;
+    edRoundSum.Text := Constants. оличество«наков¬—умме—трокиЅезЌƒ—;
+    cbPayTerm.Checked := not VarAsBool(Constants.Ќе»спользовать—рокќплаты);
+    eInBarCode.Text :=  Constants.Ўтрих од“овара¬нутренний ол—имв;
+    eDiscountCode.Text :=  Constants.Ўтрих одѕартнера ол—имв;
+    cbUseMultiBarCode.Checked := VarAsBool(Constants.»спльзоватьћультиЎтрих одыƒл€“оваров);
+    eInBarCode.Text :=  Constants.Ўтрих од“овара¬нутренний ол—имв;
+    ePrefixScannerBarCodes.Text := Constants.ѕрефикс—канераЎтрих одов;
+    PriceTypes := Constants.“ипы÷ен;
+    edTypePrice.Items.Clear;
+    if StrLength(PriceTypes) > 0 then
+      for i := 1 to StrLength(PriceTypes) do
+        begin
+          ctrlTemp := Form.FindComponent('cbPrice' + PriceTypes[i]);
+          if not IsNil(ctrlTemp) then
+            (ctrlTemp as TO4CheckBox).Checked := true;
+          Case PriceTypes[i] of
+            '0': edTypePrice.Items.Add('÷ена');
+            '1': edTypePrice.Items.Add('÷енаќпт');
+            '2': edTypePrice.Items.Add('÷ена рќпт');
+          end;
+        end;
+    edTypePrice.ItemIndex := edTypePrice.Items.IndexOf(VarAsStr(Constants.ѕечатьЁтикетки“ип÷ены));
+    cbPriceInCurrency.Checked := VarAsBool(Constants.ѕечатьЁтикетки÷ена¬¬алюте);
+    cbPrintPrice.Checked := VarAsBool(Constants.ѕечатьЁтикетки÷ена);
+    edTypePrice.Enabled := cbPrintPrice.Checked;
+    lbTypePrice.Enabled := cbPrintPrice.Checked;
+    cbPrintDate.Checked := VarAsBool(Constants.ѕечатьЁтикеткиƒатаѕечати);
+    cbPrintFirmName.Checked := VarAsBool(Constants.ѕечатьЁтикеткиѕредпри€тие);
+
+
+    cbParamPrice1.Checked := VarAsBool(StrCopy(VarAsStr(Constants.Ќастройка÷енƒл€ќтпуска“овараѕоќдному),1,1));
+    cbParamPrice2.Checked := VarAsBool(StrCopy(VarAsStr(Constants.Ќастройка÷енƒл€ќтпуска“овараѕоќдному),2,1));
+    cbParamPrice3.Checked := VarAsBool(StrCopy(VarAsStr(Constants.Ќастройка÷енƒл€ќтпуска“овараѕоќдному),3,1));
+
+
+    // ћодели
+    cbUseModel.Checked     := VarAsBool(Constants.’арактеристикаћодель);
+    cbGroup.Checked        := VarAsBool(Constants.’арактеристика√руппа);
+    cbManufacturer.Checked := VarAsBool(Constants.’арактеристикаѕроизводитель);
+    cbChangeGoodsOnlyByModel.Checked := VarAsBool(Constants.»зменение“оваров“олько„ерезћодели) and cbUseModel.Checked;
+    cbChangeGoodsOnlyByModel.Visible := cbUseModel.Checked;
+
+    cbModelDetByColor.Checked := VarAsBool(Constants.ƒетализаци€ћоделейѕо÷ветам);
+    cbModelDetBySize.Checked := VarAsBool(Constants.ƒетализаци€ћоделейѕо–азмерам);
+
+    cbModelDetByColor.Visible := cbUseModel.Checked;
+    cbModelDetByColor.Checked := cbModelDetByColor.Checked and cbUseModel.Checked;
+    cbModelDetBySize.Visible := cbUseModel.Checked;
+    cbModelDetBySize.Checked := cbModelDetBySize.Checked and cbUseModel.Checked;
+
+
+    eFilePath.Text := Constants.ѕуть  аталогу‘ото;
+    // ќкругление цен
+    cbShowNativePrice.Checked := VarAsBool(Constants.ѕоказывать÷ены√рн);
+    cbRoundPrice.Checked := VarAsBool(Constants.ќкругл€ть÷ены√рн);
+    edRoundPrice.Text := IntToStr(VarAsInt(Constants.ќкругление÷ен√рн));
+    cbRoundPricePer5Cop.Checked := VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп);
+    pnRoundDec.Visible := not cbRoundPricePer5Cop.Checked;
+
+    if VarAsStr(Constants.“екстѕодвала„ека)<>'' then
+      CheckFooterText.Text := VarAsStr(Constants.“екстѕодвала„ека);
+
+  finally
+    LockCalc := False;
+  end;
+  EnableUseSat;
+  pgcOptions.ActivePage := tsFormat;
+end;
+
+procedure btnOK_Click(Sender : TObject);
+begin
+   if cbPrice0.Checked then
+     if Price0currLst.CurIndex <> -1 then
+       Constants.¬алюта÷ена”молч := Price0currLst.GetValue(Price0currLst.CurIndex)
+     else
+       showmessage('Ќе выбрана валюта по умолчанию дл€ ÷ены!!!');
+   if cbPrice1.Checked then
+     if Price1currLst.CurIndex <> -1 then
+       Constants.¬алютаќпт÷ена”молч := Price1currLst.GetValue(Price1currLst.CurIndex)
+     else
+       showmessage('Ќе выбрана валюта по умолчанию дл€ ќпт ÷ены!!!');
+   if cbPrice2.Checked then
+     if Price2currLst.CurIndex <> -1 then
+       Constants.¬алюта рќпт÷ена”молч := Price2currLst.GetValue(Price2currLst.CurIndex)
+     else
+       showmessage('Ќе выбрана валюта по умолчанию дл€  рќпт ÷ены!!!');
+
+  // ћодели
+  Constants.ƒетализаци€ћоделейѕо÷ветам := cbModelDetByColor.Checked;
+  Constants.ƒетализаци€ћоделейѕо–азмерам := cbModelDetBySize.Checked;
+
+  Constants. од»Ѕ := VarAsInt(eCodeBase.Text);
+  Constants.ProcentPDV := StrToDec(ePDV.Text);
+  Constants.PayDate := StrToInt(ePayDate.Text);
+  Constants.UseWe := cbUseWe.Checked;
+  Constants.UseSat := cbUseSat.Checked;
+  Constants.UseNalCourse := VarAsBool(rgCourse.ItemIndex);
+  if rgCourse.ItemIndex = 1 then
+    Constants.UsedCurs := ' урсЌаличный'
+  else
+    Constants.UsedCurs := ' урсЌацЅанка';
+  Constants.‘ормат÷ены√–Ќ := eFormatPriceGrn.Text;
+  Constants.‘ормат÷ены¬ал := eFormatPriceVal.Text;
+  Constants.‘ормат—ум√–Ќ := eFormatSumGrn.Text;
+  Constants.‘ормат—ум¬ал := eFormatSumVal.Text;
+  Constants.‘ормат ол := eFormatCount.Text;
+  Constants.‘ормат урс := eFormatCurs.Text;
+  Constants.Reserv := StrToInt(eReservDate.Text);
+  Constants.UseReserv := cbUseReserv.Checked;
+  Constants.јктивный√ород := TLZTown;
+  if TLZPDVPay.FindByComment(ePDVPay.Text, True) then
+    Constants.‘орма–асчетов := TLZPDVPay;
+  Constants.Ќольѕроц := rgZeroProc.ItemIndex;
+  Constants.”четƒата := cbUseDate.Checked;
+  Constants.”четѕо—редней—тоим := cbMiddlePrice.Checked;
+  Constants.ѕереносить¬се := cbMoveAll.Checked;
+  Constants.–асчет¬х÷ены := cbCalcInPrice.Checked;
+  Constants.јвансовыйѕлатеж := AvansPay;
+  Constants.ќтметкаЅезЌƒ— := edMark.Text;
+  Constants.ќтметка”слуги¬ЌалЌакладной := edMarkService.Text;
+  Constants.¬ариантѕечатиЌалЌакладной := rgNalogPrintOptions.ItemIndex;
+  Constants.¬ыбор¬ариантаѕечатиЌалЌакладной := cbPrintChoice.Checked;     
+  Constants.»спќбщЌаценки := (rgTypePrecent.ItemIndex = 0);
+  Constants.ѕрЌац÷ена := StrToDecDef(edPrecent1.Text, 0);
+  Constants.ѕрЌацќпт÷ена := StrToDecDef(edPrecent2.Text, 0);
+  Constants.ѕрЌац рќпт÷ена := StrToDecDef(edPrecent3.Text, 0);
+
+  //касса
+  Constants.ƒолгиѕартнера¬–абћесто ассира := cbShowDebtPartner.Checked;
+  Constants.–асчет—дачи := cbCalcRest.Checked;
+  Constants.–азрешитьћультиќплату := cbUseMultiPay.Checked;
+  Constants.ќтображать атегории¬–абћесто ассира := cbShowCtgInKassWorkPlace.Checked;
+  Constants.»спѕолеѕосредник¬„еках := cbUseFieldAgent.Checked;
+  Constants.ќб€зѕолеѕосредник¬„еках := cbUseFieldAgent.Checked and cbReqFieldAgent.Checked;
+
+  // алкосбор
+  Constants.—тавкаѕојлко—бору := StrToDec(eAlcoSbor.Text);
+
+  //ставки налога на рекламу
+  Constants.—тавкаЌЌ– ол1 := eAdvertisement1.Text;
+  Constants.—тавкаЌЌ– олЅольше1 := eAdvertisementMore1.Text;
+
+  //производство
+  Constants.”четѕо—редней—тоимѕр := cbMiddlePriceExt.Checked;
+  Constants.Ќƒ—ѕроизв := cbTaxInPro.Checked;
+  Constants.√отѕродукци€ѕоѕлан—ебестоимости := cbPlanCostExt.Checked;
+  Constants.‘иксѕрием√отѕродукцииЅез—писани€ := cbFixProdInWithoutDiscout.Checked;
+
+  //валютные платежи
+  Constants.ѕроцентЅанка := StrToDec(eProcBank.Text);
+  Constants.ѕроцентѕенс := StrToDec(eProcPens.Text);
+  Constants. лиент := cbClient.Checked;
+
+  //зарплата
+  Constants.≈—¬—лужащий := StrToDec(edPens.Text);
+  Constants.≈—¬—лужащийЅольничные := StrToDec(edPensHospital.Text);
+  Constants.≈—¬—лужащий онтракт := StrToDec(edPensContract.Text);
+
+  Constants.≈—¬ѕредпр := StrToDec(edPensFirm.Text);
+  Constants.≈—¬ѕредпр»нвалид := StrToDec(edPensInvFirm.Text);
+  Constants.≈—¬ѕредпрЅольничные := StrToDec(edPensHospitalFirm.Text);
+  Constants.≈—¬ѕредпр онтракт := StrToDec(edPensContractFirm.Text);
+
+  // ѕечать штрихкодов
+  Constants.ѕечатьЁтикетки÷ена := cbPrintPrice.Checked;
+  Constants.ѕечатьЁтикеткиƒатаѕечати := cbPrintDate.Checked;
+  Constants.ѕечатьЁтикеткиѕредпри€тие := cbPrintFirmName.Checked;
+  if edTypePrice.Text<>'' then
+    Constants.ѕечатьЁтикетки“ип÷ены := edTypePrice.Text;
+  Constants.ѕечатьЁтикетки÷ена¬¬алюте := cbPriceInCurrency.Checked;
+
+
+  //Constants.—овмѕодоход := StrToDec(ePctAdd.Text);
+  Constants.Ќеоблагћин := StrToInt(eMinNoTax.Text);
+  Constants.ћин«арплатаЌач√ода := StrToDec(eMinSal.Text);
+  Constants.ћакс«арплата := StrToDec(eMaxSal.Text);
+  Constants.ѕрожитћинимумЌач√ода := StrToDec(eSurvMin.Text);
+  Constants.ѕереходной оэф—оцЋьготы := StrToDec(edIndulgCoef.Text);
+  Constants.—тавкаЌ‘Ћ := StrToDec(edIncomeTaxPercent.Text);   
+  Constants.—тавкаЌ‘Ћѕревышение«ѕ := edIncomeTaxPercentOver.Text;
+  Constants. оефƒл€Ќалога—ƒоходов := edIncomeTaxCoef.Text;
+  Constants. оэф¬ыплатыјванса := edAvansCoef.Text;
+  //Constants.¬ыходные := eHolDay.Text;
+  Constants.ƒети := eChild.Text;
+  Constants.ѕрофсоюз := eTradeUnion.Text;
+  //Constants. опейкиѕодоход := cbKopTax.Checked;
+  Constants.–егул«ѕ := chbRegulVyplZP.Checked;
+  Constants.ѕочтовый—бор := StrToDec(ePostAlim.Text);
+  //Constants.”четЅезработицы¬Ѕазеѕодохода := chbBazaSoSborom.Checked;
+  //выплата налоговом при авансовых платежах
+  Constants.¬ыплатыЌалоговјванс := Bits(-VarAsInt(cbIncomeTaxAdvance.Checked),
+    -2 * VarAsInt(cbRetireAdvance.Checked),
+    -5 * VarAsInt(cbRetireFirmAdvance.Checked));
+  //нерабочие дни
+  Constants.»нформаци€ѕро–абочуюЌеделю :=
+    Bits(-VarAsInt(chbSunday.Checked), -2 * VarAsInt(chbMonday.Checked),
+    -3 * VarAsInt(chbTuesday.Checked), -4 * VarAsInt(chbWednesday.Checked),
+    -5 * VarAsInt(chbThursday.Checked), -6 * VarAsInt(chbFriday.Checked),
+    -7 * VarAsInt(chbSaturday.Checked));
+  Constants. олво„асов¬–абочийƒень := StrToDec(edWorkDayHours.Text);
+
+  // ‘армакологи€
+  Constants.—рок√одности := cbTerm.Checked;
+  Constants.ƒни√одности := StrToDec(eDayWarning.Text);
+
+  //дл€ комплектов
+  // —клад временного хранени€ комплектующих
+  Constants.—клад омпл := TLZStore;
+  // —клад брака
+  Constants.—кладЅрака := TLZStoreNoCond;
+  Constants. ол омплектующих := eMaxCmp.Text;
+  //   Constants. атегори€CPU := eCPU.Text;
+  //   Constants. атегори€MEM := eMEM.Text;
+  //   Constants. атегори€HDD := eHDD.Text;
+  //   Constants. атегори€—истЅлоки := eSystem.Text;
+  Constants.CmpName := eCmpName.Text;
+  Constants.√арантийный“алонЌа омплект := cbGarTal.Checked;
+  //–есторан
+  Constants.ћинѕроцентЌаценки := eMinProc.Text;
+
+  Constants.ќкругл€ть—умму—трокиЅезЌƒ— := cbRoundSum.Checked;
+  Constants. оличество«наков¬—умме—трокиЅезЌƒ— := edRoundSum.Text;
+  Constants.Ќе»спользовать—рокќплаты := not cbPayTerm.Checked;
+  Constants.Ўтрих од“овара¬нутренний ол—имв := eInBarCode.Text;
+  Constants.Ўтрих одѕартнера ол—имв := eDiscountCode.Text;
+  Constants.»спльзоватьћультиЎтрих одыƒл€“оваров := cbUseMultiBarCode.Checked;
+  Constants.ѕрефикс—канераЎтрих одов := ePrefixScannerBarCodes.Text;
+  Constants.“ипы÷ен := PriceTypes;
+  Constants.Ќастройка÷енƒл€ќтпуска“овараѕоќдному := VarAsStr(AbsD(VarAsInt(cbParamPrice1.Checked)))+
+                                                    VarAsStr(AbsD(VarAsInt(cbParamPrice2.Checked)))+
+                                                    VarAsStr(AbsD(VarAsInt(cbParamPrice3.Checked)));
+  Constants.’арактеристикаћодель := cbUseModel.Checked;
+  Constants.’арактеристика√руппа := cbGroup.Checked;          
+  Constants.’арактеристикаѕроизводитель := cbManufacturer.Checked; 
+  Constants.»зменение“оваров“олько„ерезћодели := cbChangeGoodsOnlyByModel.Checked and cbUseModel.Checked;
+
+  Constants.ѕуть  аталогу‘ото := eFilePath.Text; 
+  // ќкругление цен
+  Constants.ѕоказывать÷ены√рн := cbShowNativePrice.Checked;
+  Constants.ќкругл€ть÷ены√рн := cbRoundPrice.Checked;
+  Constants.ќкругл€ть÷ены√рнƒо5 оп := cbRoundPricePer5Cop.Checked;
+  Constants.ќкругление÷ен√рн := StrToIntDef(edRoundPrice.Text,0);
+  if Constants.ќкругление÷ен√рн<0 then
+    Constants.ќкругление÷ен√рн := 0; 
+  Constants.“екстѕодвала„ека := CheckFooterText.Text;
+
+
+  ShowMessage(AboutConst);
+end;
+
+procedure cbUseWe_Click(Sender : TObject);
+begin
+  EnableUseSat;
+end;
+
+procedure cbUseReserv_Click(Sender : TObject);
+begin
+  gbReserv.Visible := cbUseReserv.Checked;
+end;
+
+procedure eTLZTown_ActionExecute(Sender : TObject);
+var
+  TLZTownName : string;
+begin
+  TLZTown := CreateObject('—правочники.√орода');
+  TLZTown.FindByName(eTLZTown.Text, False);
+  if TLZTown.SelectInForm('¬ыбор√орода', TLZTownName, Null) then
+    eTLZTown.Text := TLZTownName;
+end;
+
+procedure eTLZTown_ActionClear(Sender : TObject);
+begin
+  nil(TLZTown);
+  eTLZTown.Text := '';
+end;
+
+procedure btnDefault_Click(Sender : TObject);
+begin
+  DefaultConstants(False);
+  Form_Execute(Sender, Null, Null);
+end;
+
+procedure ePDVPay_ActionExecute(Sender : TObject);
+begin
+  nil(TLZPDVPay);
+  ePDVPay.Text := '';
+end;
+
+procedure ePDVPay_Exit(Sender : TObject);
+var
+  edSign, Collect : string;
+begin
+  Collect := ePDVPay.Text;
+  edSign := StrDelSpace(Collect);
+  if (edSign <> '') then
+    begin
+      TLZPDVPay.Change(edSign, Collect);
+      TLZPDVPay.ApplyUpdates();
+    end;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  SetPropertyForComponentList(ptTabVisible, Form, 'tsStavka;tsNalog', false);
+  cbUseDate.Enabled := GetUDASet('ChangeUseDate') and not VarAsBool(Constants.”четѕо—редней—тоим);
+  eFormatPriceGrn.Enabled := GetUDASet('formats');
+  eFormatPriceVal.Enabled := GetUDASet('formats');
+  eFormatSumGrn.Enabled := GetUDASet('formats');
+  eFormatSumVal.Enabled := GetUDASet('formats');
+  eFormatCount.Enabled := GetUDASet('formats');
+  eFormatCurs.Enabled := GetUDASet('formats');
+  cbMiddlePrice.Enabled := not VarAsBool(Constants.”четƒата);
+end;
+
+procedure eAvansPay_ActionClear(Sender : TObject);
+begin
+  nil(AvansPay);
+  eAvansPay.Text := '';
+end;
+
+procedure eAvansPay_ActionExecute(Sender : TObject);
+var
+  AvPay : string;
+begin
+  AvansPay := CreateObject('—правочники.“овары');
+  AvansPay.FindByName(eAvansPay.Text, False);
+  if AvansPay.SelectInForm('¬ыбор“овара', AvPay, Null) then
+    eAvansPay.Text := AvPay;
+end;
+
+procedure cbUseDate_Click(Sender : TObject);
+begin
+  cbMiddlePrice.Enabled := not cbUseDate.Checked;
+end;
+
+procedure cbMiddlePrice_Click(Sender : TObject);
+begin
+  cbUseDate.Enabled := not cbMiddlePrice.Checked;
+end;
+
+//сборка и продажа ѕ 
+
+procedure eTLZStore_ActionExecute(Sender : TObject);
+var
+  TLZStoreName : string;
+begin
+  TLZStore := CreateObject('—правочники.—клады');
+  TLZStore.FindByName(eTLZStore.Text, False);
+  if TLZStore.SelectInForm('¬ыбор—клада', TLZStoreName, Null) then
+    eTLZStore.Text := TLZStoreName;
+end;
+
+procedure eTLZStore_ActionClear(Sender : TObject);
+begin
+  nil(TLZStore);
+  eTLZStore.Text := '';
+end;
+
+procedure eStoreNoCond_ActionExecute(Sender : TObject);
+var
+  TLZStoreNoCondName : string;
+begin
+  TLZStoreNoCond := CreateObject('—правочники.—клады');
+  TLZStoreNoCond.FindByName(eStoreNoCond.Text, False);
+  if TLZStoreNoCond.SelectInForm('¬ыбор—клада', TLZStoreNoCondName, Null) then
+    eStoreNoCond.Text := TLZStoreNoCondName;
+end;
+
+procedure eStoreNoCond_ActionClear(Sender : TObject);
+begin
+  nil(TLZStoreNoCond);
+  eStoreNoCond.Text := '';
+end;
+
+procedure tbSalaryPays_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbSalaryPays.PageIndex := NewTab;
+end;
+
+procedure tsSal_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbSalary.PageIndex := NewTab;
+  case nbSalary.ActivePage of
+    'ƒоплаты”держани€' :
+      if IsNil(DicEarningsDeductions) then
+        begin
+          DicEarningsDeductions := CreateObject('—правочники.ƒоплаты”держани€');
+          DicEarningsDeductions.OpenFormInplace('ƒоплаты”держани€', CtrlToVar(pnEarningsDeductions));
+        end;
+    'ѕрожиточныећинимумы' :
+      if IsNil(DicSurvMinimals) then
+        begin
+          DicSurvMinimals := CreateObject('—правочники.“ипѕрожитћинимума');
+          DicSurvMinimals.OpenFormInplace('ѕросмотрѕрожћинимумов', CtrlToVar(pnMinimalSurvValues));
+        end;
+  end;
+end;
+
+procedure btDefaultEarningsDeductions_Click(Sender : TObject);
+var
+  OutParams : Variant;
+begin
+  DicEarningsDeductions.ExecProc(Null, '—писокѕо”молчанию', Null, OutParams);
+end;
+
+procedure tsAvansPays_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbAvansPays.PageIndex := NewTab;
+end;
+
+procedure btpnDefaultMinSurvValues_Click(Sender : TObject);
+var
+  OutParams : Variant;
+begin
+  DicSurvMinimals.ExecProc(Null, '—писокѕо”молчанию', Null, OutParams);
+end;
+
+procedure cbPrice_Click(Sender: TObject);
+begin
+  if (Sender as TO4CheckBox).Checked then
+    begin
+      if StrPos(IntToStr((Sender as TO4CheckBox).Tag), PriceTypes) = 0 then
+        PriceTypes := PriceTypes + IntToStr((Sender as TO4CheckBox).Tag);
+    end
+  else
+    begin
+      if StrPos(IntToStr((Sender as TO4CheckBox).Tag), PriceTypes) > 0 then
+        StrDelete(PriceTypes, StrPos(IntToStr((Sender as TO4CheckBox).Tag), PriceTypes), 1);
+    end;
+end;
+
+procedure tsColors_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  nbGoods.PageIndex := NewTab;
+end;
+
+procedure btnBrowse_Click(Sender : TObject);
+begin
+  with SAVEDIALOG do begin
+    Filter := '*.jpg|*.jpg';
+    FileName := '*.jpg';
+    Title := Trans('ќпределите путь к jpg-файлам');
+    if Execute then begin
+      eFilePath.Text := ExtractFilePath(FileName);
+    end;
+  end;
+end;
+
+procedure btFillPrecent_Click(Sender: TObject);
+begin
+    if MasterData.RunThreadProcess(server.FillPrecentPriceEP((rgTypePrecent.ItemIndex = 0),
+                                   StrToDecDef(edPrecent1.Text, 0), StrToDecDef(edPrecent2.Text, 0),
+                                   StrToDecDef(edPrecent3.Text, 0)), '«аполнение наценки') then
+      ShowMessage('«аполнение наценки произведено')
+    else
+      ShowMessage('¬о врем€ заполнени€ наценки произошла ошибка либо заполнение прервано пользователем');
+end;
+
+procedure Button1_Click(Sender: TObject);
+begin
+    if MasterData.RunThreadProcess(server.FillCurPriceEP, '«аполнение валюты') then
+      ShowMessage('«аполнение валюты произведено')
+    else
+      ShowMessage('¬о врем€ заполнени€ наценки произошла ошибка либо заполнение прервано пользователем');
+
+end;
+
+procedure cbUseModel_Click(Sender: TObject);
+begin
+  cbChangeGoodsOnlyByModel.Visible := cbUseModel.Checked;
+  cbChangeGoodsOnlyByModel.Checked := cbChangeGoodsOnlyByModel.Checked and cbUseModel.Checked;
+
+  cbModelDetByColor.Visible := cbUseModel.Checked;
+  cbModelDetByColor.Checked := cbModelDetByColor.Checked and cbUseModel.Checked;
+  cbModelDetBySize.Visible := cbUseModel.Checked;
+  cbModelDetBySize.Checked := cbModelDetBySize.Checked and cbUseModel.Checked;
+end;
+
+procedure tsPrintDocs_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ nbPrintDocs.PageIndex :=  NewTab;
+end;
+
+procedure cbPrintPrice_Click(Sender: TObject);
+begin
+ edTypePrice.Enabled := cbPrintPrice.Checked;
+ lbTypePrice.Enabled := cbPrintPrice.Checked;
+
+end;
+
+procedure cbUseFieldAgent_Click(Sender: TObject);
+begin
+ cbReqFieldAgent.Enabled := cbUseFieldAgent.Checked;
+ if not cbReqFieldAgent.Enabled then
+   cbReqFieldAgent.Checked := false;
+end;
+
+procedure cbRoundPricePer5Cop_Click(Sender: TObject);
+begin
+ pnRoundDec.Visible := not cbRoundPricePer5Cop.Checked;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+pgcOptions:TO4PageControl
+tsFormat:TTabSheet
+Label14:TO4Label
+Label19:TO4Label
+Label25:TO4Label
+GroupBox5:TO4GroupBox
+Label10:TO4Label
+Label11:TO4Label
+eFormatPriceGrn:TO4Edit
+eFormatPriceVal:TO4Edit
+GroupBox6:TO4GroupBox
+Label12:TO4Label
+Label13:TO4Label
+eFormatSumGrn:TO4Edit
+eFormatSumVal:TO4Edit
+eFormatCount:TO4Edit
+eFormatCurs:TO4Edit
+cbRoundSum:TO4CheckBox
+edRoundSum:TO4Edit
+tsGoods:TTabSheet
+tsColors:TO4TabSet
+nbGoods:TO4Notebook
+GroupBox10:TO4GroupBox
+eFilePath:TO4Edit
+btnBrowse:TO4Button
+cbUseModel:TO4CheckBox
+cbGroup:TO4CheckBox
+cbManufacturer:TO4CheckBox
+cbChangeGoodsOnlyByModel:TO4CheckBox
+cbModelDetByColor:TO4CheckBox
+cbModelDetBySize:TO4CheckBox
+GroupBox9:TO4GroupBox
+Label47:TO4Label
+cbPrice0:TO4CheckBox
+cbPrice1:TO4CheckBox
+cbPrice2:TO4CheckBox
+cbParamPrice1:TO4CheckBox
+cbParamPrice2:TO4CheckBox
+cbParamPrice3:TO4CheckBox
+eValPrice0:TO4Edit
+eValPrice1:TO4Edit
+eValPrice2:TO4Edit
+Button1:TO4Button
+cbShowNativePrice:TO4CheckBox
+cbRoundPrice:TO4CheckBox
+cbRoundPricePer5Cop:TO4CheckBox
+pnRoundDec:TO4Panel
+Label53:TO4Label
+Label52:TO4Label
+edRoundPrice:TO4Edit
+Label49:TO4Label
+Label50:TO4Label
+Label51:TO4Label
+rgTypePrecent:TO4RadioGroup
+edPrecent1:TO4Edit
+edPrecent2:TO4Edit
+edPrecent3:TO4Edit
+btFillPrecent:TO4Button
+Label45:TO4Label
+Label48:TO4Label
+Label46:TO4Label
+cbUseMultiBarCode:TO4CheckBox
+eInBarCode:TO4Edit
+eDiscountCode:TO4Edit
+ePrefixScannerBarCodes:TO4Edit
+tsStavka:TTabSheet
+Label1:TO4Label
+cbUseDate:TO4CheckBox
+ePDV:TO4Edit
+rgZeroProc:TO4RadioGroup
+cbMiddlePrice:TO4CheckBox
+cbMoveAll:TO4CheckBox
+cbCalcInPrice:TO4CheckBox
+tsKass:TTabSheet
+cbShowDebtPartner:TO4CheckBox
+cbShowCtgInKassWorkPlace:TO4CheckBox
+cbCalcRest:TO4CheckBox
+cbUseMultiPay:TO4CheckBox
+cbUseFieldAgent:TO4CheckBox
+cbReqFieldAgent:TO4CheckBox
+tsDocPrintOptions:TTabSheet
+nbPrintDocs:TO4Notebook
+lbTypePrice:TO4Label
+cbPrintPrice:TO4CheckBox
+cbPrintDate:TO4CheckBox
+cbPrintFirmName:TO4CheckBox
+edTypePrice:TO4Edit
+cbPriceInCurrency:TO4CheckBox
+CheckFooterText:TO4Memo
+tsPrintDocs:TO4TabSet
+tsReserv:TTabSheet
+gbPayTerm:TO4GroupBox
+Label2:TO4Label
+Label3:TO4Label
+ePayDate:TO4Edit
+cbUseWe:TO4CheckBox
+cbUseSat:TO4CheckBox
+gbReserv:TO4GroupBox
+Label15:TO4Label
+Label16:TO4Label
+eReservDate:TO4Edit
+cbUseReserv:TO4CheckBox
+cbPayTerm:TO4CheckBox
+tsAll:TTabSheet
+GroupBox7:TO4GroupBox
+eTLZTown:TO4Edit
+GroupBox8:TO4GroupBox
+ePDVPay:TO4Edit
+GroupBox2:TO4GroupBox
+eAvansPay:TO4Edit
+GroupBox3:TO4GroupBox
+eCodeBase:TO4Edit
+rgCourse:TO4RadioGroup
+tsNalog:TTabSheet
+Label42:TO4Label
+Label44:TO4Label
+edMark:TO4Edit
+edMarkService:TO4Edit
+rgNalogPrintOptions:TO4RadioGroup
+cbPrintChoice:TO4CheckBox
+tsSalary:TTabSheet
+tsSal:TO4TabSet
+nbSalary:TO4Notebook
+Label22:TO4Label
+Label21:TO4Label
+Label38:TO4Label
+Label43:TO4Label
+Label23:TO4Label
+eMinSal:TO4Edit
+eMinNoTax:TO4Edit
+eMaxSal:TO4Edit
+eSurvMin:TO4Edit
+eChild:TO4Edit
+grbDaysOff:TO4GroupBox
+lbWorkDayHours:TO4Label
+chbMonday:TO4CheckBox
+chbTuesday:TO4CheckBox
+chbWednesday:TO4CheckBox
+chbThursday:TO4CheckBox
+chbFriday:TO4CheckBox
+chbSaturday:TO4CheckBox
+chbSunday:TO4CheckBox
+edWorkDayHours:TO4Edit
+nbSalaryPays:TO4Notebook
+Label5:TO4Label
+eTradeUnion:TO4Edit
+GroupBox1:TO4GroupBox
+Label4:TO4Label
+Label6:TO4Label
+Label26:TO4Label
+edPens:TO4Edit
+edPensHospital:TO4Edit
+edPensContract:TO4Edit
+GroupBox12:TO4GroupBox
+Label7:TO4Label
+Label27:TO4Label
+Label29:TO4Label
+Label30:TO4Label
+edPensFirm:TO4Edit
+edPensInvFirm:TO4Edit
+edPensHospitalFirm:TO4Edit
+edPensContractFirm:TO4Edit
+tbSalaryPays:TO4TabSet
+grbPayedTaxes:TO4GroupBox
+nbAvansPays:TO4Notebook
+cbIncomeTaxAdvance:TO4CheckBox
+cbRetireAdvance:TO4CheckBox
+cbRetireFirmAdvance:TO4CheckBox
+tsAvansPays:TO4TabSet
+Panel2:TO4Panel
+Panel1:TO4Panel
+Label32:TO4Label
+Label35:TO4Label
+edIncomeTaxCoef:TO4Edit
+edAvansCoef:TO4Edit
+pnMinimalSurvValues:TO4Panel
+pnDefaultMinSurvValues:TO4Panel
+pnDefaultMinSurvValuesBT:TO4Panel
+btpnDefaultMinSurvValues:TO4Button
+pnEarningsDeductions:TO4Panel
+pnDefaultEarningsDeductions:TO4Panel
+pnDefaultEarningsDeductionsBT:TO4Panel
+btDefaultEarningsDeductions:TO4Button
+Label8:TO4Label
+lbIndulgCoef:TO4Label
+lbIncomeTaxPercent:TO4Label
+Label31:TO4Label
+ePostAlim:TO4Edit
+chbRegulVyplZP:TO4CheckBox
+edIndulgCoef:TO4Edit
+edIncomeTaxPercent:TO4Edit
+edIncomeTaxPercentOver:TO4Edit
+tsAdvertisement:TTabSheet
+GroupBox4:TO4GroupBox
+Label24:TO4Label
+Label28:TO4Label
+eAdvertisement1:TO4Edit
+eAdvertisementMore1:TO4Edit
+tsImport:TTabSheet
+Label17:TO4Label
+Label18:TO4Label
+eProcBank:TO4Edit
+eProcPens:TO4Edit
+cbClient:TO4CheckBox
+tsExt:TTabSheet
+Label40:TO4Label
+cbMiddlePriceExt:TO4CheckBox
+cbTaxInPro:TO4CheckBox
+cbGarTal:TO4CheckBox
+cbPlanCostExt:TO4CheckBox
+cbFixProdInWithoutDiscout:TO4CheckBox
+tsFarm:TTabSheet
+Label9:TO4Label
+Label20:TO4Label
+cbTerm:TO4CheckBox
+eDayWarning:TO4Edit
+tsExtPC:TTabSheet
+Label36:TO4Label
+Label37:TO4Label
+eMaxCmp:TO4Edit
+eCmpName:TO4Edit
+gbTLZ:TO4GroupBox
+Label33:TO4Label
+Label34:TO4Label
+eTLZStore:TO4Edit
+eStoreNoCond:TO4Edit
+tsAlco:TTabSheet
+Label39:TO4Label
+eAlcoSbor:TO4Edit
+tsRestoran:TTabSheet
+Label41:TO4Label
+eMinProc:TO4Edit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+btnDefault:TO4Button
+SaveDialog:TO4SaveDialog

@@ -1,0 +1,29 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsPartRealiz : ISAccs;
+
+function —формироватьѕлатежѕоƒокументу(DocOwner : Variant) : Decimal; server;
+var
+  Pays, Nakls, Orders : ISJournal;
+  V : Variant;
+  “амѕроц—уммаƒекл, ѕошл—уммаƒекл, —уммаЌƒ—ƒекл, ќпл“ам : Decimal;
+begin
+  if DocOwner.GetType() <> 'Dictionaries;—правочники;ƒов≥дники' then
+    begin
+      if (DocOwner.ќтпуск = 1) then
+        Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп')
+      else
+        Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+      Pays.UseMaster(DocOwner);
+      Pays.SetDocMultiStateRange('1;2;');
+      Result := DocOwner.—умма¬¬алюте - Pays.Total('—умма¬¬алюте');
+    end
+end;
+
+end.

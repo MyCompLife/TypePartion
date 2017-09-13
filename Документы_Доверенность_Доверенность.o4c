@@ -1,0 +1,241 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  LinkDict : ICDictionary;
+  CursorVis : TCursor;
+  Options : ICOptions;
+  ScrollLock, ChangeLock, isSave, AddDoc  : boolean;
+
+procedure dsMaster_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := dsMaster.GetMean;
+  MasterData.SetSrvTableOnCalcFields(server.GetCalcParams);
+  Options := GetOptions;
+end;
+
+procedure dsMaster_Append(Sender : TObject);
+var
+  OrderOwner, OldDoc, ChildDoc : ICDocuments;
+  TmpLHead : ICValueTable;
+  Number : string;
+  suffix : String;
+begin     
+  AddDoc := true;
+  OrderOwner := MasterData.Owner;
+  if not IsNil(OrderOwner) and OrderOwner.IsFocused then
+    OldDoc := OrderOwner
+  else
+    if MasterData.HasParam('OldDoc') then
+      OldDoc := MasterData.Params['OldDoc'];
+  if not IsNil(OldDoc) and OldDoc.IsFocused then
+    begin
+      Number := MasterData.НомерДокумента;
+      TmpLHead := CreateObject('ValueTable');
+      OldDoc.SaveContents('Код;Товар;ЕдИзм;Количество', TmpLHead);
+      TmpLHead.GroupBy('Код;Товар;ЕдИзм', 'Количество');
+      TmpLHead.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+      MasterData.LoadContents('', TmpLHead);
+      MasterData.ДатаДокумента := CurrentDateTime;
+      MasterData.НомерДокумента := Number;
+      MasterData.Партнер := OldDoc.Партнер;
+      MasterData.Служащий := OldDoc.ЧерезКого;
+      MasterData.ОснованиеДоверенности := OldDoc.ОснованиеДоверенности;
+      if StrPos('Накладная', OldDoc.GetSign) > 0 then    
+        begin
+          if MasterData.ОснованиеДоверенности = '' then
+            MasterData.ОснованиеДоверенности := 'накладна № ' + OldDoc.НомерДокумента +
+                                                  ' від ' + DateToStr(OldDoc.ДатаДокумента) + ' р.';
+          MasterData.ОтметкаПроИспользование := 'накладна № ' + OldDoc.НомерДокумента +
+                                                ' від ' + DateToStr(OldDoc.ДатаДокумента) + ' р.'
+        end
+      else
+        if StrPos('Счет', OldDoc.GetSign) > 0 then
+          begin
+            if MasterData.ОснованиеДоверенности = '' then
+              MasterData.ОснованиеДоверенности := 'рахунок № ' + OldDoc.НомерДокумента +
+                                                    ' від ' + DateToStr(OldDoc.ДатаДокумента) + ' р.';
+            suffix := '';
+            case OldDoc.GetSign of
+              'СчетНаЗакупкуФарм' :
+                suffix := 'Фарм';
+              'СчетНаЗакупкуАлко' :
+                suffix := 'Алко';
+            end;
+            ChildDoc := CreateObject('Документы.НакладнаяПриходаПоСчету' + suffix);
+            ChildDoc.UseMasterAndSelect(OldDoc);
+            if ChildDoc.SelectNext then
+              MasterData.ОтметкаПроИспользование := 'накладна № ' + ChildDoc.НомерДокумента +
+                                                    ' від ' + DateToStr(ChildDoc.ДатаДокумента) + ' р.';
+          end;
+    end;
+  MasterData.Ответственный := GetEmplByName(GetUserName, dbeRespons);
+  MasterData.ДатаДействия := MasterData.ДатаДокумента + 10;
+end;
+
+procedure tbSource_Click(Sender : TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.Товары', 'ПросмотрТоваров', Null);
+end;
+
+procedure dcsData_StartDrop(Source : Variant; var Accept : boolean);
+begin
+  MasterData.UpdateLine(True);
+  MasterData.TableAutoCalcFields := False;
+  CursorVis := WaitCursorStart;
+  ScrollLock := True;
+end;
+
+procedure dcsData_EndDrop(Source : Variant);
+begin
+  SetCursor(CursorVis);
+  MasterData.TableAutoCalcFields := True;
+  ScrollLock := False;
+end;
+
+procedure dcsData_Drop(Source : Variant; var Accept : boolean);
+var
+  Count : Decimal;
+  s : string;
+begin
+  MasterData.DisableTableControls();
+  try
+    Count := 1;
+    S := VarAsStr(Source.NameField);
+    if not MasterData.FindLineBy('Товар', Source) then
+      begin
+        if VarAsBool(Options.GetServerPrm(CountAck)) and not StdInpDec(inpGoodCount + s, Count) then
+          Accept := MessageDlg(EnterAsk, mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo;
+        if not Accept then
+          exit;
+        MasterData.AppendLine;
+        MasterData.Товар := Source;
+        MasterData.AssignFields('Код;ЕдИзм', Source);
+        MasterData.Количество := Count;
+        MasterData.PostLine;
+      end;
+  finally
+    MasterData.EnableTableControls();
+  end;
+end;
+
+procedure miLinkDict_Click(Sender : TObject);
+begin
+  miLinkDict.Checked := not miLinkDict.Checked;
+end;
+
+procedure dcsData_VPATimedAfterScroll(Sender : TObject);
+begin
+  if ScrollLock then
+    exit;
+  if miLinkDict.Checked and not IsNil(LinkDict) then
+    LinkDict.Find(MasterData.@Товар);
+end;
+
+procedure dsMaster_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  if (not ChangeLock) and IsObjFocused(MasterData) then
+    try
+      ChangeLock := True;
+      case StrLowerCase(FieldName) of
+        'датадокумента' :
+          MasterData.ДатаДействия := MasterData.ДатаДокумента + 10;
+      end;
+    finally
+      ChangeLock := False
+    end;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  MasterData.Params['ОК'] := true;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+end;
+
+procedure miProperty_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('Обработки.СвойстваТовара');
+      dialog.Execute('СвойстваТовара', MasterData);
+    end;
+end;
+
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure dcsData_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure dsMaster_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgListData:TO4DBGrid
+pnTop:TO4Panel
+Label2:TO4Label
+Label1:TO4Label
+Label6:TO4Label
+Label26:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+Label5:TO4Label
+Label8:TO4Label
+dbeNumber:TO4DBEdit
+dbeData:TO4DBEdit
+dbePartner:TO4DBEdit
+dbeRespons:TO4DBEdit
+dbeEmployee:TO4DBEdit
+dbeDateTo:TO4DBEdit
+dbeReason:TO4DBEdit
+dbeMark:TO4DBEdit
+pnBottom:TO4Panel
+pnButton:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel2:TO4Panel
+pnSource:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+Panel7:TO4Panel
+tbDet:TO4ToolBar
+tbDelete:TO4ToolButton
+tbParam:TO4ToolButton
+dcsData:TO4DocContentsSource
+dsMaster:TO4DataSource
+pmList:TO4PopupMenu
+miLinkDict:TO4MenuItem
+miDelRec:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem
+miProperty:TO4MenuItem

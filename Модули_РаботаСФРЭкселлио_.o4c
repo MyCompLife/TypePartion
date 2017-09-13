@@ -1,0 +1,433 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, Пользователи;
+
+var FPExellio:Variant;
+
+function OpenFPExellio(FPDic:ICDictionary):integer;
+procedure CloseFPExellio;
+Function PrintFiscalDocFPExellio(FPDic:ICDictionary; Doc:ICDocuments; CashPaySum, CardPaySum:Decimal=0):Boolean;
+Function PrintFiscalReturnDocFPExellio(FPDic:ICDictionary; Doc:ICDocuments; CashPaySum, CardPaySum:Decimal=0):Boolean;
+procedure PrintLastDocFPExellio(FPDic:ICDictionary);
+procedure CancelLastDocFPExellio(FPDic:ICDictionary);
+procedure PrintZeroReceiptFPExellio(FPDic:ICDictionary);
+procedure ZReportFPExellio(FPDic:ICDictionary);
+procedure XReportFPExellio(FPDic:ICDictionary);
+procedure PeriodicReportFPExellio(FPDic:ICDictionary; BegDate,EndDate:DateTime);
+procedure ReportOnItemsFPExellio(FPDic:ICDictionary);
+procedure CashInOutFPExellio(FPDic:ICDictionary; Sum:Decimal);
+
+implementation
+
+function OpenFPExellio(FPDic:ICDictionary):integer;
+begin
+ if IsNil(FPExellio) then
+   FPExellio := CreateOleObject('ExellioFP.FiscalPrinter', VarAsStr(FPDic.IP));
+ Result := FPExellio.OpenPort('COM'+IntToStr(VarAsInt(FPDic.ComPort)), VarAsInt(FPDic.Скорость));
+end;
+
+
+procedure CloseFPExellio;
+begin     
+ if not IsNil(FPExellio) then
+   FPExellio.ClosePort;
+end;
+
+Function PrintFiscalDocFPExellio(FPDic:ICDictionary; Doc:ICDocuments; CashPaySum, CardPaySum:Decimal=0):Boolean;
+var
+  Сode, ResCode : integer;
+  Tbl, PayTbl : ICValueTable;   
+  DocOpen : boolean;
+  DocSum, AllPaySum : DEcimal;
+  PayJrn : ICJournal;
+begin
+ Result := false;
+ DocOpen := false;
+ if IsObjFocused(Doc) then
+   begin    
+     if (CashPaySum=0) and (CardPaySum=0) then
+       begin
+         PayTbl := CreateObject('ТаблицаЗначений');
+         PayTbl.AddColumn('DocSign',vtcString,64);
+         PayTbl.AddColumn('Sum',vtcFFT,2);
+         PayTbl.Open;
+         PayJrn := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+         PayJrn.SetDocMultiStateRange('1;2');
+         PayJrn.UseMaster(Doc);
+         PayJrn.Select;
+         While PayJrn.SelectNext do
+           begin
+             PayTbl.Append;
+             PayTbl.DocSign := PayJrn.GetDocSign;
+             PayTbl.Sum := VarAsDec(PayJrn.Сумма);
+             PayTbl.Post;
+           end;
+         PayTbl.GroupBy('DocSign','Sum');
+         PayTbl.Select;
+         While PayTbl.SelectNext do
+           case VarAsStr(PayTbl.DocSign) of
+             'ПриходВКассу', 'ПриходНаРасчСчет' :  CashPaySum := CashPaySum+VarAsDec(PayTbl.Sum);
+             'ПриходПоЭквайрингу' :  CardPaySum := VarAsDec(PayTbl.Sum);
+           end;
+       end;
+     AllPaySum := CashPaySum + CardPaySum;
+     DocSum := VarAsDec(Doc.Сумма);
+     if (AllPaySum<>DocSum) and (MessageDlg('Сумма документа '+DecToStr(DocSum)+' грн. отличаеться от суммы оплат '+
+         DecToStr(AllPaySum)+' грн.'+#13+'Все равно печатать чек?',mtConfirmation,ArrayOf(mbYes,mbNo))<>mrYes) then
+       exit;
+     if CardPaySum>DocSum then
+      CardPaySum := DocSum
+     else
+     if CardPaySum<0 then
+       CardPaySum := 0;
+     CashPaySum := DocSum - CardPaySum;
+
+     Tbl := CreateObject('ТаблицаЗначений');
+     Tbl.AddColumn('Товар',vtcLink,0);
+     Tbl.AddColumn('НомСтроки',vtcInteger,0);
+     Tbl.AddColumn('Артикул',vtcInteger,0);
+     Tbl.AddColumn('НалоговаяГруппа',vtcInteger,0);
+     Tbl.AddColumn('Количество',vtcFFT,5);
+     Tbl.AddColumn('Цена',vtcFFT,7);
+     Tbl.AddColumn('НазвТовара',vtcString,150);
+     Tbl.AddColumn('СуммаСтроки',vtcFFT,7);
+     Tbl.AddColumn('СуммаСкидки',vtcFFT,7);
+     Tbl.Open;
+     if Doc.HasTableField('ЦенаБезСкидкиНадбавки') then
+       Doc.AppendLinesTo('НомСтроки;Товар;Количество;Цена;ЦенаБезСкидкиНадбавки',Tbl)
+     else
+       Doc.AppendLinesTo('НомСтроки;Товар;Количество;Цена',Tbl);
+     Tbl.DoGetLinks('Артикул=Товар.Артикул;НалоговаяГруппа=Товар.НалоговаяГруппа;НазвТовара=Товар.НазвТовара');
+     Tbl.DoCalculation('СуммаСтроки','Цена*Количество');
+     if Doc.HasTableField('ЦенаБезСкидкиНадбавки') then
+       Tbl.DoCalculation('СуммаСкидки','(Цена-ЦенаБезСкидкиНадбавки)*Количество');
+     Tbl.Select;
+     While Tbl.SelectNext do
+       if VarAsInt(Tbl.НалоговаяГруппа)<=0 then
+         begin
+           Tbl.Edit;
+           Tbl.НалоговаяГруппа := 1;
+           Tbl.Post;
+         end;
+     try
+       ResCode := OpenFPExellio(FPDic);
+       if ResCode=0 then
+         begin
+           ResCode := FPExellio.OpenfiscalReceipt(1, VarAsStr(FPDic.ПарольКассира),1);
+           if ResCode=0 then
+             begin
+               DocOpen := true;
+              FPExellio.PrintLine(2);
+               Tbl.SortBy('НомСтроки');
+               Tbl.Select;
+               while Tbl.SelectNext do
+                 if VarAsFloat(Tbl.ЦенаБезСкидкиНадбавки)<>0 then
+                   begin
+                     ResCode := FPExellio.Sale(VarAsInt(Tbl.Артикул),VarAsStr(Tbl.НазвТовара), VarAsInt(Tbl.НалоговаяГруппа), 1,
+                                 VarAsFloat(Tbl.ЦенаБезСкидкиНадбавки),
+                                 VarAsFloat(Tbl.Количество), 0,
+                                 VarAsFloat(Tbl.СуммаСкидки),
+                                 false, VarAsStr(FPDic.ПарольКассира));
+                     if ResCode<>0 then
+                       begin
+                         ShowMessage(VarAsStr(FPExellio.LastErrorText));
+                         exit;
+                       end;
+                   end;
+               if CardPaySum>0 then
+                 begin
+                   ResCode := FPExellio.Total('Оплата', 4, CardPaySum);
+                   if ResCode<>0 then
+                     begin
+                       ShowMessage(VarAsStr(FPExellio.LastErrorText));
+                       exit;
+                     end;
+                 end;
+               if CashPaySum>0 then
+                 ResCode := FPExellio.Total('Оплата', 1, CashPaySum);
+               if ResCode=0 then
+                begin   
+                   FPExellio.PrintFiscalText('Накладна №'+VarAsStr(Doc.GetNumber));
+                   ResCode := FPExellio.CloseFiscalReceipt;
+                   if ResCode=0 then
+                     begin
+                       Result := true;
+                       DocOpen := false;
+                     end
+                   else
+                     ShowMessage(VarAsStr(FPExellio.LastErrorText));
+                 end
+               else
+                 begin
+                   FPExellio.CancelReceipt;
+                   DocOpen := false;
+                   ShowMessage(VarAsStr(FPExellio.LastErrorText));
+                 end;
+             end
+          else
+            ShowMessage(VarAsStr(FPExellio.LastErrorText));
+          end
+        else
+          ShowMessage(VarAsStr(FPExellio.LastErrorText));
+     finally
+       if DocOpen then
+         FPExellio.CancelReceipt;
+       CloseFPExellio;
+     end
+   end
+ else
+   ShowMessage('Не указан документ!');
+end;
+
+Function PrintFiscalReturnDocFPExellio(FPDic:ICDictionary; Doc:ICDocuments; CashPaySum, CardPaySum:Decimal=0):Boolean;
+var
+  Сode, ResCode : integer;
+  Tbl, PayTbl : ICValueTable;
+  DocOpen : boolean;
+  DocSum, AllPaySum : DEcimal;
+  PayJrn : ICJournal;
+begin
+ Result := false;
+ DocOpen := false;
+ if IsObjFocused(Doc) then
+   begin
+     if (CashPaySum=0) and (CardPaySum=0) then
+       begin
+         PayTbl := CreateObject('ТаблицаЗначений');
+         PayTbl.AddColumn('DocSign',vtcString,64);
+         PayTbl.AddColumn('Sum',vtcFFT,2);
+         PayTbl.Open;
+         PayJrn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+         PayJrn.SetDocMultiStateRange('1;2');
+         PayJrn.UseMaster(Doc);
+         PayJrn.Select;
+         While PayJrn.SelectNext do
+           begin
+             PayTbl.Append;
+             PayTbl.DocSign := PayJrn.GetDocSign;
+             PayTbl.Sum := VarAsDec(PayJrn.Сумма);
+             PayTbl.Post;
+           end;
+         PayTbl.GroupBy('DocSign','Sum');
+         PayTbl.Select;
+         While PayTbl.SelectNext do
+           case VarAsStr(PayTbl.DocSign) of
+             'РасходИзКассы', 'РасходСРасчСчета' :  CashPaySum := CashPaySum+VarAsDec(PayTbl.Sum);
+             'РасходПоЭквайрингу' :  CardPaySum := VarAsDec(PayTbl.Sum);
+           end;
+       end;
+     AllPaySum := CashPaySum + CardPaySum;
+     DocSum := VarAsDec(Doc.Сумма);
+     if (AllPaySum<>DocSum) and (MessageDlg('Сумма документа '+DecToStr(DocSum)+' грн. отличаеться от суммы оплат '+
+         DecToStr(AllPaySum)+' грн.'+#13+'Все равно печатать чек?',mtConfirmation,ArrayOf(mbYes,mbNo))<>mrYes) then
+       exit;
+     if CardPaySum>DocSum then
+      CardPaySum := DocSum
+     else
+     if CardPaySum<=0 then
+       CardPaySum := 0;
+     CashPaySum := DocSum - CardPaySum;
+
+     Tbl := CreateObject('ТаблицаЗначений');
+     Tbl.AddColumn('Товар',vtcLink,0);
+     Tbl.AddColumn('НомСтроки',vtcInteger,0);
+     Tbl.AddColumn('Артикул',vtcInteger,0);
+     Tbl.AddColumn('НалоговаяГруппа',vtcInteger,0);
+     Tbl.AddColumn('Количество',vtcFFT,5);
+     Tbl.AddColumn('Цена',vtcFFT,7);
+     Tbl.AddColumn('НазвТовара',vtcString,150);
+     Tbl.AddColumn('СуммаСтроки',vtcFFT,7);
+     Tbl.Open;
+     Doc.AppendLinesTo('НомСтроки;Товар;Количество;Цена',Tbl);
+     Tbl.DoGetLinks('Артикул=Товар.Артикул;НалоговаяГруппа=Товар.НалоговаяГруппа;НазвТовара=Товар.НазвТовара');
+     Tbl.DoCalculation('СуммаСтроки','Цена*Количество');
+     Tbl.Select;
+     While Tbl.SelectNext do
+       if VarAsInt(Tbl.НалоговаяГруппа)<=0 then
+         begin
+           Tbl.Edit;
+           Tbl.НалоговаяГруппа := 1;
+           Tbl.Post;
+         end;  
+     try
+       ResCode := OpenFPExellio(FPDic);
+       if ResCode=0 then
+         begin
+           ResCode := FPExellio.OpenReturnReceipt(1, VarAsStr(FPDic.ПарольКассира),1);
+           if ResCode=0 then
+             begin
+               DocOpen := true;
+              FPExellio.PrintLine(2);
+               Tbl.Select;
+               while Tbl.SelectNext do
+                 if VarAsFloat(Tbl.Цена)<>0 then
+                   begin
+                    ResCode := FPExellio.Sale(VarAsInt(Tbl.Артикул),VarAsStr(Tbl.НазвТовара), VarAsInt(Tbl.НалоговаяГруппа), 1,
+                                 VarAsFloat(Tbl.Цена),
+                                 VarAsFloat(Tbl.Количество), 0, 0,
+                                 false, VarAsStr(FPDic.ПарольКассира));
+                     if ResCode<>0 then
+                       begin
+                         ShowMessage(VarAsStr(FPExellio.LastErrorText));
+                         exit;
+                       end;
+                   end;
+               if CardPaySum>0 then
+                 begin
+                   ResCode := FPExellio.Total('Оплата', 4, CardPaySum);
+                   if ResCode<>0 then
+                     begin
+                       ShowMessage(VarAsStr(FPExellio.LastErrorText));
+                       exit;
+                     end;
+                 end;
+               if CashPaySum>0 then
+                 ResCode := FPExellio.Total('Оплата', 1, CashPaySum);
+               if ResCode=0 then
+                 begin   
+                  FPExellio.PrintFiscalText('Накладна №'+VarAsStr(Doc.GetNumber));
+                  ResCode := FPExellio.CloseFiscalReceipt;
+                   if ResCode=0 then
+                     begin
+                       DocOpen := false;
+                       Result := true; 
+                     end
+                   else
+                     ShowMessage(VarAsStr(FPExellio.LastErrorText));
+                 end
+               else
+                 begin
+                   FPExellio.CancelReceipt;
+                   DocOpen := false;
+                   ShowMessage(VarAsStr(FPExellio.LastErrorText));
+                 end;
+             end
+          else
+           ShowMessage(VarAsStr(FPExellio.LastErrorText));
+          end
+        else
+          ShowMessage(VarAsStr(FPExellio.LastErrorText));
+     finally
+       if DocOpen then
+         FPExellio.CancelReceipt;
+       CloseFPExellio;
+     end
+   end
+ else
+   ShowMessage('Не указан документ!');
+end;
+
+
+
+procedure PrintLastDocFPExellio(FPDic:ICDictionary);
+var
+  ResCode : integer;
+begin
+  ResCode := OpenFPExellio(FPDic);
+  if ResCode=0 then
+    try
+       FPExellio.MakeReceiptCopy(1);
+    finally
+      CloseFPExellio;
+    end
+  else
+    ShowMessage(VarAsStr(FPExellio.LastErrorText));
+end;   
+
+procedure CancelLastDocFPExellio(FPDic:ICDictionary);
+var
+  ResCode : integer;
+begin
+  ResCode := OpenFPExellio(FPDic);
+  if ResCode=0 then
+    try
+       FPExellio.CancelReceipt;
+    finally
+      CloseFPExellio;
+    end
+  else
+    ShowMessage(VarAsStr(FPExellio.LastErrorText));
+end;
+
+procedure PrintZeroReceiptFPExellio(FPDic:ICDictionary);
+var ResCode : integer;
+begin
+ ResCode := OpenFPExellio(FPDic);
+ if ResCode=0 then
+   try
+     FPExellio.PrintNullCheck;
+   finally
+     CloseFPExellio;
+   end;
+end;  
+
+procedure ZReportFPExellio(FPDic:ICDictionary);
+var ResCode : integer;
+begin
+ ResCode := OpenFPExellio(FPDic);
+ if ResCode=0 then
+   try
+     FPExellio.ZReportWC(VarAsStr(FPDic.ПарольКассира));
+   finally
+     CloseFPExellio;
+   end;
+end;
+
+procedure XReportFPExellio(FPDic:ICDictionary);
+var ResCode : integer;
+begin
+ ResCode := OpenFPExellio(FPDic);
+ if ResCode=0 then
+   try
+     FPExellio.XReport(VarAsStr(FPDic.ПарольКассира));
+   finally
+     CloseFPExellio;
+   end;
+end;
+
+procedure PeriodicReportFPExellio(FPDic:ICDictionary; BegDate,EndDate:DateTime);
+var ResCode : integer;
+begin
+ ResCode := OpenFPExellio(FPDic);
+ if ResCode=0 then
+   try
+     ResCode := FPExellio.PrintRepByDateFull(VarAsStr(FPDic.ПарольКассира),
+                                     FormatDateTime('DDMMYY',BegDate),
+                                     FormatDateTime('DDMMYY',EndDate));
+     if ResCode<>0 then
+       ShowMessage(VarAsStr(FPExellio.LastErrorText));
+   finally
+     CloseFPExellio;
+   end;
+end;  
+
+procedure ReportOnItemsFPExellio(FPDic:ICDictionary);
+var ResCode : integer;
+begin
+ ResCode := OpenFPExellio(FPDic);
+ if ResCode=0 then
+   try
+     FPExellio.PrintRepByArt(VarAsStr(FPDic.ПарольКассира),1);
+   finally
+     CloseFPExellio;
+   end;
+end;
+
+procedure CashInOutFPExellio(FPDic:ICDictionary; Sum:Decimal);
+var ResCode : integer;
+begin
+ ResCode := OpenFPExellio(FPDic);
+ if ResCode=0 then
+   try
+     FPExellio.InOut(Sum);
+     if ResCode<>0 then
+       ShowMessage(VarAsStr(FPExellio.LastErrorText));
+   finally
+     CloseFPExellio;
+   end;
+end;
+
+
+
+end.

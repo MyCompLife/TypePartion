@@ -1,0 +1,183 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  UseLevels, LockPost : Boolean;
+  Opt : ICOptions;
+  Constants : IC4VPAConst;
+  KeyBoard: ICProcessing;
+
+procedure SetCalcField;
+var
+  Cond : string;
+  AccsGoodCurrent: ICAccs;
+begin
+  Cond := '';
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  MasterData.SetCalcFieldInDBServer('КоличествоНаСкладах', AccsGoodCurrent,
+    RoundDate(CurrentDate, rdDay, True), ArrayOf('Товар'), 'КолОбщ', amtBoth, Cond);
+end;
+
+procedure MDS_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  if IsNil(Constants) then
+    Constants := CreateObject('Константы');
+  if not VarAsBool(Constants.ВключатьУслугиВЧек) then
+    MasterData.SetFieldFilter('Услуга', '<>', '-1', '', '', Null);
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+  SetCalcField;
+end;
+
+procedure pmiAdd_VPABeforeActionClick(Sender : TObject);
+begin
+  MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure miCopy_VPABeforeActionClick(Sender : TObject);
+var
+  CopyFrom : ICDictionary;
+begin
+  CopyFrom := CreateObject('Справочники.Товары');
+  if CopyFrom.Find(MasterData) then
+    begin
+      MasterData.Params['CopyFrom'] := CopyFrom
+    end
+  else
+    MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+end;
+
+procedure miProperty_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('Обработки.СвойстваТовара');
+      dialog.Execute('СвойстваТовара', MasterData);
+    end;
+end;
+
+procedure MDS_Select(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  Goods : ICDictionary;
+begin 
+{
+  if IsNil(params) then
+    exit;
+  if VarAsBool(Params.IsType('Справочники')) or VarAsBool(Params.IsType('Документы'))
+    or VarAsBool(Params.IsType('Журналы')) or VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    if VarAsBool(Params.HasField('Категория')) then
+      begin
+        Goods := CreateObject('Справочники.Товары');
+        Goods.IncludeLevels(True);
+        if Goods.FindByName(Params.Категория, False) then
+          begin
+            Mean.UseParent(Goods);
+            MasterData.Params['Category'] := Params.Категория;
+          end;
+      end;
+}
+end;
+
+procedure tbAdd_VPABeforeActionClick(Sender : TObject);
+begin
+  MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+//
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  KeyBoard := CreateObject('Обработки.Клавиатура');
+  KeyBoard.OpenFormInplace('ФормаКлавиатура',ctrlToVar(pnKeyboard));
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+Var
+  CatDic : ICDictionary;
+begin
+ if LockPost then exit;
+ CatDic := CreateObject('Справочники.Товары');
+ CatDic.IncludeLevels(true);
+ CatDic.IncludeOnlyLevels(true);
+ if CatDic.Find(MasterData.@Категория) and not IsObjEQ(MasterData.GetParent,CatDic)  then
+   begin
+     LockPost := true;
+     MasterData.Edit;
+     MasterData.Категория := MasterData.GetParent;
+     MasterData.POst;
+     MasterData.ApplyUpdates;
+     LockPost := False;
+   end;
+
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+DBTreeView1:TO4DBTreeView
+DBGrid1:TO4DBGrid
+pnKeyboard:TO4Panel
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+pmData:TO4PopupMenu
+MenuItem3:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem6:TO4MenuItem
+MenuItem8:TO4MenuItem
+MenuItem9:TO4MenuItem
+pmiSort:TO4MenuItem
+tbParams:TO4MenuItem

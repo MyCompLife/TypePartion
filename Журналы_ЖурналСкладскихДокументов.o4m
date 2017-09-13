@@ -1,0 +1,200 @@
+object TJournMeanClass
+  BuhJourn = False
+  Comment = 'Журнал складских документов'
+  Description = #0
+  DocsToAdd.Strings = (
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|4875909170DBB040'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|00D6C8B507935D40'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|F0505F798109B140'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|B82895BD2007B240'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|00E4596ACA974140'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|F878B8F0EACFB040'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|98D74D511FD2B040')
+  Fields = <
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftDateTime
+      Description = 'Дата'
+      DisplayFormat = 'dd.mm.yyyy'
+      DSID = 'DATE'
+      Kind = lfkSystem
+      Name = 'ДатаДокумента'
+      Order = 0
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = True
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftString
+      Description = 'Номер'
+      DSID = 'NUMBER'
+      Kind = lfkSystem
+      Name = 'НомерДокумента'
+      Order = 1
+      Prec = 0
+      Required = False
+      Size = 20
+      Sortable = True
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = True
+      DataType = lftString
+      Description = 'Документ'
+      DSID = 'DOCNAME'
+      Kind = lfkSystem
+      Name = 'Документ'
+      Order = 2
+      Prec = 0
+      Required = False
+      Size = 64
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftLink
+      Description = 'Ответственный'
+      DSID = 'F1'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00D6C8B507935D40|F10'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|F0505F798109B140|F2'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|B82895BD2007B240|F2'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|4875909170DBB040|F2'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00E4596ACA974140|F10'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|F878B8F0EACFB040|F2'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|98D74D511FD2B040|F2')
+      Name = 'Ответственный'
+      Order = 3
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftFFT
+      Description = 'Сумма (вал.)'
+      DSID = 'F6'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00D6C8B507935D40|F45'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|F0505F798109B140|F24'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|B82895BD2007B240|F24'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|4875909170DBB040|F24'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00E4596ACA974140|F52'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|F878B8F0EACFB040|F24'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|98D74D511FD2B040|F24')
+      Name = 'СуммаВВалюте'
+      Order = 4
+      Prec = 2
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftMemo
+      Description = 'Заметки'
+      DSID = 'F7'
+      Kind = lfkStandard
+      Name = 'Заметки'
+      Order = 5
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = False
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftLink
+      Description = 'Валюта'
+      DSID = 'F3'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00D6C8B507935D40|F28'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|F0505F798109B140|F21'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|B82895BD2007B240|F21'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|4875909170DBB040|F21'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00E4596ACA974140|F28'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|98D74D511FD2B040|F21'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|F878B8F0EACFB040|F21')
+      Name = 'Валюта'
+      Order = 6
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = True
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftLink
+      Description = 'Регион'
+      DSID = 'F2'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00D6C8B507935D40|F42'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|F0505F798109B140|F29'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|B82895BD2007B240|F29'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|4875909170DBB040|F29'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00E4596ACA974140|F49'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|98D74D511FD2B040|F29'
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|F878B8F0EACFB040|F29')
+      Name = 'Регион'
+      Order = 7
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = True
+      Timed = False
+      Visible = True
+    end>
+  Forms = <
+    item
+      Comment = 'Список подчиненных накладных'
+      FormType = 'Lists'
+      ForSelect = False
+      ForTree = False
+      ID = '00C51DAEC7306140'
+      Name = 'ЖурналСкладскихДокументов'
+    end>
+  FrameSize = 100
+  LinkJourn = False
+  MapList.Strings = (
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|00D6C8B507935D40|1'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|F0505F798109B140|1'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|B82895BD2007B240|1'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|4875909170DBB040|1'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|00E4596ACA974140|1'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|F878B8F0EACFB040|1'
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|98D74D511FD2B040|1')
+  Sign = 'ЖурналСкладскихДокументов'
+  StateNames.Strings = (
+    'Оформляемые'
+    'Завершенные'
+    'В архив')
+  StringID = '509B13C5545DB240'
+end

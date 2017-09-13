@@ -1,0 +1,103 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+var
+  UseConst : IC4VPAConst;
+  LinkDoc : Variant;
+  TblGood : ICValueTable;
+  MasterData : ICProcessing;
+  Good : ICDictionary;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  TypePrice : String;
+  Course, Proc: Decimal;
+begin
+  MasterData := Mean;
+  if not MasterData.HasParam('Good') then
+    raise('Параметр с текущим товаром не задан!');
+  if not MasterData.HasParam('TypePrice') then
+    raise('Параметр с типом цены не задан!');
+  if not MasterData.HasParam('Course') then
+    raise('Параметр с курсом валюты не задан!');
+  if not MasterData.HasParam('Proc') then
+    raise('Параметр с % скидки партнера не задан!');
+  Good := MasterData.Params['Good'];
+  if not Good.IsFocused then
+    raise('Параметр с текущим товаром не спозиционирован!');
+  TypePrice := MasterData.Params['TypePrice'];
+  if TypePrice = '' then
+    raise('Параметр с типом цены не заполнен!');
+  Course := MasterData.Params['Course'];
+  if Course = 0 then
+    raise('Параметр с курсом валюты не заполнен!');
+  Proc := MasterData.Params['Proc'];
+
+  MasterData.Params['Price'] := Good._Default[TypePrice]*Course*(1 + Proc/100);;
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      UseConst := GetConstants;
+      Params.SetColumnFormat('Цена', UseConst.ФорматЦеныГРН);
+      Params.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+      Params.UseDataSource(CtrlToVar(TVSGood));
+      LinkDoc := Params;
+      TblGood := Params;
+    end;
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+//  LinkDoc.Locate('Товар', InParams);
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Код;Товар');
+      miSortByCode.Checked := True;
+      miSortByName.Checked := False;
+    end;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Товар;Код');
+      miSortByCode.Checked := False;
+      miSortByName.Checked := True;
+    end;
+end;
+
+procedure DBGrid1_DblClick(Sender: TObject);
+begin
+  if TblGood.IsFocused then
+    Form.ModalResult := mrOk;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+DBGrid1:TO4DBGrid
+Panel1:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+Panel2:TO4Panel
+Label1:TO4Label
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem

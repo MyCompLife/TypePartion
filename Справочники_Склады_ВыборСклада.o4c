@@ -1,0 +1,113 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL;
+
+implementation
+
+var
+  MasterData : ICDictionary; 
+  Constants: IC4VPAConst;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin      
+  if not MasterData.IsFocused then
+    exit;
+  if VarAsBool(MasterData.Активность) then
+    Index1 := 36;
+end;
+{$D+}
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean; 
+  Constants := GetConstants;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itSelectForm;
+  MakeStandartInterface(MasterData, Form, '', '');
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;          
+
+
+procedure MDS_Select(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if (Params.GetSign = 'ВозвратМатериаловЗЦ') or (Params.GetSign = 'ВозвратМатериаловШЦ') or
+     (Params.GetSign = 'СписаниеТовараВЗЦ') or (Params.GetSign = 'СписаниеТовараВШЦ') or
+     (Params.GetSign = 'ПриемГотПрод') or (Params.GetSign = 'ПриемКроя') then
+     begin
+       MasterData.SetFieldFilter('Регион','=',Constants.РегионПроизводство,'','',null)
+     end
+  else
+    begin
+      if (Params.GetSign = 'Склады') and VarAsBool(Params.HasParam('Region') )  then
+        begin
+          MasterData.SetFieldFilter('Регион','=',Params.Params['Region'] ,'','',null)
+        end
+      else
+        if (Params.GetSign = 'ТорговыеАгенты') or (Params.GetSign = 'НастройкиОбменаСПром')  then
+          begin
+            if not IsNil(Params) and VarAsBool(Params.IsFocused) then
+              begin
+                if VarAsBool(Params.HasParam('TypeRegion')) and (VarAsInt(Params.Params['TypeRegion']) = 1) then
+                  begin
+  {                  if VarAsBool(Params.HasField('РегионЭкспорта')) and VarAsBool(Params.@РегионЭкспорта.IsFocused) then
+                      MasterData.SetFieldFilter('Регион','=',Params.@РегионЭкспорта,'','',null)
+                    else
+                      begin
+                        if VarAsBool(Params.HasParam('IsPartner')) and VarAsBool(Params.Params['IsPartner']) then
+                          raise('Перед выбором склада укажите регион экспорта!');
+                      end;
+  }
+                  end
+                else
+                  begin
+                    if VarAsBool(Params.HasField('РегионИмпорта')) and VarAsBool(Params.@РегионИмпорта.IsFocused) then
+                      MasterData.SetFieldFilter('Регион','=',Params.@РегионИмпорта,'','',null)
+                    else
+                      begin
+                        if VarAsBool(Params.HasParam('IsPartner')) and VarAsBool(Params.Params['IsPartner']) then
+                          raise('Перед выбором склада укажите регион импорта!');
+                      end;
+                  end
+              end;
+          end
+        else
+          if Params.GetSign <> 'НакладнаяВнутрПеремещ' then
+           begin
+             if not IsNil(Params) and VarAsBool(Params.IsFocused) then
+               if VarAsBool(Params.HasField('Регион')) and VarAsBool(Params.Регион.IsFocused) then
+                 MasterData.SetFieldFilter('Регион','=',Params.Регион,'','',null)
+             else
+               raise('Перед выбором склада укажите регион!')
+           end;
+      end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

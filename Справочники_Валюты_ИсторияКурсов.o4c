@@ -1,0 +1,66 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Print : ICValueTable;
+  MasterData : ICDictionary;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  Print := Form.GetParams;
+  MasterData := CreateObject('Справочники.Валюты');
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    begin
+      MasterData := Form.GetMean;
+      MasterData.SelectBookmarks;
+      MasterData.SortByName;
+    end;
+  Accept := MasterData.SelectNextBookmark;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['NAME'] := MasterData.Название;
+      Value['VALCODE'] := MasterData.Код;
+      Value['WHATCOURSE'] := '(' + Print.WhatCourse + ')';
+    end;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := Print.SelectFirst()
+  else
+    Accept := Print.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['DATA'] := Print.Data;
+      Value['BANKCOURSE'] := Print.BankCourse;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+Label6:TRBLabel
+Label13:TRBLabel
+DetailBand2:TRBDetailBand
+Label1:TRBLabel
+Label8:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label5:TRBLabel
+Label3:TRBLabel
+Label2:TRBLabel
+Label12:TRBLabel
+Structure1:TRBStructure

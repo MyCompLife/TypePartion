@@ -1,0 +1,375 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+var FP_ICS_EP_09:Variant;
+
+function OpenFP_ICS_EP_09(FPDic:ICDictionary):Boolean;
+function CloseFP_ICS_EP_09:Boolean;
+function LineFeedFP_ICS_EP_09:Boolean;
+function PrintDocFP_ICS_EP_09(FPDic:ICDictionary; Doc:ICDocuments; CashPay, CardPay:Decimal=0; CardPayAuthCode:string=''):Boolean;
+function PrintReturnDocFP_ICS_EP_09(FPDic:ICDictionary; Doc:ICDocuments; CashPay, CardPay:Decimal=0; CardPayAuthCode:string=''):Boolean;
+function XReportFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+function ZReportFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+function ReportOnItemsFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+function CashInFP_ICS_EP_09(FPDic:ICDictionary; Sum:Decimal):boolean;
+function CashOutFP_ICS_EP_09(FPDic:ICDictionary; Sum:Decimal):boolean;
+function PrintZeroReceiptFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+function PeriodicReportFP_ICS_EP_09(FPDic:ICDictionary; BegDate,EndDate:DateTime):boolean;
+function AnnulReceiptFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+
+implementation
+
+function OpenFP_ICS_EP_09(FPDic:ICDictionary):Boolean;
+var InitResult : integer;
+begin
+ Result := false;
+ if IsNil(FP_ICS_EP_09) then
+   begin
+     FP_ICS_EP_09 := CreateOleObject('NeoFiscalPrinterDriver.ICS_EP_09');
+     InitResult := VarAsInt(FP_ICS_EP_09.FPInitialize,-1);
+     if InitResult<>0 then
+       begin
+         ShowMessage('Ошибка инициализации драйвера '+IntToStr(InitResult)); 
+         exit;
+       end;
+   end;
+ Result := VarAsBool(FP_ICS_EP_09.FPOpen(VarAsStr(FPDic.ComPort),VarAsStr(FPDic.Скорость),3,3));
+end;
+
+function CloseFP_ICS_EP_09:Boolean;
+begin 
+ if not IsNil(FP_ICS_EP_09) then
+  Result := VarAsBool(FP_ICS_EP_09.FPClose);
+end;
+
+function LineFeedFP_ICS_EP_09:Boolean;
+begin   
+ if not IsNil(FP_ICS_EP_09) then
+   Result := VarAsBool(FP_ICS_EP_09.FPLineFeed);
+end;
+
+function PrintDocFP_ICS_EP_09(FPDic:ICDictionary; Doc:ICDocuments; CashPay, CardPay:Decimal=0; CardPayAuthCode:string=''):Boolean;
+var ContentsTbl : ICValueTable;
+    SaleAccept, PayAccept : boolean;
+    DocSum : Decimal;
+    ErrorStr:string; 
+    ChildPayJrn : ICJournal;
+begin
+  Result := false;  
+  if (CardPayAuthCode='') and (CashPay=0) and (CardPay=0) then
+    begin
+      CardPay := 0;
+      ChildPayJrn := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+      ChildPayJrn.UseMaster(Doc);
+      ChildPayJrn.SetDocMultiStateRange('1;2');
+      ChildPayJrn.SetDocTypeRange('Документы.ПриходПоЭквайрингу');
+      ChildPayJrn.Select;
+      While ChildPayJrn.SelectNext do
+        CardPay := CardPay + AbsD(VarAsDec(ChildPayJrn.Сумма));
+      if (CardPay>0) and (not StdInpStr('Введите код авторизации оплаты картой:',CardPayAuthCode) or (CardPayAuthCode='')) then
+        begin
+          ShowMessage('Код авторизации оплаты картой - обязательный реквизит!'+#13+'Чек не распечатан!');
+          exit;
+        end;
+    end;
+
+  ContentsTbl := CreateObject('ТаблицаЗначений');
+  ContentsTbl.AddColumn('Товар',vtcLink,0);
+  ContentsTbl.AddColumn('Артикул',vtcInteger,0);
+  ContentsTbl.AddColumn('НазвТовара',vtcString,75);
+  ContentsTbl.AddColumn('Количество',vtcFFT,5);
+  ContentsTbl.AddColumn('Цена',vtcFFT,7);
+  ContentsTbl.AddColumn('gty',vtcInteger,0);
+  ContentsTbl.AddColumn('qtyPrecision',vtcInteger,0);
+  ContentsTbl.AddColumn('НалоговаяГруппа',vtcInteger,0);
+  ContentsTbl.Open;
+  Doc.AppendLinesTo('Товар;Количество;Цена',ContentsTbl);
+  ContentsTbl.DoGetLinks('Артикул=Товар.Артикул;НазвТовара=Товар.НазвТовара;НалоговаяГруппа=Товар.НалоговаяГруппа');
+  ContentsTbl.Select;
+  While ContentsTbl.SelectNext do
+    begin
+      ContentsTbl.Edit;
+      if (VarAsInt(ContentsTbl.НалоговаяГруппа)<1) or (VarAsInt(ContentsTbl.НалоговаяГруппа)>5) then
+        ContentsTbl.НалоговаяГруппа := 1;
+      if VarAsDec(ContentsTbl.Количество)=trunc(VarAsDec(ContentsTbl.Количество)) then
+        begin
+          ContentsTbl.gty := trunc(VarAsDec(ContentsTbl.Количество));
+          ContentsTbl.qtyPrecision := 0;
+        end
+      else
+      if (VarAsDec(ContentsTbl.Количество)/1000)=trunc(VarAsDec(ContentsTbl.Количество)/1000) then
+        begin
+          ContentsTbl.gty := trunc(VarAsDec(ContentsTbl.Количество)*1000);
+          ContentsTbl.qtyPrecision := 3;
+        end
+      else
+        begin
+          ContentsTbl.gty := trunc(VarAsDec(ContentsTbl.Количество)*100000);
+          ContentsTbl.qtyPrecision := 5;
+        end;
+      ContentsTbl.Post;
+    end;
+  try
+    if OpenFP_ICS_EP_09(FPDic) then
+      begin
+        ContentsTbl.Select;
+        While ContentsTbl.SelectNext do
+          begin
+            SaleAccept := VarAsBool(FP_ICS_EP_09.FPSaleItemStr(VarAsInt(ContentsTbl.gty),VarAsInt(ContentsTbl.qtyPrecision),0,0,0,
+                                       trunc(VarAsDec(ContentsTbl.Цена)*100), VarAsInt(ContentsTbl.НалоговаяГруппа),
+                                       VarAsStr(ContentsTbl.НазвТовара),VarAsStr(ContentsTbl.Артикул)));
+            if not SaleAccept then
+              begin
+                ErrorStr :=#13+VarAsStr(FP_ICS_EP_09.prGetErrorText)+ #13+'Товар "'+VarAsStr(ContentsTbl.НазвТовара)+'"';
+                break;
+              end;
+          end;
+        if SaleAccept then
+          begin
+            PayAccept := true;
+            DocSum := VarAsDec(Doc.Сумма);
+            if CardPay>DocSum then
+             CardPay := DocSum
+            else
+            if CardPay<0 then
+              CardPay := 0;
+            CashPay := DocSum - CardPay;
+            if CardPay>0 then
+              PayAccept := VarAsBool(FP_ICS_EP_09.FPPayment('1',trunc(CardPay*100),CashPay=0,true,CardPayAuthCode));
+            if not PayAccept then
+              ErrorStr :=#13+ VarAsStr(FP_ICS_EP_09.prGetErrorText);
+            if PayAccept and (CashPay>0) then
+              PayAccept := VarAsBool(FP_ICS_EP_09.FPPayment('4',trunc(CashPay*100),true,true,''));
+           if not PayAccept then
+              ErrorStr :=#13+ VarAsStr(FP_ICS_EP_09.prGetErrorText);
+            Result := PayAccept;
+          end;
+      end
+    else
+     ErrorStr :=#13+ VarAsStr(FP_ICS_EP_09.prGetErrorText);
+  finally
+    if not Result then
+     begin
+      FP_ICS_EP_09.FPAnnulReceipt;
+      ShowMessage('Ошибка вывода документа на фискальный регистратор'+ErrorStr);
+     end;
+    CloseFP_ICS_EP_09;
+  end;
+end;
+
+function PrintReturnDocFP_ICS_EP_09(FPDic:ICDictionary; Doc:ICDocuments; CashPay, CardPay:Decimal=0; CardPayAuthCode:string=''):Boolean;
+var ContentsTbl : ICValueTable;
+    SaleAccept, PayAccept : boolean;
+    DocSum : Decimal;
+    ErrorStr:string; 
+    ChildPayJrn : ICJournal;
+begin
+  Result := false;
+  if (CardPayAuthCode='') and (CashPay=0) and (CardPay=0) then
+    begin
+      CardPay := 0;
+      ChildPayJrn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+      ChildPayJrn.UseMaster(Doc);
+      ChildPayJrn.SetDocMultiStateRange('1;2');
+      ChildPayJrn.SetDocTypeRange('Документы.ПриходПоЭквайрингу');
+      ChildPayJrn.Select;
+      While ChildPayJrn.SelectNext do
+        CardPay := CardPay + AbsD(VarAsDec(ChildPayJrn.Сумма));
+      if (CardPay>0) and (not StdInpStr('Введите код авторизации оплаты картой:',CardPayAuthCode) or (CardPayAuthCode='')) then
+        begin
+          ShowMessage('Код авторизации оплаты картой - обязательный реквизит!'+#13+'Чек не распечатан!');
+          exit;
+        end;
+    end;
+  ContentsTbl := CreateObject('ТаблицаЗначений');
+  ContentsTbl.AddColumn('Товар',vtcLink,0);
+  ContentsTbl.AddColumn('Артикул',vtcInteger,0);
+  ContentsTbl.AddColumn('НазвТовара',vtcString,75);
+  ContentsTbl.AddColumn('Количество',vtcFFT,5);
+  ContentsTbl.AddColumn('Цена',vtcFFT,7);
+  ContentsTbl.AddColumn('gty',vtcInteger,0);
+  ContentsTbl.AddColumn('qtyPrecision',vtcInteger,0);
+  ContentsTbl.AddColumn('НалоговаяГруппа',vtcInteger,0);
+  ContentsTbl.Open;
+  Doc.AppendLinesTo('Товар;Количество;Цена',ContentsTbl);
+  ContentsTbl.DoGetLinks('Артикул=Товар.Артикул;НазвТовара=Товар.НазвТовара;НалоговаяГруппа=Товар.НалоговаяГруппа');
+  ContentsTbl.Select;
+  While ContentsTbl.SelectNext do
+    begin
+      ContentsTbl.Edit;
+      if (VarAsInt(ContentsTbl.НалоговаяГруппа)<1) or (VarAsInt(ContentsTbl.НалоговаяГруппа)>5) then
+        ContentsTbl.НалоговаяГруппа := 1;
+      if VarAsDec(ContentsTbl.Количество)=trunc(VarAsDec(ContentsTbl.Количество)) then
+        begin
+          ContentsTbl.gty := trunc(VarAsDec(ContentsTbl.Количество));
+          ContentsTbl.qtyPrecision := 0;
+        end
+      else
+      if (VarAsDec(ContentsTbl.Количество)/1000)=trunc(VarAsDec(ContentsTbl.Количество)/1000) then
+        begin
+          ContentsTbl.gty := trunc(VarAsDec(ContentsTbl.Количество)*1000);
+          ContentsTbl.qtyPrecision := 3;
+        end
+      else
+        begin
+          ContentsTbl.gty := trunc(VarAsDec(ContentsTbl.Количество)*100000);
+          ContentsTbl.qtyPrecision := 5;
+        end;
+      ContentsTbl.Post;
+    end;
+  try
+    if OpenFP_ICS_EP_09(FPDic) then
+      begin
+        ContentsTbl.Select;
+        While ContentsTbl.SelectNext do
+          begin
+            SaleAccept := VarAsBool(FP_ICS_EP_09.FPRefundItemStr(VarAsInt(ContentsTbl.gty),VarAsInt(ContentsTbl.qtyPrecision),0,0,0,
+                                       trunc(VarAsDec(ContentsTbl.Цена)*100), VarAsInt(ContentsTbl.НалоговаяГруппа),
+                                       VarAsStr(ContentsTbl.НазвТовара),VarAsStr(ContentsTbl.Артикул)));
+            if not SaleAccept then 
+              begin
+                ErrorStr :=#13+VarAsStr(FP_ICS_EP_09.prGetErrorText)+ #13+'Товар "'+VarAsStr(ContentsTbl.НазвТовара)+'"';
+                break;
+              end;
+          end;
+        if SaleAccept then
+          begin    
+            PayAccept:= true;
+            DocSum := VarAsDec(Doc.Сумма);
+            if CardPay>DocSum then
+             CardPay := DocSum
+            else
+            if CardPay<0 then
+              CardPay := 0;
+            CashPay := DocSum - CardPay;
+            if CardPay>0 then
+              PayAccept := VarAsBool(FP_ICS_EP_09.FPPayment('1',trunc(CardPay*100),CashPay=0,true,CardPayAuthCode)); 
+           if not PayAccept then
+              ErrorStr :=#13+ VarAsStr(FP_ICS_EP_09.prGetErrorText);
+            if PayAccept and (CashPay>0) then
+              PayAccept := VarAsBool(FP_ICS_EP_09.FPPayment('4',trunc(CashPay*100),true,true,''));   
+           if not PayAccept then
+              ErrorStr :=#13+ VarAsStr(FP_ICS_EP_09.prGetErrorText);
+            Result := PayAccept;
+          end;
+      end
+    else
+     ErrorStr :=#13+ VarAsStr(FP_ICS_EP_09.prGetErrorText);
+  finally
+    if not Result then
+     begin
+      FP_ICS_EP_09.FPAnnulReceipt;
+      ShowMessage('Ошибка вывода документа на фискальный регистратор'+ErrorStr);
+     end;
+    CloseFP_ICS_EP_09;
+  end;
+end;
+
+function XReportFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+var RepPsw : SmallInt;
+begin
+ try
+   OpenFP_ICS_EP_09(FPDic);
+   RepPsw := VarAsInt(FPDic.ПарольInteger);
+   Result := VarAsBool(FP_ICS_EP_09.FPMakeXReport(RepPsw));
+   if not Result then
+     ShowMessage(VarAsStr(FP_ICS_EP_09.prGetErrorText));
+ finally
+   CloseFP_ICS_EP_09;
+ end;
+end;
+
+function ZReportFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+var RepPsw : SmallInt;
+begin
+ try
+   OpenFP_ICS_EP_09(FPDic);
+   RepPsw := VarAsInt(FPDic.ПарольInteger);
+   Result := VarAsBool(FP_ICS_EP_09.FPMakeZReport(RepPsw));
+   if not Result then
+     ShowMessage(VarAsStr(FP_ICS_EP_09.prGetErrorText));
+ finally
+   CloseFP_ICS_EP_09;
+ end;
+end;
+
+function ReportOnItemsFP_ICS_EP_09(FPDic:ICDictionary):boolean;  
+var RepPsw : SmallInt;
+begin
+ try
+   OpenFP_ICS_EP_09(FPDic);
+   RepPsw := VarAsInt(FPDic.ПарольInteger);
+   Result := VarAsBool(FP_ICS_EP_09.FPMakeReportOnItemsStr(RepPsw,'0','0'));
+   if not Result then
+     ShowMessage(VarAsStr(FP_ICS_EP_09.prGetErrorText));
+ finally
+   CloseFP_ICS_EP_09;
+ end;
+end;
+
+function CashInFP_ICS_EP_09(FPDic:ICDictionary; Sum:Decimal):boolean;
+begin
+ try
+   OpenFP_ICS_EP_09(FPDic);
+   Result := VarAsBool(FP_ICS_EP_09.FPCashIn(Trunc(AbsD(Sum)*100)));
+   if not Result then
+     ShowMessage(VarAsStr(FP_ICS_EP_09.prGetErrorText));
+ finally
+   CloseFP_ICS_EP_09;
+ end;
+end; 
+
+function CashOutFP_ICS_EP_09(FPDic:ICDictionary; Sum:Decimal):boolean;
+begin
+ try
+   OpenFP_ICS_EP_09(FPDic);
+   Result := VarAsBool(FP_ICS_EP_09.FPCashOut(Trunc(AbsD(Sum)*100)));
+   if not Result then
+     ShowMessage(VarAsStr(FP_ICS_EP_09.prGetErrorText));
+ finally
+   CloseFP_ICS_EP_09;
+ end;
+end;
+
+function PrintZeroReceiptFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+begin
+ try
+   OpenFP_ICS_EP_09(FPDic);
+   Result := VarAsBool(FP_ICS_EP_09.FPPrintZeroReceipt);
+   if not Result then
+     ShowMessage(VarAsStr(FP_ICS_EP_09.prGetErrorText));
+ finally
+   CloseFP_ICS_EP_09;
+ end;
+end;
+
+function PeriodicReportFP_ICS_EP_09(FPDic:ICDictionary; BegDate,EndDate:DateTime):boolean; 
+var RepPsw : SmallInt;
+begin
+ try
+   OpenFP_ICS_EP_09(FPDic); 
+   RepPsw :=  VarAsInt(FPDic.ПарольInteger);
+   Result := VarAsBool(FP_ICS_EP_09.FPMakePeriodicReportOnDate(RepPsw,BegDate,EndDate));
+   if not Result then
+     ShowMessage(VarAsStr(FP_ICS_EP_09.prGetErrorText));
+ finally
+   CloseFP_ICS_EP_09;
+ end;
+end;   
+
+function AnnulReceiptFP_ICS_EP_09(FPDic:ICDictionary):boolean;
+begin
+ try
+   OpenFP_ICS_EP_09(FPDic);
+   Result := VarAsBool(FP_ICS_EP_09.FPAnnulReceipt);
+   if not Result then
+     ShowMessage(VarAsStr(FP_ICS_EP_09.prGetErrorText));
+ finally
+   CloseFP_ICS_EP_09;
+ end;
+end;
+
+
+end.

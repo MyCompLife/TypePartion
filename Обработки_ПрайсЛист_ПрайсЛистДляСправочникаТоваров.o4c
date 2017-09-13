@@ -1,0 +1,86 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var
+  MasterData : ICDictionary;
+  Tbl : ICValueTable;
+  Today : DateTime;
+  i : integer;
+procedure Form_BeginPrint(PrintForm: TO4PrintForm);
+begin
+   MasterData := Form.GetParams;
+   Tbl := CreateObject('ТаблицаЗначений');
+   Tbl.AddColumn('Self',vtcLink,0);
+   Tbl.AddColumn('ЕдИзм',vtcLink,0);
+   Tbl.AddColumn('Цена',vtcFFT ,7);
+   Tbl.AddColumn('ОптЦена',vtcFFT ,7);
+   Tbl.Open;  
+   Label21.Caption := DateToStr(CurrentDate);
+   MasterData.AssignSelectParamsOnSrv(Null);
+   Tbl.Clear;
+   Tbl.CopyDataToServer;
+   server.GetPrice(MasterData.SrvMean,Tbl.SrvMean);
+   Tbl.CopyDataFromServer;
+   Tbl.SortBy('Self');
+end;
+
+procedure Structure1_Tbl1_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  i := 1;
+  Tbl.Select;
+end;
+
+procedure Structure1_ROOT_DET_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Self.Код;
+      Value['Name'] := Tbl.DefValue['Self'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['OutPrice'] := Tbl.Цена;
+      Value['OptPrice'] := Tbl.ОптЦена;
+      BarCode.Text := Tbl.Self.Код;
+   end;
+  if i mod 2 = 0 then
+    BarCode.left := 100
+  else
+    BarCode.left := 50;
+  inc(i)
+end;
+
+procedure Structure1_ROOT_DET_GetCount(Table: TRBTable; var Count: Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label14:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label10:TRBLabel
+Label21:TRBLabel
+Label18:TRBLabel
+DetailBand1:TRBDetailBand
+Label4:TRBLabel
+SysData1:TRBSysData
+Label9:TRBLabel
+Label8:TRBLabel
+Label12:TRBLabel
+Label5:TRBLabel
+BarCode:TRBBarCode
+Label19:TRBLabel
+Structure1:TRBStructure

@@ -1,0 +1,45 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений, РасчетыПроизводство;
+
+function CanFixDel(Data : ICDocuments; var Accept : Boolean; SemMsg, UniMsg, OptName : string) : string;
+
+implementation
+
+var
+  Semaphore : ICSemaphore;
+
+function GroupMove(Data : ICDocuments; StrMsg : string) : Boolean; //;Var Accept:Boolean
+var
+  Resultat : Integer;
+begin
+  Resultat := mrYesToAll;
+  if not Data.IsGroupAction then
+    Resultat := MessageDlg(StrMsg + ' ?', mtConfirmation, ArrayOf(mbYes, mbNo))
+  else
+    if (not Data.YesToAllInGroupAction) or Data.FirstInGroupAction then
+      Resultat := MessageDlg(StrMsg + ' ?', mtConfirmation, ArrayOf(mbYes, mbYesToAll, mbNo, mbNoToAll));
+  Data.NoToAllInGroupAction := Resultat = mrNoToAll;
+  Data.YesToAllInGroupAction := Resultat = mrYesToAll;
+  Result := Bits(Resultat) and Bits(mrYesToAll, mrYes) <> 0;
+end;
+
+function CanFixDel(Data : ICDocuments; var Accept : Boolean; SemMsg, UniMsg, OptName : string) : string;
+begin
+  Result := VarAsStr(trans(Data.GetName)) + ' № ' + VarAsStr(Data.GetNumber);
+  if Accept and VarAsBool(GetOptions.GetServerPrm(OptName)) then
+    Accept := GroupMove(Data, UniMsg + Result);
+  if Accept and (SemMsg <> '') then
+    begin
+      case SemMsg of
+        DecGood, IncGood, IncResGood, DecResGood,
+          DecGoodRIn, IncGoodRIn, DecGoodROut, IncGoodROut : SemMsg := DecGood;
+        IncCash, DecCash, IncBank, DecBank : SemMsg := DecBank;
+      end;
+      Semaphore := CreateSemaphore(SemMsg, UniMsg + Result);
+      Accept := Semaphore.WaitSemaphore;
+    end
+end;
+
+end.

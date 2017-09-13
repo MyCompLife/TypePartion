@@ -1,0 +1,36 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Doc : ISDocuments;
+
+procedure OrderCalcFields(PaysRest : ISJournal);
+var
+  SumBank, SumKassa : Decimal;
+begin
+  SumBank := 0;
+  SumKassa := 0;
+  Doc := PaysRest.GetDoc();
+  Doc.SelectLines();
+  while Doc.SelectNextLine() do
+    case VarAsInt(Doc.“ип) of
+      0 :
+        SumBank := SumBank + Doc.—умма¬¬алюте * Doc. урс;
+      1 :
+        SumKassa := SumKassa + Doc.—умма¬¬алюте * Doc. урс;
+    end;
+  PaysRest.—уммаЅанка := SumBank;
+  PaysRest.—умма ассы := SumKassa;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  Doc := CreateObject('ƒокументы.¬водќстатковѕоЅанку» ассе');
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+end.

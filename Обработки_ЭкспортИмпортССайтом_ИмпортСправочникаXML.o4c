@@ -1,0 +1,135 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Интерфейс, Расчеты,
+  XMLИмпортЭкспорт, Пользователи, НумерацияДокументов, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+var
+  MasterData: ICProcessing;
+  Options: ICOptions;
+  DataDir: String;
+  Cursor: TCursor;
+  DicTbl, CtgTbl: ICValueTable;
+
+implementation
+
+procedure edFilePath_Change(Sender : TObject);
+begin
+  DataDir := edFilePath.Text;
+  DataDir := edFilePath.Text;
+  edFilePath.Font.Color := clWindowText;
+  Options.SetServerPrm('WayForDbfBarCodeFile',edFilePath.Text);
+end;
+
+procedure btnBrowse_Click(Sender : TObject);
+begin
+  with OpenDialog do begin
+    Filter := '*.xml|*.xml';
+    FileName := '*.xml';
+    Title := Trans('Определите путь к xml-файлу');
+    if Execute then begin
+      edFilePath.Text := FileName;
+    end;
+  end;
+end;
+
+procedure CreateObjects;
+begin
+  DicTbl := CreateObject('ТаблицаЗначений');
+  DicTbl.AddColumn('НазвТовара', vtcString, 250);
+  DicTbl.AddColumn('Информация', vtcString, 1000);
+  DicTbl.AddColumn('Код', vtcString, 20);
+  DicTbl.Open;
+  CtgTbl := CreateObject('ТаблицаЗначений');
+  CtgTbl.AddColumn('НазвТовара', vtcString, 250);
+  CtgTbl.AddColumn('Код', vtcString, 20);
+  CtgTbl.Open;
+end;
+
+procedure btnStart_Click(Sender : TObject);
+Var
+  i : Integer;
+  StrInfo, NewStr, FieldName, DocDate, DocNum, DocPartName, DocPartLogin, DocPartPhone, DocPartMail, DocInfo, DocDelivery : String;
+  dlgError : ICProcessing;
+  DomDocument, Root, DicNode, HeadNode, ContentsNode, RowNode : OleVariant;
+  Count, FieldsCount : Integer;
+  Dialog : ICProcessing;
+  XmlStr : String;
+  ActionDoc: ICDocuments;
+  TmpTbl: ICValueTable;
+begin
+  CreateObjects;
+  if not cbTitle.Checked and not cbInfo.Checked then
+    begin
+      ShowMessage('Не отмечены поля для импорта!');
+      exit;
+    end;
+  //-------------------------Зачитка с xml-файла--------------------------------
+  DomDocument := LoadXMLFromFile(DataDir);
+  // корневой узел
+  Root := DomDocument.documentElement;
+  for Count := 0 to Root.childNodes.length-1 do
+    begin
+      DicNode := Root.childNodes.Item(Count);
+      if (DicNode.nodeName = 'Товар') and VarAsBool(DicNode.hasChildNodes) then
+        begin
+          for FieldsCount := 0 to DicNode.childNodes.length-1 do
+            begin
+              DicTbl.Append;
+              FieldName := DicNode.childNodes.Item(FieldsCount);
+              Case FieldName of
+                'НазвТовара': DicTbl.НазвТовара := DicNode.childNodes.Item(FieldsCount).text;
+                'Код':        DicTbl.Код := DicNode.childNodes.Item(FieldsCount).text;
+                'Информация': DicTbl.Информация := DicNode.childNodes.Item(FieldsCount).text;
+              end;
+              DicTbl.Post;
+            end;
+        end
+      else if (DicNode.nodeName = 'Cat') and VarAsBool(DicNode.hasChildNodes) then  
+        begin  
+          for FieldsCount := 0 to DicNode.childNodes.length-1 do
+            begin
+              CtgTbl.Append;
+              FieldName := DicNode.childNodes.Item(FieldsCount);
+              Case FieldName of
+                'Name': CtgTbl.НазвТовара := DicNode.childNodes.Item(FieldsCount).text;
+                'Code': CtgTbl.Код := DicNode.childNodes.Item(FieldsCount).text;
+              end;
+              CtgTbl.Post;
+            end;
+        end;
+    end;
+  DicTbl.CopyDataToServer;
+  CtgTbl.CopyDataToServer;
+  MasterData.RunThreadProcess(Server.UpdateDicEP(DicTbl.SrvMean, CtgTbl.SrvMean, cbTitle.Checked, cbInfo.Checked ),'Обновление справочника:');
+  DicTbl.CopyDataFromServer;
+  CtgTbl.CopyDataFromServer;  
+  DicTbl.SrvMean.Clear;
+  CtgTbl.SrvMean.Clear;
+  ShowMessage('Импорт завершен');
+  Options.SetServerPrm('WayForTxtImportFile',edFilePath.text);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterData := Mean;
+  Options := GetOptions;
+  edFilePath.text := VarAsStr(Options.GetServerPrm('WayForTxtImportFile'));
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btnClose:TO4Button
+btnStart:TO4Button
+Panel1:TO4Panel
+gbxFilePath:TO4GroupBox
+edFilePath:TO4Edit
+btnBrowse:TO4Button
+GroupBox1:TO4GroupBox
+cbTitle:TO4CheckBox
+cbInfo:TO4CheckBox
+OpenDialog:TO4OpenDialog

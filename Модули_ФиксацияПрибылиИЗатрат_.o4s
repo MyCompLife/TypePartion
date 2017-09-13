@@ -1,0 +1,191 @@
+interface
+
+uses System, DispIntf, ConstNames;
+
+procedure AppendRecAccsInOutCome(Doc: ISDocuments; Tbl : ISValueTable);
+procedure AppendRecAccsInOutComeGoods(Doc: ISDocuments; Tbl : ISValueTable);
+
+implementation
+
+//акт на оказание услуг       +
+//акт на получение услуг      -
+//накладная отпуска           +
+//накладная отпуска ТМЦ       +
+//накладная отпуска по счету  +
+//списание товара             -
+//ревизия товара              +/-
+//возврат от покупателя       -     
+
+function ПодборКол(Doc: ISDocuments; Goods:ISDictionary) :  integer;
+var ServTbl, GoodsAll : ISValueTable;
+begin  
+ GoodsAll := CreateObject('ТаблицаЗначений');
+ GoodsAll.Close();
+ GoodsAll.AddColumn('Товар',vtcLink,0);
+ GoodsAll.AddColumn('Статья',lftLink,0);
+ GoodsAll.Open();
+ ServTbl := CreateObject('ТаблицаЗначений');
+ ServTbl.Close();
+ ServTbl.AddColumn('Товар',vtcLink,0);
+ ServTbl.AddColumn('Статья',lftLink,0);
+ ServTbl.Open();
+ Doc.SaveContents('Товар;Статья',ServTbl);
+ ServTbl.Select;
+ while ServTbl.SelectNext do
+   begin
+     if ServTbl.Товар.Услуга = -1 then
+       begin
+         GoodsAll.Append;
+         GoodsAll.Товар := ServTbl.Товар;
+         GoodsAll.Статья := ServTbl.Статья;
+         GoodsAll.Post;
+       end;
+   end;
+ GoodsAll.SortBy('Статья');
+ if GoodsAll.Find(Doc.Статья) then Result := 0
+   else Result := 1;
+end;
+
+procedure AppendRecAccsInOutCome(Doc: ISDocuments; Tbl : ISValueTable);
+var AccsPartGood, AccsInOutCome : ISAccs;
+    Resources, Dimensions, Fields, СумВалОтп, СумВалВх, ЦенаВВалюте, НаценкаТоварАкт : Variant;
+    Currency, CurrDic : ISDictionary;
+begin
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsInOutCome := CreateObject('Аккумуляторы.ДоходыРасходы');
+  case Doc.GetSign of
+   'НачислениеЗарпатыПроизв' :
+    begin
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions :=  ArrayOf(Null, Doc.@Партнер, Doc.@Статья, Doc.Валюта, Doc.Регион);
+      Resources  :=  ArrayOf(Doc.СуммаВВалюте, 1, Doc.Сумма);
+      Fields     :=  ArrayOf(Doc.Курс);
+      AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;
+  'АктНаПолучениеУслугПроизв' :
+    begin
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions :=  ArrayOf(Null, Doc.@Партнер, Doc.@Статья, Doc.Валюта, Doc.Регион);
+      Resources  :=  ArrayOf(Doc.СуммаВВалюте, 1, Doc.Сумма);
+      Fields     :=  ArrayOf(Doc.Курс);
+      AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;
+  'АктНаОказаниеУслуг' :
+    begin
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions :=  ArrayOf(Null, Doc.@Партнер, Doc.@Статья, Doc.Валюта, Doc.Регион);
+      Resources  :=  ArrayOf(Doc.СуммаВВалюте, 1, Doc.Сумма);
+      Fields     :=  ArrayOf(Doc.Курс);
+      AccsInOutCome.InComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;
+  'НачислениеВознаграждения' :
+    begin
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions :=  ArrayOf(Null, Doc.@Партнер, Doc.@Статья, Doc.Валюта, Doc.Регион);
+      Resources  :=  ArrayOf(Doc.СуммаВВалюте, 1, Doc.Сумма);
+      Fields     :=  ArrayOf(Doc.Курс);
+      AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;
+  'АктНаПолучениеУслуг' :
+    begin
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions :=  ArrayOf(Null, Doc.@Партнер, Doc.@Статья, Doc.Валюта, Doc.Регион);
+      Resources  :=  ArrayOf(Doc.СуммаВВалюте, 1, Doc.Сумма);
+      Fields     :=  ArrayOf(Doc.Курс);
+      AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;
+
+   'СписаниеТовара' :
+    begin
+      if AccsPartGood.SelectDimID(Doc.Партия) then
+        Currency := AccsPartGood.Валюта;
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions := ArrayOf(Doc.Товар,Doc.@Партнер,Doc.@Статья,Currency, Doc.Регион);
+      Resources  := ArrayOf(AccsPartGood.ВхЦенаВал*Doc.Количество,Doc.Количество,Doc.Количество*Doc.Цена);
+      Fields     := null;
+      AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;
+
+   'РевизияТовара', 'РевизияТовараСт' :
+    begin
+      if AccsPartGood.SelectDimID(Doc.Партия) then
+        Currency := AccsPartGood.Валюта;
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions := ArrayOf(Doc.Товар,Doc.@Партнер,Doc.@Статья,Currency,Doc.Регион);
+      Resources  := ArrayOf(AbsD(AccsPartGood.ВхЦенаВал*Doc.Количество),Doc.Количество,AbsD(Doc.ВхЦенаБезНДС*Doc.Количество));
+      Fields     := ArrayOf(Doc.Курс);
+      if Doc.ЦенаВВалюте*Doc.Количество > 0 then  //  прибыль
+        AccsInOutCome.IncomeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+      if Doc.ЦенаВВалюте*Doc.Количество < 0 then  //  расход
+        AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;
+   'ВозвратОтПокупателей' :
+    begin
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions := ArrayOf(Doc.Товар,Doc.@Партнер,Doc.@Статья,Doc.ВалютаТовара,Doc.Регион);
+      Resources  := ArrayOf(AbsF(Doc.ВхЦенаВал-Doc.ЦенаВВалюте),Doc.Количество,AbsF(Doc.ВхЦенаБезНдс-Doc.Цена));
+      Fields     := ArrayOf(Doc.Курс);
+      AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+    end;  
+   end;
+end;
+
+procedure AppendRecAccsInOutComeGoods(Doc: ISDocuments; Tbl : ISValueTable);
+var AccsPartGood, AccsInOutCome : ISAccs;
+    Resources, Dimensions, Fields, СумВалОтп, СумВалВх, ЦенаВВалюте, НаценкаТоварАкт : Variant;
+    Currency, CurrDic : ISDictionary;
+begin
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsInOutCome := CreateObject('Аккумуляторы.ДоходыРасходы');
+  if Doc.GetSign = 'АктНаОказаниеУслуг' then
+    begin
+      if AccsPartGood.SelectDimID(Doc.Партия) then
+        Currency := AccsPartGood.Валюта;
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions := ArrayOf(Doc.Товар,Doc.Партнер,Doc.Статья,Currency);
+      СумВалОтп := Doc.ЦенаВВалюте*Doc.Количество;
+      СумВалВх := AccsPartGood.ВхЦенаВал*Doc.Количество;
+      Resources  := ArrayOf(AbsF(СумВалОтп-СумВалВх),ПодборКол(Doc,Doc.Товар));
+      Fields     := null;
+      if СумВалОтп-СумВалВх < 0 then
+        AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields)
+      else
+        AccsInOutCome.IncomeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+
+        {   ////////////////
+          AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+          AccsInOutCome := CreateObject('Аккумуляторы.ДоходыРасходы');
+          if AccsPartGood.SelectDimID(Doc.Партия) then
+            Currency := AccsPartGood.Валюта;
+          AccsInOutCome.ClearFieldBuffers();
+          if Currency.Код = Doc.ВалютаТовара.Код then
+            begin
+              Dimensions := ArrayOf(Doc.Товар,Doc.Партнер,Doc.Статья,Doc.ВалютаТовара,Doc.Регион);
+              СумВалОтп := Doc.ЦенаВВалюте*Doc.Количество;
+              СумВалВх := Doc.ВхЦенаБезНДС*Doc.Количество;
+              Resources  := ArrayOf(AbsF(СумВалОтп-СумВалВх),ПодборКол(Doc,Doc.Товар)); //Doc.Количество
+              Fields     :=  null;
+              if СумВалОтп-СумВалВх < 0 then
+                AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields)
+              else
+                AccsInOutCome.IncomeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+            end;
+
+          if Currency.Код <> Doc.ВалютаТовара.Код then
+            begin
+              Dimensions := ArrayOf(Doc.Товар,Doc.Партнер,Doc.Статья,Currency,Doc.Регион);
+              СумВалОтп := Doc.ЦенаВВалюте*Doc.Количество;
+              СумВалОтп := (СумВалОтп * Doc.КурсТовара)/Currency.GetTimedValue('КурсНаличный',Doc.ДатаДокумента);
+              СумВалВх := Doc.ВхЦенаБезНДС*Doc.Количество;
+              Resources  := ArrayOf(AbsF(СумВалОтп-СумВалВх),ПодборКол(Doc,Doc.Товар)); // Doc.Количество
+              Fields     :=  null;
+              if СумВалОтп-СумВалВх < 0 then
+                AccsInOutCome.OutComeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields)
+              else
+                AccsInOutCome.IncomeDirect(Doc, Doc.ДатаДокумента, 0, Dimensions, Resources, Fields);
+            end;
+           ///////////////  }
+    end;
+end;
+
+end.

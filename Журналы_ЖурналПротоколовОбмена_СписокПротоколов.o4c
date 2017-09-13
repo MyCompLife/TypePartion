@@ -1,0 +1,75 @@
+interface
+
+uses System, DispIntf, »нтерфейс, ConstNames, InitColors, –асчеты;
+
+var
+ MasterData : ICJournal;
+ Constants : IC4VPAConst;
+ Options : ICOptions;
+
+implementation
+
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+ MasterData := MDS.GetMean;
+ Constants := GetConstants;
+ SetColors(Constants);  
+{
+ if VarAsInt(Constants.”далѕротќбмена,0) <> 0  then
+   MasterData.RunThreadProcess(server.DeleteLogs,'”даление протоколов');
+}
+end;
+
+procedure Form_Open(Sender: TObject);
+var
+ Nobody : TO4ToolBar; // заглушка на NIL
+ i : integer;
+begin
+ Options := GetOptions;
+ MakeInterface(tbrData, Nobody, dbgData);
+ MasterData.DefineSelectParams(True);
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+ MasterData.DefineSelectParams(False);
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+var
+ V: ICProcessing;
+begin
+{
+ V := CreateObject('ќбработки.ѕеч”нив∆урнала');
+ V.PrintForm('ѕеч”нив∆урнала—“ипом', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+}
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+ if MasterData.IsFocused then
+   if MasterData.“ип = 'Ёкспорт' then Index1 := 14 else Index1 := 13;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+ Masterdata.Refresh();
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+tbrData:TO4ToolBar
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+MDS:TO4DataSource
+dbgData:TO4DBGrid

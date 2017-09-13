@@ -1,0 +1,49 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+var
+   MasterProc : ICProcessing;
+   Currency : ICDictionary;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+end;
+
+procedure edCurrency_ActionClear(Sender: TObject);
+begin
+ Nil(Currency);
+ edCurrency.Text := '';
+end;
+
+procedure edCurrency_ActionExecute(Sender: TObject); 
+var DefName : string;
+    SelCurrency : ICDictionary;
+begin
+  SelCurrency := CreateObject('Справочники.Валюты');
+  if SelCurrency.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(Currency) then
+        Currency := CreateObject('Справочники.Валюты');
+      if Currency.Find(SelCurrency) then
+        edCurrency.Text := DefName;
+    end;
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+ if IsObjFocused(Currency) and Currency.SetSrvToClientPos then
+   server.FillCurrencyGood(Currency.SrvMean, edTypePrice.Text);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+Label2:TO4Label
+edTypePrice:TO4Edit
+edCurrency:TO4Edit
+btOK:TO4Button
+btCancel:TO4Button

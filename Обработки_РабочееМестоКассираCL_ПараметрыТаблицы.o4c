@@ -1,0 +1,103 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var MasterProc : ICProcessing;
+    AllColumnsList : ICValueList;
+    ReqFieldsList,GridColumnList : string;
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var i, p:integer;
+begin
+  MasterProc := Mean; 
+  if IsArray(Params) then
+    begin   
+      AllColumnsList := Params[0];
+      ReqFieldsList := Params[1];
+      GridColumnList := Params[2];
+    end
+  else
+    raise('Параметры обработки заданы не верно');    
+  // Добавляем колонки из грида
+  if WordCount(GridColumnList,';')>0 then
+    for i:=1 to WordCount(GridColumnList,';') do
+      begin
+        p := AllColumnsList.FindByValue(ExtractWord(i,GridColumnList,';'));
+        if p<>-1 then 
+          begin
+            clbColumnns.Items.Add(AllColumnsList.GetStr(p));
+            clbColumnns.Checked[clbColumnns.Items.Count-1] := true;
+          end;
+      end;
+  // Добавляем обязательные колонки
+  if WordCount(ReqFieldsList,';')>0 then
+    for i:=1 to WordCount(ReqFieldsList,';') do
+      begin
+        p := AllColumnsList.FindByValue(ExtractWord(i,ReqFieldsList,';'));
+        if (p<>-1) then
+          begin
+            if (clbColumnns.Items.IndexOf(AllColumnsList.GetStr(p))=-1) then
+              begin
+                clbColumnns.Items.Add(AllColumnsList.GetStr(p));
+                clbColumnns.Checked[clbColumnns.Items.Count-1] := true;
+                clbColumnns.ItemEnabled[clbColumnns.Items.Count-1] := false;
+              end
+            else
+              clbColumnns.ItemEnabled[clbColumnns.Items.IndexOf(AllColumnsList.GetStr(p))] := false;
+          end;
+      end;
+
+  if AllColumnsList.Count>0 then
+   for i:=0 to AllColumnsList.Count-1 do
+      begin
+        if clbColumnns.Items.IndexOf(AllColumnsList.GetStr(i))=-1 then
+          begin
+            clbColumnns.Items.Add(AllColumnsList.GetStr(i));
+            clbColumnns.Checked[clbColumnns.Items.Count-1] := false;
+          end;
+      end;
+
+end;
+
+procedure tbUp_Click(Sender: TObject);
+begin
+  if clbColumnns.ItemIndex>0 then
+   clbColumnns.Items.Exchange(clbColumnns.ItemIndex,clbColumnns.ItemIndex-1);
+end;
+
+procedure tbDown_Click(Sender: TObject);
+begin
+  if clbColumnns.ItemIndex<(clbColumnns.Items.Count-1) then
+   clbColumnns.Items.Exchange(clbColumnns.ItemIndex,clbColumnns.ItemIndex+1);
+end;
+
+
+
+
+
+procedure btOk_Click(Sender: TObject);
+var i:integer;
+    ResultColumnsList : string;
+begin
+  ResultColumnsList := '';
+  for i:=0 to clbColumnns.Items.Count-1 do
+    if VarAsBool(clbColumnns.Checked[i]) then
+      ResultColumnsList := ResultColumnsList + clbColumnns.Items.Strings[i] + ';';
+  if ResultColumnsList[StrLength(ResultColumnsList)]=';' then
+    StrDelete(ResultColumnsList,StrLength(ResultColumnsList),1);
+  MasterProc.Params['ResultColumnsList'] := ResultColumnsList;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+Panel4:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+pnRight:TO4Panel
+tbrUp:TO4ToolBar
+tbUp:TO4ToolButton
+tbrDown:TO4ToolBar
+tbDown:TO4ToolButton
+clbColumnns:TO4CheckListBox

@@ -1,0 +1,2912 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Интерфейс, Расчеты, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  РаботаСТаблицамиЗначений, РаботаСДокументами, ДополнительныйФункционал, РаботаСТаблицамиЗначенийCL,
+  Пользователи, НумерацияДокументов, РаботаСДокументамиCL, 
+  РаботаС_ICS_EP_09, РаботаСФП_Unisystem, РаботаСФРЭкселлио, РаботаСWebApi, РаботаФП_MG_N707TS;
+
+implementation
+
+const
+  buttons = 'iClose;iOpen;iCash;iReturn;iRefresh;iClear';
+  MaxPagePostPoneDocCount = 5;
+var
+  CtgDic, Store, Partner, Kassa, Partners, Employ, Goods,ParamsSt, UserDic, GoodsDic, DocCurrency,
+  Region, Scales, Agent, AnalitPartnerDic, SelAnalitPartnerDic : ICDictionary;
+  DiscCards, DiscountLimitDic, TerminalDic, Currency, FiscalPrinerDic : ICDictionary;
+  TblContents, TempRetTbl, TblToDoct, tmpTblToDoct, PartDebtTbl, ContractTbl, TblGoodsPrintPrices, ActionTbl : ICValueTable;
+  LockCalc, PreviewPrintForm, ShowPartnerDebt, ShowGoodsRest : Boolean;
+  Cursor: TCursor;
+  Num, PayType, PostPoneDocPanelPage, PrintFormCount: Integer;
+  Constants: IC4VPAConst;
+  AccsGoods, ActionAccs: ICAccs;
+  ChangeJourn, NaklJourn, ReturnJourn, InJournal: ICJournal;
+  ChangeDoc, NaklDoc, PostPoneDoc, ReturnDoc, CashIn,CashOut, ContractDoc, AcquiringIncomeDoc, AcquiringOutcomeDoc, ActionDoc: ICDocuments;
+  Options: ICOptions;
+  OldFixAck, cbxCount, BlockChangePartner, AllowReturnProcDrive, ActionByCtg, IsReturn, UseFiscalPriner: Boolean;
+  MasterProc, PrintForms, ReturnProc: ICProcessing;
+  KashGiveSum,SumReturn, PayCash,PayCard, DocCourse, PartnerDiscountPrecent, ActionDiscountPrecent, PartSumBalance: Decimal;
+  PrintFormName, TypePrice, CommentActionDiscount : string;
+  OutParam : Variant;
+  PostPoneDocsList : ICValueList;
+
+procedure SetPartner(Partner: ICDictionary); forward;
+procedure TVSOrder_VPAAfterPost(Sender: TObject); forward;
+procedure UpdateAllSum; forward;
+function CreateReturnDoc(TblContents: ICValueTable):boolean; forward;
+procedure miCard_Click(Sender: TObject); forward;
+
+procedure edAgent_ActionClear(Sender: TObject);
+begin
+ Nil(Agent);
+ edAgent.Text := '';
+end;
+
+procedure edAgent_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelAgent : ICDictionary;
+begin
+  SelAgent := CreateObject('Справочники.Служащие');
+  if SelAgent.SelectInForm('',DefName,Null) then
+    begin
+      if IsNil(Agent) then
+        Agent := CreateObject('Справочники.Служащие');
+      if Agent.Find(SelAgent) then
+        edAgent.Text := DefName;
+    end;
+end;
+
+Procedure AddToLog(TypeOper:Integer; EmplOper, Source : Variant; Count,Summa : Decimal);
+Var
+  LogDic : IcDictionary; 
+  Doc : IcDocuments;
+Begin
+  LogDic := CreateObject('Справочники.ЛогРабочегоМеста');
+  LogDic.Append;
+  LogDic.Дата := CurrentDateTime;
+  LogDic.Ответственный := EmplOper;
+  LogDic.Действие := TypeOper;
+  LogDic.Количество := Count;
+  LogDic.Сумма := Summa;
+  Case TypeOper of
+    0: LogDic.Коментарий := 'Добавление товара: '+ VarAsStr(Source.NameField);
+    1: LogDic.Коментарий := 'Удаление товара: '+ VarAsStr(Source.NameField);
+    2: LogDic.Коментарий := 'Изменение количества товара: '+ VarAsStr(Source.NameField);
+    3: LogDic.Коментарий := 'Закритие чека: №'+ VarAsStr(Source.GetNumber)+' от ' +DateToStr(Source.GetDate);
+  end;
+  LogDic.Post;
+  LogDic.ApplyUpdates;
+end;
+
+procedure CreateObjects;
+begin
+  PartnerDiscountPrecent := 0;
+  TblContents := CreateObject('ValueTable');
+  TblContents.AddColumn('НомСтроки',vtcInteger,0);
+  TblContents.AddColumn('Возврат',vtcInteger,0);
+  TblContents.AddColumn('Код',vtcString,20);
+  TblContents.AddColumn('Товар',vtcLink,0);    
+  TblContents.AddColumn('ВалютаТовара',vtcLink,0);
+  TblContents.AddColumn('ЕдИзм',vtcLink,0);
+  TblContents.AddColumn('Количество',vtcFFT,5);
+  TblContents.AddColumn('Цена',vtcFFT,7);
+  TblContents.AddColumn('ЦенаВВалюте',vtcFFT,7);
+  TblContents.AddColumn('КурсТовара',vtcFFT,6);
+  TblContents.AddColumn('ПроцентСкидкиНадбавки',vtcFFT,7);
+  TblContents.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,7);
+  TblContents.AddColumn('СуммаСтроки',vtcFFT,7);
+  TblContents.AddColumn('СуммаСтрокиВВалюте',vtcFFT,7);
+  TblContents.AddColumn('СуммаСтрокиБезСкидкиНадбавки',vtcFFT,7);
+  TblContents.AddColumn('СуммаСтрокиСкидкиНадбавки',vtcFFT,7);
+  TblContents.AddColumn('НаличиеТовара',vtcFFT,5);
+  TblContents.AddColumn('Num',vtcInteger,0);
+  TblContents.AddColumn('КомментарийСкидкиНадбавки',vtcString,100);
+  TblContents.AddColumn('РучнаяКорректировка',vtcBoolean,0);
+  TblContents.AddColumn('ЦенаИзШтрихКода',vtcBoolean,0);
+  TblContents.Open;
+  TblContents.SetColumnFormat('Количество;КурсТовара;НаличиеТовара;ПроцентСкидкиНадбавки','0.#####');
+  TblContents.SetColumnFormat('Цена;ЦенаВВалюте;СуммаСтроки;СуммаСтрокиВВалюте','0.00');
+  TblContents.SetColumnFormat('ЦенаБезСкидкиНадбавки','0.00#####');
+  TblContents.UseDataSource(CtrlToVar(TVSOrder));
+  ContractTbl := CreateObject('ValueTable');
+  PartDebtTbl := CreateObject('ValueTable');
+  PartDebtTbl.AddColumn('Валюта',vtcLink,0);
+  PartDebtTbl.AddColumn('СумОбщВал',vtcFFT,2);
+  PartDebtTbl.Open;
+  PartDebtTbl.SetColumnFormat('СумОбщВал','0.00');
+  GoodsDic := CreateObject('Справочники.Товары');
+  UserDic := CreateObject('Справочники.Пользователи');
+  Partners := CreateObject('Справочники.ЮрПартнеры');
+  Store := CreateObject('Справочники.Склады');
+  Employ := CreateObject('Справочники.Служащие');
+  Currency  := CreateObject('Справочники.Валюты');
+  ParamsSt := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');
+  NaklDoc := CreateObject('Документы.Чек');
+  CashIn :=  CreateObject('Документы.ПриходВКассу');
+  CashOut :=  CreateObject('Документы.РасходИзКассы');
+  AcquiringIncomeDoc := CreateObject('Документы.ПриходПоЭквайрингу');
+  AcquiringOutcomeDoc := CreateObject('Документы.РасходПоЭквайрингу');
+  Goods := CreateObject('Справочники.Товары');
+  CtgDic := CreateObject('Справочники.Товары');
+  CtgDic.IncludeOnlyLevels(true);
+  DiscountLimitDic := CreateObject('Справочники.ОграничениеСкидок');
+  TerminalDic := CreateObject('Справочники.Терминалы');
+  SelAnalitPartnerDic := CreateObject('Справочники.АналитикаВзаиморасчета');
+  Constants := GetConstants;
+  SetColors(Constants);
+  AllowReturnProcDrive := true;
+  Options := GetOptions;
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  ChangeJourn := CreateObject('Журналы.ЖурналСмен');
+  ChangeJourn.SetDocStateRange(0);
+  ChangeJourn.SortByField('-ДатаДокумента');
+  ChangeDoc := CreateObject('Документы.Смена');
+
+  NaklJourn := CreateObject('Журналы.ЖурналЧеков');
+  ReturnDoc := CreateObject('Документы.ВозвратОтПокупателей');
+  ReturnJourn := CreateObject('Журналы.ЖурналВозвратовОтПокупателя');
+//  LocalDir := GetUsersField('ПутьКИзображениям') +'\';
+  PrintForms := CreateObject('Обработки.ПечатьЧека');
+  TempRetTbl := CreateObject('ValueTable');
+  TempRetTbl.Open;
+  TblToDoct := CreateObject('ТаблицаЗначений');
+  TblToDoct.AddColumn('NumID',vtcString,20);
+  TblToDoct.AddColumn('НомСтроки',vtcInteger,0);
+  TblToDoct.AddColumn('Код',vtcString,20);
+  TblToDoct.AddColumn('Товар',vtcLink,0);
+  TblToDoct.AddColumn('ЕдИзм',vtcLink,0);
+  TblToDoct.AddColumn('Количество',vtcFFT,5);
+  TblToDoct.AddColumn('Цена',vtcFFT,7);
+  TblToDoct.AddColumn('СуммаСтроки',vtcFFT,7);
+  TblToDoct.AddColumn('ПроцентСкидкиНадбавки',vtcFFT,7);
+  TblToDoct.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,7);
+  TblToDoct.AddColumn('КомментарийСкидкиНадбавки',vtcString,100);
+  TblToDoct.AddColumn('ТипДокумента',vtcFFT,7);
+  TblToDoct.Open;
+  tmpTblToDoct := CreateObject('ТаблицаЗначений');
+  TblToDoct.CopyColumnsTo(tmpTblToDoct);
+  TblGoodsPrintPrices := CreateObject('ValueTable');
+  TblGoodsPrintPrices.AddColumn('Код',vtcInteger,20);
+  TblGoodsPrintPrices.AddColumn('Товар',vtcLink,0);
+  TblGoodsPrintPrices.AddColumn('ЕдИзм',vtcLink,0);
+  TblGoodsPrintPrices.AddColumn('Цена',vtcFFT,7);
+  TblGoodsPrintPrices.AddColumn('Печать',vtcInteger,0);
+
+  TblGoodsPrintPrices.Open;
+  TblGoodsPrintPrices.SetColumnFormat('Цена','0.00');
+  TblGoodsPrintPrices.SortBy('Товар');
+  TblGoodsPrintPrices.UseDataSource(CtrlToVar(TVSGoodsPrintPrices));
+
+  //Акции
+  ActionTbl := CreateObject('ТаблицаЗначений');
+  ActionTbl.AddColumn('ДатаНачала',vtcDate,0);
+  ActionTbl.AddColumn('ДатаКонца',vtcDate,0);
+  ActionTbl.AddColumn('Акция',vtcInteger,0);
+  ActionTbl.AddColumn('Скидка',vtcFFT,2);
+  ActionTbl.AddColumn('Document',vtcLink,0);
+  ActionTbl.AddColumn('Категория',vtcLink,0);
+  ActionTbl.AddColumn('ИспКатегории',vtcInteger,0);
+  ActionTbl.Open;
+  ActionAccs := CreateObject('Аккумуляторы.Акции');
+
+  PostPoneDocsList := CreateObject('СписокЗначений');
+  PostPoneDocPanelPage := 0;
+end;
+
+procedure AddPostPoneDocToPanel;
+var i, IBegin, IEnd, iDocPanel : integer;
+    CurDocPanel : TO4Panel; 
+    iDocPanelStr : string;
+begin
+ if PostPoneDocsList.Count>0 then
+   begin     
+     IBegin := PostPoneDocPanelPage*MaxPagePostPoneDocCount;
+     While IBegin>=PostPoneDocsList.Count do
+       begin
+         IBegin := IBegin-MaxPagePostPoneDocCount;
+         if IBegin<0 then IBegin := 0;
+       end;
+     IEnd := IBegin + MaxPagePostPoneDocCount -1;
+     if IEnd>=PostPoneDocsList.Count then
+       IEnd := PostPoneDocsList.Count-1;
+     iDocPanel := 1;
+     for i:= IBegin to IEnd do
+       begin
+         iDocPanelStr := IntToStr(iDocPanel);    
+         CurDocPanel := Form.FindComponent('PostPoneDocNumber'+iDocPanelStr) as TO4Panel;
+          if not IsNil(CurDocPanel) then 
+            begin
+              CurDocPanel.Caption := ExtractWord(1,PostPoneDocsList.GetStr(i),#13); 
+              CurDocPanel.Tag := i;
+            end;
+
+         CurDocPanel := Form.FindComponent('PostPoneDocSum'+iDocPanelStr) as TO4Panel;
+          if not IsNil(CurDocPanel) then            
+            begin
+              CurDocPanel.Caption := ExtractWord(2,PostPoneDocsList.GetStr(i),#13);
+              CurDocPanel.Tag := i;
+            end;
+
+         CurDocPanel := Form.FindComponent('PostPoneDocPartner'+iDocPanelStr) as TO4Panel;
+          if not IsNil(CurDocPanel) then   
+            begin
+              CurDocPanel.Caption := ExtractWord(3,PostPoneDocsList.GetStr(i),#13);
+              CurDocPanel.Tag := i;   
+            end;
+         CurDocPanel := Form.FindComponent('PostPoneDoc'+iDocPanelStr) as TO4Panel;
+         if not IsNil(CurDocPanel) then
+           begin
+             CurDocPanel.Visible := true;
+             if IsObjEQ(PostPoneDoc,PostPoneDocsList.GetValue(i)) then 
+               begin
+                 CurDocPanel.BevelOuter := bvLowered;
+                 CurDocPanel.Color := clSilver;
+               end
+             else
+               begin
+                 CurDocPanel.BevelOuter := bvRaised; 
+                 CurDocPanel.Color := clBtnFace;
+               end;
+           end;
+         inc(iDocPanel);
+       end;
+       // Прячем незадействованные панели
+     if iDocPanel<=MaxPagePostPoneDocCount then
+       for i:=MaxPagePostPoneDocCount  downto iDocPanel do
+         begin
+           CurDocPanel := Form.FindComponent('PostPoneDoc'+IntToStr(i)) as TO4Panel;
+           if not IsNil(CurDocPanel) then
+             begin
+               CurDocPanel.Visible := false; 
+               CurDocPanel.Tag := -1;
+             end;
+         end;
+     tbPostPoneLeft.Enabled := IBegin>0;
+     tbPostPoneRight.Enabled := IEnd<(PostPoneDocsList.Count-1);
+     pnPostPoneDocs.Visible := true;
+   end
+ else
+   pnPostPoneDocs.Visible := false;
+end;
+
+procedure RefreshPostPoneDocsList;
+var Jrn : ICJournal;
+    CurDoc : ICDocuments;
+begin
+ PostPoneDocsList.Clear;
+ PostPoneDocsList.SortByStr(true);
+ if IsObjFocused(ChangeDoc) then
+   begin
+     Jrn := CreateObject('Журналы.ЖурналЧеков');
+     Jrn.SetFieldFilter('Смена','=',ChangeDoc,'','',Null);
+     Jrn.SetDocStateRange(0);                              
+     Jrn.SortByField('НомерДокумента');
+     Jrn.Select;
+     While Jrn.SelectNext do
+       begin
+         CurDoc := Jrn.GetDoc;
+         if not VarAsBool(CurDoc.ЗакрытЧек) then
+           PostPoneDocsList.AddValue('№'+CurDoc.GetNumber+#13+DecToStr(VarAsDec(CurDoc.Сумма),2)+#13+
+                                     StrCopy(VarAsStr(CurDoc.Партнер.NameField),1,24),CurDoc);
+       end;
+    PostPoneDocsList.SortByStr(true);
+   end;
+end;
+
+procedure GetPrintSettings;
+var
+  PrintFormsTbl : ICValueTable;
+begin
+  PrintFormName := '';
+  PreviewPrintForm := false;
+  PrintFormCount := 1;
+  UserDic.Refresh;
+  if UserDic.FindByCode(GetUserLogin,false) then
+    begin
+      PrintFormName := VarAsStr(UserDic.ПечатнаяФормаРабМестоКассира);
+      if PrintFormName='' then
+        PrintFormName := 'Чек80мм';
+      PreviewPrintForm := VarAsBool(UserDic.ПредПросмотрЧекаРабМестоКасс);
+      PrintFormCount := VarAsInt(UserDic.КолКопийЧекаРабМестоКассира);
+    end;
+end;
+
+procedure CheckActions;
+begin
+ // Акции
+ tbAction.Visible := false;
+ miAction.Visible := false;
+ ActionByCtg := false;
+ ActionTbl.SortBy('');
+ ActionTbl.CancelRange;
+ ActionTbl.Clear;
+ //if PartSumBalance<=0 then
+//  begin
+    ActionAccs.SetFieldFilter('Регион',Region);
+    ActionAccs.SetFieldFilter('ТипЦены',TypePrice);
+    ActionAccs.AppendMotionToValueTable(0,400000,amtIncome,'Document;ДатаНачала;ДатаКонца;Скидка;Категория;ИспКатегории',-1,ActionTbl);
+    ActionTbl.DoCalculation('Акция','(ДатаНачала<='+IntToStr(trunc(CurrentDate))+
+                            ') and (ДатаКонца>='+IntToStr(trunc(CurrentDate))+')');
+    ActionTbl.SortBy('Акция');
+    ActionTbl.SetRange(-1,-1);
+    if ActionTbl.LineCount>0 then
+      begin
+        CommentActionDiscount := 'Акция';
+        //ActionTbl.DoCalculation('Скидка','Скидка/100');
+        if ActionTbl.Locate('ИспКатегории',0) and (VarAsDec(ActionTbl.Скидка)<PartnerDiscountPrecent) then
+          begin
+            ActionDiscountPrecent := VarAsDec(ActionTbl.Скидка);
+            tbAction.Caption := 'Применить акцию '+VarAsStr(ActionDiscountPrecent)+'%';
+            miAction.Caption := tbAction.Caption;
+            if VarAsBool(ActionTbl.@Document.IsFocused) then
+              begin
+                ActionDoc := ActionTbl.Document;
+                CommentActionDiscount := CommentActionDiscount + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+              end;
+            tbAction.Visible := not VarAsBool(Constants.АвтоПрименятьСкидкуАкции);
+            miAction.Visible := tbAction.Visible;
+          end
+        else
+        if ActionTbl.Locate('ИспКатегории',-1) then
+          begin
+            ActionByCtg := true;
+            tbAction.Caption := 'Применить акцию по категориям';
+            miAction.Caption := tbAction.Caption;
+            CommentActionDiscount := 'Акция по категориям';
+            if VarAsBool(ActionTbl.@Document.IsFocused) then
+              begin
+                ActionDoc := ActionTbl.Document;
+                CommentActionDiscount := CommentActionDiscount + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+              end;
+            tbAction.Visible := not VarAsBool(Constants.АвтоПрименятьСкидкуАкции);
+            miAction.Visible := tbAction.Visible;
+          end;
+      end;
+  // end; 
+ SeparAction.Visible := tbAction.Visible;
+end;
+
+
+
+
+function BarCodeExist(Good:ICDictionary; var BarCode:string; Quit:boolean=false):boolean;
+Var
+  UseMultiBarCode : Boolean;
+  BarCodeDic : ICDictionary;
+
+begin
+ BarCode := '';
+ UseMultiBarCode := VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров);
+ BarCodeDic := CreateObject('Справочники.ШтрихКодыТоваров');
+
+ if UseMultiBarCode then
+   begin
+     if BarCodeDic.UseMasterAndSelect(Good) and BarCodeDic.FindByField('Активность', true, false) then
+       BarCode := BarCodeDic.CodeField
+     else
+       BarCode := Good.ШтрихКод;
+   end
+ else
+   BarCode := Good.ШтрихКод;
+ Result := BarCode<>'';
+ if not (Result or Quit) then
+   ShowMessage('У товара "'+Good.NameField+'" нет штрих-кода');
+end;
+
+function GetCurrencyDocSum:decimal;
+begin
+ if DocCourse=0 then
+   DocCourse := 1;
+    Result := RoundDec(TblContents.Total('СуммаСтроки') / DocCourse,2);
+end;
+
+
+
+procedure ClearNakl;
+begin   
+  edAgent_ActionClear(Form);
+  TblContents.DisableControls;
+  TblContents.Clear;
+  TblContents.EnableControls;
+  Nil(DiscCards);
+  edSum.Caption := '0.00';
+  UserDic.Refresh;
+  if UserDic.FindByCode(GetUserLogin,false) then
+    begin
+      Partner := UserDic.ПартнерПоУмолчанию;
+      AnalitPartnerDic := UserDic.АналитикаВзаиморасчета;
+    end;
+  SetPartner(Partner);
+  edCard.Text := '';
+  UpdateAllSum;
+  GoodsDic.Refresh;
+  MasterProc.SendEvent('RefreshGoodsInKassWorkPlace',Null,false);
+  mComment.Text := '';
+  TsLists.TabIndex := 0;
+  if iPostPoneDoc.Visible then
+    begin
+      RefreshPostPoneDocsList;
+      AddPostPoneDocToPanel;
+    end;
+end;
+
+
+
+procedure CalcCount(Price, PackCount : Decimal; var Count : Decimal; Source, Scales : ICDictionary; var Accept : Boolean);
+var 
+  V : ICProcessing;
+begin
+  Accept := false;
+  V := CreateObject('Обработки.РабочееМестоКассираCL');
+
+  Count := 1;
+  if (V.Execute('ВводКоличеставаТовара', ArrayOf(Price, Count,Source, Scales))=mrOk) and
+     V.HasParam('Count') and (VarAsDec(V.Params['Count'], -1)>0) then
+    begin
+      Count :=  VarAsDec(V.Params['Count'], 0);
+      Accept := Count<>0;
+    end;
+end;
+
+
+procedure ПолучитьЦенуДляЧека(Data: ICValueTable; Source: ICDictionary);
+Var
+  Percent, Price, BasePrice,ActionPrice: Decimal;
+  TblGoods, TblPart: ICValueTable;
+  OrderOwner: ICDocuments;
+  AccsDiscard: ICAccs;
+  CommentPercent: String;
+  GoodParent : ICDictionary;
+begin
+
+  if IsObjEQ(Source._Default['Валюта'+TypePrice], DocCurrency) then
+    BasePrice := VarAsDec(Source._Default[TypePrice])*DocCourse
+  else
+    BasePrice := VarAsDec(Source._Default[TypePrice])*VarAsDec(Source._Default['Валюта'+TypePrice].GetTimedValue(Constants.UsedCurs,CurrentDateTime ));
+  Percent := PartnerDiscountPrecent;
+  if Percent=0 then
+    CommentPercent := ''
+  else
+    CommentPercent := 'Скидка партнера';
+
+  if VarAsBool(Constants.АвтоПрименятьСкидкуАкции) and (ActionTbl.LineCount>0) then
+    begin
+      if not IsNil(ActionTbl) and ActionTbl.Active and (ActionTbl.LineCount>0) then
+        begin
+          if ActionTbl.Locate('ИспКатегории',0) and (VarAsDec(ActionTbl.Скидка)<Percent) then
+            begin
+              CommentPercent := 'Акция';
+              Percent := VarAsDec(ActionTbl.Скидка);
+              if VarAsBool(ActionTbl.@Document.IsFocused) then
+                begin
+                  ActionDoc := ActionTbl.Document;
+                  CommentPercent := CommentPercent + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+                end;
+            end
+          else
+          if ActionTbl.Locate('Категория', Source.GetParent) and (VarAsDec(ActionTbl.Скидка)<Percent) then
+            begin
+              Percent := VarAsDec(ActionTbl.Скидка);
+              CommentPercent := 'Акция по категориям';
+              if VarAsBool(ActionTbl.@Document.IsFocused) then
+                 begin
+                   ActionDoc := ActionTbl.Document;
+                   CommentPercent := CommentPercent + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+                 end;
+            end;
+        end;
+    end;
+
+
+  DiscountLimitDic.SetFieldFilter('Товар','=',Source,'','',Null);
+  DiscountLimitDic.SetFieldFilter('ТипЦены','=',Partner.ТипЦены,'','',Null);
+  if DiscountLimitDic.Select then
+    begin
+     DiscountLimitDic.SelectNext;
+     if VarAsDec(DiscountLimitDic.Скидка) > Percent then // если ограничение скидки менше скидки партнера, то ставим ограничение
+      begin
+        Percent := VarAsDec(DiscountLimitDic.Скидка);
+//        CommentPercent := CommentPercent + ' Скидка ограничения на товар';
+        CommentPercent := ' Скидка ограничения на товар';
+        Price := BasePrice*(1 + Percent/100);
+      end
+    end;
+  Price := BasePrice*(1 + Percent/100);
+  Data.ЦенаБезСкидкиНадбавки := BasePrice;
+  Data.Цена := Price;
+  if VarAsBool(Constants.ОкруглятьЦеныГрн) then
+    begin   
+      if  VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+        begin
+          Data.ЦенаБезСкидкиНадбавки := RoundTo5Cop(Data.ЦенаБезСкидкиНадбавки);
+          Data.Цена := RoundTo5Cop(Data.Цена);
+        end
+      else
+        begin
+          Data.ЦенаБезСкидкиНадбавки := RoundDec(Data.ЦенаБезСкидкиНадбавки, VarAsInt(Constants.ОкруглениеЦенГрн));
+          Data.Цена := RoundDec(Data.Цена, VarAsInt(Constants.ОкруглениеЦенГрн));
+        end;
+    end;
+  Data.ПроцентСкидкиНадбавки := Percent;
+  Data.КомментарийСкидкиНадбавки := CommentPercent;
+end;
+
+
+procedure AddGood(Source : ICDictionary; PackCount, Price:Decimal; isWeight, IsPrice : Boolean);
+const PriceFromBarCodeComment='Цена из штрих-кода';
+var Count: Decimal;
+    Accept : Boolean;
+    TypeOper : integer;   
+    GoodCurrency : ICDictionary;
+begin
+ if TypePrice='' then
+   begin
+     ShowMessage('Для партнера не указан тип цены!');
+     exit;
+   end;
+  Accept := true;
+
+  if PackCount>0 then
+    Count := PackCount
+  else
+    Count := 1;
+
+  Cursor := WaitCursorStart;
+  LockCalc := true;
+  TblContents.DisableControls;
+  try
+    TblContents.SortBy('Товар;Цена');
+    if IsPrice and TblContents.Find(ArrayOf(Source,Price)) then  // если цена из штрих кода и товар присутствует в документе
+      begin
+        TblContents.Edit;
+        if not cbCountOne.Checked or VarAsBool(Source.ВесовойТОвар) then
+          begin
+            CalcCount(Price,PackCount,Count, Source,Scales, Accept);
+            if not Accept then
+              begin
+                TblContents.Cancel;
+                exit;
+              end;
+          end;
+        TblContents.КомментарийСкидкиНадбавки := PriceFromBarCodeComment;
+        TblContents.ЦенаБезСкидкиНадбавки := Price;
+        TblContents.Цена := Price;
+        TblContents.ПроцентСкидкиНадбавки := 0;
+        TblContents.ЦенаИзШтрихКода := true;
+        TblContents.РучнаяКорректировка := true;
+        TblContents.Количество := TblContents.Количество + Count;
+        TblContents.Post;
+      end
+    else
+    if not IsPrice and TblContents.Find(Source) then // если цена из справочнка и товар присутствует в документе
+      begin
+        TblContents.Edit;
+        ПолучитьЦенуДляЧека(TblContents, Source);
+//        if not cbCountOne.Checked then //or VarAsBool(Source.ВесовойТОвар)
+        if not cbCountOne.Checked or (VarAsBool(Source.ВесовойТОвар) and not isWeight) then
+          begin
+            CalcCount(VarAsDec(TblContents.Цена),PackCount,Count, Source,Scales, Accept);
+            if not Accept then
+              begin
+                TblContents.Cancel;
+                exit;
+              end;
+          end;
+        TblContents.Количество := TblContents.Количество + Count;
+        TblContents.Post;
+      end
+    else
+      begin // Если новый товар
+        TypePrice := Partner.ТипЦены;
+        if TypePrice='' then
+          TypePrice := 'Цена';
+        if not IsPrice and not VarAsBool(Source._Default['Валюта'+TypePrice].IsFocused) then
+          begin
+            ShowMessage('Не указана валюта цены товара');
+            exit;
+          end;
+        TblContents.Append;
+        inc(Num);
+        TblContents.Num := Num;
+        TblContents.Товар := Source;  
+        if  IsPrice then
+          begin
+            GoodCurrency := GetNativeCurrency;
+            TblContents.ВалютаТовара := GoodCurrency;
+            TblContents.КурсТовара := 1; 
+            TblContents.ЦенаБезСкидкиНадбавки := Price;
+            TblContents.Цена := Price;
+            TblContents.ПроцентСкидкиНадбавки := 0;
+            TblContents.КомментарийСкидкиНадбавки := PriceFromBarCodeComment;
+            TblContents.ЦенаИзШтрихКода := true;
+            TblContents.РучнаяКорректировка := true;
+          end
+        else
+          begin
+            GoodCurrency := Source._Default['Валюта'+TypePrice];
+            TblContents.ВалютаТовара := GoodCurrency;
+            TblContents.КурсТовара := GoodCurrency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+            ПолучитьЦенуДляЧека(TblContents, Source);
+          end;
+//        if not cbCountOne.Checked then   //or VarAsBool(Source.ВесовойТОвар)
+        if not cbCountOne.Checked or (VarAsBool(Source.ВесовойТОвар) and not isWeight) then
+          begin
+            CalcCount(VarAsDec(TblContents.Цена),PackCount,Count, Source,Scales, Accept);
+            if not Accept then
+              begin
+                TblContents.Cancel;
+                exit;
+              end;
+          end;
+        TblContents.Количество := Count;
+
+
+        if TblContents.КурсТовара<>0 then
+          TblContents.ЦенаВВалюте := TblContents.Цена / TblContents.КурсТовара;
+        if ShowGoodsRest then
+          begin
+            if VarAsBool(Store.IsFocused) then
+              AccsGoods.CalcGroupRestDirect(CurrentDateTime, ArrayOf(TblContents.@Товар, Store))
+            else
+              AccsGoods.CalcGroupRestDirect(CurrentDateTime, TblContents.@Товар);
+            TblContents.НаличиеТовара := AccsGoods.КолОбщ;
+          end;
+        TblContents.Post;
+      end;
+    AddToLog(0, Employ, Source, Count,(Count*TblContents.Цена));
+    TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+    TblContents.DoCalculation('СуммаСтроки','Количество * Цена');
+    TblContents.DoCalculation('СуммаСтрокиВВалюте','Количество * ЦенаВВалюте');
+    TblContents.DoCalculation('СуммаСтрокиБезСкидкиНадбавки','Количество * ЦенаБезСкидкиНадбавки');
+    TblContents.DoCalculation('СуммаСтрокиСкидкиНадбавки','Количество * (Цена - ЦенаБезСкидкиНадбавки)');
+    TblContents.SortBy('Num');
+    TblContents.DoNumbering('НомСтроки',1,1);
+  finally
+    UpdateAllSum;
+    TblContents.EnableControls;
+    LockCalc := false;
+    WaitCursorFinish(Cursor);
+  end;
+end;     
+
+procedure AddReturnGood(RetTbl : ICValueTable);
+var Count: Decimal;
+    Accept : Boolean;
+    TypeOper : integer;  
+    RetGood : ICDictionary;
+begin
+  Accept := true;
+  RetGood := RetTbl.Товар;
+  Count := 1;
+{  if not cbCountOne.Checked then
+    begin
+      Count := 1;
+      CalcCount(Count, RetGood.NameField, Accept);
+      if not Accept then
+        exit;
+      if Count = 0 then
+        exit;
+    end;
+}
+  Cursor := WaitCursorStart;
+  LockCalc := true;
+  TblContents.DisableControls;
+  try
+    TblContents.SortBy('Товар');
+    if TblContents.Find(RetGood) then
+      begin
+        if not cbCountOne.Checked then
+          begin
+            CalcCount(VarAsDec(TblContents.Цена),1,Count, RetGood,Scales, Accept);
+            if not Accept then
+              begin
+                TblContents.Cancel;
+                exit;
+              end;
+          end;
+        TblContents.Edit;
+        TblContents.Количество := TblContents.Количество + Count;
+        TblContents.Post;
+      end
+    else
+      begin
+        TblContents.Append;
+        inc(Num);
+        TblContents.Num := Num;
+        TblContents.Возврат := -1;
+        TblContents.Товар := RetGood;
+        TblContents.ПроцентСкидкиНадбавки := 0;
+        TblContents.AssignFields('Цена;ЦенаБезСкидкиНадбавки=Цена;ЦенаВВалюте=Цена',RetTbl);
+        TblContents.ВалютаТовара := GetNatCurrency(Currency);
+        TblContents.КурсТовара := 1;    
+        if ShowGoodsRest then
+          begin
+            if VarAsBool(Store.IsFocused) then
+              AccsGoods.CalcGroupRestDirect(CurrentDateTime, ArrayOf(TblContents.@Товар, Store))
+            else
+              AccsGoods.CalcGroupRestDirect(CurrentDateTime, TblContents.@Товар);
+            TblContents.НаличиеТовара := AccsGoods.КолОбщ;
+          end;
+        if not cbCountOne.Checked then
+          begin
+            CalcCount(VarAsDec(TblContents.Цена),1,Count, RetGood,Scales, Accept);
+            if not Accept then
+              begin
+                TblContents.Cancel;
+                exit;
+              end;
+          end;
+
+        TblContents.Количество := Count;
+        TblContents.Post;
+      end;
+    TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+    TblContents.DoCalculation('СуммаСтроки','Количество * Цена');
+    TblContents.DoCalculation('СуммаСтрокиВВалюте','Количество * ЦенаВВалюте');
+    TblContents.DoCalculation('СуммаСтрокиБезСкидкиНадбавки','Количество * ЦенаБезСкидкиНадбавки');
+    TblContents.DoCalculation('СуммаСтрокиСкидкиНадбавки','Количество * (Цена - ЦенаБезСкидкиНадбавки)');
+    TblContents.SortBy('Num');
+    TblContents.DoNumbering('НомСтроки',1,1);
+  finally
+    UpdateAllSum;
+    TblContents.EnableControls;
+    LockCalc := false;
+    WaitCursorFinish(Cursor);
+  end;
+end;
+
+procedure PrintDocumentForm(Doc:ICDocuments; PayCard, PayCash, SumReturn : Decimal);  // Печать чека соглпсно настроек в Значениях важных констант
+var i:integer;
+    PrinterName, OldPrinterName : string;
+begin     
+ if PrintFormCount>0 then
+   try
+     PrinterName := GetPrintNameForCurPrintForm(PrintFormName);
+     if (PrinterName<>'') and (GetActivePrinterName<>PrinterName) then
+       begin
+         OldPrinterName := GetActivePrinterName;
+         SetActivePrinter(PrinterName);
+       end;
+
+     for i:=1 to PrintFormCount do
+       PrintForms.PrintForm(PrintFormName,PreviewPrintForm,ArrayOf(Doc, PayCash,PayCard, SumReturn));
+
+   finally
+     if (OldPrinterName<>'') and (OldPrinterName<>GetActivePrinterName) then
+       SetActivePrinter(OldPrinterName);  
+   end;
+end;
+
+procedure CreateCashInDocByNakl(NaklDoc:ICDocuments; PayCash, DocCourse:Decimal; DocCurrency:ICDictionary);
+begin
+  if PayCash>0 then
+    try  // создаем приход в кассу
+       CashIn.Select;
+       CashIn.Append;
+       CashIn.AppendLine;
+       CashIn.PostLine;
+       CashIn.AssignFields('Партнер;АналитикаВзаиморасчета;Сумма;СуммаВВалюте;Ответственный;Регион;Курс;Валюта',NaklDoc);
+       CashIn.Касса := Kassa;     
+       if NaklDoc.СуммаВВалюте<>PayCash then
+         begin
+           CashIn.СуммаВВалюте := PayCash;
+           CashIn.Сумма := PayCash*DocCourse;
+         end;
+       CashIn.Взаиморасчет := true;
+       CashIn.Комментарий := 'Оплата згідно накладної №'+ NaklDoc.GetNumber + ' від '+ DateToStr(NaklDoc.GetDate);
+       CashIn.SetMaster(NaklDoc);
+       CashIn.BaseID := VarAsInt(Constants.КодИБ);
+       CashIn.NumID := УстановитьНомерДокумента(CashIn, '');
+       CashIn.Post;
+       CashIn.ApplyUpdates;
+       CashIn.StateUp;
+     except
+       ShowMessage('Ошибка создания документа приход в кассу!');
+     end;
+end;
+
+procedure CreateAcquiringIncomeDocByNakl(NaklDoc:ICDocuments; ContractTbl:ICValueTable; PayCash, DocCourse:Decimal);
+begin
+  if PayCash>0 then
+    try  // создаем приход в кассу
+       AcquiringIncomeDoc.Select;
+       AcquiringIncomeDoc.Append;
+       AcquiringIncomeDoc.AppendLine;
+       AcquiringIncomeDoc.PostLine;
+       AcquiringIncomeDoc.AssignFields('Партнер;АналитикаВзаиморасчета;Сумма;СуммаВВалюте;Ответственный;Регион;Курс;Валюта',NaklDoc);
+       AcquiringIncomeDoc.Статья := ParamsSt.@КомиссияПоЭквайрингу;
+       AcquiringIncomeDoc.AssignFields('БанкЭквайрер=Партнер;СчетПредприятия',ContractDoc);
+       AcquiringIncomeDoc.Терминал := TerminalDic;
+       AcquiringIncomeDoc.ПроцентКомиссии := ContractTbl.Процент;   
+       if NaklDoc.СуммаВВалюте<>PayCash then
+         begin
+           AcquiringIncomeDoc.СуммаВВалюте := PayCash;
+           AcquiringIncomeDoc.Сумма := PayCash*DocCourse;
+         end;
+       AcquiringIncomeDoc.СуммаКомиссии := RoundDec(AcquiringIncomeDoc.Сумма*AcquiringIncomeDoc.ПроцентКомиссии/100, 2);
+       AcquiringIncomeDoc.СуммаЗачисления := AcquiringIncomeDoc.Сумма - AcquiringIncomeDoc.СуммаКомиссии;
+       AcquiringIncomeDoc.Комментарий := 'Оплата згідно накладної №'+ NaklDoc.GetNumber + ' від '+ DateToStr(NaklDoc.GetDate);
+       AcquiringIncomeDoc.SetMaster(NaklDoc);
+       AcquiringIncomeDoc.BaseID := VarAsInt(Constants.КодИБ);
+       AcquiringIncomeDoc.NumID := УстановитьНомерДокумента(AcquiringIncomeDoc, '');
+       AcquiringIncomeDoc.УсловияДоговора := WritePropsToBlob(ContractTbl);
+       AcquiringIncomeDoc.Post;
+       AcquiringIncomeDoc.ApplyUpdates;
+       AcquiringIncomeDoc.StateUp;
+     except
+       ShowMessage('Ошибка создания документа приход по эквайрингу!');
+     end;
+end;    
+
+procedure CreateAcquiringOutcomeDocByNakl(NaklDoc:ICDocuments; ContractTbl:ICValueTable; PayCash,PayCourse:Decimal);
+begin
+  if PayCash>0 then
+    try  // создаем расход по эквайрингу
+       AcquiringOutcomeDoc.Select;
+       AcquiringOutcomeDoc.Append;
+       AcquiringOutcomeDoc.AppendLine;
+       AcquiringOutcomeDoc.PostLine;
+       AcquiringOutcomeDoc.AssignFields('Партнер;АналитикаВзаиморасчета;Ответственный;Регион;Курс;Валюта',ReturnDoc);
+       AcquiringOutcomeDoc.Статья := ParamsSt.@КомиссияПоЭквайрингу;
+       AcquiringOutcomeDoc.AssignFields('БанкЭквайрер=Партнер;СчетПредприятия',ContractDoc);
+       AcquiringOutcomeDoc.Терминал := TerminalDic;
+       AcquiringOutcomeDoc.ПроцентКомиссии := ContractTbl.Процент;
+       AcquiringOutcomeDoc.СуммаВВалюте := PayCash*PayCourse/VarAsDec(AcquiringOutcomeDoc.Курс);
+       AcquiringOutcomeDoc.Сумма := PayCash*PayCourse;
+       AcquiringOutcomeDoc.СуммаКомиссии := RoundDec(AcquiringOutcomeDoc.Сумма*AcquiringOutcomeDoc.ПроцентКомиссии/100, 2);
+       AcquiringOutcomeDoc.СуммаЗачисления := AcquiringOutcomeDoc.Сумма - AcquiringOutcomeDoc.СуммаКомиссии;
+       AcquiringOutcomeDoc.Комментарий := 'Оплата згідно поверення №'+ ReturnDoc.GetNumber + ' від '+ DateToStr(ReturnDoc.GetDate);
+       AcquiringOutcomeDoc.SetMaster(NaklDoc);
+       AcquiringOutcomeDoc.BaseID := VarAsInt(Constants.КодИБ);
+       AcquiringOutcomeDoc.NumID := УстановитьНомерДокумента(AcquiringOutcomeDoc, '');
+       AcquiringOutcomeDoc.УсловияДоговора := WritePropsToBlob(ContractTbl);
+       AcquiringOutcomeDoc.Post;
+       AcquiringOutcomeDoc.ApplyUpdates;
+       AcquiringOutcomeDoc.StateUp;
+     except
+       ShowMessage('Ошибка создания документа приход по эквайрингу!');
+     end;
+end;
+
+function CreateNaklDoc(IsPostPoneDoc:Boolean=false):boolean;
+var DelAckValue, IsNewDoc : boolean;  
+    ChildPayJrn : ICJournal;
+begin 
+ Result := false;
+ if IsObjFocused(PostPoneDoc) then
+   begin
+     PostPoneDoc.Refresh;
+     if PostPoneDoc.GetDocState>0 then
+       begin
+         if MessageDlg('Отложеный документ №'+VarAsStr(PostPoneDoc.GetNumber)+' уже зафиксирован!'+#13+
+                       'Его кто-то изменил и зафиксировал в журнале чеков!'+#13+
+                       'Создать новый документ?',mtConfirmation,Arrayof(mbYes,mbNo))=mrYes then
+           begin
+             Nil(PostPoneDoc);
+           end
+         else
+           begin
+             ShowMessage('Создание документа отменено!');
+             exit;
+           end;
+       end
+     else
+       begin
+         ChildPayJrn := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+         ChildPayJrn.UseMaster(PostPoneDoc);
+         if ChildPayJrn.Select then
+           begin
+             ShowMessage('По отложеному чеку '+VarAsStr(PostPoneDoc.GetNumber)+' есть оплаты!'+#13+
+                         'Удалите оплаты!');
+             exit;
+           end;
+       end;
+   end;
+  try
+    TblContents.DisableControls;
+    NaklDoc.Select;
+    if IsObjFocused(PostPoneDoc) and NaklDoc.Find(PostPoneDoc) then
+      begin  
+        IsNewDoc := false;
+        NaklDoc.Edit;
+        NaklDoc.ClearContents;
+      end
+    else
+      begin            
+        IsNewDoc := true;
+        NaklDoc.Append;
+      end;
+    NaklDoc.Партнер := Partner; 
+    if IsObjFocused(AnalitPartnerDic) then
+     NaklDoc.АналитикаВзаиморасчета := AnalitPartnerDic;
+    NaklDoc.Посредник := Agent;
+    NaklDoc.ПроцСкидки := PartnerDiscountPrecent;
+    if Store.IsFocused then
+      NaklDoc.СкладПоУмолч := Store;
+    if Region.IsFocused then
+      NaklDoc.Регион := Region;
+    if Employ.IsFocused then
+      NaklDoc.Ответственный := Employ;
+    NaklDoc.Отпуск := 1;
+    NaklDoc.ТипОплаты := PayType;
+    NaklDoc.Статья := ParamsSt.@Чек;
+    NaklDoc.LoadContents('Товар;Количество;Цена;ЦенаБезСкидкиНадбавки;ПроцентСкидкиНадбавки;КомментарийСкидкиНадбавки;РучнаяКорректировка;ЦенаИзШтрихКода',TblContents);
+    if IsObjFocused(DiscCards) then
+      begin
+        NaklDoc.ДисконтКарточка :=  DiscCards;
+        //NaklDoc.ТипДисконтнойКарты := DiscCards.@ТипДисконтнойКарты;
+      end;
+    NaklDoc.КолОбщ := RoundDec(TblContents.Total('Количество'),5);
+    NaklDoc.Сумма := RoundDec(TblContents.Total('СуммаСтроки'),2);
+    NaklDoc.Валюта := DocCurrency;
+    NaklDoc.Курс := DocCourse;
+    if DocCourse<>0 then
+      NaklDoc.СуммаВВалюте := NaklDoc.Сумма  / DocCourse;
+    NaklDoc.Смена := ChangeDoc;
+    NaklDoc.Заметки := mComment.text;   
+    if IsNewDoc then
+      begin
+        NaklDoc.BaseID := VarAsInt(Constants.КодИБ);
+        NaklDoc.NumID := УстановитьНомерДокумента(NaklDoc, '');
+      end;
+    NaklDoc.ЗакрытЧек := not IsPostPoneDoc;
+    NaklDoc.Post;
+    NaklDoc.ApplyUpdates;
+    Result := true;
+    if not IsPostPoneDoc then
+      begin
+        NaklDoc.Params['NotCheckRestrictions'] := true;
+        NaklDoc.StateUp;
+        if NaklDoc.GetDocState<1 then
+          try
+            DelAckValue := Options.GetServerPrm(DelAck);
+            Options.SetServerPrm(DelAck,false);
+            NaklDoc.Delete;
+            Result := false;
+          finally
+            Options.SetServerPrm(DelAck,DelAckValue);
+          end;
+      end;
+    Nil(PostPoneDoc);
+  finally
+    TblContents.EnableControls;
+  end;
+end;
+
+procedure CreateCashOutDocByReturn(ReturnDoc:ICDocuments; PayCash,PayCourse:Decimal; PayCurrency:ICDictionary);
+begin  
+ try  // создаем приход в кассу
+   CashOut.Select;
+   CashOut.Append;
+   CashOut.AppendLine;
+   CashOut.PostLine;
+   CashOut.AssignFields('Партнер;АналитикаВзаиморасчета;Ответственный;Регион',ReturnDoc);
+   CashOut.Валюта :=  PayCurrency;
+   CashOut.СуммаВВалюте := PayCash;
+   CashOut.Сумма := PayCash*PayCourse;
+   CashOut.Курс := PayCourse;
+   CashOut.Касса := Kassa;
+   CashOut.Комментарий := 'Оплата згідно накладної повернення від покупця №'+ ReturnDoc.GetNumber + ' від '+ DateToStr(ReturnDoc.GetDate);
+   CashOut.Взаиморасчет := true;
+   CashOut.SetMaster(ReturnDoc);
+   CashOut.BaseID := VarAsInt(Constants.КодИБ);
+   CashOut.NumID := УстановитьНомерДокумента(CashOut, '');
+   CashOut.Post;
+   CashOut.ApplyUpdates;
+   CashOut.StateUp;
+ except
+ //  ShowMessage('Ошибка создания документа приход в кассу!');
+ end;
+end;
+
+function CreateReturnDoc(TblContents: ICValueTable):boolean;
+var DelAckValue : boolean;
+begin
+  try   
+    Result := false;
+    TblContents.DisableControls;
+    if IsNil(ReturnDoc) then ReturnDoc := CreateObject('Документы.ВозвратОтПокупателей');
+    ReturnDoc.Select;
+    ReturnDoc.Append;
+    ReturnDoc.Партнер := Partner;
+    if IsObjFocused(AnalitPartnerDic) then
+     ReturnDoc.АналитикаВзаиморасчета := AnalitPartnerDic;
+    if Store.IsFocused then
+      ReturnDoc.СкладПоУмолч := Store;
+    if Region.IsFocused then
+      ReturnDoc.Регион := Region;
+    if Employ.IsFocused then
+      ReturnDoc.Ответственный := Employ;
+    ReturnDoc.Отпуск := 0;
+    ReturnDoc.Статья := ParamsSt.@НаклВозврОтПокуп;
+    ReturnDoc.LoadContents('Товар;Количество;Цена',TblContents);
+    ReturnDoc.Сумма := RoundDec(TblContents.Total('СуммаСтроки'),2);
+    ReturnDoc.КолОбщ := RoundDec(TblContents.Total('Количество'),5);
+    ReturnDoc.Валюта := DocCurrency;
+    ReturnDoc.Курс := DocCourse;
+    if DocCourse<>0 then
+      ReturnDoc.СуммаВВалюте := ReturnDoc.Сумма  / DocCourse;
+    ReturnDoc.Заметки := mComment.text;
+    ReturnDoc.Смена := ChangeDoc;
+    ReturnDoc.BaseID := VarAsInt(Constants.КодИБ);
+    ReturnDoc.NumID := УстановитьНомерДокумента(ReturnDoc, '');
+    ReturnDoc.Post;
+    ReturnDoc.ApplyUpdates;
+    Result := true;
+    ReturnDoc.StateUp;
+    if ReturnDoc.GetDocState<1 then
+      try
+        DelAckValue := Options.GetServerPrm(DelAck);
+        Options.SetServerPrm(DelAck,false);
+        ReturnDoc.Delete;
+        Result := false;
+      finally
+        Options.SetServerPrm(DelAck,DelAckValue);
+      end;
+   finally
+    TblContents.EnableControls;
+  end;
+end;
+
+procedure UpdateAllSum;
+begin          
+    edSum.Caption := FormatFloat('0.00', GetCurrencyDocSum) +' '+DocCurrency.CodeField;
+end;   
+
+procedure UpdateCurrencyVCL;
+begin
+  edCurrency.Text := DocCurrency.CodeField;
+  edDocCourse.Text := DecToStr(DocCourse);  
+  UpdateAllSum;
+end;
+
+procedure ChangeDocAppendLine(Doc: ICDocuments);
+begin
+  ChangeDoc.AppendLine;
+  ChangeDoc.Документ := Doc;
+  ChangeDoc.НазваниеДокумента := Doc.GetView + ' №' + Doc.GetNumber;
+  ChangeDoc.Дата := Doc.ДатаДокумента;
+  ChangeDoc.Партнер := Doc.Партнер;
+  ChangeDoc.КомментарийДокумента := Doc.Заметки;
+  ChangeDoc.DocNumID := Doc.GetNumber;
+  case StrLowerCase(Doc.GetSign) of
+    'чек' :
+      begin
+        ChangeDoc.ТипДокумента := 0;
+        ChangeDoc.СуммаДокумента := Doc.Сумма;
+        Doc.SetSrvToClientPos;
+        ChangeDoc.СуммаОплатыНалДокумента := server.GetChildPaysOutSum(Doc.SrvMean,'ПриходВКассу');
+        ChangeDoc.СуммаОплатыКартДокумента := server.GetChildPaysOutSum(Doc.SrvMean,'ПриходПоЭквайрингу');  
+        tmpTblToDoct.Clear;
+        Doc.AppendLinesTo('Товар;Количество;Цена;ПроцентСкидкиНадбавки;ЦенаБезСкидкиНадбавки;КомментарийСкидкиНадбавки',tmpTblToDoct);
+        tmpTblToDoct.DoCalculation('NumID',''''+VarAsStr(Doc.GetNumber)+'''');
+        tmpTblToDoct.DoCalculation('ТипДокумента','0');
+        tmpTblToDoct.AppendTo('',TblToDoct);
+      end;
+    'возвратотпокупателей' :
+      begin
+        ChangeDoc.ТипДокумента := 1;
+        ChangeDoc.СуммаДокумента := -Doc.Сумма;
+        Doc.SetSrvToClientPos;
+        ChangeDoc.СуммаОплатыНалДокумента := - server.GetChildPaysInSum(Doc.SrvMean, 'РасходИзКассы');
+        ChangeDoc.СуммаОплатыКартДокумента := - server.GetChildPaysInSum(Doc.SrvMean,'РасходПоЭквайрингу');
+        tmpTblToDoct.Clear;
+        Doc.AppendLinesTo('Товар;Количество;Цена',tmpTblToDoct);
+        tmpTblToDoct.DoCalculation('NumID',''''+VarAsStr(Doc.GetNumber)+'''');
+        tmpTblToDoct.DoCalculation('ТипДокумента','1'); 
+        tmpTblToDoct.DoCalculation('Количество','-Количество');
+        tmpTblToDoct.AppendTo('',TblToDoct);
+      end;
+   else
+    ChangeDoc.ТипДокумента := -1;
+  end;
+  ChangeDoc.PostLine;
+  ChangeDoc.UpdateLine(true);
+end;
+
+
+{procedure CreateDocTbl(TempTbl: ICValueTable);
+var
+  Doc: ICDocuments;
+begin
+  TblToDoct.Clear;
+  TempTbl.Select;
+  while TempTbl.SelectNext do
+    begin
+      Doc := TempTbl.Документ;
+      Doc.SelectLines;
+      while Doc.SelectNextLine do
+        begin
+          TblToDoct.Append;
+          if Doc.GetSign = 'Чек' then
+            begin
+              TblToDoct.AssignFields('Товар;Количество;Цена;ПроцентСкидкиНадбавки;ЦенаБезСкидкиНадбавки;КомментарийСкидкиНадбавки',Doc);
+              TblToDoct.NumID := Doc.GetNumber;
+              TblToDoct.ТипДокумента := 0;
+            end;
+          if Doc.GetSign = 'ВозвратОтПокупателей' then
+            begin
+              TblToDoct.AssignFields('Товар;Цена',Doc);
+              TblToDoct.NumID := Doc.GetNumber;
+              TblToDoct.Количество := - Doc.Количество;
+              TblToDoct.ТипДокумента := 1;
+            end;
+          TblToDoct.Post;
+        end;
+    end;
+  TblToDoct.DoNumbering('НомСтроки',1,1);
+  TblToDoct.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзмод');
+end;}
+
+function ReturnGoodsExist:boolean;
+var bookmark:integer;
+begin
+ Result := false;  
+ if TblContents.IsFocused then
+   bookmark := TblContents.НомСтроки
+ else
+   bookmark := -1;
+ TblContents.DisableControls;
+ try
+   Result := TblContents.Locate('Возврат',-1);
+   if bookmark<>-1 then
+    TblContents.Locate('НомСтроки',bookmark);
+ finally  
+   TblContents.EnableControls;
+ end;
+end;
+
+
+
+procedure PerformAction(actName: String);
+var
+  V: ICProcessing;
+  TempTbl: ICValueTable;
+  DefName, AuthCode: String;
+  UseCertificate : ICProcessing;
+  AccsGoodStore : ICAccs;
+  TypeCardRecID, Total,Count : integer;  
+  FiscalPrintOK : boolean;
+begin
+  case actName of
+    'iClose':
+      begin      
+        TblToDoct.Clear;
+        ChangeJourn.Select;
+        if not ChangeJourn.SelectNext then
+          begin
+            ShowMessage('Смена уже закрыта!');
+            exit;
+          end;
+        if MessageDlg('Закрыть смену?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrNo then
+          exit;
+        NaklJourn.SetFieldFilter('Смена','=',ChangeDoc,'','',Null);
+        NaklJourn.Select;
+        ChangeDoc.Edit;
+        ChangeDoc.ClearContents;
+        NaklJourn.SortByField('ДатаДокумента');   
+        NaklJourn.SrvAssignClientSelectParams; 
+        NaklJourn.SrvMean.Select;
+        Total := NaklJourn.SrvMean.RecordCount+4;
+        Count := 0;
+        while NaklJourn.SelectNext do
+          begin
+            if VarAsInt(NaklJourn.GetDocState)=0 then
+              begin
+                ShowMessage('В смене есть незафиксированые накладные отпуска!'+#13+
+                            'Зафиксируйте все накладные отпуска в смене! Смена не закрыта!');
+                exit;
+              end
+            else
+              ChangeDocAppendLine(NaklJourn.GetDoc);  
+            inc(Count);
+            SysProgress(0,Total,Count,'Закрытие смены');
+          end;
+        ReturnJourn.SetFieldFilter('Смена','=',ChangeDoc,'','',Null);
+        ReturnJourn.Select;
+        ReturnJourn.SortByField('ДатаДокумента');  
+        inc(Count);
+        SysProgress(0,Total,Count,'Закрытие смены');
+        while ReturnJourn.SelectNext do
+          begin
+            if VarAsInt(ReturnJourn.GetDocState)=0 then
+              begin
+                ShowMessage('В смене есть незафиксированые накладные возврата от покупателей!'+#13+
+                            'Зафиксируйте все накладные возврата в смене! Смена не закрыта!');
+                exit;
+              end 
+            else
+              ChangeDocAppendLine(ReturnJourn.GetDoc);
+          end;          
+        inc(Count);
+        SysProgress(0,Total,Count,'Закрытие смены');
+        TblToDoct.DoNumbering('НомСтроки',1,1);
+        TblToDoct.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзмод');
+        TempTbl := CreateObject('ValueTable');
+        ChangeDoc.SaveContents('ТипДокумента;СуммаДокумента;СуммаОплатыНалДокумента;СуммаОплатыКартДокумента',TempTbl);
+        if not IsNil(Employ) and VarAsBool(Employ.IsFocused) then
+          DefName := Employ.NameField;
+        // Содержимое всех документов по смене
+        //CreateDocTbl(TempTbl);  
+        inc(Count);
+        SysProgress(0,Total,Count,'Закрытие смены');
+        TempTbl.SortBy('ТипДокумента');
+        TempTbl.SetRange(0,0);
+        ChangeDoc.СуммаПродаж := TempTbl.Total('СуммаДокумента');
+        TempTbl.SetRange(1,1);
+        ChangeDoc.СуммаВозвратов := TempTbl.Total('СуммаДокумента');
+        TempTbl.CancelRange;
+        TempTbl.SortBy('');
+        ChangeDoc.Сумма                  := TempTbl.Total('СуммаДокумента');
+        ChangeDoc.СуммаОплатыНал            := TempTbl.Total('СуммаОплатыНалДокумента');
+        ChangeDoc.СуммаОплатыКарт            := TempTbl.Total('СуммаОплатыКартДокумента');
+        ChangeDoc.Таб_ТоварыПоЧекам      := WritePropsToBlob(TblToDoct);
+        ChangeDoc.Склад := Store;
+        ChangeDoc.Регион := Region;
+        ChangeDoc.Касса := Kassa;
+        ChangeDoc.НеФиксироватьНакладные := true;
+        ChangeDoc.Post;
+        ChangeDoc.ApplyUpdates;
+        ChangeDoc.StateUp; 
+        inc(Count);
+        SysProgress(0,Total,Count,'Закрытие смены');
+        pnPartnerDebt.Visible := false;
+        SetPropertyForComponentList(ptVisible,Form,'iClose;lbCtg;dbgCtg;pnTabs;gbSum;gbBarCode;'+
+                                                   'lbAll;pnPartner;pnDoc;pnGods;pnGoods;Splitter1;pnPartnerDebt',false);
+        iOpen.Visible := true;
+        miBarCodeFocusF12.Enabled := false;
+        SysProgress(0,0,0,'');
+        V := CreateObject('Обработки.РабочееМестоКассираCL');
+        V.Execute('ОтчетКассира',ChangeDoc);
+      end;
+    'iOpen': begin   
+        ChangeJourn.Select;
+        if ChangeJourn.SelectNext then
+          begin  
+            ChangeDoc := ChangeJourn.GetDoc;   
+            ShowMessage('Смена уже открыта');
+          end
+        else  
+          begin
+            ChangeDoc.Select;
+            ChangeDoc.Append;
+            ChangeDoc.Ответственный := Employ;
+            ChangeDoc.Регион := Region;
+            ChangeDoc.Склад := Store;
+            ChangeDoc.Касса := Kassa;
+            ChangeDoc.Post;
+            ChangeDoc.ApplyUpdates;
+          end;
+        SetPropertyForComponentList(ptVisible,Form,'iClose;lbCtg;dbgCtg;pnTabs;gbSum;gbBarCode;'+
+                                                   'lbAll;pnPartner;pnDoc;pnGods;pnGoods;Splitter1;pnPartnerDebt',true);
+        pnPartnerDebt.Visible := ShowPartnerDebt;
+        iOpen.Visible := false;
+        miBarCodeFocusF12.Enabled := true;
+        dbgOrder.SetFocus;
+      end;
+    'iCash' : begin
+        ChangeJourn.Select;
+        if not ChangeJourn.SelectNext then
+          ShowMessage('Смена уже закрыта!')
+        else
+        if TblContents.LineCount > 0 then
+          begin
+            if VarAsBool(Constants.ИспПолеПосредникВЧеках) and VarAsBool(Constants.ОбязПолеПосредникВЧеках) and not IsObjFocused(Agent) then
+              ShowMessage('Укажите посредника!')
+            else
+            if not ReturnGoodsExist then
+              begin
+                if IsNil(V) then
+                  V := CreateObject('Обработки.РабочееМестоКассираCL');
+                V.Params['DocCurrency'] := DocCurrency;
+                V.Params['Terminal'] := TerminalDic;
+                V.Params['UseFiscalPrinter'] := UseFiscalPriner;
+                if ContractTbl.Active and (ContractTbl.LineCount>0) then
+                  V.Params['ContractTbl'] := ContractTbl
+                else
+                  V.Params['ContractTbl'] := Null;
+                if (V.Execute('МультиОплата',GetCurrencyDocSum)=mrOK)  then
+                  begin
+                    TerminalDic.Find(V.Params['Terminal']);
+                    if IsObjFocused(ContractDoc) then
+                      ContractDoc := TerminalDic.Договор;
+                    if V.HasParam('CardSum') then
+                      PayCard := VarAsDec(V.Params['CardSum'])
+                    else
+                      PayCard := 0;
+                    if V.HasParam('SumPay') then
+                      PayCash := VarAsDec(V.Params['SumPay'])
+                    else
+                      PayCash := 0;
+                    if V.HasParam('RestSum') then
+                      SumReturn := VarAsDec(V.Params['RestSum'])
+                    else
+                      SumReturn := 0;
+                    if V.HasParam('Sum') then
+                      KashGiveSum := VarAsDec(V.Params['Sum'])
+                    else
+                      KashGiveSum := 0;
+                    if V.HasParam('AuthCode') then
+                      AuthCode := VarAsStr(V.Params['AuthCode']);
+
+                    PayType := 0;
+                    UpdateAllSum;
+                    if CreateNaklDoc then
+                      try
+                        AddToLog(3, Employ, NaklDoc, 0 ,NaklDoc.Сумма);
+
+                        if PayCard>0 then
+                          CreateAcquiringIncomeDocByNakl(NaklDoc, ContractTbl, PayCard, DocCourse);
+                        if PayCash>0 then
+                          CreateCashInDocByNakl(NaklDoc, PayCash, DocCourse, DocCurrency);
+
+                        // Печать чека  
+                        FiscalPrintOK := false;
+                        if UseFiscalPriner and IsObjFocused(FiscalPrinerDic) then
+                          case VarAsStr(FiscalPrinerDic.Тип) of
+                            'ICS' :
+                              FiscalPrintOK := PrintDocFP_ICS_EP_09(FiscalPrinerDic,NaklDoc,PayCash,PayCard,AuthCode);
+                            'Unisystem' :
+                              FiscalPrintOK := PrintDocMiniFP(FiscalPrinerDic, NaklDoc, '0', PayCash, PayCard);
+                            'Excellio' :
+                              PrintFiscalDocFPExellio(FiscalPrinerDic, NaklDoc, PayCash, PayCard);
+                            'MG-N707' :
+                              PrintFiscalDocMGN707(FiscalPrinerDic, NaklDoc, PayCash, PayCard);
+                           end;
+
+                        if not FiscalPrintOK then
+                          PrintDocumentForm(NaklDoc,PayCard, KashGiveSum, SumReturn);
+
+                        if VarAsBool(UserDic.ПокДиалогСдачиРабМестоКассира) then
+                          begin
+                            V.Execute('Сдача',ArrayOf(SumReturn,UserDic.ИнтервалДиалогаСдачиРабМесто));
+                          end;
+                      finally
+                        ClearNakl;
+                      end;
+                  end
+              end
+            else
+               ShowMessage('В документе есть товары добавленые из подбора для возврата от покупателя!'+#13+
+               'Разрешен только возврат от покупателя!');
+          end;
+         end;
+
+    'iReturn':
+      begin
+        ChangeJourn.Select;
+        if not ChangeJourn.SelectNext then
+          ShowMessage('Смена уже закрыта!')
+        else
+        if TblContents.LineCount > 0 then
+          begin
+            if IsNil(V) then
+              V := CreateObject('Обработки.РабочееМестоКассираCL');
+
+              V.Params['DocCurrency'] := DocCurrency;
+            V.Params['Terminal'] := TerminalDic;
+            if ContractTbl.Active and (ContractTbl.LineCount>0) then
+              V.Params['ContractTbl'] := ContractTbl
+            else
+              V.Params['ContractTbl'] := Null;
+            V.Params['UseFiscalPrinter'] := UseFiscalPriner;
+            if (V.Execute('МультиОплатаВозврата',GetCurrencyDocSum)=mrOK)  then
+              begin
+                TerminalDic.Find(V.Params['Terminal']);
+                if IsObjFocused(ContractDoc) then
+                  ContractDoc := TerminalDic.Договор;
+                if V.HasParam('CardSum') then
+                  PayCard := VarAsDec(V.Params['CardSum'])
+                else
+                  PayCard := 0;
+                if V.HasParam('SumPay') then
+                  PayCash := VarAsDec(V.Params['SumPay'])
+                else
+                  PayCash := 0;
+                if V.HasParam('AuthCode') then
+                  AuthCode := VarAsStr(V.Params['AuthCode']);
+                PayType := 0;
+                UpdateAllSum;
+                if CreateReturnDoc(TblContents) then
+                  try
+                    if PayCash>0 then
+                      CreateCashOutDocByReturn(ReturnDoc, PayCash, DocCourse, DocCurrency);
+                    if PayCard>0 then
+                      CreateAcquiringOutcomeDocByNakl(ReturnDoc, ContractTbl, PayCard, DocCourse);
+                    // Печать фискального чека
+                    if UseFiscalPriner and IsObjFocused(FiscalPrinerDic) then        
+                      case VarAsStr(FiscalPrinerDic.Тип) of
+                       'ICS' : PrintReturnDocFP_ICS_EP_09(FiscalPrinerDic,ReturnDoc,PayCash,PayCard,AuthCode);
+                       'Unisystem' : PrintDocMiniFP(FiscalPrinerDic, ReturnDoc, '1', PayCash, PayCard);
+                       'Excellio'  : PrintFiscalReturnDocFPExellio(FiscalPrinerDic, ReturnDoc, PayCash, PayCard);
+                       'MG-N707'   : PrintFiscalReturnDocMGN707(FiscalPrinerDic, ReturnDoc, PayCash, PayCard);
+                      end;
+                  finally
+                    ClearNakl;
+                  end;
+
+              end
+
+          end;
+      end;
+    'iPostPoneDoc' :  //Отложить чек  
+     if ReturnGoodsExist then
+       ShowMessage('В документе есть товары добавленые из подбора для возврата от покупателя!'+#13+
+                      'Отложить возврат невозвожно!')
+     else
+     if MessageDlg('Отложить чек?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+      begin
+        if CreateNaklDoc(true) then
+          ClearNakl
+        else
+          ShowMessage('Не удалось сохранить документ!');
+      end;
+  end;
+end;
+
+
+function SetProcDiscount(Part: Variant): Decimal; Server;
+var
+  Proc : Decimal;
+  AccsPart : ISAccs;
+begin
+  result := 0;
+  PartSumBalance := Server.GetPartSumBalance(Part);
+  if IsObjFocused(Part.ГруппаСкидки) then
+     Proc := Part.ГруппаСкидки.СкидкаНадбавка;
+  if VarAsBool(Part.ГруппаСкидки.БезЗадолженности) and (Proc < 0) then // правило только для скидки
+    begin
+      if PartSumBalance <= 0 then //нет задолженности
+        result := Proc;
+      exit;
+    end
+  else
+    result := Proc
+end;  
+
+procedure UpdateDocCourse;
+begin
+  if IsObjFocused(DocCurrency) then
+    begin
+      DocCurrency.Refresh;
+      DocCourse := DocCurrency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+      UpdateCurrencyVCL;
+    end;
+end;
+
+procedure SetPartner(Partner: ICDictionary);
+Var
+ tmpActionTbl : ICValueTable;
+
+begin   
+  tsPages.TabIndex := 0;
+  // установка валюты документа
+  if VarAsBool(Partner.@Валюта.IsFocused) then
+    DocCurrency := Partner.Валюта
+  else
+    DocCurrency := GetNativeCurrency;
+  if not IsObjFocused(DocCurrency) then
+    DocCurrency := GetActiveCurrency;
+ UpdateDocCourse;
+  // Долги партнера
+  if ShowPartnerDebt then
+    try
+      PartDebtTbl.UseDataSource(0);
+      PartDebtTbl.Clear;
+      PartDebtTbl.CopyDataToServer;
+      server.GetPartDebtTbl(PartDebtTbl.SrvMean, Partner);
+      PartDebtTbl.CopyDataFromServer;
+      PartDebtTbl.SortBy('Валюта');
+    finally
+      PartDebtTbl.UseDataSource(CtrlToVar(TVSPartnerDebt));
+    end;
+  TypePrice := VarAsStr(Partner.ТипЦены,'');  
+  PartnerDiscountPrecent := SetProcDiscount(Partner);
+  SelAnalitPartnerDic.UseMaster(Partner);
+  if SelAnalitPartnerDic.Select then
+    begin
+      if tsPages.Tabs.IndexOf('Аналитика взаиморасчетов')=-1 then
+        tsPages.Tabs.Add('Аналитика взаиморасчетов');
+    end
+  else
+    begin
+      if tsPages.Tabs.IndexOf('Аналитика взаиморасчетов')<>-1 then
+        tsPages.Tabs.Delete(tsPages.Tabs.IndexOf('Аналитика взаиморасчетов'));
+    end; 
+
+  if IsObjFocused(AnalitPartnerDic) then
+    edAnalit.Text := AnalitPartnerDic.NameField
+  else
+    edAnalit.Text := '';
+
+  edPrecent.Text := FormatFloat('0.###',PartnerDiscountPrecent);
+  if TypePrice='' then
+    ShowMessage('В карточке партнера '+VarAsStr(Partner.Namefield)+' не указан тип цены!')
+  else
+    GoodsDic.ExecProc(MasterProc,'changetypeprice',TypePrice, OutParam);
+  gbPartner.Caption := ' Партнер  (тип цены: '+TypePrice+')';
+  MasterProc.Params['Partner'] := Partner;
+  if AllowReturnProcDrive and (not IsNil(ReturnProc)) and  IsObjFocused(Partner) and (nbGoods.PageIndex=1) then
+    ReturnProc.ExecProc(MasterProc,'changepartner', MasterProc.Params['Partner'], OutParam);
+  edPartner.Text := Partner.ПолноеНазвание;
+  CheckActions;
+
+  try
+    tmpActionTbl := CreateObject('ТаблицаЗначений');
+    ActionTbl.CopyColumnsTo(tmpActionTbl);
+    if VarAsBool(Constants.АвтоПрименятьСкидкуАкции) then
+      ActionTbl.AppendTo('',tmpActionTbl);
+    tmpActionTbl.CopyDataToServer;
+
+    TblContents.DisableControls;
+    TblContents.CopyDataToServer;
+    Server.ChangeTbl(TblContents.SrvMean, tmpActionTbl.SrvMean, DocCourse, PartnerDiscountPrecent, TypePrice, DocCurrency.CodeField, CurrentDateTime);
+    TblContents.CopyDataFromServer;
+    TblContents.SrvMean.Clear;
+  finally
+    TblContents.EnableControls;
+    TVSOrder_VPAAfterPost(dbgOrder);
+  end;
+end;   
+
+
+
+
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  MasterProc := Mean;
+end;
+
+//  Настройки горячих клавиш для Нечая. Для Остальных закоментировать
+Procedure SetShortCutSpecialNechai;
+begin
+  miChangeCount.ShortCut := 121;
+  miCash.ShortCut := 117;
+  iCash.Caption := 'Касса [F6]';
+  tbChange.Caption := 'Изменить[F10]';
+end;
+
+procedure Form_Show(Sender: TObject);
+begin
+  miBarCodeFocusF12.ShortCut := GetShortCut;
+//  SetShortCutSpecialNechai;
+end;
+
+procedure Form_Open(Sender: TObject);
+var
+  Nobody : TO4Toolbar;
+begin
+  Cursor := WaitCursorStart;
+
+  try
+    CreateObjects;
+    panel2.Width := VarAsInt(Options.GetServerPrm(GetUserID + Form.Caption+'panel2'),500);
+    Server.CreateSrvObjects;
+    if UserDic.FindByCode(GetUserLogin,false) then
+      begin  
+        iPostPoneDoc.Visible := VarAsBool(UserDic.РаботаСОтложеннымиЧеками);
+        SeparPostPoneDoc.Visible := iPostPoneDoc.Visible; 
+        ShowGoodsRest := not VarAsBool(UserDic.РабМестоНеОтобрОстаткиТовара);
+        if not ShowGoodsRest then
+          dbgOrder.VPAOnGetRowParams.EventName := '';
+        BlockChangePartner := VarAsBool(UserDic.БлокировкаВыбораПартнера);
+        miChangePrice.Enabled :=  VarAsBool(UserDic.РазрешитьИзменениеЦены);
+        tbChangePrice.Enabled := miChangePrice.Enabled;
+        edPartner.Enabled := not (VarAsBool(UserDic.БлокировкаВыбораПартнера) or VarAsBool(UserDic.БлокВыбораПартнеравручную));
+        Partner := UserDic.ПартнерПоУмолчанию;
+        AnalitPartnerDic := UserDic.АналитикаВзаиморасчета;
+        Region := UserDic.Регион;
+        Store := UserDic.Склад;
+        Kassa := UserDic.Касса;
+        Employ := UserDic.Служащий;
+        Scales := UserDic.Весы;
+        ParamsSt.Select;
+        // Накладные прихода
+        if  not VarAsBool(UserDic.РазрешитьПриемТовараВРабМесте) then
+          TsLists.Tabs.Delete(3);
+
+        // Терминал
+        if  not VarAsBool(UserDic.РазПечЦенниковРабМестоКассира) then
+          TsLists.Tabs.Delete(2);
+
+        iReturn.Visible := VarAsBool(UserDic.РазрешитьВозвратВРабМесте);
+        SeparReturn.Visible := iReturn.Visible;
+        IsReturn := iReturn.Visible;
+        if not iReturn.Visible then
+          begin
+            AllowReturnProcDrive := false;
+            TsLists.Tabs.Delete(1);
+          end;
+
+
+        if TerminalDic.Find(UserDic.@Терминал) then
+          begin
+            if not VarAsBool(ParamsSt.@КомиссияПоЭквайрингу.IsFocused) then
+              raise('В Параметрах отчета по доходам и затратам'+#13+' не указана статья для комиссия по Эквайрингу!');
+            ContractDoc := TerminalDic.Договор;
+            if IsObjFocused(ContractDoc) then
+              begin
+                ContractDoc.SaveContents('НомСтроки;Комментарий;Процент;ПроцентДоп;Активность', ContractTbl);
+                ContractTbl.SortBy('НомСтроки');
+                if ContractTbl.LineCount=0 then
+                  ShowMessage('В договоре эквайринга отчутствует спискок типов карт!');
+              end
+            else
+              ShowMessage('В настройках POS-терминала не указан договор!')
+          end;
+
+        // настройки печати чеков
+        GetPrintSettings;    
+       // Фискальный принтер
+      if VarAsBool(UserDic.@ФискальныйРегистратор.IsFocused) then
+        begin
+         FiscalPrinerDic := CreateObject('Справочники.ФискальныеРегистраторы');
+         UseFiscalPriner := FiscalPrinerDic.Find(UserDic.@ФискальныйРегистратор);
+         tbFiscalPrint.Visible := UseFiscalPriner;
+         miRepOnItem.Visible := (VarAsStr(FiscalPrinerDic.Тип)='ICS') or (VarAsStr(FiscalPrinerDic.Тип)='Excellio') or (VarAsStr(FiscalPrinerDic.Тип)='MG-N707');
+         miPeriodReport.Visible :=  (VarAsStr(FiscalPrinerDic.Тип)='ICS') or (VarAsStr(FiscalPrinerDic.Тип)='Excellio');
+         miCancelReceipt .Visible := not (VarAsStr(FiscalPrinerDic.Тип)='MG-N707');
+         miStatusFP.Visible := (VarAsStr(FiscalPrinerDic.Тип)='Unisystem') or (VarAsStr(FiscalPrinerDic.Тип)='MG-N707');
+        end;
+
+      end
+    else
+      BlockChangePartner := false;
+    if not IsObjFocused(Partner) then
+      raise('В настройках пользователя не указан партнер по умолчанию!');    
+    if not IsObjFocused(Region) then
+      raise('В настройках пользователя не указан регион!');
+    if not IsObjFocused(Store) then
+      raise('В настройках пользователя не указан склад!');
+    if not IsObjFocused(Kassa) then
+      raise('В настройках пользователя не указана касса!');
+    if not IsObjFocused(Employ) then
+      raise('В настройках пользователя не указан служащий!');
+    lbAll.Caption := 'Склад: '+VarAsStr(Store.NameField)+' Касса: '+VarAsStr(Kassa.NameField);
+
+    if not VarAsBool(ParamsSt.@Чек.IsFocused) then
+      raise('В Параметрах отчета по доходам и затратам'+#13+' не указана статья для чека!');
+    if not VarAsBool(ParamsSt.@НаклВозврОтПокуп.IsFocused) then
+      raise('В Параметрах отчета по доходам и затратам'+#13+' не указана статья для возврата от покупателя!');
+    // Установка валюты
+    DocCurrency := GetNatCurrency(Currency);
+    if IsObjFocused(DocCurrency) then
+      begin
+        DocCourse := DocCurrency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+        UpdateCurrencyVCL;
+      end
+    else
+      raise('В конфигурации не указана активная валюта!');
+
+    GoodsDic.Params['Store'] := Store;
+    GoodsDic.Params['OwnerProc'] := MasterProc;
+    GoodsDic.Params['BlockChangeBarCode'] :=  VarAsBool(UserDic.РазрПривязкуШтрихКодаРабМесто);
+    GoodsDic.Params['EnabledChangeGoodPrices'] := VarAsBool(UserDic.РазрИзмЦенТовараРабМестоКас);;
+    GoodsDic.Params['EnabledPrintBarCodes'] := VarAsBool(UserDic.РазПечЦенниковРабМестоКассира);
+
+    GoodsDic.OpenFormInplace('ТоварыДляРабочееМестоКассира',CtrlToVar(nbGoods.PageClass[0]));
+    ShowPartnerDebt := VarAsBool(Constants.ДолгиПартнераВРабМестоКассира);
+    ChangeJourn.SetFieldFilter('Регион','=',Region,'','',Null);
+    ChangeJourn.SetFieldFilter('Касса','=',Kassa,'','',Null);   
+    ChangeJourn.SetFieldFilter('Склад','=',Store,'','',Null);
+    ChangeJourn.Select;
+    if ChangeJourn.SelectNext then
+      begin
+        SetPropertyForComponentList(ptVisible,Form,'iClose;lbCtg;dbgCtg;pnTabs;gbSum;gbBarCode;'+
+                                                   'lbAll;pnPartner;pnDoc;pnGods;pnGoods;Splitter1',true);
+        pnPartnerDebt.Visible := ShowPartnerDebt;
+        ChangeDoc := ChangeJourn.GetDoc;
+        iOpen.Visible := false; 
+        if iPostPoneDoc.Visible then
+          begin
+            RefreshPostPoneDocsList;
+            AddPostPoneDocToPanel;
+          end;
+      end
+    else
+      begin
+        SetPropertyForComponentList(ptVisible,Form,'iClose;lbCtg;dbgCtg;pnTabs;gbSum;gbBarCode;'+
+                                                   'lbAll;pnPartner;pnDoc;pnGods;pnGoods;Splitter1;pnPartnerDebt',false);
+        iOpen.Visible := true;
+      end;
+    SetPartner(Partner);
+    OldFixAck := Options.GetServerPrm('FixAck');
+    Options.SetServerPrm('FixAck', false);
+    edRespons.Text := Employ.NameField;
+    if VarAsBool(Constants.ИспПолеПосредникВЧеках) then
+      begin     
+        edAgent.Visible := true;
+        gbResponsCurrency.Caption := gbResponsCurrency.Caption + '                            Посредник';
+      end;
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+end;
+
+
+
+
+
+procedure tbDel_Click(Sender: TObject);
+begin
+  if TblContents.IsFocused and
+     (MessageDlg(Trans('Удалить запись?'), mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes) then
+    begin
+      TblContents.DisableControls;
+      try
+        PlaySound('Ding');
+        AddToLog(1, Employ, TblContents.Товар, TblContents.Количество ,TblContents.Количество*TblContents.Цена);
+        TblContents.Delete;
+        TblContents.DoNumbering('НомСтроки',1,1);
+        UpdateAllSum;
+      finally
+        TblContents.EnableControls;
+      end;
+    end;
+end;
+
+procedure TVSOrder_VPAAfterPost(Sender: TObject);
+begin
+  TblContents.DisableControls;
+  TblContents.DoCalculation('СуммаСтроки','Количество * Цена');   
+  TblContents.DoCalculation('СуммаСтрокиВВалюте','Количество * ЦенаВВалюте');
+  TblContents.DoCalculation('СуммаСтрокиБезСкидкиНадбавки','Количество * ЦенаБезСкидкиНадбавки');
+  TblContents.DoCalculation('СуммаСтрокиСкидкиНадбавки','Количество * (Цена - ЦенаБезСкидкиНадбавки)');
+  TblContents.DoNumbering('НомСтроки',1,1);
+  UpdateAllSum;
+  TblContents.EnableControls;
+end;
+
+procedure dbgOrder_DblClick(Sender: TObject);
+Var
+  Count,CountRazn: Decimal;
+  Accept : boolean;
+  V : ICProcessing;
+  Price : Decimal;
+begin
+  PlaySound('Ding');
+  if (TblContents.IsFocused) and VarAsBool(TblContents.Товар.IsFocused) then
+    begin
+      Count := TblContents.Количество;
+      Price := TblContents.Цена;
+      V := CreateObject('Обработки.РабочееМестоКассираCL');
+//      V.Execute('СтандартныйВводЗначения', ArrayOf(Count,'Введите количество:'));
+//      if V.HasParam('Value') then
+
+      if (V.Execute('ВводКоличеставаТовара', ArrayOf(Price, Count,TblContents.Товар, Scales))=mrOk) and
+         V.HasParam('Count') and (VarAsDec(V.Params['Count'], -1)>0) then
+        begin
+//          Count := VarAsDec(V.Params['Value'], -1);
+          Count := VarAsDec(V.Params['Count'], -1);
+          if Count<=0 then
+            begin
+              ShowMessage('Введено не верное значение!');
+              exit;
+            end;
+          try
+            CountRazn := Count-TblContents.Количество;
+            TblContents.DisableControls;
+            TblContents.Edit;
+            TblContents.Количество := Count;
+            if not VarAsBool(TblContents.РучнаяКорректировка) and not VarAsBool(TblContents.ЦенаИзШтрихКода) then
+              ПолучитьЦенуДляЧека(TblContents, TblContents.Товар);
+            TblContents.Post;
+            AddToLog(2, Employ, TblContents.Товар, CountRazn ,CountRazn*TblContents.Цена);
+
+          finally
+            TblContents.EnableControls;
+          end;
+        end;
+    end;
+
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  if not IsNil(Options) then
+    Options.SetServerPrm('FixAck', OldFixAck);
+  Options.SetServerPrm(GetUserID + Form.Caption+'panel2', panel2.width);
+
+end;
+
+procedure miMainFocus_Click(Sender: TObject);
+begin
+  Case (Sender as TO4MenuItem).Name of
+   // 'miCtg'     : dbgCtg.SetFocus;
+    'miGoods'   :  
+      begin    
+        nbGoods.SetFocus;
+        case nbGoods.PageIndex of
+          0: GoodsDic.ExecProc(MasterProc,'setgridfocus', Null, OutParam);
+          1: if not IsNil(ReturnProc) then
+               ReturnProc.ExecProc(MasterProc,'setgridfocus', Null, OutParam);
+        end;
+      end;
+    'miDocList' : dbgOrder.SetFocus;
+    'miCash'    : PerformAction('iCash');    
+    'miPayCard'    : PerformAction('iCard');
+    'miReturn'  : PerformAction('iReturn');
+    'miBarCodeFocusF12' : edBarCode.SetFocus;
+  end;
+end; 
+
+function GetNaklOutByBarCode(BarCode:string):ICDocuments;
+var Doc : ICDocuments;  
+    NumId:integer;
+begin
+ Result := Null;  
+ StrDelete(BarCode,1,3);
+ NumId := StrToIntDef(BarCode,-1);  
+ if NumId>=0 then
+   begin
+     Doc := CreateObject('Документы.Чек');
+     Doc.SetFieldFilter('BaseID','=',VarAsInt(Constants.КодИБ),'','',Null);
+     Doc.SetFieldFilter('NumID','=',NumId,'','',Null);
+     if Doc.Select and Doc.SelectNext then
+       Result := Doc;
+   end;
+end;
+
+procedure miBarCode_Click(Sender: TObject);
+var
+  BarCode, FieldName: String;
+  Accept, isWeight, isPrice: Boolean;
+  PackCount : integer;
+  DocByReturn : ICDocuments;
+  BarCodeWeitGoodLength, BarCodePriceGoodLength : Integer;
+  PrefixWeitGood, PrefixPriceGood : String;
+  Weight, Price : Decimal;
+
+begin
+  Accept := true;
+//  PlaySound('Ding');
+  BarCode := edBarCode.Text;
+  edBarCode.Text := '';
+  if BarCode = '' then
+    exit;
+  BarCodeWeitGoodLength := VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0)+9;
+  BarCodePriceGoodLength := BarCodeWeitGoodLength;
+  if (BarCodeWeitGoodLength mod 2)>0 then
+    begin
+      inc(BarCodeWeitGoodLength);
+      inc(BarCodePriceGoodLength);
+      PrefixWeitGood := '0201';
+      PrefixPriceGood := '0301';
+    end
+  else
+    begin
+      PrefixWeitGood := '201';
+      PrefixPriceGood := '301';
+    end;
+
+
+  if (StrCopy(BarCode,1,3)='*01') and (StrLength(BarCode)>3) then // если штрих-код накладной отпуска (возврат)
+    begin
+      if not IsReturn then
+        begin
+           ShowMessage('Вам запрещено делать возвраты от покупателя.'+#13+'Обратитесь к Администратору');
+           Exit;
+        end;
+      DocByReturn := GetNaklOutByBarCode(BarCode);
+      if IsObjFocused(DocByReturn) then
+        begin
+          if DocByReturn.GetDocState>0 then
+            begin
+              AllowReturnProcDrive := false;
+              try
+                if not IsObjEQ(Partner,DocByReturn.Партнер, false) then
+                  begin
+                    Partner := DocByReturn.Партнер;
+                    edCard.Text := '';
+                    SetPartner(Partner);
+                  end;
+                if IsNil(ReturnProc) then
+                  begin
+                   ReturnProc := CreateObject('Обработки.ПодборДляВозврата');
+                   ReturnProc.Params['OwnerProc'] := MasterProc;
+                   ReturnProc.Params['DocByReturn'] := DocByReturn;
+                   ReturnProc.OpenFormInplace('ПодборВозвратРабМестоКассира',CtrlToVar(nbGoods.PageClass[1]));
+                 end
+                else
+                  begin
+                    ReturnProc.ExecProc(MasterProc,'DocByReturn', DocByReturn, OutParam);
+                  end;
+              finally
+                AllowReturnProcDrive := true;
+                TsLists.TabIndex := 1;
+              end;
+            end
+          else
+            ShowMessage('Накладная отпуска найдена, но она не зафиксирована!'+#13+'Возврат от покупателя не возможен');
+        end
+      else
+        ShowMessage('Документ по штрих-коду не найден!');
+    end
+  else
+  if (StrLength(BarCode) = VarAsInt(Constants.ШтрихКодПартнераКолСимв,0)) and (StrCopy(BarCode,1,4)='0000') then  // вторая проверка добавлена для Нечая
+    begin
+      edCard.Text := BarCode;
+      miCard_Click(Sender);
+    end
+  else
+    begin
+      if (StrLength(BarCode)=BarCodeWeitGoodLength) and (StrCopy(BarCode,1,StrLength(PrefixWeitGood))=PrefixWeitGood) then
+        begin
+          Weight := StrToDec(StrCopy(BarCode,StrLength(PrefixWeitGood)+VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0)+1,6))/1000;
+          BarCode := StrCopy(BarCode,StrLength(PrefixWeitGood)+1,VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0));
+          isWeight := true;
+        end
+      else
+        begin
+          isWeight :=false;
+          Weight :=0
+        end;
+      if (StrLength(BarCode)=BarCodePriceGoodLength) and (StrCopy(BarCode,1,StrLength(PrefixPriceGood))=PrefixPriceGood) then
+        begin
+          Price := StrToDec(StrCopy(BarCode,StrLength(PrefixPriceGood)+VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0)+1,6))/100;
+          BarCode := StrCopy(BarCode,StrLength(PrefixWeitGood)+1,VarAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв,0));
+          isPrice := true;
+        end
+      else
+        begin
+          isPrice :=false;
+          Price :=0
+        end;
+
+      if FindGoodByCodeCount(BarCode, Goods, PackCount) then
+        begin
+          if isWeight then
+            AddGood(Goods, Weight, Price, isWeight, isPrice)
+          else
+            AddGood(Goods, PackCount, Price, isWeight, isPrice);
+        end
+    end;
+end;
+
+
+
+procedure btInputBarCode_Click(Sender: TObject);
+Var
+  V : ICProcessing;
+begin
+  PlaySound('Ding');
+  V := CreateObject('Обработки.РабочееМестоКассираCL');
+  V.Execute('ВводЗначения', Null);
+  if V.HasParam('Value') then
+    begin
+      edBarCode.Text := VarAsStr(V.Params['Value']);
+      miBarCode_Click(Sender);
+    end;
+end;
+
+
+
+
+procedure iOpen_Click(Sender: TObject);
+begin
+  ((Sender as TO4Image).Parent as TO4Panel).BevelOuter := bvLowered;
+  ((Sender as TO4Image).Parent as TO4Panel).Refresh;
+  sleep(200);
+  ((Sender as TO4Image).Parent as TO4Panel).BevelOuter := bvRaised;   
+  ((Sender as TO4Image).Parent as TO4Panel).Refresh;
+  PlaySound('Ding');
+  PerformAction((Sender as TO4Image).Name);
+end;
+
+procedure ToolButton1_Click(Sender: TObject);
+begin
+  UpdateAllSum;
+end;
+
+procedure miCard_Click(Sender: TObject);
+var
+  PartCode, FieldName: String;
+  Accept: Boolean;
+begin   
+  if BlockChangePartner then
+    begin
+      ShowMessage('Вам запрещено изменять партнера!'); 
+      edCard.Text := '';
+      exit;
+    end;
+  Accept := true;
+  UpdateAllSum;   
+
+  PartCode := edCard.Text;
+  if PartCode = '' then
+    exit;
+  if IsNil(DiscCards) then
+    DiscCards := CreateObject('Справочники.ДисконтныеКарты');
+  if DiscCards.FindByCode(PartCode, false) then
+    begin
+      Partner := DiscCards._GetOwner;
+      if IsObjFocused(Partner) then
+        begin
+          PlaySound('Ding'); 
+          if IsObjFocused(AnalitPartnerDic) and not IsObjEQ(AnalitPartnerDic._GetOwner,Partner) then
+            AnalitPartnerDic := Null;
+          SetPartner(Partner);
+        end
+      else
+        begin
+          PlaySound('Ding');
+          if UserDic.FindByCode(GetUserLogin,false) then
+            begin
+              Partner := UserDic.ПартнерПоУмолчанию;
+              AnalitPartnerDic := UserDic.АналитикаВзаиморасчета;
+            end;
+          if IsObjFocused(Partner) then
+            begin
+              SetPartner(Partner);
+              edCard.Text := '';
+            end;
+          ShowMessage('Не найден партнер с номером дисконтной карты: ' + PartCode);
+        end;
+    end
+  else
+    begin
+      Nil(DiscCards);
+      ShowMessage('Дисконтная карта с номером '+PartCode+' не найдена!');
+    end;
+end;
+
+procedure Image_Click(Sender: TObject);
+begin
+  PlaySound('Ding');
+  PerformAction((Sender as TO4ToolButton).Name);
+end;
+
+procedure tsPages_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  nbPages.PageIndex :=  NewTab
+end;
+
+procedure iRefresh_Click(Sender: TObject);
+begin
+  PlaySound('Ding');
+  PerformAction((Sender as TO4ToolButton).Name);    
+end;
+
+procedure miPrintRout_Click(Sender: TObject);
+Var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечатьЧека');
+  V.Execute('ВыборПринтераДляПечФормы', ArrayOf(PrintFormName,'РабочееМестоКассира'));
+  GetPrintSettings;
+end;
+
+procedure miChangePrice_Click(Sender: TObject);
+Var
+  Price, Precent: Decimal;
+  TypeChange : string;
+  Accept : boolean;
+  V : ICProcessing;
+begin
+  if IsNil(V) then
+   V := CreateObject('Обработки.РабочееМестоКассираCL');
+  if IsObjFocused(UserDic) and VarAsBool(UserDic.ЗапрПарольПриИзмПроцЦены) then
+    begin        
+      if UserDic.Пароль='' then
+        begin
+          ShowMessage('В настройках пользователя не указан пароль!');
+          exit;
+        end;
+      if (V.Execute('Пароль',MasterProc)=mrOK) and MasterProc.HasParam('PassStr') then
+        begin
+          if VarAsStr(MasterProc.Params['PassStr'])<>VarAsStr(UserDic.Пароль) then
+            begin
+              ShowMessage('Не правильный пароль!');
+              exit;
+            end;  
+        end
+      else
+        exit;
+    end;
+  PlaySound('Ding');
+  if TblContents.IsFocused then
+    begin 
+      if VarAsBool(TblContents.ЦенаИзШтрихКода) then
+        ShowMessage('Цену товара из штрих-кода изменять запрещено!')
+      else
+      if ((not VarAsBool(TblContents.Возврат)) or (MessageDlg('Этот товар добавлен из подбора для возрата от покупателя!'+#13+
+          'Все равно менять цену?',mtInformation, ArrayOf(mbYes,mbNo))=mrYes)) then
+        begin
+          V := CreateObject('Обработки.РабочееМестоКассираCL');
+          if (V.Execute('ИзменениеЦены', ArrayOf(TblContents.Цена,TblContents.ПроцентСкидкиНадбавки,
+                                                 TblContents.ЦенаВВалюте, TblContents.ВалютаТовара))=mrOK) and
+             V.HasParam('Value') and V.HasParam('TypeChange') then
+            begin
+              TypeChange := V.Params['TypeChange'];
+              TblContents.DisableControls;
+              TblContents.Edit;
+              Case TypeChange of
+               'Цена' :
+                 begin
+                   Price :=  V.Params['Value'];
+                   TblContents.Цена :=  Price;
+                   if TblContents.ЦенаБезСкидкиНадбавки<>0 then
+                     TblContents.ПроцентСкидкиНадбавки := (Price-TblContents.ЦенаБезСкидкиНадбавки)/TblContents.ЦенаБезСкидкиНадбавки*100
+                   else
+                     TblContents.ПроцентСкидкиНадбавки := 0;
+                 end;
+               'ЦенаВВалюте' :
+                 begin
+                   Price :=  V.Params['Value'];
+                   TblContents.ЦенавВалюте :=  Price;
+                   TblContents.Цена := TblContents.ЦенавВалюте * TblContents.КурсТовара;
+                   if TblContents.ЦенаБезСкидкиНадбавки<>0 then
+                     TblContents.ПроцентСкидкиНадбавки := (Price-TblContents.ЦенаБезСкидкиНадбавки)/TblContents.ЦенаБезСкидкиНадбавки*100
+                   else
+                     TblContents.ПроцентСкидкиНадбавки := 0;
+                 end;
+               'Процент' :
+                 begin
+                   Precent := V.Params['Value'];
+                   TblContents.ПроцентСкидкиНадбавки := Precent;
+                   TblContents.Цена := RoundFloat(TblContents.ЦенаБезСкидкиНадбавки * (1 + Precent/100),2);
+                 end;
+              end;
+              if TblContents.КурсТовара<>0 then
+                TblContents.ЦенавВалюте :=  TblContents.Цена / TblContents.КурсТовара
+              else
+                TblContents.ЦенавВалюте := 0;
+              TblContents.РучнаяКорректировка := true;
+              TblContents.КомментарийСкидкиНадбавки := 'Ручная коректировка';
+              TblContents.Post;
+              TblContents.EnableControls;
+            end;
+        end;
+    end;
+end;
+
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+  case StrLowerCase(ProcID) of
+   'addgood' :
+     if IsObjFocused(InParams) then
+     begin
+       AddGood(InParams, 1,0,false,false);
+     end;
+   'addreturngood' :
+     if VarAsBool(InParams.IsFocused) then
+     begin
+       AddReturnGood(InParams);
+     end;
+   'addgoodbyprint' :
+     if VarAsBool(InParams.IsFocused) then
+     begin
+       TblGoodsPrintPrices.Append;
+       TblGoodsPrintPrices.Товар:=InParams;
+       TblGoodsPrintPrices.Печать:=-1;
+       TblGoodsPrintPrices.Цена:=InParams._Default[TypePrice];
+       TblGoodsPrintPrices.Post;
+       TblGoodsPrintPrices.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+
+     end;
+  end;
+
+end;
+
+
+
+procedure TsLists_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ case TsLists.Tabs.Strings[NewTab] of
+   'Товары' :
+     begin
+//      nbGoods.PageIndex := NewTab;
+      nbGoods.PageIndex := 0;
+     end;
+   'Печать ценников' :
+     begin
+//      nbGoods.PageIndex := NewTab;
+      nbGoods.PageIndex := 2;
+     end;
+   'Подбор для возврата от покупателя' :
+     begin
+       if AllowReturnProcDrive then
+         begin
+           if IsNil(ReturnProc) then
+             begin
+               ReturnProc := CreateObject('Обработки.ПодборДляВозврата');
+               ReturnProc.Params['OwnerProc'] := MasterProc;
+               ReturnProc.OpenFormInplace('ПодборВозвратРабМестоКассира',CtrlToVar(nbGoods.PageClass[1]));
+             end
+           else
+           if IsObjFocused(MasterProc.Params['Partner']) then
+             ReturnProc.ExecProc(MasterProc,'changepartner', MasterProc.Params['Partner'], OutParam);
+//           nbGoods.PageIndex := NewTab;
+           nbGoods.PageIndex := 1;
+         end;
+     end;
+   'Накладные прихода' :
+     begin
+       if isNil(InJournal) or isNull(InJournal) then
+         InJournal := CreateObject('Журналы.ЖурналНакладныхПрихода');
+       InJournal.OpenFormInplace('СписокНакладныхРабМестоКассира',CtrlToVar(nbGoods.PageClass[3]));  
+       nbGoods.PageIndex := 3;
+     end;
+ end;
+end;
+
+
+{$D-}
+procedure dbgOrder_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+ if TblContents.IsFocused then
+   begin
+     if VarAsBool(TblContents.Возврат) then
+       Index1 := 234;   
+     if VarAsBool(TblContents.РучнаяКорректировка) then
+       Index2 := 207;
+   end;
+end;  
+
+procedure dbgPrintPrices_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  If TblGoodsPrintPrices.IsFocused then
+  if VarAsBool(TblGoodsPrintPrices.Печать) then
+    Index1:=112
+  else
+    Index1:=-1;
+end;
+{$D+}
+
+
+procedure edCurrency_ActionClear(Sender: TObject);
+var tmpCurrency : ICDictionary;
+begin
+  tmpCurrency := GetNatCurrency(Currency);
+  if IsObjFocused(tmpCurrency) then
+    begin
+      DocCurrency := tmpCurrency;
+      DocCourse := 1;
+      UpdateCurrencyVCL
+    end
+  else
+    ShowMessage('В справочнике валют не указана национальная валюта!');
+end;
+
+procedure edCurrency_ActionExecute(Sender: TObject);
+var DefName : string;
+    tmpCurrency : ICDictionary;
+begin     
+  tmpCurrency := CreateObject('Справочники.Валюты');
+  if tmpCurrency.SelectInForm('',DefName,Null) then
+    begin  
+      DocCurrency := tmpCurrency;
+      DocCourse := DocCurrency.GetTimedValue(Constants.UsedCurs, CurrentDateTime);
+      if DocCourse=0 then
+        DocCourse := 1; 
+      UpdateCurrencyVCL;
+    end;
+end;
+
+
+
+
+
+
+{$D-}
+procedure dbgPartDebt_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if not PartDebtTbl.IsFocused then
+    exit;
+  if PartDebtTbl.СумОбщВал > 0 then
+    DrawFont.Color := clBlue
+  else
+    if PartDebtTbl.СумОбщВал < 0 then
+      DrawFont.Color := clRed;
+  BackColor := clBtnFace;
+end;
+{$D+}
+
+procedure edPartner_ActionClear(Sender: TObject);
+begin
+  PlaySound('Ding');
+  if UserDic.FindByCode(GetUserLogin,false) then
+    begin
+      Partner := UserDic.ПартнерПоУмолчанию;
+      AnalitPartnerDic := UserDic.АналитикаВзаиморасчета;
+    end;
+  edCard.Text := '';
+  Nil(DiscCards);
+  SetPartner(Partner);
+  UpdateAllSum;
+end;
+
+procedure edPartner_ActionExecute(Sender: TObject);
+var DefName:string;
+    SelPartner:ICDictionary;
+begin
+  SelPartner := CreateObject('Справочники.ЮрПартнеры');
+  if SelPartner.SelectInForm('ВыборПартнера', DefName, Null) and
+    (not IsObjEQ(Partner,SelPartner,false))then
+    begin       
+      edCard.Text := '';
+      Nil(DiscCards);
+      Partner := SelPartner;
+      AnalitPartnerDic := Null;
+      SetPartner(Partner);
+      UpdateAllSum;
+    end;
+end;
+
+      
+
+procedure tbDelOne_Click(Sender: TObject);
+begin
+  if TblGoodsPrintPrices.IsFocused then
+    TblGoodsPrintPrices.Delete;
+
+end;
+
+procedure tbClearAll_Click(Sender: TObject);
+begin
+  TblGoodsPrintPrices.Clear;
+
+end;
+ 
+
+
+procedure tbPrintPrices_Click(Sender: TObject);
+var
+    i:integer;
+    PrinterName, BarCode : string;
+    V: ICProcessing;
+
+begin
+ if TblGoodsPrintPrices.LineCount<>0 then
+   begin
+      PrinterName := GetPrintNameForCurPrintForm('ПечатьЦенникаРМ');
+      if PrinterName<>'' then
+        SetActivePrinter(PrinterName);
+      V:= CreateObject('Обработки.ПечатьШтрихКодовИЦенников');
+
+      TblGoodsPrintPrices.UseDataSource(Null);
+      TblGoodsPrintPrices.Select;
+      While TblGoodsPrintPrices.SelectNext do
+        if VarAsBool(TblGoodsPrintPrices.Печать) and (BarCodeExist(TblGoodsPrintPrices.Товар,BarCode)) then
+          V.PrintForm('ПечатьЦенникаРМ58мм',False,ArrayOf(TblGoodsPrintPrices.Товар,BarCode));
+      TblGoodsPrintPrices.SelectFirst;
+      TblGoodsPrintPrices.UseDataSource(CtrlToVar(TVSGoodsPrintPrices));
+
+   end
+end;
+
+procedure tbAddChPrices_Click(Sender: TObject);
+begin
+  TblGoodsPrintPrices.CopyDataToServer;
+  Server.GetPrintPricesTbl(TblGoodsPrintPrices.SrvMean, TypePrice);
+  TblGoodsPrintPrices.CopyDataFromServer;
+end;
+
+procedure TVSGoodsPrintPrices_VPATimedAfterScroll(Sender: TObject);
+begin
+  if  TblGoodsPrintPrices.IsFocused then
+  if VarAsBool(TblGoodsPrintPrices.Печать) Then
+    miChangeStatus.Caption:='Убрать отметку печати'
+  else
+    miChangeStatus.Caption:='Поставить отметку печати';
+
+end;
+
+procedure miChangeStatus_Click(Sender: TObject);
+begin
+  TblGoodsPrintPrices.UseDataSource(Null);
+  if  TblGoodsPrintPrices.IsFocused then
+  if VarAsBool(TblGoodsPrintPrices.Печать) Then
+    begin
+      TblGoodsPrintPrices.Edit;
+      TblGoodsPrintPrices.Печать:=0;
+      TblGoodsPrintPrices.Post;
+      miChangeStatus.Caption:='Поставить отметку печати';
+    end
+  else
+    begin
+      TblGoodsPrintPrices.Edit;
+      TblGoodsPrintPrices.Печать:=-1;
+      TblGoodsPrintPrices.Post;
+      miChangeStatus.Caption:='Убрать отметку печати';
+    end;
+ TblGoodsPrintPrices.UseDataSource(CtrlToVar(TVSGoodsPrintPrices));
+end;
+
+procedure miGetPrinter_Click(Sender: TObject);
+Var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечатьЧека');
+  V.Execute('ВыборПринтераДляПечФормы', 'ПечатьЦенникаРМ');
+
+end;
+
+procedure tbAction_Click(Sender: TObject);
+Var
+  isRnd, IsEdit : boolean;
+  rnd : integer;
+  DiscountLimitDic : IcDictionary;
+  ComentPercent : String;
+  PercentLine : Decimal;
+  CurRecID:Double;
+begin
+ if PartSumBalance<=0 then
+   begin
+    if (ActionByCtg and (MessageDlg('Применить скидку по категориям?',mtInformation, ArrayOf(mbYes,mbNo))=mrYes)) or
+       (not ActionByCtg and (MessageDlg('Применить скидку '+CommentActionDiscount+' '+VarAsStr(ActionDiscountPrecent*100)+'%',mtInformation, ArrayOf(mbYes,mbNo))=mrYes)) then
+      try
+        DiscountLimitDic := CreateObject('Справочники.ОграничениеСкидок');
+        rnd :=  VarAsInt(Constants.ОкруглениеЦенГрн);
+        isRnd := VarAsBool(Constants.ОкруглятьЦеныГрн);
+        CurRecID := TblContents.RecID;
+        Cursor := WaitCursorStart;
+        LockCalc := true;
+        TblContents.DisableControls;
+        TblContents.Select;
+        While TblContents.SelectNext do
+          begin
+            if VarAsBool(TblContents.ЦенаИзШтрихКода) then continue; // Если цена товара из штрих-кода - пропускаем товар
+
+            IsEdit := False;
+            PercentLine := TblContents.ПроцентСкидкиНадбавки;
+            if ActionByCtg then
+              begin
+                if ActionTbl.Locate('Категория',TblContents.Товар.GetParent) and
+                   (VarAsDec(ActionTbl.Скидка)<PercentLine) then
+                  begin
+                    PercentLine := VarAsDec(ActionTbl.Скидка);
+                    ComentPercent := 'Акция';
+                    ActionDoc := ActionTbl.Document;
+                    ComentPercent := ComentPercent +' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);;
+                    IsEdit := True;
+                  end;
+              end
+            else
+              begin
+                if ActionTbl.Locate('ИспКатегории',0) and
+                   (VarAsDec(ActionTbl.Скидка)<PercentLine) then
+                  begin
+                    ComentPercent := 'Акция по категориям';
+                    PercentLine := VarAsDec(ActionTbl.Скидка);
+                    IsEdit := True;
+                  end;
+              end;
+            DiscountLimitDic.SetFieldFilter('Товар','=',TblContents.Товар,'','',Null);
+            DiscountLimitDic.SetFieldFilter('ТипЦены','=',TypePrice,'','',Null);
+            if DiscountLimitDic.Select then
+              begin
+                DiscountLimitDic.SelectNext;
+                if VarAsDec(DiscountLimitDic.Скидка) > PercentLine then // если ограничение скидки менше скидки партнера, то ставим ограничение
+                 begin
+                   ComentPercent := 'Скидка ограничения на товар';
+                   PercentLine := VarAsDec(DiscountLimitDic.Скидка);
+                   IsEdit := True;
+                 end;
+              end;
+
+            if IsEdit Then
+              begin
+                TblContents.Edit;
+                TblContents.ПроцентСкидкиНадбавки := PercentLine;
+                TblContents.КомментарийСкидкиНадбавки := ComentPercent;
+                if isRnd then
+                  begin         
+                    if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+                      TblContents.Цена := RoundTo5Cop(TblContents.ЦенаБезСкидкиНадбавки*(1 + VarAsDec(PercentLine/100)))
+                    else
+                      TblContents.Цена := RoundDec(TblContents.ЦенаБезСкидкиНадбавки*(1 + VarAsDec(PercentLine/100)), rnd)
+                  end
+                else
+                  TblContents.Цена := TblContents.ЦенаБезСкидкиНадбавки*(1 + VarAsDec(PercentLine/100));
+                if VarAsDec(TblContents.КурсТовара)>0 then
+                  TblContents.ЦенаВВалюте := TblContents.Цена / TblContents.КурсТовара;
+                TblContents.Post;
+              end;
+
+          end;
+      finally
+         TblContents.DoCalculation('СуммаСтроки','Количество * Цена');
+         TblContents.DoCalculation('СуммаСтрокиВВалюте','Количество * ЦенаВВалюте');
+         TblContents.DoCalculation('СуммаСтрокиБезСкидкиНадбавки','Количество * ЦенаБезСкидкиНадбавки');
+         TblContents.DoCalculation('СуммаСтрокиСкидкиНадбавки','Количество * (Цена - ЦенаБезСкидкиНадбавки)');
+         UpdateAllSum;
+         TblContents.FindByRecID(CurRecID);
+         TblContents.EnableControls;
+         LockCalc := false;
+         WaitCursorFinish(Cursor);
+      end;
+   end
+ else
+   ShowMessage('Акцию запрещено применять к партнерам с долгом!');
+
+end;
+
+procedure tbFiscalPrint_Click(Sender: TObject);
+var x,y : integer;
+begin
+  tbFiscalPrint.GetScreenPos(x,y);
+  pmFiscalPrinter.Popup(x,y+tbFiscalPrint.Height);
+end;
+
+procedure miXReport_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить X-отчет?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   case VarAsStr(FiscalPrinerDic.Тип) of
+     'ICS' : XReportFP_ICS_EP_09(FiscalPrinerDic);
+     'Unisystem' : XReportMiniFP(FiscalPrinerDic);  
+     'Excellio' : XReportFPExellio(FiscalPrinerDic);
+     'MG-N707' :  PrintFiscalReportMGN707(FiscalPrinerDic, '10')
+    else
+      ShowMessage('Неизвестный тип фискального регистратора!');
+   end;
+end;
+
+procedure miZReport_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить Z-отчет?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   case VarAsStr(FiscalPrinerDic.Тип) of
+     'ICS' : ZReportFP_ICS_EP_09(FiscalPrinerDic);
+     'Unisystem' : ZReportMiniFP(FiscalPrinerDic);
+     'Excellio' : ZReportFPExellio(FiscalPrinerDic);
+     'MG-N707' :  PrintFiscalReportMGN707(FiscalPrinerDic, '0')
+    else
+      ShowMessage('Неизвестный тип фискального регистратора!');
+   end;
+end;
+
+procedure miRepOnItem_Click(Sender: TObject);  
+begin
+ if IsObjFocused(FiscalPrinerDic) and
+   (MessageDlg('Выполнить отчет по товарам?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+     case VarAsStr(FiscalPrinerDic.Тип) of
+      'ICS' : ReportOnItemsFP_ICS_EP_09(FiscalPrinerDic);
+      'Excellio' : ReportOnItemsFPExellio(FiscalPrinerDic);
+      'MG-N707' :  PrintFiscalReportMGN707(FiscalPrinerDic, '20')
+      else
+        ShowMessage('Неизвестный тип фискального регистратора!');
+     end;
+end;
+
+procedure miCashInOut_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму внесения денег:',Sum) then
+   begin
+     if Sum>0 then
+       case VarAsStr(FiscalPrinerDic.Тип) of
+        'ICS' :  CashInFP_ICS_EP_09(FiscalPrinerDic,Sum);
+        'Unisystem' : CashInMiniFP(FiscalPrinerDic,Sum); 
+        'Excellio' : CashInOutFPExellio(FiscalPrinerDic,Sum);
+        'MG-N707' :  InputOutputCashMGN707(FiscalPrinerDic, Sum)
+        else
+          ShowMessage('Неизвестный тип фискального регистратора!');
+       end
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure miCashOut_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму выдачи денег:',Sum) then
+   begin
+     if Sum>0 then
+       case VarAsStr(FiscalPrinerDic.Тип) of
+        'ICS' :  CashOutFP_ICS_EP_09(FiscalPrinerDic,Sum);
+        'Unisystem' : CashOutMiniFP(FiscalPrinerDic,Sum);  
+        'Excellio' : CashInOutFPExellio(FiscalPrinerDic,-Sum);
+        'MG-N707' :  InputOutputCashMGN707(FiscalPrinerDic, -Sum)
+        else
+          ShowMessage('Неизвестный тип фискального регистратора!');
+       end
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+
+procedure miPrintZeroReceipt_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   case VarAsStr(FiscalPrinerDic.Тип) of
+    'ICS' :  PrintZeroReceiptFP_ICS_EP_09(FiscalPrinerDic);
+    'Unisystem' : PrintZeroReceiptMiniFP(FiscalPrinerDic); 
+    'Excellio' :  PrintZeroReceiptFPExellio(FiscalPrinerDic);
+    'MG-N707' :  PrintZeroReceiptMGN707(FiscalPrinerDic)
+    else
+      ShowMessage('Неизвестный тип фискального регистратора!');
+   end;
+end;
+
+procedure miPeriodReport_Click(Sender: TObject);
+var BegDate,EndDate:DateTime;
+    P:ICProcessing;
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   begin
+     P := CreateObject('Обработки.Диалоги');
+     if P.Execute('ВыборПериодаДат',Null)=mrOK then
+        case VarAsStr(FiscalPrinerDic.Тип) of
+         'ICS' :       PeriodicReportFP_ICS_EP_09(FiscalPrinerDic,VarAsDate(P.Params['BegDate']),VarAsDate(P.Params['EndDate']));
+         'Excellio' :  PeriodicReportFPExellio(FiscalPrinerDic,VarAsDate(P.Params['BegDate']),VarAsDate(P.Params['EndDate']))
+        else
+          ShowMessage('Неизвестный тип фискального регистратора!');
+       end;
+   end;
+end;
+
+
+procedure tbPostPoneLeft_Click(Sender: TObject);
+begin
+ if PostPoneDocPanelPage>0 then
+   dec(PostPoneDocPanelPage);
+ AddPostPoneDocToPanel;
+end;
+
+procedure tbPostPoneRight_Click(Sender: TObject);
+begin
+ if ((PostPoneDocPanelPage+1)*MaxPagePostPoneDocCount)<PostPoneDocsList.Count then
+   inc(PostPoneDocPanelPage);
+ AddPostPoneDocToPanel;
+end;
+
+procedure LoadPostPoneDoc(PostPoneDoc:ICDocuments);
+begin
+ try
+   TblContents.DisableControls;
+   TblContents.Clear;
+   PostPoneDoc.AppendLinesTo('Товар;Количество;Цена;ЦенаБезСкидкиНадбавки;ПроцентСкидкиНадбавки;КомментарийСкидкиНадбавки;РучнаяКорректировка;ЦенаИзШтрихКода',TblContents);
+   TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+   Partner := PostPoneDoc.Партнер;
+   SetPartner(Partner); 
+   Nil(DiscCards);
+   if VarAsBool(PostPoneDoc.@ДисконтКарточка.IsFocused) then
+     begin
+       DiscCards := CreateObject('Справочники.ДисконтныеКарты');
+       if DiscCards.Find(PostPoneDoc.@ДисконтКарточка) then
+         edCard.Text := DiscCards.CodeField
+       else
+         Nil(DiscCards);
+     end;
+   UpdateAllSum;
+ finally
+   TblContents.EnableControls;
+ end
+end;
+
+procedure PostPoneDoc_Click(Sender: TObject); 
+var CurPanel : TO4Panel;   
+    MessageStr : string;
+begin
+ CurPanel := Sender as TO4Panel;
+ if not IsNil(CurPanel) and PostPoneDocsList.ValidIndex(CurPanel.Tag) then
+   begin     
+     if (TblContents.LineCount > 0) and not IsObjFocused(PostPoneDoc) then
+       MessageStr := 'Текущий чек не сохраниться !!!'+#13+'Перейти к чеку №'
+     else
+       MessageStr := 'Перейти к чеку №';
+     if MessageDlg(MessageStr+PostPoneDocsList.GetStr(CurPanel.Tag)+'?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+       begin    
+         if IsObjFocused(PostPoneDoc) and
+           (MessageDlg('Сохранить текущий отложенный чек №'+VarAsStr(PostPoneDoc.GetNumber)+'?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+             CreateNaklDoc(true);
+         Nil(PostPoneDoc);
+         PostPoneDoc := CreateObject('Документы.Чек');
+         PostPoneDoc.Select;
+         if PostPoneDoc.Find(PostPoneDocsList.GetValue(CurPanel.Tag)) then 
+           begin 
+             LoadPostPoneDoc(PostPoneDoc); 
+             RefreshPostPoneDocsList;
+             AddPostPoneDocToPanel;
+           end
+         else
+           ShowMessage('Документ не найден!');
+      end;
+
+   end;
+end;
+
+procedure miCancelReceipt_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+  case VarAsStr(FiscalPrinerDic.Тип) of
+   'ICS' :  if AnnulReceiptFP_ICS_EP_09(FiscalPrinerDic) then
+             ShowMessage('Текущий чек отменен!');
+   'Unisystem' :
+     begin
+       if CancelReceiptMiniFP(FiscalPrinerDic) then
+        ShowMessage('Текущий чек отменен!');
+     end;
+   'Excellio' :
+     CancelLastDocFPExellio(FiscalPrinerDic)
+   else
+     ShowMessage('Неизвестный тип фискального регистратора!');
+  end;
+end;
+
+procedure miStatusFP_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+  case VarAsStr(FiscalPrinerDic.Тип) of
+   'Unisystem' :  ShowMessage(GetStatusStrMiniFP(FiscalPrinerDic));
+   'MG-N707' : ShowMessage(GetFiscalPrinterStateMGN707(FiscalPrinerDic));
+  end;
+end;
+
+procedure edAnalit_ActionClear(Sender: TObject);
+begin
+ Nil(AnalitPartnerDic);
+ edAnalit.Text := '';
+end;
+
+procedure edAnalit_ActionExecute(Sender: TObject);
+var DefName : string;
+begin                           
+ if IsObjFocused(Partner) then
+   begin
+     SelAnalitPartnerDic.UseMaster(Partner);
+     if SelAnalitPartnerDic.SelectInForm('',DefName,Null) then
+       begin
+          Nil(AnalitPartnerDic);
+          AnalitPartnerDic := CreateObject('Справочники.АналитикаВзаиморасчета');
+          if AnalitPartnerDic.Find(SelAnalitPartnerDic) then  
+            edAnalit.Text := DefName;
+       end;
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+Panel2:TO4Panel
+Panel5:TO4Panel
+lbAll:TO4Label
+Splitter2:TO4Splitter
+Panel8:TO4Panel
+Panel9:TO4Panel
+iClose:TO4Image
+iOpen:TO4Image
+gbSum:TO4GroupBox
+edSum:TO4Label
+pnPartnerDebt:TO4Panel
+Label6:TO4Label
+dbgPartDebt:TO4DBGrid
+Panel1:TO4Panel
+Label7:TO4Label
+Label8:TO4Label
+pnDoc:TO4Panel
+Label1:TO4Label
+dbgOrder:TO4DBGrid
+mComment:TO4Memo
+Panel3:TO4Panel
+Label4:TO4Label
+ToolBar3:TO4ToolBar
+tbSelPrinter:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbChange:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbDel:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbChangePrice:TO4ToolButton
+ToolBar1:TO4ToolBar
+ToolButton3:TO4ToolButton
+ToolButton5:TO4ToolButton
+iReturn:TO4ToolButton
+SeparReturn:TO4ToolButton
+iCash:TO4ToolButton
+SeparCash:TO4ToolButton
+iPostPoneDoc:TO4ToolButton
+SeparPostPoneDoc:TO4ToolButton
+tbAction:TO4ToolButton
+SeparAction:TO4ToolButton
+tbFiscalPrint:TO4ToolButton
+pnPartner:TO4Panel
+tsPages:TO4TabSet
+nbPages:TO4Notebook
+gbPartner:TO4GroupBox
+lbDiscountCard:TO4Label
+Label2:TO4Label
+edPartner:TO4Edit
+edCard:TO4Edit
+btPartClear:TO4Button
+edPrecent:TO4Edit
+gbResponsCurrency:TO4GroupBox
+edRespons:TO4Edit
+edDocCourse:TO4Edit
+edCurrency:TO4Edit
+edAgent:TO4Edit
+gbAnalit:TO4GroupBox
+edAnalit:TO4Edit
+pnGoods:TO4Panel
+pnGods:TO4Panel
+Label3:TO4Label
+Panel4:TO4Panel
+gbBarCode:TO4GroupBox
+edBarCode:TO4Edit
+btInputBarCode:TO4Button
+cbCountOne:TO4CheckBox
+nbGoods:TO4Notebook
+tbPrintPricesGood:TO4ToolBar
+tbAddChPrices:TO4ToolButton
+tbDelOne:TO4ToolButton
+tbClearAll:TO4ToolButton
+tbPrintPrices:TO4ToolButton
+dbgPrintPrices:TO4DBGrid
+TsLists:TO4TabSet
+pnPostPoneDocs:TO4Panel
+pnChildPostPone:TO4Panel
+ToolBar4:TO4ToolBar
+tbPostPoneLeft:TO4ToolButton
+ToolButton13:TO4ToolButton
+PostPoneDoc1:TO4Panel
+PostPoneDocPartner1:TO4Panel
+PostPoneDocTop1:TO4Panel
+PostPoneDocNumber1:TO4Panel
+PostPoneDocSum1:TO4Panel
+PostPoneDoc2:TO4Panel
+PostPoneDocPartner2:TO4Panel
+PostPoneDocTop2:TO4Panel
+PostPoneDocNumber2:TO4Panel
+PostPoneDocSum2:TO4Panel
+PostPoneDoc3:TO4Panel
+PostPoneDocPartner3:TO4Panel
+PostPoneDocTop3:TO4Panel
+PostPoneDocNumber3:TO4Panel
+PostPoneDocSum3:TO4Panel
+PostPoneDoc4:TO4Panel
+PostPoneDocPartner4:TO4Panel
+PostPoneDocTop4:TO4Panel
+PostPoneDocNumber4:TO4Panel
+PostPoneDocSum4:TO4Panel
+ToolBar2:TO4ToolBar
+ToolButton7:TO4ToolButton
+tbPostPoneRight:TO4ToolButton
+PostPoneDoc5:TO4Panel
+PostPoneDocPartner5:TO4Panel
+PostPoneDocTop5:TO4Panel
+PostPoneDocNumber5:TO4Panel
+PostPoneDocSum5:TO4Panel
+TVSOrder:TO4TableValueSource
+pmBarCode:TO4PopupMenu
+miBarCode:TO4MenuItem
+pmMainFocus:TO4PopupMenu
+miDocList:TO4MenuItem
+miGoods:TO4MenuItem
+miCash:TO4MenuItem
+miReturn:TO4MenuItem
+miBarCodeFocusF12:TO4MenuItem
+miChangeCount:TO4MenuItem
+pmList:TO4PopupMenu
+miChangePrice:TO4MenuItem
+miEdit:TO4MenuItem
+miDelRec:TO4MenuItem
+miAction:TO4MenuItem
+pmPartCode:TO4PopupMenu
+miCard:TO4MenuItem
+TVSPartnerDebt:TO4TableValueSource
+pmPrintPrices:TO4PopupMenu
+miAddChPrices:TO4MenuItem
+miDelOne:TO4MenuItem
+miClearAll:TO4MenuItem
+miPrintPrices:TO4MenuItem
+MenuItem5:TO4MenuItem
+miChangeStatus:TO4MenuItem
+pmGetPrinter:TO4PopupMenu
+miGetPrinter:TO4MenuItem
+TVSGoodsPrintPrices:TO4TableValueSource
+pmFiscalPrinter:TO4PopupMenu
+miXReport:TO4MenuItem
+miZReport:TO4MenuItem
+miRepOnItem:TO4MenuItem
+miPeriodReport:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCashIn:TO4MenuItem
+miCashOut:TO4MenuItem
+miPrintZeroReceipt:TO4MenuItem
+miCancelReceipt:TO4MenuItem
+miStatusFP:TO4MenuItem

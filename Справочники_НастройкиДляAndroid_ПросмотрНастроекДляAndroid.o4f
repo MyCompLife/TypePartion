@@ -1,0 +1,208 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 413
+  Height = 200
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'dbgData.PosColumns[  0].Title.Caption'
+    0
+    #1'-1'#1'Пароль'
+    'miEdit.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'miEdit.Hint'
+    0
+    #1'-1'#1'Изменить'
+    'miPrint.Caption'
+    0
+    #1'-1'#1'Печатать'
+    'miPrint.Hint'
+    0
+    #1'-1'#1'Печатать'
+    'miRefresh.Caption'
+    0
+    #1'-1'#1'Обновить'
+    'miRefresh.Hint'
+    0
+    #1'-1'#1'Обновить'
+    'miSort.Caption'
+    0
+    #1'-1'#1'Сортировать'
+    'miSort.Hint'
+    0
+    #1'-1'#1'Сортировать'
+    'tbEdit.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'tbEdit.Hint'
+    0
+    #1'-1'#1'Изменить'
+    'tbRefresh.Caption'
+    0
+    #1'-1'#1'Обновить'
+    'tbRefresh.Hint'
+    0
+    #1'-1'#1'Обновить')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  PopupMenu = pmData
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object tbrData: TO4ToolBar
+    Left = 0
+    Top = 0
+    Width = 413
+    Height = 24
+    Anchors = []
+    AutoSize = True
+    EdgeBorders = [ebLeft, ebTop, ebRight]
+    Flat = True
+    Images = ImagesHolder.Bmp16x16
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 0
+    Transparent = True
+    O4MDSource = MDS
+    object tbEdit: TO4ToolButton
+      Left = 0
+      Top = 0
+      Hint = 'Изменить'
+      AutoSize = True
+      Caption = 'Изменить'
+      ImageIndex = 1
+      O4Action = actEdit
+    end
+    object tbDelimiter1: TO4ToolButton
+      Left = 23
+      Top = 0
+      Width = 8
+      Caption = 'tbDelimiter1'
+      ImageIndex = 3
+      Style = tbsSeparator
+      O4Action = actNone
+    end
+    object tbRefresh: TO4ToolButton
+      Left = 31
+      Top = 0
+      Hint = 'Обновить'
+      AutoSize = True
+      Caption = 'Обновить'
+      ImageIndex = 39
+      O4Action = actNone
+      VPAOnClick.EventName = 'miRefresh_Click'
+    end
+    object tbSettings: TO4ToolButton
+      Left = 54
+      Top = 0
+      Hint = 'Настройки'
+      AutoSize = True
+      Caption = 'Настройки'
+      ImageIndex = 48
+      O4Action = actGridParam
+    end
+  end
+  object dbgData: TO4DBGrid
+    Left = 0
+    Top = 24
+    Width = 413
+    Height = 176
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    Images = ImagesHolder.Bmp16x16
+    DragDisabled = False
+    Options = [dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = MDS
+    PopupMenu = pmData
+    TabOrder = 1
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    VPAOnGetImageIndex.EventName = 'dbgData_GetImageIndex'
+    PosColumns = <
+      item
+        O4FieldName = 'ПарольДоступаКНастройкам'
+        Title.Caption = 'Пароль'
+        Width = 390
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '31.12.1899'
+      end>
+  end
+  object MDS: TO4DataSource
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 21
+    Top = 127
+  end
+  object pmData: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 354
+    Top = 82
+    object miEdit: TO4MenuItem
+      Caption = 'Изменить'
+      Hint = 'Изменить'
+      ImageIndex = 1
+      ShortCut = 113
+      O4Action = actEdit
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miDelimiter1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miSort: TO4MenuItem
+      Caption = 'Сортировать'
+      Hint = 'Сортировать'
+      ImageIndex = 37
+      Visible = False
+      O4Action = actSelect
+      SortMenuParent = True
+      GridParamMenuParent = False
+    end
+    object miDelimiter3: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miRefresh: TO4MenuItem
+      Caption = 'Обновить'
+      Hint = 'Обновить'
+      ImageIndex = 39
+      VPAOnClick.EventName = 'miRefresh_Click'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miSettings: TO4MenuItem
+      Caption = 'Настройки'
+      Hint = 'Настройки'
+      ImageIndex = 48
+      O4Action = actGridParam
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+  end
+end

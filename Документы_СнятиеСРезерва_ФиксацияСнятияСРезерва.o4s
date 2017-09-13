@@ -1,0 +1,44 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация;
+
+implementation
+
+var
+  AccGood : ISAccs;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean); server;
+var
+  DocDate : DateTime;
+  Count, Total : Integer;
+begin
+  DocDate := Doc.GetDate;
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  while Doc.SelectNextLine do
+    begin
+      AccGood.ClearFieldBuffers();
+      AccGood.Товар := Doc.@Товар;
+      AccGood.ИзРезерва := Doc.Количество;
+      AccGood.КолОбщ := Doc.Количество;
+      AccGood.Счет := Doc.Счет;
+      AccGood.Outcome(Doc, DocDate, Doc.НомСтроки);
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccGood := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+end.

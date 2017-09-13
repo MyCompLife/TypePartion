@@ -1,0 +1,135 @@
+object TJournMeanClass
+  BuhJourn = False
+  Comment = 'Журнал ввода остатков по банку и кассе'
+  DocsToAdd.Strings = (
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|00B3A69556376240')
+  Fields = <
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftDateTime
+      Description = 'Дата'
+      DisplayFormat = 'dd.mm.yyyy'
+      DSID = 'DATE'
+      Kind = lfkSystem
+      Name = 'ДатаДокумента'
+      Order = 0
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = True
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftString
+      Description = 'Номер'
+      DSID = 'NUMBER'
+      Kind = lfkSystem
+      Name = 'НомерДокумента'
+      Order = 1
+      Prec = 0
+      Required = False
+      Size = 20
+      Sortable = True
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = True
+      DataType = lftString
+      Description = 'Документ'
+      DSID = 'DOCNAME'
+      Kind = lfkSystem
+      Name = 'Документ'
+      Order = 2
+      Prec = 0
+      Required = False
+      Size = 64
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = False
+      DataType = lftLink
+      Description = 'Ответственный'
+      DSID = 'F1'
+      Kind = lfkStandard
+      MapList.Strings = (
+        '{9169B472-C8D2-11D3-B377-0090278D41A1}|00B3A69556376240|F1')
+      Name = 'Ответственный'
+      Order = 3
+      Prec = 0
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = True
+      DataType = lftFFT
+      Description = 'Сумма по банку'
+      DisplayFormat = '0.00'
+      DSID = 'F2'
+      Kind = lfkStandard
+      Name = 'СуммаБанка'
+      Order = 4
+      Prec = 2
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end
+    item
+      CalcSide = csdServer
+      Calculated = True
+      DataType = lftFFT
+      Description = 'Сумма по кассе'
+      DisplayFormat = '0.00'
+      DSID = 'F3'
+      Kind = lfkStandard
+      Name = 'СуммаКассы'
+      Order = 5
+      Prec = 2
+      Required = False
+      Size = 0
+      Sortable = False
+      Timed = False
+      Visible = True
+    end>
+  Forms = <
+    item
+      Comment = 'Список остатков по банку и кассе'
+      FormType = 'Lists'
+      ForSelect = False
+      ForTree = False
+      ID = '00D43BCF6C526240'
+      Name = 'СписокОстатков'
+    end
+    item
+      Comment = 'Остатки по банку и кассе'
+      FormType = 'Prints'
+      ForSelect = False
+      ForTree = False
+      ID = '00DF344D9D9F7540'
+      Name = 'ОстаткиПоБанкуКассе'
+    end>
+  FrameSize = 100
+  LinkJourn = False
+  MapList.Strings = (
+    '{9169B472-C8D2-11D3-B377-0090278D41A1}|00B3A69556376240|1')
+  Sign = 'ЖурналОстатковПоБанкуИКассе'
+  StateNames.Strings = (
+    'Оформляемые'
+    'Завершенные'
+    'В архив')
+  StringID = '00A8EE3B20416240'
+end

@@ -1,0 +1,429 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 536
+  Height = 420
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'dbgData.PosColumns[  0].Title.Caption'
+    0
+    #1'-1'#1'Партнер'
+    'dbgData.PosColumns[  1].Title.Caption'
+    0
+    #1'-1'#1'Торговая точка'#1'1058'#1'Торгова точка'
+    'Label1.Caption'
+    0
+    #1'-1'#1'Дата'
+    'Label2.Caption'
+    0
+    #1'-1'#1'Номер'
+    'MenuItem4.Caption'
+    0
+    #1'-1'#1'Предприятия-партнеры'
+    'MenuItem5.Caption'
+    0
+    #1'-1'#1'Физические лица'
+    'miDelRec.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'miSort.Caption'
+    0
+    #1'-1'#1'Сортировать'
+    'tbSource.Caption'
+    0
+    #1'-1'#1'выбрать из'
+    'tbSource.Hint'
+    0
+    #1'-1'#1'Открыть окно со списком товаров'
+    'ToolButton1.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'ToolButton1.Hint'
+    0
+    #1'-1'#1'Удалить')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  Alignment = taLeftJustify
+  BevelOuter = bvNone
+  Caption = 'Form'
+  ParentShowHint = False
+  ShowHint = False
+  TabOrder = 0
+  Transparent = False
+  VPAOnCloseQuery.EventName = 'Form_CloseQuery'
+  object pnTop: TO4Panel
+    Left = 0
+    Top = 0
+    Width = 536
+    Height = 64
+    Align = alTop
+    BorderSides = []
+    BevelOuter = bvNone
+    Caption = 'pnTop'
+    ParentCtl3D = False
+    TabOrder = 0
+    Transparent = False
+    object Label1: TO4Label
+      Left = 24
+      Top = 11
+      Width = 26
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Дата'
+    end
+    object Label2: TO4Label
+      Left = 210
+      Top = 11
+      Width = 34
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Номер'
+    end
+    object Label6: TO4Label
+      Left = 21
+      Top = 38
+      Width = 29
+      Height = 13
+      Alignment = taRightJustify
+      Caption = 'Агент'
+    end
+    object edData: TO4DBEdit
+      Left = 53
+      Top = 7
+      Width = 150
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '31.12.1899'
+      TabOrder = 0
+      Lock = False
+      O4FieldName = 'ДатаДокумента'
+      O4MDSource = dsMaster
+      FastFindIndex = 0
+    end
+    object edNumber: TO4DBEdit
+      Left = 247
+      Top = 7
+      Width = 121
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '31.12.1899'
+      TabOrder = 1
+      Lock = False
+      O4FieldName = 'НомерДокумента'
+      O4MDSource = dsMaster
+      FastFindIndex = 0
+    end
+    object edPartner: TO4DBEdit
+      Left = 53
+      Top = 34
+      Width = 315
+      Height = 21
+      PasswordChar = #0
+      Period.Enabled = False
+      Period.StrStartDate = '31.12.1899'
+      TabOrder = 2
+      Lock = False
+      O4FieldName = 'ТорговыйАгент'
+      O4MDSource = dsMaster
+      FastFindIndex = 0
+    end
+  end
+  object dbgData: TO4DBGrid
+    Left = 0
+    Top = 86
+    Width = 536
+    Height = 246
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    DragDisabled = False
+    Options = [dgEditing, dgTitles, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = dcsContents
+    PopupMenu = pmList
+    TabOrder = 1
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'НомСтроки'
+        Title.Caption = '№'
+        Width = 29
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '30.08.2017'
+      end
+      item
+        O4FieldName = 'Партнер'
+        ReadOnly = True
+        Title.Caption = 'Партнер'
+        Width = 218
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '21.06.2006'
+      end
+      item
+        O4FieldName = 'ТорговаяТочка'
+        Title.Caption = 'Торговая точка'
+        Width = 198
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '21.06.2006'
+      end
+      item
+        O4FieldName = 'Время'
+        Title.Caption = 'Время'
+        Width = 83
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '30.08.2017'
+      end>
+  end
+  object ButtonPanel: TO4Panel
+    Left = 0
+    Top = 385
+    Width = 536
+    Height = 35
+    Align = alBottom
+    BorderSides = []
+    BevelOuter = bvNone
+    ParentCtl3D = False
+    TabOrder = 2
+    Transparent = False
+    object Panel1: TO4Panel
+      Left = 351
+      Top = 0
+      Width = 185
+      Height = 35
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      Caption = 'Panel1'
+      ParentCtl3D = False
+      TabOrder = 0
+      Transparent = False
+      object btCancel: TO4Button
+        Left = 102
+        Top = 5
+        Width = 75
+        Height = 25
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 0
+        WordWrap = False
+        O4MDSource = dsMaster
+        O4Action = actNone
+      end
+      object btOK: TO4Button
+        Left = 22
+        Top = 5
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        ModalResult = 1
+        TabOrder = 1
+        WordWrap = False
+        O4MDSource = dsMaster
+        O4Action = actSave
+      end
+    end
+  end
+  object Panel2: TO4Panel
+    Left = 0
+    Top = 64
+    Width = 536
+    Height = 22
+    Align = alTop
+    BorderSides = []
+    BevelOuter = bvNone
+    ParentCtl3D = False
+    TabOrder = 3
+    Transparent = False
+    object Panel6: TO4Panel
+      Left = 280
+      Top = 0
+      Width = 256
+      Height = 22
+      Align = alClient
+      Alignment = taRightJustify
+      BorderSides = []
+      BevelOuter = bvNone
+      ParentCtl3D = False
+      TabOrder = 0
+      Transparent = False
+      object tbrSource: TO4ToolBar
+        Left = 156
+        Top = 0
+        Width = 100
+        Height = 22
+        Align = alRight
+        AutoSize = True
+        ButtonWidth = 85
+        EdgeInner = esNone
+        EdgeOuter = esNone
+        Flat = True
+        Images = ImagesHolder.Bmp16x16
+        List = True
+        ParentShowHint = False
+        ShowCaptions = True
+        ShowHint = True
+        TabOrder = 0
+        Transparent = True
+        object tbSource: TO4ToolButton
+          Left = 0
+          Top = 0
+          Hint = 'Открыть окно со списком товаров'
+          Caption = 'выбрать из'
+          DropdownMenu = pmDrop
+          ImageIndex = 6
+          Style = tbsDropDown
+          O4Action = actNone
+          VPAOnClick.EventName = 'miUrPartners_Click'
+        end
+      end
+    end
+    object Panel7: TO4Panel
+      Left = 0
+      Top = 0
+      Width = 280
+      Height = 22
+      Align = alLeft
+      BorderSides = []
+      BevelOuter = bvNone
+      ParentCtl3D = False
+      TabOrder = 1
+      Transparent = False
+      object tbrData: TO4ToolBar
+        Left = 0
+        Top = 0
+        Width = 280
+        Height = 22
+        AutoSize = True
+        ButtonWidth = 70
+        Caption = 'tbrData'
+        EdgeInner = esNone
+        EdgeOuter = esNone
+        Flat = True
+        Images = ImagesHolder.Bmp16x16
+        List = True
+        ParentShowHint = False
+        ShowCaptions = True
+        ShowHint = True
+        TabOrder = 0
+        Wrapable = False
+        O4MDSource = dcsContents
+        object ToolButton1: TO4ToolButton
+          Left = 0
+          Top = 0
+          Hint = 'Удалить'
+          AutoSize = True
+          Caption = 'Удалить'
+          ImageIndex = 2
+          ParentShowHint = False
+          ShowHint = True
+          O4Action = actDel
+        end
+        object tbParam: TO4ToolButton
+          Left = 74
+          Top = 0
+          Caption = 'tbParam'
+          ImageIndex = 48
+          O4Action = actGridParam
+        end
+      end
+    end
+  end
+  object dbMemComment: TO4DBMemo
+    Left = 0
+    Top = 332
+    Width = 536
+    Height = 53
+    Align = alBottom
+    DataSource = dcsContents.dcsContents
+    TabOrder = 4
+    O4FieldName = 'Коментарий'
+    O4MDSource = dcsContents
+  end
+  object dsMaster: TO4DataSource
+    VPAOnAppend.EventName = 'dsMaster_Append'
+    VPABeforeOpen.EventName = 'dsMaster_VPABeforeOpen'
+    VPAOnFieldChange.EventName = 'dsMaster_FieldChange'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 32
+    Top = 155
+  end
+  object dcsContents: TO4DocContentsSource
+    VPAOnFieldChange.EventName = 'dcsContents_FieldChange'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    VPAOnStartDrop.EventName = 'dcsContents_StartDrop'
+    VPAOnDrop.EventName = 'dcsContents_Drop'
+    VPAOnEndDrop.EventName = 'dcsContents_EndDrop'
+    Left = 126
+    Top = 135
+  end
+  object pmList: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = dcsContents
+    Left = 206
+    Top = 177
+    object miDelRec: TO4MenuItem
+      Caption = 'Удалить'
+      ImageIndex = 2
+      ShortCut = 46
+      O4Action = actDel
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object MenuItem1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object miSort: TO4MenuItem
+      Caption = 'Сортировать'
+      ImageIndex = 37
+      O4Action = actNone
+      SortMenuParent = True
+      GridParamMenuParent = False
+    end
+  end
+  object pmDrop: TO4PopupMenu
+    Left = 455
+    Top = 217
+    object MenuItem4: TO4MenuItem
+      Caption = 'Предприятия-партнеры'
+      Default = True
+      VPAOnClick.EventName = 'miUrPartners_Click'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+    object MenuItem5: TO4MenuItem
+      Caption = 'Физические лица'
+      VPAOnClick.EventName = 'miMainPartners_Click'
+      O4Action = actNone
+      SortMenuParent = False
+      GridParamMenuParent = False
+    end
+  end
+end

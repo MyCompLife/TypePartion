@@ -1,0 +1,873 @@
+interface
+
+uses
+  System, DispIntf, Reports;
+
+implementation
+
+var
+ Acc : ICAccs;
+ VTbl : ICValueTable;
+ AccTbl : ICValueTable;
+ LinkFields : String;
+ LockCalk : Boolean;
+ AccPr : ICProcessing;
+ Filter, FieldFilter, FilterValueBeg, FilterValueEnd : Variant;
+ DateFrom, DateTo : DateTime;
+
+//Acc - аккумулятор, который обрабатывается
+//Vtbl - таблица, где находятся сигнатуры полей
+
+// Процедура для создания столбцов таблицы dbgData
+procedure dbgData_Fill (GroupString : String);
+var
+ i,j,k,n,z : integer;
+begin
+ dbgData.PosColumns.Clear;
+ Vtbl.Select;
+ Vtbl.SelectFirst;
+ j := 0; k := 0; z :=0; n := 0;
+ for i := 1 to Vtbl.LineCount do
+  begin
+   if Vtbl.Измерения<>Null then
+     begin
+      if GroupString <>'' then
+        begin
+         if StrPos(Vtbl.Измерения,GroupString)<>0 then
+           begin
+            dbgData.PosColumns.Add;
+             (dbgData.PosColumns.Items[z] as TO4GridColumn).O4FieldName := Vtbl.Измерения;
+             (dbgData.PosColumns.Items[z] as TO4GridColumn).Title.Caption := ListIzmer.Items.Strings[n];
+             (dbgData.PosColumns.Items[z] as TO4GridColumn).Width := 120;
+            inc(n);
+            inc(z);
+           end
+         else
+           inc(n);
+        end
+      else
+        begin
+         dbgData.PosColumns.Add;
+          (dbgData.PosColumns.Items[z] as TO4GridColumn).O4FieldName := Vtbl.Измерения;
+          (dbgData.PosColumns.Items[z] as TO4GridColumn).Title.Caption := ListIzmer.Items.Strings[n];
+          (dbgData.PosColumns.Items[z] as TO4GridColumn).Width := 130;
+         inc(z);
+         inc(n);
+        end;
+     end;
+   if Vtbl.Значения<>Null then
+     begin
+      dbgData.PosColumns.Add;
+       (dbgData.PosColumns.Items[z] as TO4GridColumn).O4FieldName := Vtbl.Значения;
+       (dbgData.PosColumns.Items[z] as TO4GridColumn).Title.Caption := ListZnach.Items.Strings[k];
+       (dbgData.PosColumns.Items[z] as TO4GridColumn).Width := 100;
+      inc(z);
+      inc(k);
+     end;
+   if (Vtbl.Атрибуты<>Null) and (GroupString ='') then
+     begin
+      dbgData.PosColumns.Add;
+       (dbgData.PosColumns.Items[z] as TO4GridColumn).O4FieldName := Vtbl.Атрибуты;
+       (dbgData.PosColumns.Items[z] as TO4GridColumn).Title.Caption := ListAtribut.Items.Strings[j];
+       (dbgData.PosColumns.Items[z] as TO4GridColumn).Width := 70;
+      inc(z);
+      inc(j);
+     end;
+   Vtbl.SelectNext;
+ end;
+ if GroupString ='' then
+   begin
+     dbgData.PosColumns.Add;
+      (dbgData.PosColumns.Items[z] as TO4GridColumn).O4FieldName := 'MotionSign';
+      (dbgData.PosColumns.Items[z] as TO4GridColumn).Title.Caption := 'Motion';
+      (dbgData.PosColumns.Items[z] as TO4GridColumn).Width := 30;
+     dbgData.PosColumns.Add;
+      (dbgData.PosColumns.Items[z+1] as TO4GridColumn).O4FieldName := 'Document';
+      (dbgData.PosColumns.Items[z+1] as TO4GridColumn).Title.Caption := 'Document';
+      (dbgData.PosColumns.Items[z+1] as TO4GridColumn).Width := 100;
+     dbgData.PosColumns.Add;
+      (dbgData.PosColumns.Items[z+2] as TO4GridColumn).O4FieldName := 'Date';
+      (dbgData.PosColumns.Items[z+2] as TO4GridColumn).Title.Caption := 'Date';
+      (dbgData.PosColumns.Items[z+2] as TO4GridColumn).Width := 50;
+     dbgData.PosColumns.Add;
+      (dbgData.PosColumns.Items[z+3] as TO4GridColumn).O4FieldName := 'DocState';
+      (dbgData.PosColumns.Items[z+3] as TO4GridColumn).Title.Caption := 'DS';
+      (dbgData.PosColumns.Items[z+3] as TO4GridColumn).Width := 20;
+     dbgData.PosColumns.Add;
+      (dbgData.PosColumns.Items[z+4] as TO4GridColumn).O4FieldName := 'DocLineNum';
+      (dbgData.PosColumns.Items[z+4] as TO4GridColumn).Title.Caption := 'LN';
+      (dbgData.PosColumns.Items[z+4] as TO4GridColumn).Width := 20;
+     dbgData.PosColumns.Add;
+      (dbgData.PosColumns.Items[z+5] as TO4GridColumn).O4FieldName := 'DimensionID';
+      (dbgData.PosColumns.Items[z+5] as TO4GridColumn).Title.Caption := 'ID';
+      (dbgData.PosColumns.Items[z+5] as TO4GridColumn).Width := 50;
+   end;
+end;
+
+//Процедура для проверки и установки фильтров
+procedure Filter_Check(Sender : TObject; Fields : String; j : Integer);
+var
+  Object : TO4Edit;
+  i : Integer;
+begin
+  for i := 0 to 3 do
+    if i <> (Sender as TO4Edit).Tag then
+        begin
+          if i = 0 then
+            begin
+              Object := Form.FindComponent('deFilter' + IntToStr(i)) as TO4Edit;
+              if deUniFilter.Text <> '' then
+                Fields := Fields + deUniFilter.Text +';';
+              if Object.Text <> '' then
+                begin
+                  FilterValueBeg[j] := Filter[i];
+                  FilterValueEnd[j] := Filter[i];
+                  inc(j)
+                end
+              else
+                StrDelete(Fields,StrPos(deUniFilter.Text,Fields),StrLength(deUniFilter.Text)+1);
+            end
+          else
+            begin
+              Object := Form.FindComponent('deFilter' + IntToStr(i)) as TO4Edit;
+              if ExtractWord(i,LinkFields,';')<>'' then
+                  Fields := Fields + ExtractWord(i,LinkFields,';') +';'
+              else break;
+              if Object.Text <> '' then
+                begin
+                  FilterValueBeg[j] := Filter[i];
+                  FilterValueEnd[j] := Filter[i];
+                  inc(j)
+                end
+              else
+                StrDelete(Fields,StrPos(ExtractWord(i,LinkFields,';'),Fields),StrLength(ExtractWord(i,LinkFields,';'))+1);
+            end;
+        end;
+  StrDelete(Fields,StrLength(Fields),1);
+  if Fields = '' then
+    begin
+      AccTbl.SortBy('Date');
+      exit;
+    end;
+  AccTbl.SortBy(Fields);
+  if WordCount(Fields,';')= 1 then
+    AccTbl.SetRange(ArrayOf(FilterValueBeg[0]),
+                    ArrayOf(FilterValueEnd[0]));
+  if WordCount(Fields,';')= 2 then
+    AccTbl.SetRange(ArrayOf(FilterValueBeg[0],FilterValueBeg[1]),
+                    ArrayOf(FilterValueEnd[0],FilterValueEnd[1]));
+  if WordCount(Fields,';')= 3 then
+    AccTbl.SetRange(ArrayOf(FilterValueBeg[0],FilterValueBeg[1],FilterValueBeg[2]),
+                    ArrayOf(FilterValueEnd[0],FilterValueEnd[1],FilterValueEnd[2]));
+  if WordCount(Fields,';')= 4 then
+    AccTbl.SetRange(ArrayOf(FilterValueBeg[0],FilterValueBeg[1],FilterValueBeg[2],FilterValueBeg[3]),
+                    ArrayOf(FilterValueEnd[0],FilterValueEnd[1],FilterValueEnd[2],FilterValueEnd[3]));
+end;
+
+procedure btnAccList_Click(Sender : TObject);
+var
+ AccName, AccumStr, TableFields, ListStr, StrName, FieldWithParam, FieldName, FieldParam : String;
+ countFields, Iz, Zn, At, i, j, k : Integer;
+ SelectRow : Boolean;
+begin
+//Описание переменных :
+//AccName - принимает сигнатуру понятия аккумулятора
+//AccumStr - принимает комментарий понятия аккумулятора
+//ListStr - список строк CheckListBox; где "Строка1-ListBox;Строка2-ListBox..."
+//TableFields - список полей аккумулятора; где "ИмяПоля1-СтруктурыйТипПоляАккумулятора;ИмяПоля2-СтруктурыйТипПоляАккумулятора..."
+//ListBox - (0 = ListIzmer),(1 = ListZnach),(2 = ListAtribut)
+//СтруктурыйТипПоляАккумулятора - (0 = измерения),(1 = значения),(2 = атрибуты)
+    deUniFilter.Items.Clear;
+    btnAccList.Flat := true;
+    AccumStr := AccList.Text;
+    case AccumStr of
+     'ДоходыРасходы' :
+       begin
+         AccName := 'Аккумуляторы.ДоходыРасходы';
+         ListStr := 'ТоварУслуга;Партнер;Статья;Валюта;Регион;Сумма;Количество;СуммаГрн;Курс';
+         TableFields := 'ТоварУслуга-0;Партнер-0;Статья-0;Валюта-0;Регион-0;Сумма-1;Количество-1;СуммаГрн-1;Курс-2';
+       end;
+     'Коректоровка налоговых накладных' :
+       begin
+         AccName := 'Аккумуляторы.КоррекцияНалогНакладных';
+         ListStr := 'Партнер;Документ;Товар;Цена с НДС;Количество;Стоимость';
+         TableFields := 'Партнер-0;Док-0;Товар-0;Цена-0;КолОбщ-1;Стоимость-1';
+       end;
+     'Остатки личных финансов' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиЛичФинансов';
+         ListStr := 'Валюта;Сумма прихода;Сумма расхода;Сумма общая;Дата события';
+         TableFields := 'Валюта-0;СумПрих-1;СумРасх-1;СумОбщ-1;ДатаПр-2';
+       end;
+     'Остатки на расчетных счетах' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиНаРасчСчет';
+         ListStr := 'Расчетный счет;Валюта платежа;Сумма прихода на расчетный счет;Сумма расхода с расчетного счета;Сумма общая;Дата события';
+         TableFields :='РасчСчет-0;Валюта-0;СумПрих-1;СумРасх-1;СумОбщ-1;Дата-2';
+       end;
+     'Остатки по кассе' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиПоКассе';
+         ListStr := 'Валюта;Сумма прихода в кассу;Сумма расхода из кассы;Сумма общая;Дата события';
+         TableFields := 'Валюта-0;СумПрих-1;СумРасх-1;СумОбщ-1;Дата-2';
+       end;
+     'Остатки ТМЦ на ответственном' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиТМЦНаОтвет';
+         ListStr := 'Ответственный;Товар;Партия товара;Тип операции;Общее количество товара;Общая сумма;Общая сумма по вх.цене';
+         TableFields := 'Ответственный-0;Товар-0;Партия-0;Тип-0;КолОбщ-1;СумОтп-1;СумВх-1';
+       end;
+     'Остатки товаров на складах' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиТоваров';
+         ListStr := 'Товар;Склад;ID партии товара;Тип операции;'
+                   +'Количество товара;Сумма без НДС по входным ценам;Сумма НДС по входным ценам;Сумма с НДС по отпускным ценам;'
+                   +'Сумма НДС по отпускным ценам;Сумма наценки;Сумма с НДС в валюте по входным ценам;Сумма с НДС в валюте по отпускным ценам;Сумма наценки в Валюте'
+                   +'Валюта валютных сумм;Курс валюты валютных сумм к национальной валюте';
+         TableFields := 'Товар-0;Склад-0;Партия-0;Тип-0;КолОбщ-1;СумВх-1;СумВхНДС-1;СумОтп-1;СумОтпНДС-1;СумНац-1;СумВалВх-1;СумВалОтп-1;СумВалНац-1;Валюта-2;Курс-2';
+       end;
+     'Остатки товаров поставщиков на реализацию' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиТоваровНаПостРеал';
+         ListStr := 'Поставщик на реализацию;Товар;Партия товара;Тип операции;Количество товара;'
+                   +'Сумма без НДС;Сумма НДС;Сумма с НДС в валюте входная;Валюта товара;Курс товара';
+         TableFields := 'Партнер-0;Товар-0;Партия-0;Тип-0;КолОбщ-1;СумВх-1;СумВхНДС-1;СумВалВх-1;Валюта-2;Курс-2';
+       end;
+     'Остатки товаров на реализаторах' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиТоваровНаРеализаторах';
+         ListStr := 'Реализатор;Товар;Цена;Партия товара;Курс товара;Отпускная цена товара в валюте с НДС;Валюта товара;Тип операции;'
+                   +'Общее количество товара;Сумма без НДС по входным ценам;Сумма с НДС по отпускным ценам;Сумма НДС по отпускным ценам;'
+                   +'Сума наценки;Сумма с НДС  в валюте по входным ценам;Сумма с НДС в валюте по отпускным ценам;Сумма скидки;Сумма НДС скидки';
+         TableFields := 'Партнер-0;Товар-0;Цена-0;Партия-0;КурсТовара-0;ЦенаВВалюте-0;ВалютаТовара-0;Тип-0;'
+                       +'КолОбщ-1;СумВх-1;СумОтп-1;СумОтпНДС-1;СумНац-1;СумВалВх-1;СумВалОтп-1;СумСкидки-1;СумСкидкиНДС-1';
+       end;
+     'Остатки товаров на сегодня' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиТоваровНаСегодня';
+         ListStr := 'Товар;Склад;Количество товара';
+         TableFields := 'Товар-0;Склад-0;КолОбщ-1';
+       end;
+     'Остатки ТМЦ по счетам' :
+       begin
+         AccName := 'Аккумуляторы.ОстаткиТоваровТМЦПоСчетам';
+         ListStr := 'Счет;Товар;Партия товара;Тип операции;Количество возврата;Сумма возврата;Сумма по отп.ценам';
+         TableFields := 'Счет-0;Товар-0;Партия-0;Тип-0;КолОбщ-1;СумОбщ-1;СумОбщОтп-1';
+       end;
+     'Партии товаров' :
+       begin
+         AccName := 'Аккумуляторы.ПартииТоваров';
+         ListStr := 'Товар;Партнер;Входная цена без НДС в ГРН;Валюта;Входная цена с НДС в валюте;Признак комиссионной партии;'
+                   +'Ставка НДС;Дата прихода;Общее количество;Общая сумма';
+         TableFields := 'Товар-0;Партнер-0;ВхЦенаБезНДС-0;Валюта-0;ВхЦенаВал-0;Комиссия-0;СтавкаНДС-0;ДатаПр-0;КолОбщ-1;СумОбщ-1';
+       end;
+     'Расчеты с партнерами' :
+       begin
+         AccName := 'Аккумуляторы.РасчетыСПартнерами';
+         ListStr := 'Партнер;Сумма долга нам;Сумма нашего долга;Общая сумма взаиморасчетов;Сумма долга нам в валюте;'
+                   +'Сумма нашего долга в валюте;Общая сумма взаиморасчетов в валюте;Код выплаты в форме 8ДР ("05", "13" или "")';
+         TableFields := 'Партнер-0;СумПрих-1;СумРасх-1;СумОбщ-1;СумПрихВал-1;СумРасхВал-1;СумОбщВал-1;КодВыплВ8ДР-2';
+       end;
+     'Зарезервированный товары' :
+       begin
+         AccName := 'Аккумуляторы.ТоварыВРезерве';
+         ListStr := 'Товар;Счет;Направить в резерв;Забрать из резерва;Ожидаемое к поступлению;Общее количество товара;Дата окончания резервирования, ожидаемого прихода';
+         TableFields := 'Товар-0;Счет-0;ВРезерв-1;ИзРезерва-1;СкороБудет-1;КолОбщ-1;Дата-2';
+       end;
+     'Расчеты с потавщиками на реализацию' :
+       begin
+         AccName := 'Аккумуляторы.РасчетыСПостНаРеал';
+         ListStr := 'Поставщик на реализацию;Сумма прихода;Сумма возврата;Сумма списания;Сумма оплаты;Сумма отпуска на реализацию;'
+                   +'Сумма остатков;Сумма прихода (вал.);Сумма возврата (вал.);Сумма списания (вал.);Сумма оплаты (вал.);'
+                   +'Сумма на реализации (вал.);Сумма остатка (вал.);Сумма инвентаризации;Сумма инветаризации (вал.)';
+         TableFields := 'Партнер-0;СумПрих-1;СумВозвр-1;СумСпис-1;СумОпл-1;СумОбщ-1;СумОст-1;СумПрихВал-1;СумВозврВал-1;СумСписВал-1;'
+                       +'СумОплВал-1;СумОбщВал-1;СумОстВал-1;СумИнв-1;СумИнвВал-1';
+       end;
+     'Расчеты с реализаторами' :
+       begin
+         AccName := 'Аккумуляторы.РасчетыСРеализаторами';
+         ListStr := 'Реализатор;Сумма отпуска на реализацию;Сумма возврата;Сумма списания;Сумма остатков;Сумма оплаты;Общая сумма расчетов с реализатором;'
+                   +'Сумма отпуска на реализацию;Сумма возврата (вал.);Сумма списания (вал.);Сумма остатка (вал.);Сумма оплаты (вал.);Общая сумма расчетов с реализатором (вал.);'
+                   +'Сумма инвентаризации;Сумма инвентаризации (вал.);Сумма переоценки;Сумма переоценки (вал.);Сумма скидки;Сумма скидки (вал.)';
+         TableFields := 'Партнер-0;СумРасх-1;СумВозвр-1;СумСпис-1;СумОст-1;СумОпл-1;СумОбщ-1;СумРасхВал-1;СумВозврВал-1;СумСписВал-1;СумОстВал-1;СумОплВал-1;'
+                       +'СумОбщВал-1;СумИнв-1;СумИнвВал-1;СумПереоценки-1;СумПереоценкиВал-1;СумСкидки-1;СумСкидкиВал-1';
+       end;
+     'Товары по чекам' :
+       begin
+         AccName := 'Аккумуляторы.ОтпускПоЧекам';
+         ListStr := 'Товар;Склад;Количество товара';
+         TableFields := 'Товар-0;Склад-0;Кол-1';
+       end;
+     'Ревизии товара' :
+       begin
+         AccName := 'Аккумуляторы.РевизииТовара';
+         ListStr := 'Дата;Склад;Сумма';
+         TableFields := 'ДатаРев-0;СкладРев-0;Сумма-1';
+       end;   
+     'УстановкаСкидок' :
+       begin
+         AccName := 'Аккумуляторы.УстановкаСкидок';
+         ListStr := 'ДатаСкидки;Процент';
+         TableFields := 'ДатаСкидки-0;Процент-1';
+       end; 
+     'ОперацииПоНарядЗаказу':
+       begin
+         AccName := 'Аккумуляторы.ОперацииПоНарядЗаказу';
+         ListStr := 'НарядЗаказ;НомГруппы;НомОпер;Операция;Служащий;КоличествоВыдано;ВремяВыдано;КоличествоКВыполнению;ВремяКВыполнению';
+         TableFields := 'НарядЗаказ-0;НомГруппы-0;НомОпер-0;Операция-0;Служащий-0;КоличествоВыдано-1;ВремяВыдано-1;КоличествоКВыполнению-1;ВремяКВыполнению-1';
+       end;
+     'МатериалыПоНарядЗаказу':
+       begin
+         AccName := 'Аккумуляторы.МатериалыПоНарядЗаказу';
+         ListStr := 'Товар;НарядЗаказ;ПризнакКроя;Крой;UniID;КолПлан;КолОбщ;Сумма';
+         TableFields := 'Товар-0;НарядЗаказ-0;ПризнакКроя-0;Крой-0;UniID-0;КолПлан-0;КолОбщ-1;Сумма-1';
+       end;
+     'ДоходыРасходыПроизводство':
+       begin
+         AccName := 'Аккумуляторы.ДоходыРасходыПроизводство';
+         ListStr := 'НарядЗаказ;Статья;Валюта;Регион;Сумма;Количество;СуммаГрн;Курс';
+         TableFields := 'НарядЗаказ-0;Статья-0;Валюта-0;Регион-0;Сумма-1;Количество-1;СуммаГрн-1;Курс-2';
+       end;
+     'УслугиВПроизводстве':
+       begin
+         AccName := 'Аккумуляторы.УслугиВПроизводстве';
+         ListStr := 'НарядЗаказ;Партнер;Сумма';
+         TableFields := 'НарядЗаказ-0;Партнер-0;Сумма-1';
+       end;  
+     'МатериалыВПроизводстве':
+       begin
+         AccName := 'Аккумуляторы.МатериалыВПроизводстве';
+         ListStr := 'Товар;НарядЗаказ;ПризнакКроя;Партия;'
+                   +'Количество;Сумма';
+         TableFields := 'Товар-0;НарядЗаказ-0;ПризнакКроя-0;Партия-0;КолОбщ-1;Сумма-1';
+       end;
+     'ЖурналИзменений' :
+       begin
+         AccName := 'Аккумуляторы.ЖурналИзменений';
+         ListStr := 'ТипДокумента;ТипДействия;Док;НомерДокумента;Состояние;Идентификатор;Ответственный;Логин;'
+                   +'Движение;Сумма;КолОбщ;ДатаДокумента;Партнер';
+         TableFields := 'ТипДокумента-0;ТипДействия-0;Док-0;НомерДокумента-0;Состояние-0;Идентификатор-0;Ответственный-0;Логин-0;'+
+                           'Движение-1;Сумма-1;КолОбщ-1';
+       end;
+     'Расчеты по документам' :
+       begin
+         AccName := 'Аккумуляторы.РасчетыПоДокументам';
+         ListStr := 'Партнер;Валюта;Сумма долга нам в валюте;'
+                   +'Сумма нашего долга в валюте;Общая сумма взаиморасчетов в валюте;Документ';
+         TableFields := 'Партнер-0;Валюта-0;СумПрихВал-1;СумРасхВал-1;СумОбщВал-1;Док-0';
+       end;
+    else
+     begin
+      ShowMessage('Такого аккумулятора нет в системе, или он не доступен в данной обработке');
+      Exit;
+     end;
+    end;
+    Acc := CreateObject(AccName);
+    ListIzmer.Items.Clear;
+    ListZnach.Items.Clear;
+    ListAtribut.Items.Clear;
+    Vtbl.Clear;
+    Iz := 0; Zn := 0; At := 0;
+    for countFields := 1 to WordCount(ListStr,';') do
+      begin
+        StrName := ExtractWord(countFields,ListStr,';');
+        FieldWithParam := ExtractWord(countFields,TableFields,';');
+          FieldName :=  ExtractWord(1,FieldWithParam,'-');
+          FieldParam :=  ExtractWord(2,FieldWithParam,'-');
+        Vtbl.Append;
+        case FieldParam of
+          '0' :
+             begin
+               Vtbl.IndexIz := Iz;
+               Vtbl.Измерения := FieldName;
+               ListIzmer.Items.Add(StrName);
+               inc(Iz);
+             end;
+          '1' :
+             begin
+               Vtbl.IndexZn := Zn;
+               Vtbl.Значения := FieldName;
+               ListZnach.Items.Add(StrName);
+               inc(Zn);
+             end;
+          '2' :
+             begin
+               Vtbl.IndexAt := At;
+               Vtbl.Атрибуты := FieldName;
+               ListAtribut.Items.Add(StrName);
+               inc(At);
+             end;
+        end;
+        Vtbl.Post;
+      end;
+    deFilter1.Text := '';
+    deFilter2.Text := '';
+    deFilter3.Text := '';
+    lblFilter1.Caption := '';
+    lblFilter2.Caption := '';
+    lblFilter3.Caption := '';
+    lblFilter1.Visible := false;
+    lblFilter2.Visible := false;
+    lblFilter3.Visible := false;
+    deFilter1.Visible := false;
+    deFilter2.Visible := false;
+    deFilter3.Visible := false;
+    lblFilter1.Enabled := true;
+    lblFilter2.Enabled := true;
+    lblFilter3.Enabled := true;
+    deFilter1.Enabled := true;
+    deFilter2.Enabled := true;
+    deFilter3.Enabled := true;
+    AccTbl.Close;
+    AccTbl.UseDataSource(0);
+    AccTbl.Open;
+    Acc.SaveMotionToValueTable(StrToDate(deDateFrom.Text),StrToDate(deDateTo.Text),amtBoth,-1,AccTbl);
+    AccTbl.Clear;
+    deUniFilter.Items.Clear;
+    for i := 1 to AccTbl.GetColumnCount do
+      deUniFilter.Items.Add(AccTbl.GetColumnName(i-1));
+    dbgData_Fill('');
+    deUniFilter.Visible := true;
+    deFilter0.Visible := true;
+    // Код (см. ниже) определяет поля типа Link для создания фильтров по ним
+    k := 1;
+    LinkFields := '';
+    Vtbl.Select;
+    Vtbl.SelectFirst;
+    for i := 7 to AccTbl.GetColumnCount do
+     begin
+       SelectRow := false;
+       if Vtbl.Измерения<>Null then
+         begin
+          for j := k to Vtbl.LineCount do
+            begin
+             if AccTbl.GetColumnName(i-1) = Vtbl.Измерения then
+               if AccTbl.GetColumnDataType(i-1) = vtcLink then
+                 begin
+                   if (lblFilter1.Caption = '') then
+                     begin
+                       lblFilter1.Caption := ListIzmer.Items.Strings[j-1];
+                       deUniFilter.Items.Delete(deUniFilter.Items.IndexOf(Vtbl.Измерения));
+                       LinkFields := LinkFields + Vtbl.Измерения + ';';
+                       lblFilter1.Visible := true;
+                       deFilter1.Visible := true;
+                       Vtbl.SelectNext;
+                       SelectRow := true;
+                       inc(k);
+                       break;
+                     end;
+                   if (lblFilter2.Caption = '') and (deFilter1.Text <> ListIzmer.Items.Strings[j-1]) then
+                     begin
+                       lblFilter2.Caption := ListIzmer.Items.Strings[j-1];
+                       deUniFilter.Items.Delete(deUniFilter.Items.IndexOf(Vtbl.Измерения));
+                       LinkFields := LinkFields + Vtbl.Измерения + ';';
+                       lblFilter2.Visible := true;
+                       deFilter2.Visible := true;
+                       Vtbl.SelectNext;
+                       SelectRow := true;
+                       inc(k);
+                       break;
+                     end;
+                   if (lblFilter3.Caption = '') and (deFilter1.Text <> ListIzmer.Items.Strings[j-1]) and
+                      (deFilter2.Text <> ListIzmer.Items.Strings[j-1]) then
+                     begin
+                       lblFilter3.Caption := ListIzmer.Items.Strings[j-1];
+                       deUniFilter.Items.Delete(deUniFilter.Items.IndexOf(Vtbl.Измерения));
+                       LinkFields := LinkFields + Vtbl.Измерения + ';';
+                       lblFilter3.Visible := true;
+                       deFilter3.Visible := true;
+                       Vtbl.SelectNext;
+                       SelectRow := true;
+                       inc(k);
+                       break;
+                     end;
+                 end
+               else break;
+            end;
+         end
+       else
+         break;
+       if SelectRow = false then
+         begin
+           Vtbl.SelectNext;
+           inc(k);
+         end;
+     end;
+    LockCalk := true;
+//  finally
+//   if IsEmpty(Acc) then
+//      MessageDlg('Такого аккумулятора нет в базе знаний!',mtWarning,mbOk);
+//  end;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+ i : integer;
+ s : string;
+ IzmerList, ZnachList, AtrList : ICValueList;
+ GroupString : String;
+begin
+ if LockCalk = false then
+   begin
+    ShowMessage('Аккумулятор не выбран, или введенный аккумулятор не доступен в данной обработке');
+    exit;
+   end;
+ IzmerList := CreateObject('СписокЗначений');
+ ZnachList := CreateObject('СписокЗначений');
+ AtrList := CreateObject('СписокЗначений');
+ Vtbl.GroupToList('Измерения',IzmerList);
+ Vtbl.GroupToList('Значения',ZnachList);
+ Vtbl.GroupToList('Атрибуты',AtrList);
+ AccTbl.Close;
+ AccTbl.UseDataSource(0);
+ AccTbl.Open;
+ Acc.SaveMotionToValueTable(StrToDate(deDateFrom.Text),StrToDate(deDateTo.Text),amtBoth,-1,AccTbl);
+ AccTbl.Clear;
+ if StrLength(AtrList.ComaStr[';'])<>0 then
+   s := AtrList.ComaStr[';']+';';
+ Vtbl.Select;
+ Vtbl.SelectFirst;
+ GroupString := '';
+ for i := 1 to Vtbl.LineCount do
+  begin
+    if Vtbl.Измерения<>Null then
+      begin
+       if ListIzmer.Checked[Vtbl.indexIz] then
+         GroupString :=GroupString+Vtbl.Измерения+';';
+      end
+    else
+     break;
+    Vtbl.SelectNext;
+  end;
+ if GroupString <>'' then
+   begin
+     StrDelete(GroupString,StrLength(GroupString),1);
+     Acc.AppendGroupMotionToValueTable(StrToDate(deDateFrom.Text),StrToDate(deDateTo.Text),amtBoth,GroupString
+                                       +';'+ZnachList.ComaStr[';'],-1,AccTbl);//+';'+s+'MotionSign;Document;Date;DocState;DocLineNum;DimensionID'
+   end
+ else
+   Acc.AppendMotionToValueTable(StrToDate(deDateFrom.Text),StrToDate(deDateTo.Text),amtBoth,IzmerList.ComaStr[';']
+                                +';'+ZnachList.ComaStr[';']+';'+s+'MotionSign;Document;Date;DocState;DocLineNum;DimensionID',-1,AccTbl);
+ dbgData_Fill(GroupString);
+ if GroupString <>'' then
+   AccTbl.SortBy(GroupString)
+ else
+   AccTbl.SortBy('Date');
+ deFilter0.Text :='';
+ deFilter1.Text :='';
+ deFilter2.Text :='';
+ deFilter3.Text :='';
+ AccTbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+ AccPr :=CreateObject('Обработки.ОбработкаОбъектов');
+ AccPr := Mean;
+ deUniFilter.Text := '';
+ SetDatesOnOpenForm(DateFrom, DateTo, deDateFrom, deDateTo);
+ Filter := ArrayOf(Unassigned,Unassigned,Unassigned,Unassigned);
+ FieldFilter := ArrayOf('','','','');
+ FilterValueBeg := ArrayOf(Unassigned,Unassigned,Unassigned,Unassigned);
+ FilterValueEnd := ArrayOf(Unassigned,Unassigned,Unassigned,Unassigned);
+ Vtbl := CreateObject('ТаблицаЗначений');
+ AccTbl := CreateObject('ТаблицаЗначений');
+ Vtbl.AddColumn('indexIz',vtcInteger,0);
+ Vtbl.AddColumn('Измерения',vtcString,30);
+ Vtbl.AddColumn('Type',vtcString,30);
+ Vtbl.AddColumn('indexZn',vtcInteger,5);
+ Vtbl.AddColumn('Значения',vtcString,30);
+ Vtbl.AddColumn('indexAt',vtcInteger,5);
+ Vtbl.AddColumn('Атрибуты',vtcString,30);
+ Vtbl.Open;
+ AccTbl := CreateObject('ТаблицаЗначений');
+// AccsText :='Коректоровка налоговых накладных;Остатки личных финансов;Остатки на расчетных счетах;'+
+//            'Остатки по кассе;Остатки ТМЦ на ответственном;Остатки товаров на складах;Остатки товаров поставщиков на реализацию;'+
+//            'Остатки товаров на реализаторах;Остатки товаров на сегодня;Остатки ТМЦ по счетам;Партии товаров;Расчеты с партнерами;'+
+//            'Расчеты с потавщиками на реализацию;Расчеты с реализаторами;Зарезервированный товары';
+end;
+
+procedure AccList_Change(Sender : TObject);
+begin
+ if LockCalk = true then
+  LockCalk := false;
+ btnAccList.Flat := false;
+end;
+
+//Установка фильтра
+procedure deFilter_ActionExecute(Sender : TObject);
+var
+  i,j : Integer;
+  FieldName, Fields : String;
+  Parametrs : Variant;
+  Object, OtherObject : TO4Edit;
+  FtrLabel  : TO4Label;
+  FilterTbl : ICValueTable;
+begin
+ FilterTbl := CreateObject('ТаблицаЗначений');
+//Проверка: от имени какого элемента происходит вызов процедуры
+ if (Sender as TO4Edit).Tag = 0 then
+   begin
+     Object :=  Form.FindComponent('deFilter' + IntToStr((Sender as TO4Edit).Tag)) as TO4Edit;
+     if (deUniFilter.Text <> '') and (AccTbl.HasField(deUniFilter.Text)) then
+        begin
+          FieldName := deUniFilter.Text;
+          Filter_Check(Sender,'',0);
+          AccTbl.UseDataSource(0);
+          AccTbl.CopyTo(FieldName,FilterTbl);
+          AccTbl.UseDataSource(CtrlToVar(TVS));
+          Parametrs := ArrayOf(FilterTbl,FieldName);
+          Fields := '';
+          if AccPr.Execute('ВыборФильтра',Parametrs) = mrOk then
+              if (AccPr.HasParam('Filter')) then
+                if FieldName <> 'Document' then
+                  begin
+                    Object.Text := VarAsStr(AccPr.Params['Filter']);
+                    Filter[0] := AccPr.Params['Filter'];
+                    FieldFilter[0] :=FieldName;
+                    FilterValueBeg[0] := Filter[0];
+                    FilterValueEnd[0] := Filter[0];
+                    Fields := FieldName +';';
+                    Filter_Check(Sender,Fields,1);
+                  end
+                else
+                  begin
+                    Object.Text := VarAsStr(AccPr.Params['Filter'].GetName+' №'+AccPr.Params['Filter'].GetNumber);
+                    Filter[0] := AccPr.Params['Filter'];
+                    FieldFilter[0] := FieldName;
+                    FilterValueBeg[0] := Filter[0];
+                    FilterValueEnd[0] := Filter[0];
+                    Fields := FieldName +';';
+                    Filter_Check(Sender,Fields,1);
+                  end;
+        end
+     else
+        ShowMessage('Поле: '+deUniFilter.Text+' отсутствует у выбранного аккумулятора');
+   end
+ else
+   begin
+     Object :=  Form.FindComponent('deFilter' + IntToStr((Sender as TO4Edit).Tag)) as TO4Edit;
+     FtrLabel := Form.FindComponent('lblFilter' + IntToStr((Sender as TO4Edit).Tag)) as TO4Label;
+     Vtbl.Select;
+     Vtbl.SelectFirst;
+     for i := 1 to Vtbl.LineCount do
+       if (Vtbl.Измерения <> '') then
+         begin
+           if (Vtbl.indexIz = ListIzmer.Items.IndexOf(FtrLabel.Caption)) then
+             begin
+               FieldName := Vtbl.Измерения;
+               break;
+             end
+           else Vtbl.SelectNext;
+         end
+       else break;
+     Filter_Check(Sender,'',0);
+     AccTbl.UseDataSource(0);
+     AccTbl.CopyTo(FieldName,FilterTbl);
+     AccTbl.UseDataSource(CtrlToVar(TVS));
+     Parametrs := ArrayOf(FilterTbl,FieldName);
+     Fields := '';
+     if AccPr.Execute('ВыборФильтра',Parametrs) = mrOk then
+       begin
+         if (AccPr.HasParam('Filter')) and VarAsBool(AccPr.Params['Filter'].IsFocused) then
+           if (FieldName <> 'Док') and (FieldName <> 'Счет') then
+             begin
+               Object.Text := VarAsStr(AccPr.Params['Filter'].NameField);
+               Filter[(Sender as TO4Edit).Tag] := AccPr.Params['Filter'];
+               FieldFilter[(Sender as TO4Edit).Tag] :=FieldName;
+               FilterValueBeg[0] := Filter[(Sender as TO4Edit).Tag];
+               FilterValueEnd[0] := Filter[(Sender as TO4Edit).Tag];
+               Fields := FieldName +';';
+               Filter_Check(Sender,Fields,1);
+             end
+           else
+             begin
+               Object.Text := VarAsStr(AccPr.Params['Filter'].GetName+' №'+AccPr.Params['Filter'].GetNumber);
+               Filter[(Sender as TO4Edit).Tag] := AccPr.Params['Filter'];
+               FieldFilter[(Sender as TO4Edit).Tag] :=FieldName;
+               FilterValueBeg[0] := Filter[(Sender as TO4Edit).Tag];
+               FilterValueEnd[0] := Filter[(Sender as TO4Edit).Tag];
+               Fields := FieldName +';';
+               Filter_Check(Sender,Fields,1);
+             end
+         else
+           begin
+             Object.Text := 'Пустая строка';
+             Filter[(Sender as TO4Edit).Tag] := null;
+             FieldFilter[(Sender as TO4Edit).Tag] :=FieldName;
+             FilterValueBeg[0] := Filter[(Sender as TO4Edit).Tag];
+             FilterValueEnd[0] := Filter[(Sender as TO4Edit).Tag];
+             Fields := FieldName +';';
+             Filter_Check(Sender,Fields,1);
+           end;
+       end;
+   end;
+end;
+
+//Очищение фильтра
+procedure deFilter_ActionClear(Sender : TObject);
+begin
+  Filter_Check(Sender,'',0);
+end;
+
+//работа с календарем
+procedure tbSelectDates_Click(Sender : TObject);
+var
+ X, Y : integer;
+begin
+ tbSelectDates.GetScreenPos(X, Y);
+ Y := Y + tbSelectDates.Height;
+ pmDates.Popup(X, Y)
+end;
+
+procedure deDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo, deDateFrom, deDateTo);
+  (Sender as TO4MenuItem).Checked := true;
+end;
+
+procedure btnUniFilterClear_Click(Sender : TObject);
+begin
+  deUniFilter.Text := '';
+end;
+
+procedure ListIzmer_ClickCheck(Sender : TObject);
+var
+ i, j, k : Integer;
+ UniFilterList : ICValueList;
+ FieldsName : String;
+begin
+  lblFilter1.Enabled := true;
+  deFilter1.Enabled := true;
+  lblFilter2.Enabled := true;
+  deFilter2.Enabled := true;
+  lblFilter3.Enabled := true;
+  deFilter3.Enabled := true;
+  deUniFilter.Items.Clear;
+  k := 0;
+  for i := 1 to AccTbl.GetColumnCount do
+    deUniFilter.Items.Add(AccTbl.GetColumnName(i-1));
+  for i := 1 to WordCount(LinkFields,';')-1 do
+    deUniFilter.Items.Delete(deUniFilter.Items.IndexOf(ExtractWord(i,LinkFields,';')));
+  Vtbl.Select;
+  Vtbl.SelectFirst;
+  for i := 0 to ListIzmer.Items.Count-1 do
+    if ListIzmer.Checked[i] then
+      begin
+        for j := 0 to ListIzmer.Items.Count-1 do
+          begin
+            if not ListIzmer.Checked[j] then
+              begin
+                if ListIzmer.Items.Strings[j] = lblFilter1.Caption then
+                  begin
+                    lblFilter1.Enabled := false;
+                    deFilter1.Enabled := false;
+                  end;
+                if ListIzmer.Items.Strings[j] = lblFilter2.Caption then
+                  begin
+                    lblFilter2.Enabled := false;
+                    deFilter2.Enabled := false;
+                  end;
+                if ListIzmer.Items.Strings[j] = lblFilter3.Caption then
+                  begin
+                    lblFilter3.Enabled := false;
+                    deFilter3.Enabled := false;
+                  end;
+                if StrPos(Vtbl.Измерения,LinkFields) = 0 then
+                  deUniFilter.Items.Delete(deUniFilter.Items.IndexOf(Vtbl.Измерения));
+              end;
+            Vtbl.SelectNext;
+          end;
+        break;
+      end;
+end;
+
+procedure deUniFilter_Change(Sender : TObject);
+begin
+ deFilter0.Items.Clear;
+end;
+
+procedure ColorSelector1_Change(Sender: TObject);
+begin
+  showmessage(VarAsStr(ColorSelector1.Color));
+end;
+
+procedure btWorkOfAccsOld_Click(Sender: TObject);
+var P : ICProcessing;
+begin
+  P := CreateObject('Обработки.РаботаСАккумуляторами');
+  P.OpenForm('АнализДвиженияАккумулятора');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Head:TO4Panel
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbParam:TO4ToolButton
+Panel5:TO4Panel
+Label3:TO4Label
+Label4:TO4Label
+deDateFrom:TO4Edit
+deDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+GroupBox1:TO4GroupBox
+AccList:TO4Edit
+btnAccList:TO4Button
+ColorSelector1:TO4ColorSelector
+dbgData:TO4DBGrid
+Panel3:TO4Panel
+Panel1:TO4Panel
+Panel2:TO4Panel
+Label1:TO4Label
+GroupBox4:TO4GroupBox
+ListAtribut:TO4CheckListBox
+GroupBox3:TO4GroupBox
+ListZnach:TO4CheckListBox
+GroupBox2:TO4GroupBox
+ListIzmer:TO4CheckListBox
+Panel4:TO4Panel
+Label2:TO4Label
+lblFilter1:TO4Label
+lblFilter2:TO4Label
+lblFilter3:TO4Label
+deFilter1:TO4Edit
+deFilter2:TO4Edit
+deFilter3:TO4Edit
+deUniFilter:TO4Edit
+deFilter0:TO4Edit
+TVS:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+btWorkOfAccsOld:TO4Button

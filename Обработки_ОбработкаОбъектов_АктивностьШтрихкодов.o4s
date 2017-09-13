@@ -1,0 +1,69 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+VAr
+  TblGoods, TblBarCodes : IsValueTable;
+  Constants: IS4VPAConst;
+
+Procedure GetBarCodesError(V : IsProcessing; var Acc : Boolean);
+VAr
+  GoodDic, BarCodeDic : IsDictionary;
+  Count, Total, SimvolCount : Integer;
+begin
+  Constants := GetConstants;
+  SimvolCount := VArAsInt(Constants.ШтрихКодТовараВнутреннийКолСимв);
+  GoodDic := CreateObject('Справочники.Товары');
+  BarCodeDic := CreateObject('Справочники.ШтрихКодыТоваров');
+  BarCodeDic.SetFieldFilter('Активность','=',true,'','',Null);
+  GoodDic.Select;
+  Count := 1;
+  Total := GoodDic.RecordCount;
+  While GoodDic.SelectNext do
+    begin                                      
+      BarCodeDic.UseMaster(GoodDic);
+      if BarCodeDic.Select then
+        begin
+         if BarCodeDic.RecordCount>1 then
+           begin
+             while BarCodeDic.SelectNext do
+               begin
+                 TblBarCodes.Append;
+                 TblBarCodes.Товар := GoodDic;
+                 TblBarCodes.ШтрихКод := BarCodeDic.Код;
+                 TblBarCodes.Кол := StrLength(VarAsStr(BarCodeDic.Код));
+                 TblBarCodes.Post;
+               end;
+           end
+         else
+           begin
+             BarCodeDic.SelectNext;
+             If StrLength(VarAsStr(BarCodeDic.Код))<> SimvolCount then
+               begin
+                 TblBarCodes.Append;
+                 TblBarCodes.Товар := GoodDic;
+                 TblBarCodes.ШтрихКод := BarCodeDic.Код;
+                 TblBarCodes.Кол := StrLength(VarAsStr(BarCodeDic.Код));
+                 TblBarCodes.Post;
+               end;
+           end;
+         end;
+      V.NotifyClient('Обработано товаров: '+IntToStr(Count)+'/'+IntToStr(Total),Count,Total);
+      inc(Count);
+    end;
+  TblBarCodes.Select;
+  TblBarCodes.AppendTo('Товар',TblGoods);
+  TblGoods.GroupBy('Товар','');
+  TblGoods.DoGetLinks('Код=Товар.Код');
+end;
+
+function GetBarCodesErrorEp(TblGoodsS, TblBarCodesS : IsValueTable): Variant;Server;
+Begin
+  TblGoods := TblGoodsS;
+  TblBarCodes := TblBarCodesS;
+  Result := EntryPoint(GetBarCodesError);
+end;
+
+end.

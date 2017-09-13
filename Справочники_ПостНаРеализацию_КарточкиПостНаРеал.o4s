@@ -1,0 +1,48 @@
+interface
+
+uses 
+  System, DispIntf;
+
+implementation
+
+var
+  AccsPartRealiz : ISAccs;
+
+procedure CalcFields(Data : ISDictionary);
+begin
+  AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Data);
+  Data.ѕолучено := AccsPartRealiz.—умѕрих + AccsPartRealiz.—умќст;
+  Data.¬озвращено := -AccsPartRealiz.—ум¬озвр;
+  Data.—писано := -AccsPartRealiz.—ум—пис;
+  Data.»нвентаризаци€ := AccsPartRealiz.—ум»нв;
+  Data.Ќа–еализации := AccsPartRealiz.—умќбщ - AccsPartRealiz.—умќпл; // - AccsPartRealiz.—умќпл;
+  Data.ќплачено := -AccsPartRealiz.—умќпл;
+  Data. ќплате := AccsPartRealiz.—умќбщ + Data.—писано; //AccsPartRealiz.—умќпл - AccsPartRealiz.—ум—пис;
+
+  Data.ѕолучено¬ал := AccsPartRealiz.—умѕрих¬ал + AccsPartRealiz.—умќст¬ал;
+  Data.¬озвращено¬ал := -AccsPartRealiz.—ум¬озвр¬ал;
+  Data.—писано¬ал := -AccsPartRealiz.—ум—пис¬ал;
+  Data.»нвентаризаци€¬ал := AccsPartRealiz.—ум»нв¬ал;
+  Data.Ќа–еализации¬ал := AccsPartRealiz.—умќбщ¬ал - AccsPartRealiz.—умќпл¬ал; // - AccsPartRealiz.—умќпл;
+  Data.ќплачено¬ал := -AccsPartRealiz.—умќпл¬ал;
+  Data. ќплате¬ал := AccsPartRealiz.—умќбщ¬ал + Data.—писано¬ал; //AccsPartRealiz.—умќпл - AccsPartRealiz.—ум—пис;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+  Result := EntryPoint(CalcFields);
+end;
+
+function IsMotions(ID : Double) : Boolean; server;
+begin
+  Result := False;
+  if ID <> 0 then
+    begin
+      AccsPartRealiz.SelectMotion(0, 400000, amtBoth, ID);
+      if AccsPartRealiz.SelectMotionNext() then
+        Result := True;
+    end;
+end;
+
+end.

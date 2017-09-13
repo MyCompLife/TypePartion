@@ -1,0 +1,261 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –абота—ѕеременными, –абота—ќбъектами,
+  –абота— омпонентамиVCL, –абота—ƒокументами¬∆урналах;
+
+implementation
+
+var
+  MasterData, Currency : ICDictionary;
+  ChildNakls, ChildPays, ChildPDVNaklsOut, ChildPDVNaklsIn : ICJournal;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+  ChildNakls := CreateObject('∆урналы.∆урналѕриемаЌа–еализацию');
+  ChildNakls.UseMaster(MasterData);
+  ChildNakls.OpenFormInplace('—писокѕриемаЌа–еализацию', CtrlToVar(pAll));
+  ChildPays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+  ChildPays.UseMaster(MasterData);
+  ChildPays.OpenFormInplace('—писокѕодчиненныхѕлатежей', CtrlToVar(pPays));
+  ChildPDVNaklsOut := CreateObject('∆урналы.∆урналѕодчЌалогЌакл');
+  ChildPDVNaklsOut.UseMaster(ChildNakls);
+  ChildPDVNaklsOut.OpenFormInplace('—писокЌакл', CtrlToVar(pPDVNaklsOut));
+  ChildPDVNaklsIn := CreateObject('∆урналы.∆урналѕодчѕрихЌалогЌакл');
+  ChildPDVNaklsIn.UseMaster(ChildNakls);
+  ChildPDVNaklsIn.OpenFormInplace('—писокѕрихЌакл', CtrlToVar(pPDVNaklsIn));
+  Currency := CreateObject('—правочники.¬алюты');
+end;
+
+procedure miPrintActive_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null)
+end;
+
+procedure tcRealiz_Change(Sender : TObject);
+begin
+  case tcRealiz.TabIndex of
+    0 :
+      begin
+        nbPDVNakls.PageIndex := 3;
+        ChildNakls.SetDocTypeRange('ƒокументы.Ќакладна€ѕрихЌа–еал');
+        ChildNakls.UserTypesToAdd := 'Ќакладна€ѕрихЌа–еал';
+        ChildNakls.Select;
+      end;
+    1 :
+      begin
+        nbPDVNakls.PageIndex := 3;
+        ChildNakls.SetDocTypeRange('ƒокументы.—писание—ѕостЌа–еал');
+        ChildNakls.UserTypesToAdd := '—писание—ѕостЌа–еал';
+        ChildNakls.Select;
+      end;
+    2 :
+      begin
+        nbPDVNakls.PageIndex := 3;
+        ChildNakls.SetDocTypeRange('ƒокументы.¬озвратѕостЌа–еал');
+        ChildNakls.UserTypesToAdd := '¬озвратѕостЌа–еал';
+        ChildNakls.Select;
+      end;
+    3 :
+      begin
+        nbPDVNakls.PageIndex := 3;
+        ChildNakls.SetDocTypeRange('ƒокументы.»нвентѕостЌа–еал');
+        ChildNakls.UserTypesToAdd := '»нвентѕостЌа–еал';
+        ChildNakls.Select;
+      end;
+    4 :
+      begin
+        nbPDVNakls.PageIndex := 3;
+        ChildNakls.SetDocTypeRange('ƒокументы.¬водќстѕрихЌа–еал');
+        ChildNakls.UserTypesToAdd := '¬водќстѕрихЌа–еал';
+        ChildNakls.Select;
+      end;
+    5 :
+      if ChildNakls.IsFocused then
+        begin
+          case VarAsStr(ChildNakls.GetDocSign) of
+            'Ќакладна€ѕрихЌа–еал', '¬озвратѕостЌа–еал', '—писание—ѕостЌа–еал',
+            '¬водќстѕрихЌа–еал' :
+              nbPDVNakls.PageIndex := 1;
+            '»нвентѕостЌа–еал' :
+              nbPDVNakls.PageIndex := 2;
+          end;
+          ChildPDVNaklsIn.UseMasterAndSelect(ChildNakls);
+        end
+      else
+        nbPDVNakls.PageIndex := 2;
+  end;
+end;
+
+procedure SetGridCaptions;
+begin
+  sgRealiz.Cells[0, 1] := Trans(lRealizIn);
+  sgRealiz.Cells[0, 2] := Trans(lRealizRet);
+  sgRealiz.Cells[0, 3] := Trans(lRealizDisc);
+  sgRealiz.Cells[0, 4] := Trans(lRealizRev);
+  sgRealiz.Cells[0, 5] := Trans(lRealizAll);
+  sgRealiz.Cells[0, 6] := Trans(lOrderPaid);
+  sgRealiz.Cells[0, 7] := Trans(lOrderToPay);
+  sgRealiz.Cells[1, 0] := lOrderCurrency;
+  if Currency.FindByField('јктивность', VarAsInt(True), True) then
+    sgRealiz.Cells[2, 0] := Trans(Currency. од);
+end;
+
+procedure SetGridValues;
+begin
+  sgRealiz.Cells[1, 1] := FormatFloat('0.00', MasterData.ѕолучено);
+  sgRealiz.Cells[1, 2] := FormatFloat('0.00', MasterData.¬озвращено);
+  sgRealiz.Cells[1, 3] := FormatFloat('0.00', MasterData.—писано);
+  sgRealiz.Cells[1, 4] := FormatFloat('0.00', MasterData.»нвентаризаци€);
+  sgRealiz.Cells[1, 5] := FormatFloat('0.00', MasterData.Ќа–еализации);
+  sgRealiz.Cells[1, 6] := FormatFloat('0.00', MasterData.ќплачено);
+  sgRealiz.Cells[1, 7] := FormatFloat('0.00', MasterData. ќплате);
+
+  sgRealiz.Cells[2, 1] := FormatFloat('0.00', MasterData.ѕолучено¬ал);
+  sgRealiz.Cells[2, 2] := FormatFloat('0.00', MasterData.¬озвращено¬ал);
+  sgRealiz.Cells[2, 3] := FormatFloat('0.00', MasterData.—писано¬ал);
+  sgRealiz.Cells[2, 4] := FormatFloat('0.00', MasterData.»нвентаризаци€¬ал);
+  sgRealiz.Cells[2, 5] := FormatFloat('0.00', MasterData.Ќа–еализации¬ал);
+  sgRealiz.Cells[2, 6] := FormatFloat('0.00', MasterData.ќплачено¬ал);
+  sgRealiz.Cells[2, 7] := FormatFloat('0.00', MasterData. ќплате¬ал);
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetRangeByField('—осто€ние', NewTab, NewTab);
+  MasterData.Select;
+  MasterData.Refresh;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  NoBool : Boolean;
+begin
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData', 'dbgData');
+  tcRealiz_Change(tcRealiz);
+  SetGridCaptions;
+  tsState_Change(Sender, tsState.TabIndex, NoBool);
+end;
+
+{$D-}
+procedure sgRealiz_GetCellProps(Sender : TObject; aCol, aRow : Integer; aFont : TFont;
+  var Background : TColor; var CellAlignment : TAlignment;
+  var Layout : TTextLayout; var WrapText : Boolean;
+  Selected, Fixed, Highlight : Boolean);
+begin
+  if aRow = 0 then
+    CellAlignment := taCenter
+  else
+    if (aCol > 0) and (aRow > 0) then
+      CellAlignment := taRightJustify;
+  case aRow of
+    5 :
+      aFont.Color := clBlue;
+    6 : 
+      aFont.Color := clGreen;
+    7 : 
+      aFont.Color := clRed;
+  end;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  SetGridValues;
+end;
+
+procedure MDS_VPABeforeDelete(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  ChildNakls.CancelRangeByField;
+  ChildNakls.SetDateRange(0, 0);
+  ChildNakls.SetDocStateRange(-1);
+  ChildNakls.SetDocTypeRange('');
+  if ChildNakls.Select then
+    begin
+      ShowMessage(DontDelThisRealizator);
+      Accept := False;
+    end;
+end;
+
+procedure tsNotes_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbList.PageIndex := Newtab;
+end;
+
+procedure tbEdit_VPABeforeActionClick(Sender : TObject);
+var
+  ID : Double;
+  AccsRealizPart : ICAccs;
+begin
+  AccsRealizPart := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+  ID := AccsRealizPart.FindDimIDDirect(MasterData);
+  MasterData.Params['IsMotions'] := server.IsMotions(ID);
+  if server.IsMotions(ID) then
+    ShowMessage(DontEditThisRealizator);
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case ProcID of
+    ReadFieldNameAtSetMaster :
+      OutParams := 'Self'; // сравнение с самой записью
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+tsState:TO4TabSet
+Panel2:TO4Panel
+Splitter3:TO4Splitter
+Panel3:TO4Panel
+Label1:TO4Label
+tsNotes:TO4TabSet
+nbList:TO4Notebook
+sgRealiz:TO4StringGrid
+DBMemo1:TO4DBMemo
+pPays:TO4Panel
+Label2:TO4Label
+pNakls:TO4Panel
+Label3:TO4Label
+tcRealiz:TO4TabControl
+nbPDVNakls:TO4Notebook
+Label4:TO4Label
+pPDVNaklsOut:TO4Panel
+Label5:TO4Label
+pPDVNaklsIn:TO4Panel
+Panel4:TO4Panel
+Label6:TO4Label
+pAll:TO4Panel
+Panel6:TO4Panel
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

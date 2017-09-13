@@ -1,0 +1,29 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками, НумерацияДокументов;
+
+implementation
+
+var
+  MasterData, DetReg : ICDictionary;
+  Constants : IC4VPAConst;   
+  
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants; 
+  DetReg := SetDetailDict(MasterData, 'РегистрРабочегоВремени', 'РегистрацияВремени', ctrlToVar(pnReg));
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Label3:TO4Label
+Label4:TO4Label
+Label21:TO4Label
+dbeLastName:TO4DBEdit
+dbeFirstNames:TO4DBEdit
+dbeCode:TO4DBEdit
+pnReg:TO4Panel
+MDS:TO4DataSource

@@ -1,0 +1,113 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€, –абота—∆урналом»зменений;
+
+implementation
+
+var
+  ApplyTbl : ICValueTable;
+  AccsGood, AccsPart : ICAccs;
+  FullName : string;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+var
+  MinTbl, TblContents : ICValueTable;
+  ViewTbl : ICProcessing;
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniFix, FixAck);
+  if Accept then
+    case Doc.GetDocState of
+      0 :
+        begin
+          MinTbl := CreateObject('“аблица«начений');
+          TblContents := CreateObject('“аблица«начений');
+          Doc.SaveContents('', TblContents);
+          TblContents.CopyDataToServer;
+          server.CreateMinTbl(MinTbl.SrvMean, TblContents.SrvMean);
+          MinTbl.CopyDataFromServer;
+          MinTbl.SrvMean.Clear;
+          if (MinTbl.LineCount > 0) then
+            begin
+              ViewTbl := CreateObject('ќбработки.ѕревышение ол“овараЌа—кладах');
+              Accept := ViewTbl.Execute('ѕревышение ол“овЌа—кладах', MinTbl) = mrOK;
+              if Accept and not GetUDASet('OverGoodStore') then
+                begin
+                  ShowMessage(TakeHimAway);
+                  Accept := False;
+                end;
+            end;
+        end;
+      1 :
+        ;
+    end;
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+begin
+  case Doc.GetDocState of
+    1 :
+      begin
+        if not Doc.RunThreadProcess(server.GetChangeStateUpEP, UniFixProgress + FullName) then
+          raise(emsgFixFail);    
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.SendEvent(evCount, Unassigned, False);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, IncGood, UniUnFix, FixAck);
+  if Accept then
+    case Doc.GetDocState of
+      1 :
+        Accept := CheckOverGoodStore(Doc, FullName, actStateDown);
+      2 :
+        ;
+    end;
+end;
+
+procedure DoChangeStateDown(Doc : Variant);
+begin   
+  ChangeDoc(clmtStateDown, Doc);
+  Doc.SendEvent(evCount, Unassigned, False);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, IncGood, UniDel, DelAck);
+  if Accept then
+    case Doc.GetDocState of
+      1, 2 :
+        Accept := CheckOverGoodStore(Doc, FullName, actDel);
+    end;   
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoDelete(Doc : ICDocuments);
+begin 
+  Doc.SendEvent(evCount, Unassigned, False);
+end;
+
+procedure CanChangeBuhStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  if (not Doc.ISGroupAction) or (Doc.FirstInGroupAction) then
+    begin
+      Doc.BuhWizard := CreateObject('Ѕух”чет.Ѕух”чет').CreateWizard();
+      Accept := Doc.BuhWizard.OpenAskForm(Doc);
+    end
+  else
+    Accept := Doc.BuhWizard.AsceptUp;
+end;
+
+procedure DoChangeBuhStateUp(Doc : ICDocuments);
+begin
+  Doc.BuhWizard.DocStateUp(Doc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

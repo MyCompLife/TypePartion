@@ -1,0 +1,63 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation    
+
+procedure GetDocNumbers(OneDoc : ISDocuments; var Numbers, Dates : String); server;
+var
+  AccsOrder : ISAccs;
+  DocsTbl : ISValueTable;
+  DocNumbers, DocDates : String;
+begin
+  AccsOrder := CreateObject('Аккумуляторы.ОстаткиПоЗаказамНаПоставку');
+  DocsTbl := CreateObject('ТаблицаЗначений');
+  DocsTbl.AddColumn('Date',vtcDateTime,0);
+  DocsTbl.AddColumn('Document',vtcLink,0);
+  DocsTbl.Open;
+  AccsOrder.SetFieldFilter('Заказ',OneDoc);
+  AccsOrder.AppendGroupMotionToValueTable(0,CurrentDate,amtOutcome,'Date;Document',-1,DocsTbl);
+  DocsTbl.Select;
+  while DocsTbl.SelectNext do
+    begin
+      DocNumbers := DocNumbers + DocsTbl.Document.GetNumber + ', ';
+      DocDates := DocDates + DateToStr(DocsTbl.Date) + ', ';
+    end;                                                   
+  Numbers := DocNumbers;
+  Dates := DocDates;
+end;
+
+procedure GetTable(TblGoods : ISValueTable; Partner : Variant); server;
+var
+  DetCodePart : ISDictionary;
+begin
+  DetCodePart := CreateObject('Справочники.ТоварыПартнеров');
+  TblGoods.Select;
+  while TblGoods.SelectNext do
+    begin
+      DetCodePart.UseMasterAndSelect(TblGoods.Товар);
+      if DetCodePart.FindByField('Партнер', Partner, False) then
+        begin
+          TblGoods.Edit;
+          TblGoods.Код := DetCodePart.Код;
+          TblGoods.Post;
+        end;
+      DetCodePart.UseMaster(Null);
+    end;
+  TblGoods.DoGetLinks('ЕдИзм=Товар.ЕдИзм');
+end;
+
+function GetJourRecordCount(ObjJour : ISJournal) : Integer; server;
+begin
+  ObjJour.Select;
+  Result := ObjJour.RecordCount;
+end;
+
+function GetDictRecordCount(ObjDict : ISDictionary) : Integer; server;
+begin
+  ObjDict.Select;
+  Result := ObjDict.RecordCount;
+end;
+
+end.

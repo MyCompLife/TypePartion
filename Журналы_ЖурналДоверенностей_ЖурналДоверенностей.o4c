@@ -1,0 +1,102 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  TLF, ADR, RRR, MYF : ICDictionary;  
+  MasterData : ICJournal;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+end;
+
+procedure Structure1_ME_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);      
+  MasterData.AssignSelectParams(Form.GetMean);
+  MasterData.Select;
+  if MasterData.SelectNext then
+    Table.Value['Year'] := StrCopy(IntToStr(GetYear(MasterData.ДатаДокумента)), 3, 2);
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+var
+  Employee : ICDictionary;
+begin
+  if Index = 0 then
+    begin
+      MasterData.AssignSelectParams(Form.GetMean);
+      MasterData.Select;
+    end;
+  Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      Value['DateTo'] := MasterData.ДатаДействия; 
+      Employee := MasterData.Служащий;
+      if VarAsBool(Employee.IsFocused) then
+        if VarAsBool(Employee.Должность.IsFocused) then
+          Value['Employee'] := Employee.Должность.Value + ' ' + Employee.ПолноеНазвание
+        else
+          Value['Employee'] := Employee.ПолноеНазвание;
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        Value['Partner'] := MasterData.Партнер.ПолноеНазвание;
+      Value['Order'] := MasterData.ОснованиеДоверенности;
+      Value['Mark'] := MasterData.ОтметкаПроИспользование;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+lbZKPO:TRBLabel
+Label24:TRBLabel
+Label11:TRBLabel
+Label14:TRBLabel
+Label16:TRBLabel
+Label38:TRBLabel
+Label20:TRBLabel
+Shape1:TRBShape
+Label21:TRBLabel
+Label1:TRBLabel
+Label39:TRBLabel
+Label23:TRBLabel
+Label25:TRBLabel
+DetailBand1:TRBDetailBand
+lbNumber:TRBLabel
+lbDate:TRBLabel
+lbDateTo:TRBLabel
+lbEmployee:TRBLabel
+lbSign:TRBLabel
+lbOrder:TRBLabel
+lbSlip:TRBLabel
+lbPartner:TRBLabel
+Label10:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label15:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label22:TRBLabel
+DetailBand2:TRBDetailBand
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Structure1:TRBStructure

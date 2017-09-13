@@ -1,0 +1,39 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений;
+
+var
+    DateFrom, DateTo : DateTime;
+    AccsName : String;
+    AccsTbl : ISValueTable;
+    Accs : ISAccs;
+implementation
+
+procedure GetRunAccs(V : ISProcessing; var Accept : Boolean);
+begin
+ Accept:=True;
+ AccsTbl.Params['Result']:='';
+ try
+  Accs := CreateObject('Аккумуляторы.'+AccsName);
+  Accs.SaveMotionToValueTable(DateFrom, DateTo, amtBoth, -1, AccsTbl);
+ except
+  AccsTbl.Params['Result']:='Аккумулятор "'+AccsName+'" не найден';
+  Accept:=False;
+ end;
+
+
+end;
+
+function GetRunAccsEP(AccsTbls : ISValueTable; AccsNames:String; DateFroms, DateTos : DateTime): Variant; server;
+begin
+DateFrom:=DateFroms;
+DateTo:=DateTos;
+AccsName:=AccsNames;
+AccsTbl:=AccsTbls;
+  Result := EntryPoint(GetRunAccs);
+end;
+
+
+end.

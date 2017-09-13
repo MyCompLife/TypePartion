@@ -1,0 +1,39 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+procedure FillGoodsTbl(GoodsTbl:ISValueTable); server;
+var MasterData, ParentGood : ISDictionary;
+    s1,s2:string; 
+    root : boolean;
+begin
+  MasterData := CreateObject('Справочники.Товары');
+  MasterData.IncludeOnlyLevels(true);
+  MasterData.Select;
+  While MasterData.SelectNext do
+    begin
+      GoodsTbl.Append;
+      GoodsTbl.Товар := MasterData; 
+      root := true;
+      s1 := MasterData.NameField; 
+      s2 := s1;
+      ParentGood := MasterData.GetParent;
+      While IsObjFocused(ParentGood) do
+        begin 
+          root := false;
+          s1:= VarAsStr(ParentGood.NameField) + '\'+s1;   
+          s2 := ' - '+s2;
+          ParentGood := ParentGood.GetParent;
+        end;
+      GoodsTbl.НазвТовара := s1; 
+      GoodsTbl.Название := s2; 
+      GoodsTbl.Root := root;
+      GoodsTbl.Post;
+    end;
+  GoodsTbl.UpdateObjNames;
+end;
+
+end.

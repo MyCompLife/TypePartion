@@ -1,0 +1,78 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  LogTbl : ISValueTable;
+  Employ : Variant;
+  DateFrom, DateTo : DateTime;
+  ShowAdded, ShowDel, ShowChange, ShowNaklSave : Boolean;
+
+
+
+
+procedure SetGoods(Doc : ISReport; var Accept : Boolean);
+var
+  LogDic : IsDictionary;
+  TmpTbl : IsValueTable;
+begin
+  TmpTbl := CreateObject('ValueTable');
+  TmpTbl.Open;
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+  LogDic := CreateObject('Справочники.ЛогРабочегоМеста');
+  LogDic.SetFieldFilter('Дата','>=',DateFrom,'AND','<=',DateTo);
+  if (not IsNil(Employ)) and VarAsBool(Employ.IsFocused) then
+    LogDic.SetFieldFilter('Ответственный','=',Employ,'','',Null);
+
+  if ShowAdded then
+    begin
+      LogDic.SetFieldFilter('Действие','=',0,'','',Null);
+      LogDic.Select;
+      LogDic.SaveToValueTable('',TmpTbl,0,LogDic.RecordCount);
+      TmpTbl.AppendTo('Дата;Ответственный;Действие;Количество;Сумма;Коментарий',LogTbl);
+    end;
+  if ShowChange then
+    begin
+      LogDic.SetFieldFilter('Действие','=',2,'','',Null);
+      LogDic.Select;
+      LogDic.SaveToValueTable('',TmpTbl,0,LogDic.RecordCount);
+      TmpTbl.AppendTo('Дата;Ответственный;Действие;Количество;Сумма;Коментарий',LogTbl);
+    end;
+  if ShowDel then
+    begin
+      LogDic.SetFieldFilter('Действие','=',1,'','',Null);
+      LogDic.Select;
+      LogDic.SaveToValueTable('',TmpTbl,0,LogDic.RecordCount);
+      TmpTbl.AppendTo('Дата;Ответственный;Действие;Количество;Сумма;Коментарий',LogTbl);
+    end;
+  if ShowNaklSave then
+    begin
+      LogDic.SetFieldFilter('Действие','=',3,'','',Null);
+      LogDic.Select;
+      LogDic.SaveToValueTable('',TmpTbl,0,LogDic.RecordCount);
+      TmpTbl.AppendTo('Дата;Ответственный;Действие;Количество;Сумма;Коментарий',LogTbl);
+    end;
+  LogTbl.UpdateObjNames;
+  Accept := True;
+end;
+
+function GetRunReportEP(LogTblS : ISValueTable; Employs : Variant;
+  ShowAddedS, ShowDelS, ShowChangeS, ShowNaklSaveS : Boolean;
+  DateFroms, DateTos : DateTime) : Variant; server;
+begin
+  LogTbl := LogTblS;
+  Employ := Employs;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  ShowAdded := ShowAddedS;
+  ShowDel := ShowDelS;
+  ShowChange := ShowChangeS;
+  ShowNaklSave := ShowNaklSaveS;
+  Result := EntryPoint(SetGoods);
+end;
+
+end.

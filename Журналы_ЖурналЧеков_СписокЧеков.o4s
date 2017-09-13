@@ -1,0 +1,115 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+Var
+  PaysOut, NaklReturn : ISJournal;
+  AccsPart, AccsDoc: ISAccs;
+  Currency: ISDictionary;
+
+implementation
+
+procedure InitSrvDate;server;
+begin      
+  AccsDoc := CreateObject('јккумул€торы.–асчетыѕоƒокументам');
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Currency := CreateObject('—правочники.¬алюты');
+  if not Currency.FindByField('јктивность', VarAsInt(true), false) then
+    begin
+      Currency.Select;
+      Currency.SelectNext;
+    end;
+end;
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := ArrayOf(Data.Total('—умма'));
+end;
+
+function GetTotalPaySrv(Data : ISJournal) : Variant; server;
+Var
+  Sum : Decimal;
+begin
+  Data.Select;
+  While Data.SelectNext do
+    begin
+      PaysOut.UseMaster(Data);
+      Sum := Sum + PaysOut.Total('—умма¬¬алюте');
+    end;
+  Result :=  Sum;
+end;
+
+procedure OrderCalcFields(Order : ISJournal);  
+var
+  TmpDoc : ISDocuments;
+  DateFrom, DateTo : DateTime;
+begin
+  TmpDoc := Order.GetDoc;
+
+  PaysOut.UseMaster(Order);
+  NaklReturn.UseMaster(Order);
+  Order.ќплачено¬ал := PaysOut.Total('—умма¬¬алюте')+NaklReturn.Total('—умма¬ал');
+  PaysOut.UseMaster(Null);
+  NaklReturn.UseMaster(Null);
+  Order.ƒолжны¬ал := Order.—умма¬ал - Order.ќплачено¬ал;
+
+/////////////
+{ 
+var Tbl : ISValueTable;
+begin Tbl := CreateObject('ValueTable');
+  Tbl.Open;
+  AccsDoc.ClearFieldBuffers;
+  AccsDoc.ClearFieldFilters;
+
+  AccsDoc.CalcGroupRestDirect(400000,ArrayOf(Order));
+  Order.ќплачено¬ал := AccsDoc.—ум–асх¬ал;
+                                           
+  AccsDoc.CalcGroupRestDirect(400000,ArrayOf(Order.GetDoc));
+  Order.ќплачено¬ал := AccsDoc.—ум–асх¬ал;
+
+  AccsDoc.SetFieldFilter('ƒок',Order.GetDoc);
+  AccsDoc.CalcRest(400000);                
+  Order.ќплачено¬ал := AccsDoc.—ум–асх¬ал; 
+
+  AccsDoc.SetFieldFilter('ƒок',Order.GetDoc);
+  AccsDoc.SaveMotionToValueTable(0,400000,amtBoth,-1,Tbl);
+  Tbl.Select;
+
+  AccsDoc.SelectGroupMotion(0,400000,amtBoth,'ƒок;—ум–асх¬ал',-1);
+  Order.ќплачено¬ал := AccsDoc.EndVal._Default['—ум–асх¬ал'];
+
+  Order.ќплачено¬ал := Tbl.Total('—ум–асх¬ал');  
+
+
+  Order.ƒолжны¬ал := Order.—умма¬ал - Order.ќплачено¬ал;      }
+  ///////////
+end;
+
+function GetCalcEP : Variant; server;
+begin  
+  PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  NaklReturn := CreateObject('∆урналы.∆урналѕодч¬озвратовќтѕокупател€');
+  NaklReturn.SetDocMultiStateRange('1;2;');
+  Result := EntryPoint(OrderCalcFields);        //–асчетыѕоƒокументам
+end;
+
+end.
+
+{
+ // PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+ // PaysOut.SetDocMultiStateRange('1;2;');
+ // PaysOut.UseMaster(Order);
+  //  .—ум–асх¬ал PaysOut.Total('—умма¬¬алюте');
+ // PaysOut.UseMaster(Null);
+
+var Tbl : ISValueTable;
+  Tbl := CreateObject('ValueTable');
+  Tbl.Open;
+  AccsDoc.SaveMotionToValueTable(0,400000,amtBoth,-1,Tbl);
+  Tbl.Select;
+  while Tbl.SelectNext do;
+  //AccsDoc.CalcGroupRestDirect(400000,ArrayOf(Order));
+  
+  
+  }

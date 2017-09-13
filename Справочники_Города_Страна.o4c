@@ -1,0 +1,62 @@
+interface
+
+uses 
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+
+procedure Form_Open(Sender : TObject);
+begin
+  cbCodeUse.Checked := MasterData.ПочтИндекс = '1';
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeCountry.Text), '');
+end;
+
+procedure cbCodeUse_Click(Sender : TObject);
+begin
+  if cbCodeUse.Checked then
+    MasterData.ПочтИндекс := '1'
+  else
+    MasterData.ПочтИндекс := '';
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure dedCountry_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeCountry.Text), '');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label1:TO4Label
+Label5:TO4Label
+dbeCode:TO4DBEdit
+dbeCountry:TO4DBEdit
+cbCodeUse:TO4CheckBox
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource
+pnTitle:TO4Panel
+lbTitle:TO4Label

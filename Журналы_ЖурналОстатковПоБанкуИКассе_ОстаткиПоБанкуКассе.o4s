@@ -1,0 +1,74 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+procedure GetTable(Tbl : ISValueTable; MasterData : ISJournal; var s1, s2 : Decimal); server;
+var
+  OutCome, HasOutCome : Boolean;
+  MasterDoc : ISDocuments;
+  LinkToPart : ISDictionary;
+begin
+  s1 := 0;
+  s2 := 0;
+  Tbl.Close();
+  Tbl.AddColumn('НомерДокумента', lftString, 20);
+  Tbl.AddColumn('ДатаДокумента', lftDateTime, 0);
+  Tbl.AddColumn('Название', lftString, 70);
+  Tbl.AddColumn('Сумма', lftFFt, 4);
+  Tbl.AddColumn('СуммаБезНДС', lftFFt, 4);
+  Tbl.AddColumn('СуммаНДС', lftFFt, 4);
+  Tbl.Open();
+  HasOutCome := MasterData.HasField('Отпуск');
+  OutCome := False;
+  MasterData.Select();
+  while MasterData.SelectNext() do
+    begin
+      Tbl.Append();
+      if HasOutCome then
+        OutCome := VarAsBool(MasterData.Отпуск)
+      else
+        begin
+          MasterDoc := MasterData.GetDoc();
+          if MasterDoc.HasField('Отпуск') then
+            OutCome := VarAsBool(MasterDoc.Отпуск)
+        end;
+      if OutCome then
+        begin
+          s1 := s1 - MasterData.Сумма;
+          s2 := s2 - MasterData.СуммаБезНДС;
+
+          Tbl.Сумма := -MasterData.Сумма;
+          Tbl.СуммаБезНДС := -MasterData.СуммаБезНДС;
+          Tbl.СуммаНДС := -MasterData.СуммаНДС;
+        end
+      else
+        begin
+          s1 := s1 + MasterData.Сумма;
+          s2 := s2 + MasterData.СуммаБезНДС;
+
+          Tbl.Сумма := MasterData.Сумма;
+          Tbl.СуммаБезНДС := MasterData.СуммаБезНДС;
+          Tbl.СуммаНДС := MasterData.СуммаНДС;
+        end;
+      Tbl.ДатаДокумента := MasterData.ДатаДокумента;
+      Tbl.НомерДокумента := MasterData.НомерДокумента;
+      LinkToPart := MasterData.Партнер;
+      if VarAsBool(LinkToPart.IsFocused) then
+        begin
+          case LinkToPart.GetSign of
+            'Реализаторы', 'ПостНаРеализацию', 'КонтрактИмпорт', 'ДоговПоставки' : 
+              LinkToPart := LinkToPart.Партнер;
+          end;
+          if (LinkToPart.GetSign = 'ФизЛица') or (LinkToPart.GetSign = 'Служащие') then
+            Tbl.Название := LinkToPart.Фамилия + ' ' + LinkToPart.ИмяОтчество
+          else
+            Tbl.Название := LinkToPart.Название
+        end;
+      Tbl.Post();
+    end;
+end;
+
+end.

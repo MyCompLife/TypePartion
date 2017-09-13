@@ -1,0 +1,80 @@
+interface
+
+uses
+  System, DispIntf, –асчеты, –абота—ќбъектами, –абота—ѕеременными,
+  –абота—“аблицами«начений;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  PrmPrice1,PrmPrice2,PrmPrice3 : Boolean;
+begin
+  Constants := GetConstants;
+  cbParamPrice1.Checked := VarAsBool(StrCopy(VarAsStr(Constants.Ќастройка÷енƒл€ќтпуска“овараѕоќдному),1,1));
+  cbParamPrice2.Checked := VarAsBool(StrCopy(VarAsStr(Constants.Ќастройка÷енƒл€ќтпуска“овараѕоќдному),2,1));
+  cbParamPrice3.Checked := VarAsBool(StrCopy(VarAsStr(Constants.Ќастройка÷енƒл€ќтпуска“овараѕоќдному),3,1));
+  cbRest.Checked := VarAsBool(Constants.ѕоказыватьЌаличиеƒл€„еков);
+  cbServiceInChek.Checked :=  VarAsBool(Constants.¬ключать”слуги¬„ек);
+  eFilePath.Text := VarAsStr(Constants.ѕуть  аталогу‘ото);
+  cbAutoUseActionDiscount.Checked := VarAsBool(Constants.јвтоѕримен€ть—кидкујкции);
+
+end;
+
+procedure btOk_Click(Sender : TObject);
+var
+  index : Integer;
+begin
+  Constants.Ќастройка÷енƒл€ќтпуска“овараѕоќдному := VarAsStr(AbsD(VarAsInt(cbParamPrice1.Checked)))+
+                                                    VarAsStr(AbsD(VarAsInt(cbParamPrice2.Checked)))+
+                                                    VarAsStr(AbsD(VarAsInt(cbParamPrice3.Checked)));
+
+  Constants.¬ключать”слуги¬„ек := VarAsBool(cbServiceInChek.Checked);
+  Constants.ѕуть  аталогу‘ото := eFilePath.Text;  
+  Constants.јвтоѕримен€ть—кидкујкции := cbAutoUseActionDiscount.Checked;
+
+  ShowMessage('„тоб изменени€ вступили в силу необходимо переподключение!');
+end;
+
+procedure btnBrowse_Click(Sender : TObject);
+begin
+  with SAVEDIALOG do begin
+    Filter := '*.jpg|*.jpg';
+    FileName := '*.jpg';
+    Title := Trans('ќпределите путь к jpg-файлам');
+    if Execute then begin
+      eFilePath.Text := ExtractFilePath(FileName);
+    end;
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+Panel2:TO4Panel
+Panel3:TO4Panel
+cbRest:TO4CheckBox
+cbServiceInChek:TO4CheckBox
+GroupBox8:TO4GroupBox
+ePrice1:TO4Edit
+cbParamPrice1:TO4CheckBox
+ePrice2:TO4Edit
+cbParamPrice2:TO4CheckBox
+ePrice3:TO4Edit
+cbParamPrice3:TO4CheckBox
+GroupBox9:TO4GroupBox
+eFilePath:TO4Edit
+btnBrowse:TO4Button
+GroupBox3:TO4GroupBox
+edStore:TO4Edit
+GroupBox1:TO4GroupBox
+edPartner:TO4Edit
+Panel4:TO4Panel
+LinkImage1:TO4LinkImage
+SaveDialog:TO4SaveDialog
+cbAutoUseActionDiscount:TO4CheckBox

@@ -1,0 +1,315 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, Расчеты, РаботаСТаблицамиЗначенийCL, Пользователи, НумерацияДокументов,
+  РаботаСДокументамиCL, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  ChangeLock, ScrollLock, DropMode, LockCalc, CreateDoc, isSave : Boolean;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  SelectForm, LinkDoc : Variant;
+  MasterData, OrderOwner : ICDocuments;
+  cvtICalc, GoodTbl, tmpCtx : ICValueTable;
+  Stores : ICValueList;
+  Currency, Store, Units, LinkDict, ParamsSt, AnalitPartDic : ICDictionary;
+  CursorVis : TCursor;
+  DocOwner: ICDictionary;
+  AddDoc: Boolean;   
+
+procedure RefreshAnalitVCL;
+var AnalitVisible : Boolean;
+begin
+ AnalitVisible := false;
+ if VarAsBool(MasterData.@Партнер.IsFocused) then
+   begin
+     AnalitPartDic.UseMaster(MasterData.Партнер);
+     AnalitVisible :=  AnalitPartDic.Select;
+   end;
+ eAnalit.Visible := AnalitVisible;
+ lbAnalit.Visible := AnalitVisible;
+ if AnalitVisible then
+   ePartner.Width := 200
+ else
+   ePartner.Width := 453;
+end;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  Currency := CreateObject('Справочники.Валюты');
+  Units := CreateObject('Справочники.Упаковки');
+  Store := CreateObject('Справочники.Склады');
+  ParamsSt := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');
+  AnalitPartDic := CreateObject('Справочники.АналитикаВзаиморасчета');
+  GoodTbl := CreateObject('ТаблицаЗначений');
+  Stores := CreateObject('СписокЗначений');
+  cvtICalc := CreateObject('ТаблицаЗначений');
+end;
+
+procedure CalcLocalDocSumByTableChange;
+begin
+  try
+    DropMode := True;
+    ScrollLock := True;
+    CalcTransSumma(MasterData, Constants.ProcentPDV);
+  finally
+    DropMode := False;
+    ScrollLock := False;
+  end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  LockCalc := False;
+  CreateObjects;
+  SetColors(Constants);
+end;
+
+procedure CheckControls;
+begin
+  if MasterData.GetDocState > 0 then
+    exit;
+end;
+
+
+procedure Form_Open(Sender : TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    begin
+      CheckControls;
+      eData.Enabled := GetUDASet('changedate');
+      eRespons.Enabled := GetUDASet('changeresp');
+    end; 
+  RefreshAnalitVCL;
+end;
+
+procedure ePriceNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateLine(True);
+end;
+
+procedure TDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  GoodTDSFieldChange(MasterData, FieldName, Value, ChangeLock, DropMode);
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);    
+var Partner : ICDictionary;
+begin
+  isSave := true;
+  if ChangeLock then
+    exit;
+  try
+    ChangeLock := True;
+    SetSums(FieldName, Value, MasterData, MasterData.СтавкаНДС); //расчеты
+    case StrLowerCase(FieldName) of
+      'сумма', 'суммабезндс', 'суммандс', 'валюта' :
+        begin
+          SetCurSumma(MasterData);
+        end;
+      'курс' :
+        begin
+          SetCurSumma(MasterData);
+        end;
+      'суммаввалюте' :
+        begin
+          SetMainSumma(MasterData, MasterData.СтавкаНДС);
+        end;
+      'партнер' :
+        begin    
+          MasterData.АналитикаВзаиморасчета := Null;
+          if VarAsBool(MasterData.@Партнер.IsFocused) then
+            begin
+              Partner := MasterData.Партнер;
+              if Partner.HasField('Валюта') and VarAsBool(Partner.@Валюта.IsFocused) and
+              (not IsObjEQ(Partner.@Валюта, MasterData.@Валюта, false)) then
+                begin
+                  MasterData.Валюта := Partner.@Валюта;
+                  if VarAsBool(MasterData.@Валюта.IsFocused) then
+                    MasterData.Курс := MasterData.Валюта.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента)
+                  else
+                    MasterData.Курс := 1;
+                  SetCurSumma(MasterData);
+                end;
+            end; 
+          RefreshAnalitVCL;
+        end;
+
+    end;
+  finally
+    ChangeLock := False;
+  end;
+//  GoodMDSFieldChange(MasterData, FieldName, Value, ChangeLock);
+end;
+
+
+procedure MDS_Append(Sender : TObject);
+var
+  Number : string;
+  OldDoc : ICDocuments;
+  TmpLHead : ICValueTable;
+begin
+  AddDoc := true;
+  if MasterData.HasParam('OldDoc') then
+    begin
+      Number := MasterData.НомерДокумента;
+      OldDoc := MasterData.Params['OldDoc'];
+      TmpLHead := CreateObject('ValueTable');
+      OldDoc.SaveHead('', TmpLHead);
+      MasterData.LoadHead('', TmpLHead);
+      MasterData.ДатаДокумента := CurrentDateTime;
+      MasterData.НомерДокумента := Number;
+      MasterData.Отпуск := 1;
+      MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+      CreateDoc := true;
+      MasterData.Регион := null;
+      MasterData.NumID := 0;
+      MasterData.BaseID := 0;
+    end
+  else
+    begin
+      MasterData.TableAutoCalcFields := False;
+      LockCalc := True;
+      CreateDoc := true;
+      try
+        if not Currency.FindByField('Активность', VarAsInt(True), True) then
+          Currency := GetNatCurrency(Currency);
+        if Currency.IsFocused then
+          begin
+            MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+            MasterData.Валюта := Currency;
+          end;
+        ParamsSt.Select;
+        if VarAsBool(ParamsSt.АктНаОказУсл.IsFocused) then MasterData.Статья := ParamsSt.АктНаОказУсл;
+        MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+        MasterData.ДатаДоверенности := CurrentDate;
+        MasterData.Отпуск := 1;
+        MasterData.МетодРасчета := VarAsInt(Options.GetServerPrm(CalcSumRule));
+        //перенос данных из счета
+        OrderOwner := MasterData.Owner;
+        if not IsNil(OrderOwner) and OrderOwner.IsFocused then
+        begin
+          if OrderOwner.GetSign <> 'АвансовыеОтчеты' then
+            begin
+              MasterData.AssignFields('Партнер;Посредник;ПроцентОбщий;' +
+                'ИспПроцентТрансп;ПроцентТрансп;Валюта;Курс;МетодРасчета', OrderOwner);
+              if not VarAsBool(MasterData.ИспПроцентТрансп) then
+                MasterData.AssignFields('СуммаТрансп;СуммаБезНДСТрансп;СуммаНДСТрансп', OrderOwner);
+            end
+          else
+            MasterData.Посредник := OrderOwner.Служащий;
+        end;
+        SetDocDefRegonStore(MasterData);
+      finally
+        LockCalc := False;
+        CalcLocalDocSumByTableChange; //расчеты
+        MasterData.TableAutoCalcFields := True;
+      end;
+    end;
+  MasterData.BaseID := VarAsInt(Constants.КодИБ);
+  if MasterData.BaseID = 0 then
+    raise('Заполните код информационной базы в значениях важных констант');
+end;
+
+
+
+
+procedure tsAct_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  nbAct.PageIndex := NewTab;
+end;
+
+
+procedure eSumma_Change(Sender: TObject);
+begin
+  if not ChangeLock then
+    MasterData.UpdateRecord(True);
+end;
+
+procedure eCurrency_ActionExecute(Sender: TObject);
+begin
+  MasterData.Курс := MasterData.Валюта.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+end;
+
+procedure eCourse_Change(Sender: TObject);
+begin
+  if ChangeLock then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure eSumVal_Change(Sender: TObject);
+begin
+  if ChangeLock then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if MasterData.NumID = 0 then
+    MasterData.NumID := УстановитьНомерДокумента(MasterData, '');
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  if AddDoc then
+    ChangeDoc(clmtAppend,MasterData)
+  else
+    ChangeDoc(clmtEdit,MasterData);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+nbAct:TO4Notebook
+Label3:TO4Label
+Label26:TO4Label
+Label6:TO4Label
+Label1:TO4Label
+Label2:TO4Label
+Label9:TO4Label
+Label11:TO4Label
+Label10:TO4Label
+Label4:TO4Label
+Label5:TO4Label
+lbAnalit:TO4Label
+eSumma:TO4DBEdit
+eRespons:TO4DBEdit
+ePartner:TO4DBEdit
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eSumVal:TO4DBEdit
+eCourse:TO4DBEdit
+eCurrency:TO4DBEdit
+eCostItem:TO4DBEdit
+eRegion:TO4DBEdit
+eAnalit:TO4DBEdit
+Panel5:TO4Panel
+Label12:TO4Label
+DBMemo1:TO4DBMemo
+tsPay:TO4TabSet
+MDS:TO4DataSource

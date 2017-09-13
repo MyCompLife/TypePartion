@@ -1,0 +1,69 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСSMS;
+
+implementation
+var PartTbl : ICValueTable;
+    DateTo : DateTime;
+    PaySum : Decimal;
+    ErrorParam : boolean;
+    TLF : ICDictionary;  
+
+procedure Form_BeginPrint(PrintForm: TO4PrintForm);
+begin  
+ TLF := CreateObject('Справочники.Телефоны');
+ try
+   ErrorParam := false;
+   PartTbl := Form.GetParams[0];
+   DateTo :=  Form.GetParams[1];
+   PaySum :=  Form.GetParams[2];
+ except
+   ErrorParam := true;
+   ShowMessage('Параметры заданы неверно!');
+ end;
+ PartTbl.Select;
+end;
+
+procedure Structure1_Head_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+ if ErrorParam then
+   begin
+     Accept := false;
+     exit;
+   end;
+ with Table do
+   begin
+     Value['DateTo'] := DateTo;
+     Value['PaySum'] := PaySum;
+   end;
+end;
+
+procedure Structure1_Head_PartList_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+ Accept := PartTbl.SelectNext;
+ if not Accept then
+   exit;
+ with Table do
+   begin
+     Value['Partner'] := PartTbl.DefValue['Партнер'];
+     Value['PartPaySum'] := PartTbl.СумОбщ;
+     Value['Tel'] := SelectionTelByPartner(PartTbl.Партнер,TLF);
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+HeadBand:TRBBand
+Label5:TRBLabel
+Label6:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+DetailBand1:TRBDetailBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label4:TRBLabel
+Structure1:TRBStructure

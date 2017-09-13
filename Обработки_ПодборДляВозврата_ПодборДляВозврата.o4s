@@ -1,0 +1,83 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsPartGood, AccGood : ISAccs;
+  SLstOrder : ISValueList;
+  Partner : Variant;
+  SDateBeg, SDateEnd : DateTime;
+  JMD : ISJournal;
+  DMD : ISDocuments;
+
+procedure InitSData; server;
+begin
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  JMD := CreateObject('Журналы.ЖурналЧеков');
+end;
+
+procedure InitSrvData(PostReal : Variant; DateBeg, DateEnd : DateTime; TblGoods : ISValueTable; LstOrder : ISValueList); server;
+begin
+  SDateBeg := RoundDate(DateBeg, rdDay, False);
+  SDateEnd := RoundDate(DateEnd, rdDay, True);
+  Partner := PostReal;
+  LstOrder.Clear();
+  TblGoods.SortBy('Товар');
+  //  TblGoods.Clear();
+  JMD.SetDocMultiStateRange('1;2');
+  JMD.SetDateRange(SDateBeg, SDateEnd);
+  JMD.SetRangeByField('Партнер', Partner);
+  JMD.SetDocTypeRange('Документы.Чек');
+  JMD.Select();
+  while JMD.SelectNext() do
+    //    if (JMD.GetDocSign='НакладнаяОтпуска') or (JMD.GetDocSign='НакладнаяОтпускаПоСчету') then
+    if VarAsBool(JMD.IsFocused) then
+      begin
+        DMD := JMD.GetDoc();
+        if VarAsBool(DMD.IsFocused) then
+          begin                                
+            LstOrder.AddValue('Чек ' + JMD.НомерДокумента + trans(' от ') + DateToStr(JMD.ДатаДокумента), DMD);
+            AccGood.AppendDocMotionToValueTable(DMD, amtOutcome, 'Document;Товар;Партия;СумОтп;СумВалОтп;КолОбщ;Валюта=ВалютаОтп', TblGoods);
+          end;
+      end;
+  JMD.SetDocTypeRange('Документы.НакладнаяОтпускаПоСчету');
+  JMD.Select();
+  while JMD.SelectNext() do
+    if VarAsBool(JMD.IsFocused) then
+      begin
+        DMD := JMD.GetDoc();
+        if VarAsBool(DMD.IsFocused) then
+          begin
+            LstOrder.AddValue(JMD.Документ + ' ' + JMD.НомерДокумента + trans(' от ') + DateToStr(JMD.ДатаДокумента), DMD);
+            AccGood.AppendDocMotionToValueTable(DMD, amtOutcome, 'Document;Товар;Партия;СумОтп;СумВалОтп;КолОбщ;Валюта=ВалютаОтп', TblGoods);
+          end;
+      end;
+
+  TblGoods.DoCalculation('Цена', 'СумОтп/КолОбщ');
+  TblGoods.DoCalculation('ЦенаВВалюте', 'СумВалОтп/КолОбщ');
+  TblGoods.GroupBy('Document;Товар;Партия;Цена;ЦенаВВалюте', 'СумОтп;СумВалОтп;КолОбщ');
+  TblGoods.SortBy('Товар;Партия;Цена;ЦенаВВалюте');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', TblGoods);
+  //Валюта;
+  TblGoods.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  SLstOrder := LstOrder;
+end;
+
+procedure GetGoodWithPart(TblPartGood : ISValueTable; CurInd : Integer); server;
+begin
+  if SLstOrder.ValidIndex(CurInd) then
+    begin
+      DMD := SLstOrder.GetValue(CurInd);
+      AccGood.AppendDocMotionToValueTable(DMD, amtOutcome, 'Document;Товар;Партия;СумОтп;СумВалОтп;КолОбщ;Валюта=ВалютаОтп', TblPartGood);
+      TblPartGood.DoCalculation('Цена', 'СумОтп/КолОбщ');
+      TblPartGood.DoCalculation('ЦенаВВалюте', 'СумВалОтп/КолОбщ');
+      AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', TblPartGood);
+    end;
+  TblPartGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+end;
+
+end.

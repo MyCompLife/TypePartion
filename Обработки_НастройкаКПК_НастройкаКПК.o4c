@@ -1,0 +1,534 @@
+interface
+
+uses
+
+  System, DispIntf, ConstNames, –асчеты, ѕользователи, –абота—ѕеременными, –абота—ќбъектами,–абота—“аблицами«начений, –абота—о—правочниками,
+  XML»мпортЁкспорт, –абота—“аблицами«наченийCL, ѕодключениеƒоп»нтерфейса, Ќумераци€ƒокументов,   –абота—ƒокументамиCL ,
+    ѕ ;
+
+implementation
+
+const
+  msgClearAndFillCode = '¬нимание! ƒанную операцию можно производить только 1 раз в начале работы. ѕродолжить?' ;
+  msgSuccessFillCode = '«аполнение кодов успешно завершено';
+  odProgramFilter = '¬ыполн€емые файлы|*.exe';
+  odProgramName = '*.exe';
+  odProgramTitle = 'ќпределите путь к архиватору';
+  errImportExportPath = 'Ќеправильный путь к папке обмена данными';
+  errPocketBaseName = '»м€ базы на  ѕ  необходимо указывать без расширени€';
+  errEmptyPocketBaseName = 'Ќе заполнено им€ базы на  ѕ ';
+  errIncorrectSymbolPocketBaseName = '¬ имени базы нельз€ использовать символ "_"';
+
+var
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  OldImportExportPath : string;
+  StoresDic, RegionsDic : ICDictionary;
+  SLst, RLst : ICValueList;
+  StrStores, StrRegions : String;
+
+procedure AppendPriceType(PriceTypes : ICDictionary; Code : Integer; Name, FieldName : string;
+  Active : Boolean);
+begin
+  PriceTypes.Append;
+  PriceTypes. од := Code;
+  PriceTypes.Ќазвание := Name;
+  PriceTypes.Ќазваниеѕол€ := FieldName;
+  PriceTypes.јктивность := Active;
+  PriceTypes.Post;
+end;
+
+procedure FillCode(MeanName : string);
+var
+  Means, Docs : string;
+  IsCtg : Boolean;
+  P : ICProcessing;
+  PriceTypes : ICDictionary;
+  UnitedNumbering : Boolean;
+begin
+  Means := '';
+  Docs := '';
+  case VarAsStr(MeanName) of
+    'Items', 'ItemsCtg' :
+      Means := '—правочники.“овары';
+    'PriceTypes' :
+      begin
+        PriceTypes := CreateObject('—правочники.“ипы÷ен');
+        while PriceTypes.Select do
+          PriceTypes.Delete;
+        AppendPriceType(PriceTypes, 1, '–ознична€', '1', True);
+        AppendPriceType(PriceTypes, 2, 'ќптова€', '2', False);
+        AppendPriceType(PriceTypes, 3, ' рупный опт', '3', False);
+        AppendPriceType(PriceTypes, 4, 'ћагазин', '4', False);
+        PriceTypes.ApplyUpdates;
+      end;
+    'Customers' :
+      Means := '—правочники.ёрѕартнеры;—правочники.‘изЋица';
+    'CustomersCtg' :
+      Means := '—правочники.ёрѕартнеры;—правочники.‘изЋица';
+    'CommercialAgents' :
+      Means := '—правочники.“орговыејгенты';
+    'Route' :
+      Docs := 'ƒокументы.ћаршрут';
+    'VisitResultTypes' :
+      Means := '—правочники.–езультатыѕосещений';
+    'Shops' :
+      Means := '—правочники.ѕредставители';
+    'Packings' :
+      Means := '';
+    else
+      Means := '';
+  end;
+  case VarAsStr(MeanName) of
+    'ItemsCtg', 'CustomersCtg' :
+      IsCtg := True
+    else
+      IsCtg := False
+  end;
+  UnitedNumbering := False;
+  if StrPos('Customers', MeanName) > 0 then
+    UnitedNumbering := (rgPartners.ItemIndex = 2);
+  if Means <> '' then
+    FillCodeForMean(Means, IsCtg, UnitedNumbering);
+  if Docs <> '' then
+    begin
+      //      P := CreateObject('ќбработки.ќ');
+      //      P.RunThreadProcess(server.FillDocCode(Docs),
+      //           DateTimeToStr(CurrentDateTime)+Trans(' - «аполнение  ода'));
+    end;
+end;
+
+procedure btAllCode_Click(Sender : TObject);
+const
+  Means = 'Items;ItemsCtg;Prices;PriceTypes;Customers;CustomersCtg;Packings;Shops;' +
+    'Route;VisitResultTypes';
+var
+  i, Total : Integer; 
+  AndroidSettingsDict : ICDictionary;
+begin
+  if MessageDlg(Trans(msgClearAndFillCode),
+    mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes then
+    begin
+      Total := WordCount(Means, ';');
+      try
+        for i := 1 to Total do
+          begin
+            FillCode(ExtractWord(i, Means, ';'));
+            StatusText(Trans('ќбработано ') + IntToStr(i) + Trans(' из ') + IntToStr(Total))
+          end;
+        ShowMessage(Trans(msgSuccessFillCode))
+      finally
+        StatusText('')
+      end;  
+      GetAndroidSettingsDict(AndroidSettingsDict);
+    end;
+end;
+
+procedure CheckComponents;
+begin
+  if rgZipType.ItemIndex > 0 then
+    begin
+      edZipExePath.Enabled := True;
+      btBrowse.Enabled := True;
+    end
+  else
+    begin
+      edZipExePath.Enabled := False;
+      btBrowse.Enabled := False;
+    end
+end;
+
+procedure Form_Open(Sender : TObject);
+Var
+  i : Integer;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  cbUnitedPocketGoodDict.Checked := VarAsBool(Constants.“оварыƒл€ ѕ );
+  cbUnitedPocketPartnerDict.Checked := VarAsBool(Constants.ѕартнерыƒл€ ѕ );
+
+  pStores.Enabled := cbUnitedPocketGoodDict.Checked;
+  pRegions.Enabled := cbUnitedPocketPartnerDict.Checked;
+
+
+  edImportExportPath.Text := VarAsStr(Constants.ѕуть ѕапкеќбменаƒл€ ѕ );
+  edPocketBaseName.Text := VarAsStr(Constants.»м€ЅазыЌа ѕ );
+  rgPartners.ItemIndex := VarAsInt(Constants. лиентыƒл€ ѕ );
+  //rgDocType.ItemIndex := VarAsInt(Constants.“ипƒокумента ѕ );
+  cbStoreCount.Checked := VarAsBool(Constants. оличествоЅольшеЌул€ ѕ );
+  cbDeleteZeroPosition.Checked := VarAsBool(Constants.ќтпускЌа€вного“овара ѕ );
+  cbFixDoc.Checked := VarAsBool(Constants.‘иксироватьƒокументы ѕ );
+
+  edFtpExePath.Text := Options.GetServerPrm('FtpPATH');
+  cbUseCLManager.Checked := VarAsStr(Options.GetServerPrm('FtpType')) = 'CLManager';
+  if cbUseCLManager.Checked then
+    begin
+      Label4.Visible := true;
+      edFtpExePath.Visible := true;
+      btFtpBrowse.Visible := true;
+    end
+  else
+    begin
+      Label4.Visible := false;
+      edFtpExePath.Visible := false;
+      btFtpBrowse.Visible := false;
+    end;
+
+  StrStores := Constants.—кладƒл€ ѕ ;
+  SLst := CreateObject('—писок«начений');
+  StoresDic := CreateObject('—правочники.—клады');
+  StoresDic.Select;
+  while StoresDic.SelectNext do
+    begin
+      SLst.AddValue(StoresDic.NameField, StoresDic);
+      i := cbStores.Items.Add(StoresDic.CodeField + ' ' + StoresDic.NameField);
+      if StrPos(StoresDic.CodeField + ' ' + StoresDic.NameField, StrStores) > 0 then
+        cbStores.Checked[i] := true;
+    end;
+
+  StrRegions := Constants.–егионƒл€ ѕ ;
+  RLst := CreateObject('—писок«начений');
+  RegionsDic := CreateObject('—правочники.–егионы');
+  RegionsDic.Select;
+  while RegionsDic.SelectNext do
+    begin
+      RLst.AddValue(RegionsDic.NameField, RegionsDic);
+      i := cbRegions.Items.Add(RegionsDic.CodeField + ' ' + RegionsDic.NameField);
+      if StrPos(RegionsDic.CodeField + ' ' + RegionsDic.NameField, StrRegions) > 0 then
+        cbRegions.Checked[i] := true;
+    end;
+
+
+  rgZipType.ItemIndex := VarAsInt(Options.GetServerPrm(PocketArchiveType));
+  edZipExePath.Text := VarAsStr(Options.GetServerPrm(PocketArchiveExePath));
+  rgMailClient.ItemIndex := VarAsInt(Constants.“ипѕочтового лиента ѕ );
+  edIncomeMailFolder.Text := VarAsStr(Constants.ѕапка¬ход€щейѕочты ѕ );
+  edReadMailFolder.Text := VarAsStr(Constants.ѕапкаѕрочитаннойѕочты ѕ );
+  CheckComponents;
+  OldImportExportPath := Constants.ѕуть ѕапкеќбменаƒл€ ѕ ;
+  cbDeleteLog.Checked := VarAsBool(Constants.”дал€тьѕротоколыќбмена ѕ );
+  edLogDays.Text := VarAsStr(Constants.ƒни—охранени€ѕротокола ѕ );
+end;
+
+procedure ChangeImportExportPath(CommercialAgents : ICDictionary);
+var
+  CommercialAgentsGroups : ICDictionary;
+  SubDirectoryName, GroupPath : string;
+begin
+  MakeDir(Constants.ѕуть ѕапкеќбменаƒл€ ѕ );
+  SubDirectoryName := 'Agents\';
+  MakeDir(Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName);
+  SubDirectoryName := 'Groups\';
+  MakeDir(Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName);
+  SubDirectoryName := 'Groups\System\';
+  MakeDir(Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName);
+  SubDirectoryName := 'Groups\Partners\';
+  MakeDir(Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName);
+  SubDirectoryName := 'Groups\Goods\';
+  MakeDir(Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName);
+  while CommercialAgents.SelectNext do
+    begin
+      case VarAsInt(CommercialAgents.ќперационна€—истема) of
+        osWindowsMobile :
+          SubDirectoryName := 'Agents\' + CommercialAgents.Ћогин + '\';
+        osAndroid :
+          SubDirectoryName := CommercialAgents.Ћогин + '\';
+      end;
+      MakeDir(Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName);
+      CommercialAgents.Edit;
+      CommercialAgents.ѕуть»мпортаѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName;
+      CommercialAgents.Post;
+    end;
+  CommercialAgents.ApplyUpdates;
+  CommercialAgentsGroups := CreateObject('—правочники.√руппы“ј');
+  CommercialAgentsGroups.Select;
+  while CommercialAgentsGroups.SelectNext do
+    begin
+      case VarAsInt(CommercialAgentsGroups.“ип) of
+        0 :
+          GroupPath := 'System\';
+        1 :
+          GroupPath := 'Goods\';
+        2 :
+          GroupPath := 'Partners\';
+      end;
+      SubDirectoryName := 'Groups\' + GroupPath + CommercialAgentsGroups.Ќазвание + '\';
+      MakeDir(Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName);
+      CommercialAgentsGroups.Edit;
+      CommercialAgentsGroups.ѕутьЁкспортаѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + SubDirectoryName;
+      CommercialAgentsGroups.Post;
+    end;
+  CommercialAgentsGroups.ApplyUpdates;
+end;
+
+procedure SaveAdditParams;
+var
+  SubDirectoryName : string;
+  CommercialAgents, CommercialAgentsGroup : ICDictionary;
+  UseWindowsMobile : boolean;
+  i : Integer;
+begin
+  UseWindowsMobile := False;
+  Constants.“оварыƒл€ ѕ  := cbUnitedPocketGoodDict.Checked;
+  Constants.ѕартнерыƒл€ ѕ  := cbUnitedPocketPartnerDict.Checked;
+//  Constants. лиентыƒл€ ѕ  := rgPartners.ItemIndex;
+  Constants. лиентыƒл€ ѕ  := 0;
+  CommercialAgents := CreateObject('—правочники.“орговыејгенты');
+  CommercialAgents.SetRangeByField('ќперационна€—истема', osWindowsMobile, osWindowsMobile);
+  Constants.ѕуть ѕапкеќбменаƒл€ ѕ  := edImportExportPath.Text;
+  if CommercialAgents.Select then
+    UseWindowsMobile := True;
+  if UseWindowsMobile then
+    if (StrPos(':', edImportExportPath.Text) > 0) or (StrPos('\\', edImportExportPath.Text) > 0) then
+      begin
+        if (OldImportExportPath <> edImportExportPath.Text) or (not DirectoryExists(edImportExportPath.Text)) then
+          ChangeImportExportPath(CommercialAgents);
+      end
+    else
+      raise(Trans(errImportExportPath));
+  CommercialAgents.SetRangeByField('ќперационна€—истема', osAndroid, osAndroid);
+  if CommercialAgents.Select then
+    CreateAndroidXMLExchangeFile(CommercialAgents);
+  if StrLength(edPocketBaseName.Text) = 0 then
+    raise(Trans(errEmptyPocketBaseName));
+  if StrPos('_', edPocketBaseName.Text) > 0 then
+    raise(Trans(errIncorrectSymbolPocketBaseName));
+  if StrPos('.', edImportExportPath.Text) > 0 then
+    raise(Trans(errPocketBaseName));
+  Constants.»м€ЅазыЌа ѕ  := edPocketBaseName.Text;
+  Constants.“ипƒокумента ѕ  := 2;// rgDocType.ItemIndex;
+  Constants. оличествоЅольшеЌул€ ѕ  := cbStoreCount.Checked;
+  Constants.ќтпускЌа€вного“овара ѕ  := cbDeleteZeroPosition.Checked;
+  Constants.‘иксироватьƒокументы ѕ  := cbFixDoc.Checked;
+
+  StrStores :='';
+  For i:= 0 to cbStores.Items.Count-1 do
+    if cbStores.Checked[i] then
+      StrStores := StrStores + cbStores.Items.Strings[i] + ';';
+  Constants.—кладƒл€ ѕ  := StrStores;
+
+  StrRegions :='';
+  For i:= 0 to cbRegions.Items.Count-1 do
+    if cbRegions.Checked[i] then
+      StrRegions := StrRegions + cbRegions.Items.Strings[i] + ';';
+  Constants.–егионƒл€ ѕ  := StrRegions;
+   
+  Options.SetServerPrm('FtpPATH',edFtpExePath.Text);
+  if cbUseCLManager.Checked then
+    Options.SetServerPrm('FtpType','CLManager')
+  else
+    Options.SetServerPrm('FtpType','WinFtp');
+
+  Options.SetServerPrm(PocketArchiveType, rgZipType.ItemIndex);
+  Options.SetServerPrm(PocketArchiveExePath, edZipExePath.Text);
+  Constants.“ипѕочтового лиента ѕ  := rgMailClient.ItemIndex;
+  Constants.ѕапка¬ход€щейѕочты ѕ  := edIncomeMailFolder.Text;
+  Constants.ѕапкаѕрочитаннойѕочты ѕ  := edReadMailFolder.Text;
+  Constants.”дал€тьѕротоколыќбмена ѕ  := cbDeleteLog.Checked;
+  Constants.ƒни—охранени€ѕротокола ѕ  := VarAsInt(edLogDays.Text);
+
+  if UseWindowsMobile then
+    begin
+      CommercialAgentsGroup := CreateObject('—правочники.√руппы“ј');
+      CommercialAgentsGroup.Select;
+      if not CommercialAgentsGroup.FindByField('“ип', 0, false) then
+        begin
+          CommercialAgentsGroup.Append;
+          CommercialAgentsGroup.“ип := 0;
+          CommercialAgentsGroup. од := GetNextNumberForField('—правочники.√руппы“ј', ' од');
+          CommercialAgentsGroup.Ќазвание := 'system';
+          CommercialAgentsGroup.ѕутьЁкспортаѕ  := Constants.ѕуть ѕапкеќбменаƒл€ ѕ  + 'Groups\System\' + CommercialAgentsGroup.Ќазвание + '\';
+          MakeDir(CommercialAgentsGroup.ѕутьЁкспортаѕ );
+          CommercialAgentsGroup.Post;
+          CommercialAgentsGroup.ApplyUpdates;
+        end;
+    end;
+  Form.ModalResult := mrOK;
+end;
+
+procedure btnOK_Click(Sender : TObject);
+begin
+  SaveAdditParams;
+  ShowMessage(AboutConst);
+end;
+
+procedure btBrowse_Click(Sender : TObject);
+begin
+  with OpenDialog do
+    begin
+      Filter := odProgramFilter;
+      FileName := odProgramName;
+      Title := odProgramTitle;
+      if Execute then
+        edZipExePath.Text := ExtractFilePath(FileName);
+    end;
+end;
+
+procedure rgZipType_Click(Sender : TObject);
+begin
+  CheckComponents;
+end;
+
+procedure edZipExePath_Exit(Sender : TObject);
+begin
+  if (edZipExePath.Text <> '') and (edZipExePath.Text[StrLength(edZipExePath.Text)] <> '\') then
+    edZipExePath.Text := edZipExePath.Text + '\';
+end;
+
+procedure edImportExportPath_Exit(Sender : TObject);
+begin
+  if (edImportExportPath.Text <> '') and (edImportExportPath.Text[StrLength(edImportExportPath.Text)] <> '\') then
+    edImportExportPath.Text := edImportExportPath.Text + '\';
+end;
+
+procedure tsMain_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbMain.PageIndex := NewTab;
+end;
+
+Function ActionExecute(edMean : TO4Edit; MeanName, FormName, FilterName : string; Filter: Variant; var Mean : ICDictionary): Boolean;
+var
+  s : string;
+begin
+  if IsNil(Mean) or not IsObjFocused(Mean) then
+    Mean := CreateObject(MeanName);
+  if (FilterName<>'') and IsObjFocused(Filter) then
+    Mean.SetFieldFilter(FilterName,'=',Filter,'','',Null);
+  if Mean.SelectInForm(FormName, s, Null) then
+    begin
+      edMean.Text := s;
+      Result :=True;
+    end
+  else
+    Result:=False;
+end;
+
+procedure rgDocType_Click(Sender : TObject);
+begin
+  cbDeleteZeroPosition.Enabled := (rgDocType.ItemIndex = 1) or (rgDocType.ItemIndex = 2)
+end;
+
+procedure cbUnitedPocketGoodDict_Click(Sender : TObject);
+var
+  IsEnabled : Boolean;
+begin
+  IsEnabled := cbUnitedPocketGoodDict.Checked;
+  pStores.Enabled := IsEnabled;
+  cbStoreCount.Enabled := IsEnabled;
+
+end;
+
+procedure cbUnitedPocketPartnerDict_Click(Sender: TObject);
+var
+  IsEnabled : Boolean;
+begin
+  IsEnabled := cbUnitedPocketPartnerDict.Checked;
+  pRegions.Enabled := IsEnabled;
+
+end;
+
+procedure rgMailClient_Click(Sender : TObject);
+begin
+  gbMSOutlook.Visible := (rgMailClient.ItemIndex = 0);
+  //Outlook Express
+  //The Bat (3.0-3.6)
+end;
+
+procedure cbDeleteLog_Click(Sender : TObject);
+begin
+  if cbDeleteLog.Checked then
+    begin
+      lbLogDays1.Enabled := True;
+      lbLogDays2.Enabled := True;
+      edLogDays.Enabled := True;
+    end
+  else
+    begin
+      lbLogDays1.Enabled := False;
+      lbLogDays2.Enabled := False;
+      edLogDays.Enabled := False;
+    end;
+end;
+
+procedure cbDeleteZeroPosition_Click(Sender: TObject);
+begin
+  cbFixDoc.Checked := cbDeleteZeroPosition.Checked;
+end;
+
+procedure cbUseCLManager_Click(Sender: TObject);
+begin
+  Label4.Visible := cbUseCLManager.Checked;
+  edFtpExePath.Visible := cbUseCLManager.Checked;
+  btFtpBrowse.Visible := cbUseCLManager.Checked;
+end;
+
+procedure btFtpBrowse_Click(Sender: TObject);
+begin
+    with OpenDialog do
+    begin
+      Filter := odProgramFilter;
+      FileName := odProgramName;
+      Title := odProgramTitle;
+      if Execute then
+        edFtpExePath.Text := ExtractFilePath(FileName);
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+Panel2:TO4Panel
+tsMain:TO4TabSet
+nbMain:TO4Notebook
+GroupBox2:TO4GroupBox
+btAllCode:TO4Button
+GroupBox1:TO4GroupBox
+cbUnitedPocketPartnerDict:TO4CheckBox
+cbUnitedPocketGoodDict:TO4CheckBox
+rgPartners:TO4RadioGroup
+Panel4:TO4Panel
+pRegions:TO4Panel
+Label7:TO4Label
+cbRegions:TO4CheckListBox
+pStores:TO4Panel
+Label6:TO4Label
+cbStores:TO4CheckListBox
+Panel7:TO4Panel
+Panel5:TO4Panel
+cbStoreCount:TO4CheckBox
+Panel3:TO4Panel
+cbFixDoc:TO4CheckBox
+cbDeleteZeroPosition:TO4CheckBox
+cbUseDictPrice:TO4CheckBox
+rgDocType:TO4RadioGroup
+GroupBox3:TO4GroupBox
+Label11:TO4Label
+edImportExportPath:TO4Edit
+GroupBox4:TO4GroupBox
+edPocketBaseName:TO4Edit
+GroupBox5:TO4GroupBox
+Label4:TO4Label
+edFtpExePath:TO4Edit
+cbUseCLManager:TO4CheckBox
+btFtpBrowse:TO4Button
+Label1:TO4Label
+rgZipType:TO4RadioGroup
+edZipExePath:TO4Edit
+btBrowse:TO4Button
+lbLogDays1:TO4Label
+lbLogDays2:TO4Label
+cbDeleteLog:TO4CheckBox
+edLogDays:TO4Edit
+rgMailClient:TO4RadioGroup
+gbMSOutlook:TO4GroupBox
+Label2:TO4Label
+Label3:TO4Label
+edIncomeMailFolder:TO4Edit
+edReadMailFolder:TO4Edit
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+OpenDialog:TO4OpenDialog

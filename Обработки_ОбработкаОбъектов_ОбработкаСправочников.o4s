@@ -1,0 +1,18 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+procedure DicTbl_Fill(DicName : String; DicTbl : ISValueTable); server;
+var
+  Dic : ISDictionary;
+  i, j :Integer;
+begin
+  Dic := CreateObject('Справочники.'+ DicName);
+  Dic.Select;
+  Dic.SaveToValueTable('',DicTbl,1,Dic.RecordCount);
+end;
+
+end.

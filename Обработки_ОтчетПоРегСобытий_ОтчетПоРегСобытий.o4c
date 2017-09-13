@@ -1,0 +1,454 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, РаботаСТаблицамиЗначений;
+
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  V : ICProcessing;
+  DateFrom, DateTo : DateTime;
+  AccsName : String;
+  AccsTbl : ICValueTable;
+  SrtName, SrtAllName, NameField, NameFieldFilter : string;
+  ColCount, TypeLine : integer;
+  TblFilter, TblFParams : ICValueTable;
+  FilterField, FilterValue : ICValueList;
+  P : ICProcessing;
+  ArrRange : Variant;
+
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  XGrid.Print(V.GetPrintForms, True);
+end;
+
+procedure CreateObjects;
+begin
+  Options := CreateObject('ОпцииКлиента');
+  AccsTbl := CreateObject('ValueTable');
+  AccsTbl.Open;
+  TblFilter := CreateObject('ValueTable');
+  TblFilter.Open;
+  TblFParams := CreateObject('ValueTable');
+  TblFParams.AddColumn('НазвПоля', lftString, 100);
+  TblFParams.AddColumn('ЗначПоля', lftString, 250);
+  TblFParams.AddColumn('НомСтроки', lftInteger, 0);
+  TblFParams.Open;
+  FilterField := CreateObject('СписокЗначений');
+  FilterValue := CreateObject('СписокЗначений');
+
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  CreateObjects;
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+end;
+
+procedure SaveTblToXGrid;
+var i : integer;
+
+begin
+  XGrid.ClearAll;
+  XGrid.AddSection('Hed');
+  {
+  for i:=1 to AccsTbl.GetColumnCount do
+   XGrid.Cell(1,i).Value := AccsTbl.GetColumnName(i-1);
+  }
+  AccsTbl.AddToXGrid(CtrlToVar(XGrid),'Det','Date;Докум;Склад;Ответственный;Комментарий;НазваниеОбъекта',0,AccsTbl.LineCount);
+  XGrid.ColCount:=6;
+
+ if (AccsTbl.LineCount>0) and (AccsTbl.GetColumnCount>0) then
+  for i:=1 to AccsTbl.GetColumnCount do
+   begin
+     if StrPos(AccsTbl.GetColumnName(i-1),'Date;Докум;Склад;Ответственный;Комментарий;НазваниеОбъекта') = 0 then
+       continue;
+     case AccsTbl.GetColumnDataType(i-1) of
+       vtcInteger :
+        begin
+         XGrid.Cells(2,i,XGrid.RowCount,i).Alignment:=taRightJustify;
+        end;
+       vtcFFT :
+        begin
+         XGrid.Cells(2,i,XGrid.RowCount,i).Alignment:=taRightJustify;
+         XGrid.Cells(2,i,XGrid.RowCount,i).DisplayFormat:='### ### ##0.00';
+        end;
+     end;
+   end;
+
+  XGrid.Cells(1,1,AccsTbl.LineCount,AccsTbl.GetColumnCount).AdjustColWidths;
+end;
+
+procedure InitFilter;
+var
+    i : integer;
+begin
+ TblFParams.UseDataSource(0);
+ TblFParams.Clear;
+ ArrayCreate(ArrRange,[1,1], Variant);
+ TblFParams.UseDataSource(CtrlToVar(TVSFilter));
+ TblFilter.Close;
+ AccsTbl.CopyColumnsTo(TblFilter);
+ TblFilter.Open;
+ FilterField.Clear;
+ FilterValue.Clear;
+ FilterValue.AddValue(Trans('-'),Null);
+ FilterField.AddValue(Trans('-'),Null);
+
+ if (AccsTbl.LineCount>0) and (AccsTbl.GetColumnCount>0) then
+  begin
+    tbFieldFilter.Enabled:=true;
+    tbFilter.Enabled:=true;
+    eFilter.Enabled:=true;
+    eValue.Enabled:=true;
+  end
+ else
+  begin
+    tbFieldFilter.Enabled:=false;
+    tbFilter.Enabled:=false;
+    eFilter.Enabled:=false;
+    eValue.Enabled:=false;
+    exit;
+  end;
+
+
+ for i:=0 to AccsTbl.GetColumnCount-1 do       
+   if StrPos(AccsTbl.GetColumnName(i),'Date;Докум;Склад;Ответственный;Комментарий;НазваниеОбъекта') > 0 then
+     FilterField.AddValue(AccsTbl.GetColumnName(i),AccsTbl.GetColumnName(i));
+ FilterField.UseControl(CtrlToVar(eFilter));
+ FilterValue.UseControl(CtrlToVar(eValue));
+ FilterField.CurIndex := 0;
+ FilterValue.CurIndex := 0;
+
+
+end;
+
+procedure tbRun_Click(Sender: TObject);
+begin
+   CursorVis := WaitCursorStart;
+   AccsTbl.Close;
+   AccsTbl.Open;
+   AccsTbl.CopyDataToServer();
+   V.RunThreadProcess(server.GetRunAccsEP(AccsTbl.SrvMean, 'РегистрацияCобытий', DateFrom, DateTo),ReportRunning);
+   if AccsTbl.SrvMean.HasParam('Result') then
+    if VarAsStr(AccsTbl.SrvMean.Params['Result'],'')='' then
+     AccsTbl.CopyDataFromServer2()
+    else
+     showmessage(VarAsStr(AccsTbl.SrvMean.Params['Result'],'Ошибка'));
+
+   AccsTbl.SrvMean.Close;
+   SaveTblToXGrid;
+   InitFilter;
+   WaitCursorFinish(CursorVis);
+end;
+
+
+
+procedure eFilter_Change(Sender: TObject);
+var
+  NameFieldFilter : string;
+begin
+  FilterValue.Clear;
+  FilterValue.AddValue(Trans('-'),Null);
+
+  if (AccsTbl.LineCount <> 0) then
+    if FilterField.ValidIndex(FilterField.CurIndex) then
+      if FilterField.CurIndex <> 0 then
+    begin
+
+      NameFieldFilter := FilterField.GetValue(FilterField.CurIndex);
+      TblFilter.Clear;
+      AccsTbl.AppendTo('',TblFilter);
+
+      TblFilter.GroupBy(FilterField.GetValue(FilterField.CurIndex),'');
+      TblFilter.SelectFirst;
+      TblFilter.Select;
+      while TblFilter.SelectNext do
+        begin
+          if AccsTbl.GetColumnDataType(AccsTbl.GetColumnIndex(NameFieldFilter)) = 8 then   //  vtcLink
+            begin
+              if VarAsBool(TblFilter._Default[NameFieldFilter].IsFocused) then
+                FilterValue.AddValue(TblFilter.DefValue[NameFieldFilter],TblFilter._Default[NameFieldFilter]);
+            end
+          else
+            FilterValue.AddValue(TblFilter._Default[NameFieldFilter],TblFilter._Default[NameFieldFilter]);
+        end;
+    end;
+  FilterValue.UseControl(CtrlToVar(eValue));
+  FilterValue.CurIndex := 0;
+ end;
+
+procedure AddNewFilter(NameField, FieldStr : string; FieldValue : Variant; NumLine : integer);
+var
+  TempArrRange : Variant;
+  i, j, k : integer;
+begin
+  if NumLine = 0 then
+    k := TblFParams.LineCount+1
+  else
+    k := NumLine;
+
+  TblFParams.Append;
+  TblFParams.НомСтроки := k;
+  TblFParams.НазвПоля := NameField;
+  TblFParams.ЗначПоля := FieldStr;
+  TblFParams.Post;
+  k := TblFParams.LineCount-1;
+
+  i := 1;
+  if TblFParams.LineCount > i then
+    i := TblFParams.LineCount;
+
+  TempArrRange := ArrRange;
+
+  //TblFParams.SortBy('НомСтроки');
+
+  if TblFParams.LineCount > 1 then
+    ArrayCreate(ArrRange,[1,TblFParams.LineCount], Variant)
+  else
+    ArrayCreate(ArrRange,[1,1], Variant);
+
+  ArrRange[TblFParams.LineCount] := FieldValue;
+  if k >= 1 then
+    for j:=1 to k do
+      ArrRange[j] := TempArrRange[j];
+end;
+
+
+procedure tbAdd_Click(Sender: TObject);
+var
+ NameField, FieldStr : string;
+ FieldValue : Variant;
+ TblLink : ICValueTable;
+ i : integer;
+begin
+ if (FilterField.CurIndex>0) and (FilterValue.CurIndex>0) then
+   begin
+     NameField := eFilter.Text;
+     FieldStr := eValue.Text;
+     FieldValue := FilterValue.GetValue(FilterValue.CurIndex);
+     TblLink := CreateObject('ValueTable');
+     TblLink.AddColumn('Поле', lftLink, 0);
+     TblLink.Open;
+     i := 1;
+     TblFParams.SortBy('НазвПоля');
+     if not TblFParams.Find(NameField) then
+       begin
+         inc(i);
+         TblFParams.SortBy('НомСтроки');
+         AddNewFilter(NameField,FieldStr,FieldValue,0);
+       end;
+     TblFParams.UseDataSource(CtrlToVar(TVSFilter));
+   end;
+end;
+
+procedure tbDel_Click(Sender: TObject);
+var
+  TempArrRange : Variant;
+  i, j, k, OldCount : integer;
+begin
+  if TblFParams.LineCount<=0 then exit;
+  TblFParams.UseDataSource(0);
+
+  OldCount := TblFParams.НомСтроки;
+  k := TblFParams.linecount;
+  TblFParams.Delete;
+  TempArrRange := ArrRange;
+  ArrayCreate(ArrRange,[1,TblFParams.LineCount], Variant);
+  i := 1;
+  TblFParams.Select;
+  while TblFParams.SelectNext do
+    begin
+      TblFParams.Edit;
+      TblFParams.НомСтроки := i;
+      TblFParams.Post;
+      inc(i);
+    end;
+  i := 1;
+  for j:=1 to k do
+    if j <> OldCount then
+      begin
+        ArrRange[i] := TempArrRange[j];
+        inc(i);
+      end;
+
+  TblFParams.SortBy('НомСтроки');
+  TblFParams.Select;
+  while TblFParams.SelectNext do
+    begin
+      if NameFieldFilter = '' then
+        NameFieldFilter := TblFParams.НазвПоля
+      else
+        NameFieldFilter := NameFieldFilter + ';' + TblFParams.НазвПоля;
+    end;
+  TblFParams.SortBy('НомСтроки');
+  TblFParams.UseDataSource(CtrlToVar(TVSFilter));
+
+  if TblFParams.LineCount = 0 then
+    begin
+      AccsTbl.CancelRange;
+      AccsTbl.Select;
+      SaveTblToXGrid; 
+      eFilter_Change(Form);
+    end;
+end;
+
+
+procedure tbDelAll_Click(Sender: TObject);
+begin
+  if TblFParams.LineCount<=0 then exit;
+  TblFParams.UseDataSource(0);
+  TblFParams.Clear;
+  ArrayCreate(ArrRange,[1,1], Variant);
+  TblFParams.UseDataSource(CtrlToVar(TVSFilter));
+
+  AccsTbl.CancelRange;
+  AccsTbl.Select;
+  SaveTblToXGrid; 
+  eFilter_Change(Form);
+end; 
+
+
+procedure tbApplyFilter_Click(Sender: TObject);
+begin
+  if TblFParams.LineCount <> 0 then
+    begin
+      NameFieldFilter := '';
+      TblFParams.UseDataSource(0);
+      TblFParams.SortBy('НомСтроки');
+      TblFParams.Select;
+      while TblFParams.SelectNext do
+        begin
+          if NameFieldFilter = '' then
+            NameFieldFilter := TblFParams.НазвПоля
+          else
+            NameFieldFilter := NameFieldFilter + ';' + TblFParams.НазвПоля;
+        end;
+
+      AccsTbl.SortBy(NameFieldFilter);
+      AccsTbl.SetRange(ArrRange,ArrRange);
+      AccsTbl.Select;
+      SaveTblToXGrid;
+      TblFParams.UseDataSource(CtrlToVar(TVSFilter));
+      eFilter_Change(Form);
+    end;
+end;
+
+
+
+procedure tbCancelFilter(Sender: TObject);
+begin
+  AccsTbl.CancelRange;
+  AccsTbl.Select;
+  SaveTblToXGrid;
+  eFilter_Change(Form);
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+//Options.SetLocalPrm('AccsList',eAccs.Items.Text);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+PanelLeft:TO4Panel
+Label6:TO4Label
+Panel1:TO4Panel
+Label2:TO4Label
+Label3:TO4Label
+eFilter:TO4Edit
+eValue:TO4Edit
+tbFieldFilter:TO4ToolBar
+tbAdd:TO4ToolButton
+tbDel:TO4ToolButton
+tbDelAll:TO4ToolButton
+DBGrid:TO4DBGrid
+tbFilter:TO4ToolBar
+tbApplyFilter:TO4ToolButton
+tbCancelFilter:TO4ToolButton
+PanelXGrid:TO4Panel
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+tbMain:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+Label4:TO4Label
+eDateFrom:TO4Edit
+Label5:TO4Label
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+TVSFilter:TO4TableValueSource

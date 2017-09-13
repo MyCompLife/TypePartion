@@ -1,0 +1,71 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  AccGood : ISAccs;
+  SLstOrder : ISValueList;
+  Partner : Variant;
+  SDateBeg, SDateEnd : DateTime;
+  JMD : ISJournal;
+  DMD : ISDocuments;
+  tmpTbl, DocListTbl, tmpDocListTbl : ISValueTable;
+
+procedure InitSData; server;
+begin
+  AccGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  JMD := CreateObject('Журналы.ЖурналЧеков');
+  tmpTbl := CreateObject('ТаблицаЗначений');
+  tmpTbl.Open;
+  DocListTbl := CreateObject('ТаблицаЗначений');
+  DocListTbl.Open;
+end;
+
+procedure InitSrvData(PostReal : Variant; DateBeg, DateEnd : DateTime; LstOrder : ISValueList; OneDocByReturn:Variant); server;
+begin            
+  SDateBeg := RoundDate(DateBeg, rdDay, False);
+  SDateEnd := RoundDate(DateEnd, rdDay, True);
+  Partner := PostReal;
+  LstOrder.Clear();
+  JMD.SetDocMultiStateRange('1;2');
+  JMD.SetRangeByField('Партнер', Partner);
+  JMD.SetDocTypeRange('Документы.Чек');
+  if IsObjFocused(OneDocByReturn)  then
+    begin      
+      JMD.CancelDateRange;
+      if JMD.FindDoc(OneDocByReturn) then
+        begin
+          DMD := JMD.GetDoc;
+          if VarAsBool(DMD.IsFocused) then
+            LstOrder.AddValue('Чек №' + JMD.НомерДокумента + ' от ' + DateToStr(JMD.ДатаДокумента), DMD);
+        end;
+    end
+  else
+    begin
+      JMD.SetDateRange(SDateBeg, SDateEnd); 
+      if JMD.Select then
+        begin
+          JMD.SaveToValueTable('Self;ИмяДокумента;ДатаДокумента;НомерДокумента',DocListTbl, 0, JMD.RecordCount);
+          DocListTbl.Select;
+          While DocListTbl.SelectNext do
+            LstOrder.AddValue(DocListTbl.ИмяДокумента+ ' №' + DocListTbl.НомерДокумента + ' от ' + DateToStr(DocListTbl.ДатаДокумента), DocListTbl.@Self);
+        end;
+    end;
+  SLstOrder := LstOrder;
+end;
+
+procedure GetGoodWithPart(TblPartGood : ISValueTable; CurInd : Integer); server;
+begin
+  if SLstOrder.ValidIndex(CurInd) and JMD.FindDoc(SLstOrder.GetValue(CurInd)) then
+    begin 
+      DMD := JMD.GetDoc;
+      DMD.SaveContents('Товар;Количество;Цена;ЦенаБезСкидкиНадбавки',tmpTbl);
+      tmpTbl.AppendTo('Товар;Цена;ЦенаБезСкидкиНадбавки;Количество=КолОбщ',TblPartGood);
+      TblPartGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+    end;
+end;
+
+end.

@@ -1,0 +1,36 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure GetGroupTbl(GroupTbl: ISValueTable);server;
+var
+  GroupDic: ISDictionary;
+  TempTbl: ISValueTable;
+begin
+  GroupDic := CreateObject('Справочники.Производители');
+  GroupDic.Select;
+  TempTbl := CreateObject('ValueTable');
+  GroupDic.SaveToValueTable('',TempTbl,1,GroupDic.RecordCount);
+  TempTbl.AppendTo('SELF=ГруппаТовара',GroupTbl);
+  GroupTbl.DoGetLinks('Группа=ГруппаТовара.Название');
+  GroupTbl.DoCalculation('Order','1');
+  GroupTbl.Append;
+  GroupTbl.Группа := 'Все';
+  GroupTbl.Order := 0;
+  GroupTbl.Post;
+end;    
+
+procedure SrvCalcFields(Dic : ISDictionary);
+begin
+  PricesInNativeCurrency(Dic); //находится в модуле Расчёты
+end;
+
+function SrvCalcFieldsEP : Variant; server;
+begin
+  Result := EntryPoint(SrvCalcFields);
+end;
+
+end.

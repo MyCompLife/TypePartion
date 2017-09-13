@@ -1,0 +1,124 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  CommercialAgentDict, Shops : ICDictionary;
+  LinkDict : ICDictionary;
+  CursorVis : TCursor;   
+  Options : ICOptions;
+  isSave : Boolean;
+
+procedure dsMaster_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  Options := GetOptions;
+  MasterData := dsMaster.GetMean;
+  Shops := CreateObject('Справочники.Представители');
+end;
+
+procedure dsMaster_Append(Sender : TObject);
+var
+  OldDoc : ICDocuments;
+  TmpLHead : ICValueTable;
+  Number : string;
+begin
+  if MasterData.HasParam('OldDoc') then
+    begin
+      Number := MasterData.НомерДокумента;
+      OldDoc := MasterData.Params['OldDoc'];
+      TmpLHead := CreateObject('ValueTable');
+      OldDoc.SaveHead('', TmpLHead);
+      MasterData.LoadHead('', TmpLHead);
+      OldDoc.SaveContents('', TmpLHead);
+      MasterData.LoadContents('', TmpLHead);
+      MasterData.НомерДокумента := Number;
+    end;
+  MasterData.ДатаДокумента := CurrentDate;
+end;
+
+procedure dcsContents_StartDrop(Source : Variant; var Accept : Boolean);
+begin
+  MasterData.UpdateLine(True);
+  CursorVis := WaitCursorStart;
+end;
+
+procedure dcsContents_Drop(Source : Variant; var Accept : Boolean);
+begin
+  MasterData.AppendLine;
+  MasterData.Партнер := Source;
+  Shops.UseMasterAndSelect(Source);
+  Shops.AssignSelectParamsOnSrv(Shops.SrvMean);
+  Shops.SrvMean.Select;
+  if (Shops.SrvMean.RecordCount = 1) and Shops.SelectNext then
+    MasterData.ТорговаяТочка := Shops;
+  MasterData.PostLine;
+end;
+
+procedure dcsContents_EndDrop(Source : Variant);
+begin
+  SetCursor(CursorVis);
+end;
+
+procedure miUrPartners_Click(Sender: TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.ЮрПартнеры', 'ПодборПартнеров', Null);
+end;
+
+procedure miMainPartners_Click(Sender: TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.ФизЛица', 'ПодборФизЛиц', Null);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure dsMaster_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure dcsContents_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+pnTop:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label6:TO4Label
+edData:TO4DBEdit
+edNumber:TO4DBEdit
+edPartner:TO4DBEdit
+dbgData:TO4DBGrid
+ButtonPanel:TO4Panel
+Panel1:TO4Panel
+btCancel:TO4Button
+btOK:TO4Button
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+Panel7:TO4Panel
+tbrData:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbParam:TO4ToolButton
+dbMemComment:TO4DBMemo
+dsMaster:TO4DataSource
+dcsContents:TO4DocContentsSource
+pmList:TO4PopupMenu
+miDelRec:TO4MenuItem
+MenuItem1:TO4MenuItem
+miSort:TO4MenuItem
+pmDrop:TO4PopupMenu
+MenuItem4:TO4MenuItem
+MenuItem5:TO4MenuItem

@@ -1,0 +1,534 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, XMLИмпортЭкспорт, Пользователи, РаботаСFtp, НумерацияДокументов, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  LocalDir, ResMessage, FtpFiles: String;
+  FilesTbl : ICValueTable;
+  MasterData : ICProcessing;
+  RegionTbl: ICValueTable;
+  FileList, HLog, DLog : TStringList;
+  Accept : Boolean;
+  Step: Integer;
+  ParamsSt, Currency, UrPartner, ManPartner, Goods, Units, Stores : ICDictionary;
+  Docs, DocsList : ICValueTable;
+  Order, ProtokolDoc: ICDocuments;
+  Constants: IC4VPAConst;
+
+procedure CalcDocSumma(DocCurrent : ICDocuments; ObjForRecalcOtherSums : IObject = '');
+var
+  Sums : Variant;
+  FieldList : String;
+  TblDocContents : ICValueTable;
+  Tax : Decimal;
+begin
+  if IsNil(TblDocContents) then
+    TblDocContents := CreateObject('ValueTable')
+  else
+    TblDocContents.Close;
+  DocCurrent.SaveContents('', TblDocContents);
+  TblDocContents.DoCalculation('СуммаСтроки', 'Цена*Количество');
+  DocCurrent.Сумма := TblDocContents.Total('СуммаСтроки');
+  DocCurrent.СуммаВВалюте := DocCurrent.Сумма/DocCurrent.Курс;
+end;
+
+procedure CreatObject;
+begin
+  RegionTbl := CreateObject('ТаблицаЗначений');
+  RegionTbl.AddColumn('Артикул', vtcInteger, 0);
+  RegionTbl.AddColumn('Код', vtcString, 50);
+  RegionTbl.AddColumn('Название', vtcString, 50);
+  RegionTbl.AddColumn('Регион', vtcLink, 0);
+  RegionTbl.Open;
+
+  FilesTbl := CreateObject('ТаблицаЗначений');
+  FilesTbl.AddColumn('IDOrder', vtcString, 100);
+  FilesTbl.AddColumn('ДатаДокумента', vtcDateTime, 0);
+  FilesTbl.AddColumn('НомерДокумента', vtcString, 50);
+  FilesTbl.AddColumn('Партнер', vtcLink, 0);
+  FilesTbl.AddColumn('Регион', vtcLink, 0);
+  FilesTbl.AddColumn('Документ', vtcLink, 0);
+  FilesTbl.AddColumn('Сумма', vtcFFt, 2);
+  FilesTbl.AddColumn('НазвФайла', vtcString, 250);
+  FilesTbl.AddColumn('НазвФайлаFtp', vtcString, 250);
+  FilesTbl.Open;
+
+  ParamsSt := CreateObject('Справочники.ПараметрыОтчетаПоДоходамЗатратам');
+  Docs := CreateObject('ТаблицаЗначений');
+  Docs.AddColumn('НомерДокумента', vtcString, 15);
+  Docs.AddColumn('ДатаДокумента', vtcDate, 0);
+  Docs.AddColumn('КодПартнера', vtcString, 100);
+  Docs.AddColumn('Партнер', vtcLink, 0);
+  Docs.AddColumn('ПроцСкидки', vtcFft, 2);
+  Docs.AddColumn('Заметки', vtcMemo, 0);
+  Docs.AddColumn('Доставка', vtcMemo, 0);
+  Docs.Open;
+
+  DocsList := CreateObject('ТаблицаЗначений');
+  DocsList.AddColumn('НомерСтроки', vtcInteger, 0);
+  DocsList.AddColumn('IDOrder', vtcString, 100);
+  DocsList.AddColumn('НомерДокумента', vtcString, 15);
+  DocsList.AddColumn('ДатаДокумента', vtcDateTime, 0);
+  DocsList.AddColumn('КодПартнера', vtcString, 100);
+  DocsList.AddColumn('Заметки', vtcMemo, 0);
+  DocsList.AddColumn('Доставка', vtcMemo, 0);
+  DocsList.AddColumn('Партнер', vtcLink, 0);
+  DocsList.AddColumn('КодСклада', vtcString, 100);
+  DocsList.AddColumn('СкладПоУмолч', vtcLink, 0);
+  DocsList.AddColumn('Код', vtcString, 50);
+  DocsList.AddColumn('Товар', vtcLink, 0);
+  DocsList.AddColumn('ШтрихКод', vtcString, 50);
+  DocsList.AddColumn('ЕдИзм', vtcLink, 0);
+  DocsList.AddColumn('НазвТовара', vtcString, 100);
+  DocsList.AddColumn('Количество', vtcFft, 5);
+  DocsList.AddColumn('Цена', vtcFft, 7);
+  DocsList.AddColumn('ЦенаБезСкидкиНадбавки', vtcFft, 7);
+  DocsList.AddColumn('ПроцСкидки', vtcFft, 2);
+  DocsList.AddColumn('ДокументСкидки', vtcLink, 0);
+  DocsList.Open;
+
+  Order := CreateObject('Документы.Чек');
+  Order.Select;
+
+  UrPartner := CreateObject('Справочники.ЮрПартнеры');
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  Stores := CreateObject('Справочники.Склады');
+  Goods := CreateObject('Справочники.Товары');
+  Currency := CreateObject('Справочники.Валюты');
+  GetNatCurrency(Currency);
+end;
+
+procedure CreateTabList;
+var
+  RegionDic: ICDictionary;
+  Users: ICDictionary;
+  TabIndex: Integer;
+begin
+  Users := GetDictUser;
+  if IsObjFocused(Users) and VarAsBool(Users.@Регион.IsFocused) and
+        VarAsBool(Users.БлокировкаВыбораРегиона) then
+    begin
+      RegionDic := Users.Регион;
+      RegionTbl.Append;
+      RegionTbl.AssignFields('Код;Название',RegionDic);
+      RegionTbl.Регион := RegionDic;
+      RegionTbl.Post;
+      TabIndex := 0;
+    end
+  else
+    begin
+      RegionDic := CreateObject('Справочники.Регионы');
+      RegionDic.Select;
+      while RegionDic.SelectNext do
+        begin
+          RegionTbl.Append;
+          RegionTbl.AssignFields('Код;Название',RegionDic);
+          RegionTbl.Регион := RegionDic;
+          RegionTbl.Post;
+        end;
+      tsRegions.Tabs.Add(Trans('Все'));
+      TabIndex := 1;
+    end;
+  RegionTbl.Select;
+  while RegionTbl.SelectNext do
+    begin
+      tsRegions.Tabs.Add(Trans(RegionTbl.Название));
+      RegionTbl.Edit;
+      RegionTbl.Артикул := TabIndex;
+      RegionTbl.Post;
+      inc(TabIndex);
+    end;
+end;
+
+procedure LoadDocFromFiles(Accept: Boolean);
+Var
+  i : Integer;
+  NewStr, FieldName, DocDate, DocNum, DocPartName, DocPartLogin, DocPartPhone, DocPartMail, DocInfo, DocDelivery, DocOrderNum, DocSumma : String;
+  PartnerDic : ICDictionary;
+  dlgError : ICProcessing;
+  DomDocument, Root, DocNode, HeadNode, ContentsNode, RowNode : OleVariant;
+  DocCount, FieldsCount, RowsCount : Integer;
+  XmlStr : String;
+  ActionDoc: ICDocuments;
+  StrInfo: TStringList;
+
+begin
+  NewStr := #13;
+  StrInfo := CreateStringList;
+
+  //-------------------------Зачитка с xml-файла--------------------------------
+  FilesTbl.Select;
+  while FilesTbl.SelectNext do
+    begin
+      DomDocument := LoadXMLFromFile(FilesTbl.НазвФайла);
+      // корневой узел
+      Root := DomDocument.documentElement;
+      // обход коллекции узлов Doc
+      ActionDoc := CreateObject('Документы.УстановкаСкидок');
+      DocNode := Root.childNodes.Item(0);
+      XmlStr := XmlStr + #13#10 + 'ДОКУМЕНТ ' + IntToStr(DocCount);
+      // поля шапки
+      HeadNode := DocNode.selectSingleNode('head');
+      XmlStr := XmlStr + #13#10 + HeadNode.nodeName + ':';
+      DocPartName := '';
+      DocDate:= '';
+      DocNum:= '';
+      DocPartLogin:= '';
+      DocPartPhone:= '';
+      DocPartMail:= '';
+      DocInfo:= '';
+      DocDelivery:= '';
+      DocOrderNum:= '';
+      DocSumma:= '';
+      PartnerDic := null;
+      for FieldsCount := 0 to HeadNode.childNodes.length-1 do
+        begin
+          XmlStr := XmlStr + #13#10 +
+            '  ' + HeadNode.childNodes.Item(FieldsCount).nodeName + ' = ' + HeadNode.childNodes.Item(FieldsCount).text;
+          FieldName := HeadNode.childNodes.Item(FieldsCount).nodeName;
+          Case FieldName of
+            'name':      DocPartName := HeadNode.childNodes.Item(FieldsCount).text;
+            'date':      DocDate := HeadNode.childNodes.Item(FieldsCount).text;
+            'number':    DocNum := HeadNode.childNodes.Item(FieldsCount).text;
+            'partner':   DocPartLogin  := HeadNode.childNodes.Item(FieldsCount).text;
+            'phone':     DocPartPhone := HeadNode.childNodes.Item(FieldsCount).text;
+            'email':     DocPartMail := HeadNode.childNodes.Item(FieldsCount).text;
+            'info' :     DocInfo := HeadNode.childNodes.Item(FieldsCount).text;
+            'delivery' : DocDelivery := HeadNode.childNodes.Item(FieldsCount).text;
+            'order' :    DocOrderNum := HeadNode.childNodes.Item(FieldsCount).text;
+            'total' :    DocSumma := HeadNode.childNodes.Item(FieldsCount).text;
+          end;
+        end;
+      FilesTbl.Edit;
+      FilesTbl.IDOrder := DocOrderNum;
+      FilesTbl.ДатаДокумента := StrToDateTime(DocDate);
+      FilesTbl.НомерДокумента := DocNum;
+      if Order.FindByField('IDOrder', DocOrderNum, false) then //проверка на уникальность
+        FilesTbl.Документ := Order;
+      if UrPartner.FindByField('Логин', DocPartLogin, false) then
+        PartnerDic := UrPartner
+      else
+        DLog.Add(VarAsStr('Партнер с логином: ' + Docs.КодПартнера + ' не найден') );
+      FilesTbl.Партнер := PartnerDic;
+      if VarAsBool(FilesTbl.Партнер.@Регион.IsFocused) then
+        FilesTbl.Регион := FilesTbl.Партнер.Регион;
+      FilesTbl.Сумма := VarAsDec(DocSumma);
+      FilesTbl.Post;
+        // поля таблицы
+      ContentsNode := DocNode.selectSingleNode('table');
+      if VarAsBool(ContentsNode.hasChildNodes) then
+        begin
+          XmlStr := XmlStr + #13#10 + ContentsNode.nodeName + ':';
+          for RowsCount := 0 to ContentsNode.childNodes.length-1 do
+            begin
+              DocsList.Append;
+              DocsList.НомерСтроки      := RowsCount + 1;
+              DocsList.IDOrder          := DocOrderNum;
+              DocsList.НомерДокумента   := DocNum;
+              DocsList.КодПартнера      := DocPartLogin;
+              DocsList.ДатаДокумента    := StrToDateTime(DocDate);//dd.mm.yyyy.hh:mm:cc
+              DocsList.Партнер          := PartnerDic;
+              StrInfo.Clear;
+              StrInfo.Add(DocPartName);// Перевозчик
+              StrInfo.Add('Телефон: ' + DocPartPhone);
+              StrInfo.Add( 'e-mail: ' + DocPartMail);
+              StrInfo.Add(DocInfo); //Форма оплаты
+              DocsList.Заметки := StrInfo.Text;
+              DocsList.Доставка := DocDelivery;
+              RowNode := ContentsNode.childNodes.Item(RowsCount);
+              XmlStr := XmlStr + #13#10 + '  ' + 'Строка ' + IntToStr(RowsCount+1) + ':';
+              for FieldsCount := 0 to RowNode.childNodes.length-1 do
+                begin
+                  XmlStr := XmlStr + #13#10 +
+                    '    ' + RowNode.childNodes.Item(FieldsCount).nodeName + ' = ' + RowNode.childNodes.Item(FieldsCount).text;
+                  FieldName := RowNode.childNodes.Item(FieldsCount).nodeName;
+                  Case FieldName of
+                   'article': begin
+                                DocsList.Код   := RowNode.childNodes.Item(FieldsCount).text;
+                                if Goods.FindByCode(DocsList.Код, false) then
+                                  DocsList.Товар := Goods;
+                              end;
+                   'price':   DocsList.Цена := StrToDec(RowNode.childNodes.Item(FieldsCount).text);
+                   'count':   DocsList.Количество := StrToDec(RowNode.childNodes.Item(FieldsCount).text);
+                   'action': begin
+                     if ActionDoc.FindByField('NumID',VarAsInt(RowNode.childNodes.Item(FieldsCount).text),false) then
+                       DocsList.ДокументСкидки := ActionDoc;
+                   end;
+                  end;
+                end;
+              DocsList.Post;
+            end;
+        end;
+    end;
+
+  DocsList.DoGetLinks('НазвТовара=Товар.НазвТовара;ЕдИзм=Товар.ЕдИзм;ШтрихКод=Товар.ШтрихКод');
+  DocsList.GroupToMaster('IDOrder;НомерДокумента;ДатаДокумента;КодПартнера;Партнер','',Docs);
+  DocsList.Select;
+  while DocsList.SelectNext Do
+    begin
+      if not VarAsBool(DocsList.@Товар.IsFocused) then
+        begin
+          DLog.Add(VarAsStr('Товар с кодом : ' + DocsList.Код + ' не найден'));
+          Accept := false;
+        end;
+      StatusText('Анализ строки: ' + VarAsStr(DocsList.НомерСтроки));
+      Inc(i);
+    end;
+  FilesTbl.SortBy('ДатаДокумента');
+  FilesTbl.UseDataSource(CtrlToVar(TVS));
+  if Accept then
+    DLog.Add(VarAsStr(Step) + '  - успешное выполнение.');
+end;
+
+procedure SaveDocsFormTbl;
+var
+  TmpTbl: ICValueTable;
+  i : Integer;
+begin
+  Constants := GetConstants;
+  TmpTbl := CreateObject('ValueTable');
+  DocsList.CopyColumnsTo(TmpTbl);
+  TmpTbl.Open;
+  if not(FilesTbl.IsFocused) then
+    exit;
+  if VarAsBool(FilesTbl.Документ.IsFocused) then //проверка на уникальность
+    begin
+      ShowMessage('Вы не можете добавить этот документ, так как он уже существует.');
+      exit;
+    end;
+  Docs.SortBy('IDOrder');
+  if not Docs.Find(FilesTbl.IDOrder) then
+    begin
+      ShowMessage('Документ с ID документа: ' + FilesTbl.IDOrder + ' не найден');
+      exit;
+    end;
+  DocsList.UseMaster(0);
+  DocsList.UseMaster(Docs);
+  TmpTbl.Clear;
+  DocsList.AppendTo('',TmpTbl);
+  Order.Append;
+  StatusText('Импорт документа: '+ VarAsStr(i) + ' из ' + VarAsStr(Docs.LineCount));
+  Order.AssignFields('IDOrder;НомерДокумента;ДатаДокумента;Партнер',Docs);
+  ParamsSt.Select;
+  if VarAsBool(ParamsSt.@Чек.IsFocused) then
+    Order.Статья := ParamsSt.Чек;
+  Order.Регион := Order.Партнер.Регион;
+  Order.СкладПоУмолч := GetUsersField('Склад');
+  if not VarAsBool(Order.@СкладПоУмолч.IsFocused) then
+    begin
+      if isNil(Stores) then
+        Stores := CreateObject('Справочники.Склады');
+      if Stores.FindByField('Регион', Order.Регион, false) then
+        Order.СкладПоУмолч := Stores
+    end;
+  Order.Импорт := 1;
+  Currency := GetNatCurrency(Currency);
+  Order.Валюта := Currency;
+  Order.Курс := Currency.GetTimedValue(Constants.UsedCurs, Order.ДатаДокумента);
+  Order.Отпуск := 1;
+  if Users.IsFocused then
+    Order.Ответственный := Users.Служащий;
+  Order.NumID := StrToInt(УстановитьНомерДокумента(Order, '')) + 1;
+  Order.BaseID := VarAsInt(Constants.КодИБ);
+  Order.ЗаказСайт := WritePropsToBlob(TmpTbl);
+  DocsList.Select;
+  While DocsList.SelectNext Do
+    begin
+      Order.AppendLine;
+      Order.AssignFields('Код;Товар;ЕдИзм;КоличествоВЗаказе=Количество;Количество;Цена;ШтрихКод;ДокументСкидки',DocsList);
+      Order.ЦенаБезСкидкиНадбавки := DocsList.Товар._Default[Order.Партнер.ТипЦены];
+      Order.PostLine;
+    end;
+  Order.Заметки := DocsList.Заметки;
+  Order.Доставка := DocsList.Доставка;
+  CalcDocSumma(Order);
+  Order.Post;
+  Order.ApplyUpdates;
+  Inc(i);
+  FilesTbl.Edit;
+  FilesTbl.Документ := Order;
+  FilesTbl.Post;
+
+  Inc(Step);
+  DLog.Add(VarAsStr(Step) + ') Удаление файла с ftp-ресурса: ' + FilesTbl.НазвФайлаFtp);
+  Accept := DeleteFileFromFtp(FilesTbl.НазвФайлаFtp, ResMessage);
+  DLog.Add(ResMessage);
+  if not Accept then
+    exit;
+end;
+
+procedure FilterDocsByRegion(TabIndex: Integer);
+begin
+  RegionTbl.SortBy('Артикул');
+  if RegionTbl.Find(TabIndex) then
+    begin
+      FilesTbl.SortBy('Регион;ДатаДокумента');
+      FilesTbl.SetRange(RegionTbl.Регион, RegionTbl.Регион);
+    end
+  else
+    FilesTbl.SortBy('ДатаДокумента');
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  i, Cnt: Integer;
+  FtpDir, FilePath, FileName : String;
+  TimeFrom: DateTime;
+  FtpDic: ICDictionary;
+begin
+  MasterData := Mean;
+  CreatObject;
+  TimeFrom := CurrentDateTime;
+  Accept := true;
+  HLog := CreateStringList;
+  DLog := CreateStringList;
+  FileList := CreateStringList;
+  Step := 1;
+  FtpDic := CreateObject('Справочники.FTPНастройки');
+  FtpDic.Select;
+  FtpDic.SelectNext;
+  try
+    CreateTabList; //Создание закладок с регионами и заполнение таб. значения RegionTbl
+    DLog.Add(VarAsStr(Step) + ') Проверка соединения с ftp сервером - '+ FtpDic.IP);
+    Accept := InitializationFtpConnect(FtpDic, ResMessage);
+    DLog.Add(ResMessage);
+    if not Accept then
+      exit;
+
+    inc(Step);
+    LocalDir := ExtractFilePath(RunPath)+'ImpOrders\';
+    DLog.Add(VarAsStr(Step) + ') Проверка локальных директории: ' + LocalDir);
+    if not DirectoryExists(LocalDir) then
+      MkDir(LocalDir);
+    RegionTbl.Select;
+    while RegionTbl.SelectNext do
+      begin
+        if not DirectoryExists(LocalDir+RegionTbl.Код) then
+          MkDir(LocalDir + RegionTbl.Код);
+      end;
+    if not Accept then
+      exit;
+
+    Inc(Step);
+    DLog.Add(VarAsStr(Step) + ') Получение списка файлов с ftp сервера:');
+    FileList.Clear;
+    RegionTbl.Select;
+    while RegionTbl.SelectNext do
+      begin
+        FtpDir := 'public_html/orders/' + RegionTbl.Код + '/';
+        ResMessage := GetFileList(FtpDir);
+        DLog.Add(ResMessage);
+        if (StrPos('Директория', ResMessage) = 0) and (ResMessage <> '') then
+          FtpFiles := FtpFiles + ResMessage + #13;
+      end;
+    if  FtpFiles = '' then
+      Accept := false;
+    if not Accept then
+      exit;
+    Inc(Step);
+    DLog.Add(VarAsStr(Step) + ') Копирование файлов с ftp-сервера:');
+    StrDelete(FtpFiles, StrLength(FtpFiles),1);
+    for Cnt := 1 to WordCount(FtpFiles ,#13) do
+      begin
+        FilePath := ExtractWord(Cnt,FtpFiles,#13);
+        FileName := ExtractWord(WordCount(FilePath,'/'),FilePath,'/');
+        Accept := CopyFileFromFtp(LocalDir + FileName, ExtractWord(Cnt,FtpFiles,#13), ResMessage);
+        DLog.Add(ResMessage);
+        if not Accept then
+          exit;
+        FilesTbl.Append;
+        FilesTbl.НазвФайла := LocalDir + FileName;
+        FilesTbl.НазвФайлаFtp := ExtractWord(Cnt,FtpFiles,#13);
+        FilesTbl.Post;
+      end;
+    Inc(Step);
+    DLog.Add(VarAsStr(Step) + ') Анализ скопированных файлов:');
+    LoadDocFromFiles(Accept);
+    if not Accept then
+      exit;
+
+    if VarAsBool(Users.@Регион.IsFocused) then
+      begin
+        RegionTbl.SortBy('Название');
+        if RegionTbl.Find(Users.Регион.Название) then
+          tsRegions.TabIndex := RegionTbl.Артикул
+      end
+    else
+      tsRegions.TabIndex := 0;
+  finally
+    if not Accept then
+      begin
+        ResMessage := 'Импорт прерван или выполнен с ошибками!';
+        ShowMessage(ResMessage);
+      end;
+    ProtokolDoc := CreateObject('Документы.ПротоколОбмена');
+    ProtokolDoc.Select;
+    ProtokolDoc.Append;
+    ProtokolDoc.ЭкспортИмпорт := 'Импорт';
+    ProtokolDoc.Шапка := HLog.Text;
+    ProtokolDoc.Документы := DLog.Text;
+    ProtokolDoc.Post;
+    ProtokolDoc.ApplyUpdates;
+  end;
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+//
+end;
+
+procedure tsRegions_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  FilterDocsByRegion(NewTab);
+end;
+
+{$D-}
+procedure dbgGrid_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if VarAsBool(FilesTbl.Документ.IsFocused) then
+    Index1 := 52;
+end;
+{$D+}
+
+procedure Form_Close(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+//    V := CreateObject('Обработки.РаботаСFtp');
+//    if V.Execute('ЗавершениеПроцесса',ResMessage) = mrOk then
+//      Protokol.EditInForm('протокол',2);
+end;
+
+procedure tbAdd_Click(Sender: TObject);
+begin
+  SaveDocsFormTbl;
+end;
+
+procedure tbAddAll_Click(Sender: TObject);
+begin
+  FilesTbl.Select;
+  while FilesTbl.SelectNext do
+    begin
+      if VarAsBool(FilesTbl.@Документ.IsFocused) then
+        continue;
+      SaveDocsFormTbl;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+PMain:TO4Panel
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+tbrOrder:TO4ToolBar
+tbAdd:TO4ToolButton
+tbAddAll:TO4ToolButton
+tbDel:TO4ToolButton
+dbgGrid:TO4DBGrid
+tsRegions:TO4TabSet
+TVS:TO4TableValueSource

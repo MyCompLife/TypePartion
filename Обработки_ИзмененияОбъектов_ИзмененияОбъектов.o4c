@@ -1,0 +1,178 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation   
+const TypeChangeStr = ';ПометкаУдаление';
+      TypeChangeTitleStr = 'Все изменения;Отметка на удаление';
+var
+     MasterProc : ICProcessing;
+     MasterData : ICDictionary;
+     DateFrom, DateTo : DateTime;
+     AfterExecute : boolean;
+     RepTbl : ICValueTable;
+     TypeChangeList : ICValueList;    
+
+procedure Run;
+begin   
+ if IsObjFocused(MasterData) then
+   begin
+     RepTbl.Clear;
+     RepTbl.CopyDataToServer;
+     server.FillRepTbl(RepTbl.SrvMean, TypeChangeList.GetValue(TypeChangeList.CurIndex),MasterData,cbUsePeriod.Checked, DateFrom, DateTo);
+     RepTbl.CopyDataFromServer;
+     RepTbl.SortBy('ТипСобытия;Date'); 
+     RepTbl.Select;
+     XGrid.ClearAll;
+     XGrid.AddSection('Hed');
+     RepTbl.AddToXGrid(CtrlToVar(XGrid),'Det','ТипСобытия;Date;Комментарий;Ответственный',1,RepTbl.LineCount);
+   end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+ MasterProc := Mean;
+end;
+
+procedure Form_Open(Sender: TObject);
+var i:integer;
+begin
+ AfterExecute := false;   
+ if MasterProc.HasParam('MasterData') then    
+   begin
+     MasterData := CreateObject('Справочники.'+VarAsStr( MasterProc.Params['MasterData'].GetSign));
+     MasterData.Find(MasterProc.Params['MasterData']);
+     MasterProc.Params['MasterData'] := Null;
+   end
+ else
+   raise('Не задан объект!');
+ DateFrom := RoundDate(CurrentDate,rdYear,false);
+ DateTo   := trunc(RoundDate(CurrentDate,rdYear,true)-1);
+ eDateFrom.Text := DateToStr(DateFrom);
+ eDateTo.Text := DateToStr(DateTo);
+ TypeChangeList := CreateObject('СписокЗначений');
+ for i:=1 to WordCount(TypeChangeStr,';') do
+   TypeChangeList.AddValue(ExtractWord(i,TypeChangeTitleStr,';'),ExtractWord(i,TypeChangeStr,';'));
+ TypeChangeList.UseControl(CtrlToVar(edChangeType));
+ TypeChangeList.CurIndex := 0;
+ RepTbl := CreateObject('ТаблицаЗначений');
+ RepTbl.AddColumn('ТипСобытия',vtcString,100);
+ RepTbl.AddColumn('Date',vtcDateTime,0);
+ RepTbl.AddColumn('Ответственный',vtcLink,0);
+ RepTbl.AddColumn('Комментарий',vtcString,100);
+ RepTbl.AddColumn('Значение',vtcFFT,7);
+ RepTbl.Open;
+ Run;
+ AfterExecute := true;
+end;
+
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo, eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := true;
+end; 
+
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  x, y : integer;
+begin
+  tbSelectDates.GetScreenPos(x, y);
+  y := y + tbSelectDates.Height;
+  pmDates.Popup(x, y);
+end;
+
+procedure DateFrom_Change(Sender: TObject);
+begin
+  Case (Sender as TO4Edit).Tag of       // проверка на неверный период
+    0 : begin
+          if StrToDate((Sender as TO4Edit).Text) > DateTo then
+            begin
+              ShowMessage('Начальная дата не может быть больше конечной');
+              eDateFrom.VPAOnChange.EventName := '';
+              (Sender as TO4Edit).Text := VarAsStr(DateFrom);
+              eDateFrom.VPAOnChange.EventName := 'DateFrom_Change';
+              exit;
+            end;
+        end;
+    1 : begin
+          if StrToDate((Sender as TO4Edit).Text) < DateFrom then
+            begin
+              ShowMessage('Конечная дата не может быть меньше начальной');
+              eDateFrom.VPAOnChange.EventName := '';
+              (Sender as TO4Edit).Text := VarAsStr(DateFrom);
+              eDateFrom.VPAOnChange.EventName := 'DateFrom_Change';
+              exit;
+            end;
+        end;
+  end; 
+
+  if AfterExecute then
+    begin
+       SetOneDates(Sender,DateFrom,DateTo);
+       if cbUsePeriod.Checked then
+         Run;
+    end;
+end;
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure ToolButton1_Click(Sender: TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+
+procedure cbUsePeriod_Click(Sender: TObject);
+begin
+  if AfterExecute then
+    Run;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+tbrData:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbExcel:TO4ToolButton
+Panel13:TO4Panel
+Label9:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+cbUsePeriod:TO4CheckBox
+tbSelectDates:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+edChangeType:TO4Edit
+XGrid:TO4XGrid
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

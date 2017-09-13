@@ -1,0 +1,228 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV  : ICWriNums;
+  Tbl, TblMat :ICValueTable;
+  LOWHIGHSUM : Variant;
+  Constants : IC4VPAConst;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  Constants := GetConstants;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+  TblMat := CreateObject('ТаблицаЗначений');
+  LOWHIGHSUM := 0;
+  if VarAsStr(Constants.ТекстПодвалаЧека)<>'' then
+    begin
+      LbFooter1.Caption := VarAsStr(Constants.ТекстПодвалаЧека);
+      LbFooter2.Caption := VarAsStr(Constants.ТекстПодвалаЧека);
+      bndFooter.Height := LbFooter1.Height;
+    end;
+
+
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  with Table do
+    begin
+     Value['NUMBER'] := MasterData.НомерДокумента;
+     Value['Date'] := DateToStr(MasterData.ДатаДокумента);
+     Value['Time'] := TimeToStr(MasterData.ДатаДокумента);
+     Value['Summa'] := MasterData.Сумма;
+     Value['Respons'] := MasterData.Ответственный.ПолноеНазвание;
+
+     if VarAsBool(MasterData.ДисконтКарточка.IsFocused) then
+      if MasterData.ПроцСкидки < 0 then
+        Value['LowHighNT'] := - MasterData.ПроцСкидки
+      else
+        Value['LowHighNT'] := MasterData.ПроцСкидки;
+    end;
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар;Цена;ЦенаБезСкидкиНадбавки', 'Количество');
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*ЦенаБезСкидкиНадбавки');
+  Tbl.DoGetLinks('НаличиеТовара=Товар.Услуга;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('НаличиеТовара;Товар');
+  Tbl.SetRange(0, 0);
+  Tbl.CopyTo('Товар;ЕдИзм;Цена;ЦенаБезСкидкиНадбавки;Количество;СуммаСтроки', TblMat);
+  Tbl.CancelRange;
+  Tbl.SetRange(-1, -1);
+  TblMat.Select;
+  Tbl.Select;
+end;
+
+procedure Structure1_ME_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  MYF.Params['Region'] := MasterData.Регион;
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  Accept := TblMat.SelectNext();
+  if not Accept then Exit;
+  with Table do
+    begin
+      Value['Code'] := TblMat.Товар.ШтрихКод;
+      Value['NAME'] := TblMat.DefValue['Товар'];
+      Value['UnitName'] := TblMat.DefValue['ЕдИзм'];
+      Value['Count'] := TblMat.Количество;
+      Value['Price'] := TblMat.ЦенаБезСкидкиНадбавки;
+      Value['SummaStr'] :=  TblMat.СуммаСтроки;
+      LOWHIGHSUM := LOWHIGHSUM + ((TblMat.Количество * TblMat.ЦенаБезСкидкиНадбавки)-(TblMat.Количество * TblMat.Цена))
+    end;
+end;
+
+procedure bndFtMinus_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+  Accept := VarAsBool(MasterData.ДисконтКарточка.IsFocused);
+  if VarAsBool(MasterData.ДисконтКарточка.IsFocused) then
+    Accept := (MasterData.ПроцСкидки < 0);
+  Label61.Caption := LOWHIGHSUM;
+end;
+
+procedure bndFtPlus_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+  Accept := VarAsBool(MasterData.ДисконтКарточка.IsFocused); 
+  if VarAsBool(MasterData.ДисконтКарточка.IsFocused) then
+    Accept := (MasterData.ПроцСкидки > 0);
+  Label73.Caption := LOWHIGHSUM;
+end;
+
+procedure DetailBand2_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+    Label6.Caption := GetActiv(ADR,'Адрес',MYF);
+    Label7.Caption := 'тел.: (' + GetActiv(TLF, 'КодГорода', MYF) + ') ' +
+                            GetActiv(TLF, 'Номер', MYF);
+end;
+
+procedure Structure1_ROOT_serv_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then Exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Товар.ШтрихКод;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+      Value['Price'] := Tbl.ЦенаБезСкидкиНадбавки;
+      Value['SummaStr'] :=  Tbl.СуммаСтроки;
+      LOWHIGHSUM := LOWHIGHSUM + ((Tbl.Количество * Tbl.ЦенаБезСкидкиНадбавки)-(Tbl.Количество * Tbl.Цена))
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand2:TRBDetailBand
+Label41:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label38:TRBLabel
+Label42:TRBLabel
+Label43:TRBLabel
+bndHdDet:TRBBand
+Label27:TRBLabel
+Label29:TRBLabel
+Label31:TRBLabel
+Label32:TRBLabel
+Label8:TRBLabel
+Label28:TRBLabel
+Label45:TRBLabel
+Label47:TRBLabel
+Label48:TRBLabel
+Label49:TRBLabel
+Label50:TRBLabel
+Label51:TRBLabel
+dbndGoods:TRBDetailBand
+Label35:TRBLabel
+Label37:TRBLabel
+Label39:TRBLabel
+Label40:TRBLabel
+Label9:TRBLabel
+bndFtMinus:TRBBand
+Label44:TRBLabel
+Label46:TRBLabel
+Label61:TRBLabel
+Label64:TRBLabel
+Label65:TRBLabel
+Label66:TRBLabel
+bndFtPlus:TRBBand
+Label70:TRBLabel
+Label71:TRBLabel
+Label73:TRBLabel
+Label67:TRBLabel
+Label68:TRBLabel
+Label69:TRBLabel
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label81:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label2:TRBLabel
+Label1:TRBLabel
+Label84:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label30:TRBLabel
+Label33:TRBLabel
+Label34:TRBLabel
+Label36:TRBLabel
+Label74:TRBLabel
+Label75:TRBLabel
+Label76:TRBLabel
+Label77:TRBLabel
+Label79:TRBLabel
+Label80:TRBLabel
+Label82:TRBLabel
+Label83:TRBLabel
+Label85:TRBLabel
+Label86:TRBLabel
+Label87:TRBLabel
+Label88:TRBLabel
+Label89:TRBLabel
+bndHead:TRBBand
+Label5:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label26:TRBLabel
+Label52:TRBLabel
+Label53:TRBLabel
+Label54:TRBLabel
+Label55:TRBLabel
+Label56:TRBLabel
+Label57:TRBLabel
+dbndUslugi:TRBDetailBand
+Label21:TRBLabel
+Label22:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+Label58:TRBLabel
+Label59:TRBLabel
+Label60:TRBLabel
+Label62:TRBLabel
+Label63:TRBLabel
+Structure1:TRBStructure
+bndFooter:TRBBand
+LbFooter1:TRBLabel
+LbFooter2:TRBLabel

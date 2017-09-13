@@ -1,0 +1,101 @@
+interface
+
+uses  System, DispIntf, Интерфейс, Расчеты, ConstNames, Reports;
+
+implementation
+var
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MasterData, V : ICProcessing;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  i : integer;
+  PriceTypes : String;
+begin
+  MasterData := Mean;
+  Constants := GetConstants;
+  Options := GetOptions;
+  eCourse.Text := VarAsStr(Options.GetServerPrm('РасчКурс'));
+
+  PriceTypes := Constants.ТипыЦен;
+  if StrLength(PriceTypes) > 0 then
+    for i := 1 to StrLength(PriceTypes)-1 do
+     (Form.FindComponent('cbPrice' + PriceTypes[i]) as TO4CheckBox).Checked := true;
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+  Options.SetServerPrm('РасчКурс', eCourse.Text);
+end;
+
+procedure btStart_Click(Sender: TObject);
+var
+  V : ICProcessing;
+  Course : Decimal;
+begin
+  if MessageDlg('Выполнить персчет цены в товарах согласно нового курса?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrYes then
+    begin
+      Course := VarAsDec(eCourse.Text, 3);
+      if Course = 0 then
+        begin
+          ShowMessage('Курс не заполнен, переоценка остановлена!');
+          exit;
+        end;
+      MasterData.RunThreadProcess(server.GetRunReportEP(Course,cbPrice0.Checked,cbPrice1.Checked,cbPrice2.Checked), 'Обновляется цена в справочниках: моделей и товаров');
+    end;
+end;
+
+procedure btStartBegCourse_Click(Sender: TObject);
+var
+  V : ICProcessing;
+  Course : Decimal;
+begin
+  if MessageDlg('Выполнить начального нового курса?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrYes then
+    begin
+      StdInpDec('Введите курс', Course);
+      if Course = 0 then
+        begin
+          ShowMessage('Курс не заполнен, переоценка остановлена!');
+          exit;
+        end;
+      MasterData.RunThreadProcess(server.GetRunReportBegPriceEP(Course), 'Обновляется цена в справочниках: моделей и товаров');
+    end;
+end;
+
+
+function RoundTo5Cop(Price: Decimal): Decimal;
+var
+  Det : Decimal;
+  Grn, Cop: Decimal;
+begin
+  Grn := DecInt(Price);
+  Cop := RoundDec(DecFrac(Price)*100,0);
+  Det := DecFrac(Cop/10);
+  case Det*10 of
+    1, 2, 3, 4: result := Grn + (Cop - Det*10 + 5)/100;
+    6, 7, 8, 9: result := Grn + (Cop - Det*10 + 10)/100;
+    0, 5: result := Grn + Cop/100;
+  end;
+end;
+
+procedure Button1_Click(Sender: TObject);
+var
+  Price: Decimal;
+begin
+  StdInpDec('Введите число', Price);
+  ShowMessage(VarAsStr(RoundTo5Cop(Price)))
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+Panel2:TO4Panel
+btCancel:TO4Button
+eCourse:TO4Edit
+btStart:TO4Button
+Button1:TO4Button
+cbPrice0:TO4CheckBox
+cbPrice1:TO4CheckBox
+cbPrice2:TO4CheckBox
+Button2:TO4Button

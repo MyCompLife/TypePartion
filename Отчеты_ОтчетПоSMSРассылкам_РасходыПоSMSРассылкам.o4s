@@ -1,0 +1,54 @@
+interface
+
+uses
+  System, DispIntf, ConstNames,  Расчеты;
+
+implementation
+
+var
+  AccsSMS : ISAccs;
+  ReportTbl: ISValueTable;
+  DateFrom, DateTo : DateTime;
+
+
+
+
+
+
+procedure GetRunReport(Doc:ISProcessing; var Accept : boolean); 
+var TotalSum, TotalSMSCount : Decimal;
+begin
+  if IsNil(AccsSMS) then
+   AccsSMS := CreateObject('Аккумуляторы.SMSРассылки');
+
+  AccsSMS.ClearFieldFilters();
+  AccsSMS.ClearFieldBuffers();
+  // отправка сообщения клиенту
+  Doc.NotifyClient('Отбор данных из аккумулятора.', 1, 50);
+  if Doc.Terminated then exit;
+  Accept := True;
+  ReportTbl.Clear;
+  //-------вытяжка данных из аккумулятора---------------------------------------
+    AccsSMS.AppendGroupMotionToValueTable(DateFrom, DateTo, amtIncome, 'Партнер;ПолноеНазваниеПартнера;КоличествоSMS;Сумма', -1, ReportTbl);
+   ReportTbl.SortBy('Партнер');
+   TotalSum :=  ReportTbl.Total('Сумма');
+   TotalSMSCount := ReportTbl.Total('КоличествоSMS');
+   ReportTbl.Append;
+   ReportTbl.КоличествоSMS := TotalSMSCount;
+   ReportTbl.Сумма := TotalSum;
+   ReportTbl.Post;
+  // отправка сообщения клиенту
+  Doc.NotifyClient('Формирование отчета завершено.', 1, 50);
+  if Doc.Terminated then exit;
+  Accept := True;
+end;
+
+function GetRunReportEP(ReportTbls : ISValueTable; DateFroms, DateTos : DateTime) : Variant; server;
+begin
+  ReportTbl := ReportTbls;
+  DateFrom := RoundDate(DateFroms, rdDay, False);
+  DateTo := RoundDate(DateTos, rdDay, True);
+  Result := EntryPoint(GetRunReport);
+end;
+
+end.

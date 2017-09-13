@@ -1,0 +1,37 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure СформироватьНакладнуюПоСчету(tmpCtx : ISValueTable; Order, Nakls : ISDocuments); server;
+var
+  Other : ISDocuments;
+begin
+  Other := Nakls;
+  Other.UseMaster(Order);
+  if Other.Select then
+    while Other.SelectNext do
+      if (Other.GetDocState > 0) and Other.SelectLines then
+        while Other.SelectNextLine do
+          begin // проходим по содержимому накладной прихода
+            tmpCtx.Edit;
+            tmpCtx.Количество := tmpCtx.Количество - Other.Количество;
+            tmpCtx.Post;
+            if tmpCtx.Количество = 0 then
+              tmpCtx.Delete;
+          end;
+end;
+
+end.

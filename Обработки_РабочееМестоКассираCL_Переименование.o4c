@@ -1,0 +1,94 @@
+interface
+
+uses
+  System, Расчеты, РаботаСПеременными;
+
+implementation
+
+var Goods : ICDictionary;
+
+procedure Button1_Click(Sender: TObject);
+var
+  FromMemo, ToMemo, FromCopy, ToCopy, DelName : string;
+  i, j, z, s : integer;
+begin
+  FromMemo := mStrFrom.Text;
+  ToMemo := mStrTo.Text;
+  //i := WordCount(FromMemo,#13)-1;
+  Goods := CreateObject('Справочники.Товары');
+
+  i := 1;
+  while i <= WordCount(FromMemo,#13) do
+    begin
+      if i = 1 then
+        begin
+          FromCopy := ExtractWord(i,FromMemo,#13);
+          ToCopy := ExtractWord(i,ToMemo,#13);
+        end
+      else
+        begin
+          FromCopy := StrCopy(ExtractWord(i,FromMemo,#13),2,StrLength(ExtractWord(i,FromMemo,#13)));//ExtractWord(i,FromMemo,#13);//StrCopy(FromMemo,1,(StrPos(#13,FromMemo)));//ExtractWord(j,MMemo,#13);
+          ToCopy := StrCopy(ExtractWord(i,ToMemo,#13),2,StrLength(ExtractWord(i,ToMemo,#13)));//ExtractWord(i,ToMemo,#13);
+        end;
+      if StrLength(FromCopy) <> 0 then
+        begin
+          //mStrTo.Text := mStrTo.Text + #13 + FromCopy;
+          Goods.CancelFieldFilter('НазвТовара');
+          Goods.SetFieldFilter('НазвТовара','Like', '%' + FromCopy + '%','','',Null);
+          Goods.Refresh;
+          Goods.Select;
+          while Goods.SelectNext do
+            begin   
+              z := 0;
+              s := 0;     
+              DelName := '';
+             Goods.Edit;
+              z := StrPos(FromCopy,Goods.НазвТовара);
+              s := StrLength(FromCopy);
+              DelName := Goods.НазвТовара;
+              StrDelete(DelName,z,s);
+              StrInsert(ToCopy,DelName,z);
+              Goods.НазвТовараст := Goods.НазвТовара;
+              Goods.НазвТовара := DelName;
+             Goods.Post;
+             Goods.ApplyUpdates;
+              //mStrTo.Text := mStrTo.Text + #13 + Goods.НазвТовара;
+              inc(j);
+            end;
+        end;
+      inc(i);
+    end;
+  Label2.Caption := 'Змінено ' + IntToStr(j);
+end;
+
+procedure Button2_Click(Sender: TObject);
+var 
+  Dic: ICDictionary;
+begin
+  Dic := CreateObject('Справочники.Товары');
+  Dic.SortByCode;
+  Dic.Select;
+  while Dic.SelectNext do
+    begin
+      Dic.Edit;
+      //Dic.НазвТовара := ReplaceOneStrWithAnother(Dic.НазвТовара, Dic.КодПроизводителя, '');
+      //Dic.НазвТовара := ReplaceOneStrWithAnother(Dic.НазвТовара, 'женский', 'жіночий');
+   //   Dic.НазвТовара := ReplaceOneStrWithAnother(Dic.НазвТовара, 'рукавички жен, авто', 'рукавички жін, авто');
+   //   Dic.НазвТовара := ReplaceOneStrWithAnother(Dic.НазвТовара, 'рукавички жен авто', 'рукавички жін авто');
+   //   Dic.НазвТовара := ReplaceOneStrWithAnother(Dic.НазвТовара, 'рукавички жен', 'рукавички жін');
+      Dic.НазвТовара := ReplaceOneStrWithAnother(Dic.НазвТовара, 'муж', 'чол');
+      Dic.Post;
+      Dic.ApplyUpdates;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+Label2:TO4Label
+mStrFrom:TO4Memo
+mStrTo:TO4Memo
+btOK:TO4Button
+btCancel:TO4Button
+Button1:TO4Button
+Button2:TO4Button

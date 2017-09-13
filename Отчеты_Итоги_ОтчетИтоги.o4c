@@ -1,0 +1,261 @@
+interface
+
+uses
+  System, DispIntf, Reports;
+
+implementation
+
+var
+  DateFrom, DateTo : DateTime;
+  jrItog : ICJournal;
+  ChartTbl : ICValueTable; // таблица значений дл€ построени€ диаграмм
+  rbtType : TO4RadioButton;
+  Field, LegendName : String;
+  V : ICReport;
+
+procedure CreateObjects;
+begin
+  ChartTbl := CreateObject('“аблица«начений');
+  ChartTbl.Close;
+  ChartTbl.AddColumn('DATE',vtcDateTime,0);
+  ChartTbl.AddColumn('—умма',vtcFFt,2);
+  ChartTbl.AddColumn('—уммаќтп',vtcFFt,2);
+  ChartTbl.AddColumn('јктив—умма',vtcFFt,2);
+  ChartTbl.AddColumn('јктив—уммаќтп',vtcFFt,2);
+  ChartTbl.AddColumn('ѕасив—умма',vtcFFt,2);
+  ChartTbl.AddColumn('—клады—умма',vtcFFt,2);
+  ChartTbl.AddColumn(' асса—умма',vtcFFt,2);
+  ChartTbl.AddColumn('–асч—чет—умма',vtcFFt,2);
+  ChartTbl.AddColumn('ƒеб—умма',vtcFFt,2);
+  ChartTbl.Open;
+end;
+
+//работа с календарем
+procedure tbSelectDates_Click(Sender : TObject);
+var
+ X, Y : integer;
+begin
+ tbSelectDates.GetScreenPos(X, Y);
+ Y := Y + tbSelectDates.Height;
+ pmDates.Popup(X, Y)
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo, deDateFrom, deDateTo);
+  (Sender as TO4MenuItem).Checked := true;
+end;
+
+procedure deDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  SetDatesOnOpenForm(DateFrom, DateTo, deDateFrom, deDateTo);
+  CreateObjects;
+  V := Mean;
+end;
+
+procedure Chart_Add(Vtbl : ICValueTable; Add_Field, Add_LegendName : String; index : Integer);
+begin
+  ChartBalans.SeriesList.Series[0].Clear;
+  ChartBalans.SeriesList.Series[1].Clear;
+  ChartBalans.SeriesList.Series[0].Title := Add_LegendName;
+  ChartBalans.SeriesList.Series[1].Title := Add_LegendName;
+  ChartBalans.Legend.Visible := true;
+  Vtbl.Select;
+  While Vtbl.SelectNext do
+    begin
+      ChartBalans.SeriesList.Series[0].AddXY(RoundDate(Vtbl.DATE,rdDay,false),Vtbl._Default[Add_Field],VarAsStr(RoundDate(Vtbl.DATE,rdDay,false))+'-('+VarAsStr(Vtbl._Default[Add_Field])+')',clRed);
+      ChartBalans.SeriesList.Series[1].AddXY(RoundDate(Vtbl.DATE,rdDay,false),Vtbl._Default[Add_Field],VarAsStr(RoundDate(Vtbl.DATE,rdDay,false))+'-('+VarAsStr(Vtbl._Default[Add_Field])+')',clRed);
+    end;
+  ChartBalans.SeriesList.Series[0].Active := false;
+  ChartBalans.SeriesList.Series[1].Active := false;
+  ChartBalans.SeriesList.Series[index].Active := true;
+end;
+
+procedure rbt_choose;
+var
+  i : integer;
+begin
+  for i := 0 to 6 do
+    begin
+      rbtType := Form.FindComponent('rbt' + VarASStr(i)) as TO4RadioButton;
+      if VarAsBool(rbtType.Checked) then
+          case rbtType.Tag of
+            0 : if VarAsBool(rbtInPrice.Checked) then
+                  begin
+                    Field := '—умма';
+                    LegendName := '—умма баланса';
+                    break;
+                  end
+                else
+                  begin
+                    Field := '—уммаќтп';
+                    LegendName := '—умма баланса';
+                    break;
+                  end;
+            1 : if VarAsBool(rbtInPrice.Checked) then
+                  begin
+                    Field := 'јктив—умма';
+                    LegendName := '—умма активов';
+                    break;
+                  end
+                else
+                  begin
+                    Field := 'јктив—уммаќтп';
+                    LegendName := '—умма активов';
+                    break;
+                  end;
+            2 : begin
+                  Field := 'ѕасив—умма';
+                  LegendName := '—умма пасивов';
+                  break;
+                end;
+            3 : begin
+                  Field := '—клады—умма';
+                  LegendName := '—умма остатков товаров на складах';
+                  break;
+                end;
+            4 : begin
+                  Field := ' асса—умма';
+                  LegendName := '—умма остатков денег в кассе';
+                  break;
+                end;
+            5 : begin
+                  Field := '–асч—чет—умма';
+                  LegendName := '—умма остатков денег на р/с';
+                  break;
+                end;
+            6 : begin
+                  Field := 'ƒеб—умма';
+                  LegendName := '—умма по дебиторам';
+                  break;
+                end;
+          end;
+    end;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  Doc : ICDocuments;
+  HeadTbl : ICValueTable;
+begin
+  jrItog := CreateObject('∆урналы.∆урнал»тогов');
+  Doc := CreateObject('ƒокументы.Ѕаланс');
+  HeadTbl := CreateObject('“аблица«начений');
+  ChartTbl.Clear;
+  jrItog.Select;
+  While jrItog.SelectNext do
+    begin
+      Doc := jrItog.GetDoc;
+      if (Doc.GetDate > DateFrom) and (Doc.GetDate < DateTo) then
+        begin
+          Doc.SaveHead('',HeadTbl);
+          HeadTbl.AppendTo('DATE;ѕасив—умма;—клады—умма; асса—умма;–асч—чет—умма;ƒеб—умма',ChartTbl);
+          ChartTbl.Open;
+          ChartTbl.Select;
+          While ChartTbl.SelectNext do
+            begin
+              ChartTbl.Edit;
+                ChartTbl.—умма := ChartTbl.—клады—умма + ChartTbl. асса—умма + ChartTbl.–асч—чет—умма + ChartTbl.ƒеб—умма - AbsD(ChartTbl.ѕасив—умма);
+                ChartTbl.—уммаќтп := ChartTbl.—клады—умма + ChartTbl. асса—умма + ChartTbl.–асч—чет—умма + ChartTbl.ƒеб—умма - AbsD(ChartTbl.ѕасив—умма);
+                ChartTbl.јктив—умма := ChartTbl.—клады—умма + ChartTbl. асса—умма + ChartTbl.–асч—чет—умма + ChartTbl.ƒеб—умма;
+                ChartTbl.јктив—уммаќтп := ChartTbl.—клады—умма + ChartTbl. асса—умма + ChartTbl.–асч—чет—умма + ChartTbl.ƒеб—умма;
+              ChartTbl.Post;
+            end;
+        end;
+    end;
+  rbt_Choose;
+  if StrPos(deSeriesType.Text,'Line;Bar')<>0 then
+    Chart_Add(ChartTbl,Field,LegendName,deSeriesType.ItemIndex)
+  else
+    ShowMessage('“акой тип диаграммы недопустим! ¬ыберите один из заданых типов.');
+end;
+
+procedure rbt_Click(Sender : TObject);
+begin
+  rbt_choose;
+  if StrPos(deSeriesType.Text,'Line;Bar')<>0 then
+    Chart_Add(ChartTbl,Field,LegendName,deSeriesType.ItemIndex)
+  else
+    ShowMessage('“акой тип диаграммы недопустим! ¬ыберите один из заданых типов.');
+end;
+
+procedure deSeriesType_Change(Sender : TObject);
+begin
+  rbt_choose;
+  if StrPos(deSeriesType.Text,'Line;Bar')<>0 then
+    Chart_Add(ChartTbl,Field,LegendName,deSeriesType.ItemIndex)
+  else
+    ShowMessage('“акой тип диаграммы недопустим! ¬ыберите один из заданых типов.');
+end;
+
+procedure tbPrint_Click(Sender : Tobject);
+begin
+ V.PrintForm('ѕечать»тоги',true,ArrayOf(deDateFrom.Text,deDateTo.Text,LegendName,ChartTbl,Field,deSeriesType.ItemIndex));
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+ToolButton2:TO4ToolButton
+Panel5:TO4Panel
+Label3:TO4Label
+Label4:TO4Label
+deDateFrom:TO4Edit
+deDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+ToolButton3:TO4ToolButton
+Panel4:TO4Panel
+Label1:TO4Label
+rbtInPrice:TO4RadioButton
+rbtOutPrice:TO4RadioButton
+ToolButton1:TO4ToolButton
+tbPrint:TO4ToolButton
+Panel2:TO4Panel
+GroupBox1:TO4GroupBox
+rBt0:TO4RadioButton
+rBt1:TO4RadioButton
+rBt2:TO4RadioButton
+rBt3:TO4RadioButton
+rBt4:TO4RadioButton
+rBt5:TO4RadioButton
+rBt6:TO4RadioButton
+GroupBox2:TO4GroupBox
+deSeriesType:TO4Edit
+Panel3:TO4Panel
+ChartBalans:TChart
+Series1:TLineSeries
+Series2:TBarSeries
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

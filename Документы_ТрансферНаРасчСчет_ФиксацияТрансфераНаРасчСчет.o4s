@@ -1,0 +1,65 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€;
+
+implementation
+
+var
+  AccPart, AccBank, AccROutPart, AccRInPart, AccKassa : ISAccs;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  Partner : Variant;
+begin
+  DocDate := Doc.GetDate;
+  AccBank.ClearFieldBuffers();
+  AccKassa.ClearFieldBuffers();
+
+  //остаток по банку на расчетном счету
+  AccBank.AssignFields('–асч—чет=—четѕредпри€ти€;¬алюта;—умѕрих=—умма¬¬алюте;—умќбщ=—умма¬¬алюте;ƒата=ƒатаƒокумента', Doc);
+  AccBank.Income(Doc, DocDate, 0);
+  //остаток по кассе в валюте
+  AccKassa.AssignFields('¬алюта;—ум–асх=—умма¬¬алюте;—умќбщ=—умма¬¬алюте;ƒата=ƒатаƒокумента', Doc);
+  AccKassa.Outcome(Doc, DocDate, 0);
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccBank := CreateObject('јккумул€торы.ќстаткиЌа–асч—чет');
+  AccKassa := CreateObject('јккумул€торы.ќстаткиѕо ассе');
+  Result := EntryPoint(ChangeStateUp);
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccBank := CreateObject('јккумул€торы.ќстаткиЌа–асч—чет');
+        AccKassa := CreateObject('јккумул€торы.ќстаткиѕо ассе');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  //
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+begin
+  //
+end;
+
+end.

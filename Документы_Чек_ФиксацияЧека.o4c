@@ -1,0 +1,137 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, РаботаСПеременными, РаботаСОбъектами, СтруктураТаблицДляDBF, РаботаСТаблицамиЗначений,
+  ФиксацияCL, ДокументыВСмене, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  AccsGood, AccsPart, AccsRev: ICAccs;
+  FullName : String;
+  Constants : IC4VPAConst;
+  ItemsInOutComeDic : ICDictionary;
+
+function CheckPartBalance(Data: ICDocuments): boolean;
+var
+  OverPartLimit, PartSumBalance : Decimal;
+begin
+  result := true;
+  if not GetUDASet('OverPartLimit') then
+    begin
+      PartSumBalance := Server.GetPartSumBalance(Data.@Партнер);
+      if Data.Партнер.КредитныйЛимит = 0 then
+        exit;
+      OverPartLimit := Data.Партнер.КредитныйЛимит - (PartSumBalance + Data.СуммаВВалюте);
+      if VarAsBool(Data.Партнер.HasField('КредитныйЛимит')) and (OverPartLimit < 0) then
+        begin
+          ShowMessage(Trans('Вам запрещено отпускать товар партнеру, у которого превышен кредитный лимит'));
+          result := false;
+          exit
+        end;
+    end;
+end;
+
+procedure CanChangeStateUp(Data: ICDocuments; var Accept: boolean);
+begin
+  FullName := CanFixDel(Data, Accept, DecGood, UniFix, FixAck);
+  if not Accept or (Data.HasParam('NotCheckRestrictions') and VarAsBool(Data.Params['NotCheckRestrictions'])) then
+    exit;
+  Accept := CheckRestrictions(Data, 'СкладПоУмолч');
+  if not Accept then
+    exit;
+  Accept := CheckPartBalance(Data);
+  if not Accept then
+    exit;
+end;
+
+procedure DoChangeStateUp(Doc:ICDocuments);
+var Options: ICOptions;
+begin
+  Options := GetOptions;
+  case Doc.GetDocState of
+    1: begin
+         Server.GetChangeStateUpEP(Doc.SrvMean);
+         ChangeDoc(clmtStateUp, Doc);
+       end;
+    2:
+    ;
+  end;
+end;
+
+procedure CanChangeStateDown(Data:ICDocuments; var Accept : boolean);
+begin   
+ if VarAsBool(Data.Смена.IsFocused) and (VarAsInt(Data.Смена.GetDocState)>0) then
+   begin
+     Accept := false;
+     ShowMessage('Документ привязан к зафиксированой смене №'+VarAsStr(Data.Смена.GetNumber)+' от '+DateTimeToStr(Data.Смена.GetDate)+#13+
+                 'Сначала расфиксируйте Смену!');
+     exit;
+   end;
+ FullName := CanFixDel(Data, Accept, DecGood, UniUnFix, FixAck)
+end; 
+
+procedure DoChangeStateDown(Doc:ICDocuments);
+begin
+  ChangeDoc(clmtStateDown, Doc);
+end;
+
+procedure CanDelete(Doc: ICDocuments; var Accept: boolean);
+var ChangDoc:ICDocuments;
+    P:ICProcessing; 
+    ChildPayModalResult : integer;
+begin
+ if Doc.HasField('Смена') and VarAsBool(Doc.@Смена.IsFocused) then
+    begin
+      ChangDoc := CreateObject('Документы.Смена');
+      if ChangDoc.Find(Doc.@Смена) then
+        begin
+          if (ChangDoc.GetDocState>0) then
+            begin
+              Accept := false;
+              ShowMessage('Документ есть в зафиксированой смене №'+VarAsStr(ChangDoc.GetNumber)+' от '+DateTimeToStr(ChangDoc.GetDate)+#13+
+                          'По этому удалять документ запрещено!');
+              exit;
+            end
+          else
+            begin
+              if MessageDlg('Документ принадлежит к Смене №'+VarAsStr(ChangDoc.GetNumber)+' от '+DateTimeToStr(ChangDoc.GetDate)+#13+
+                        'Все равно удалить документ?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+                begin
+                  ChildPayModalResult := mrYes;
+                  if HasChildPays(Doc) then
+                    begin
+                      P := CreateObject('Обработки.Диалоги');
+                      ChildPayModalResult := P.Execute('УдалениеДокументаСПодчДокОплат',Doc);
+                      Accept := ChildPayModalResult <> mrCancel;
+                    end;
+                  if Accept then
+                    begin
+                      Accept := DelDocFromChangeDoc(Doc,ChangDoc);
+                      if Accept then
+                        begin
+                          if ChildPayModalResult=mrYesToAll then
+                            DelAllChildPayDoc(Doc);
+                        end
+                      else
+                        ShowMessage('Не удалось удалить документ из смены!');
+                    end;
+                end
+              else
+                Accept := false; 
+              if Accept then
+                ChangeDoc(clmtDelete, Doc);
+              exit;
+            end;
+        end;
+      Nil(ChangDoc);
+    end;
+
+ FullName := CanFixDel(Doc, Accept, DecGood, UniDel, DelAck, CheckChildPayDoc);
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

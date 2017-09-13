@@ -1,0 +1,109 @@
+interface
+
+uses 
+  System, DispIntf, ConstNames, InitColors, Интерфейс, Расчеты;
+
+implementation
+
+var
+  AccsGood, AccsPartGood, AccsGoodRes : ISAccs;
+  Store : ISDictionary;
+  Stores : ISValueList;
+  Date : DateTime;
+  ServerCheck : Boolean;
+  Constants : IS4VPAConst;
+  TempTbl : ISValueTable; 
+
+procedure SrvCalcFields(Dic : ISDictionary);
+begin
+  PricesInNativeCurrency(Dic); //находится в модуле Расчёты
+end;
+
+function SrvCalcFieldsEP : Variant; server;
+begin
+  Result := EntryPoint(SrvCalcFields);
+end;
+
+procedure GetGroupTbl(GroupTbl: ISValueTable);server;
+var
+  GroupDic: ISDictionary;
+  TempTbl: ISValueTable;
+begin
+  GroupDic := CreateObject('Справочники.Производители');
+  GroupDic.Select;
+  TempTbl := CreateObject('ValueTable');
+  GroupDic.SaveToValueTable('',TempTbl,1,GroupDic.RecordCount);
+  TempTbl.AppendTo('SELF=ГруппаТовара',GroupTbl);
+  GroupTbl.DoGetLinks('Группа=ГруппаТовара.Название');
+  GroupTbl.DoCalculation('Order','1');
+  GroupTbl.Append;
+  GroupTbl.Группа := 'Все';
+  GroupTbl.Order := 0;
+  GroupTbl.Post;
+end;
+
+procedure InitSrvData; server;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoodRes := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  Constants := GetConstants;    
+  TempTbl := CreateObject('ТаблицаЗначений');
+  TempTbl.AddColumn('Активность', vtcInteger, 0);
+  TempTbl.AddColumn('Склад', lftLink, 0);
+  TempTbl.AddColumn('Товар', lftLink, 0);
+  TempTbl.AddColumn('КолОбщ', lftFFT, 5);
+  TempTbl.Open;
+end;
+
+procedure SetStoreParams(DT : DateTime; SelStores : ISValueList; Index : Integer); server;
+var
+  NumStr : Integer;
+begin
+  Date := RoundDate(DT, rdDay, True);
+  Stores := SelStores;
+  if Stores.ValidIndex(Index) and (Index <> 0) then
+    Store := Stores.GetValue(Index)
+  else
+    nil(Store);
+  NumStr := Stores.FindByStr('');
+  if (Stores.Count > 2) and (NumStr <> -1) then
+    Stores.RemoveValue(NumStr);
+end;
+
+function GetStoreList(Good : ISDictionary; TblStore, TblPartGood : ISValueTable; ZeroRest : Boolean) : Double; server;
+begin
+  AccsGood.SetFieldFilter('Товар', Good);
+  if not IsNil(Store) and Store.IsFocused then
+    AccsGood.SetFieldFilter('Склад', Store)
+  else
+    AccsGood.SetFieldFilter('Склад', Stores);
+  AccsGood.IncludeZeroRest := ZeroRest;
+  if VarAsBool(Constants.УчетПоСреднейСтоим) then
+    begin
+      AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Склад;Партия;КолОбщ;СумВх;СумВалВх', TblPartGood);
+      TblPartGood.SortBy('Товар;Склад;Партия');
+    end
+  else
+    begin
+      AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Склад;Партия;КолОбщ', TblPartGood);
+      TblPartGood.SortBy('Товар;Склад;Партия');
+    end;
+  Result := TblPartGood.Total('КолОбщ');
+  AccsGood.ClearFieldFilters();
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ДатаПр;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;СтавкаНДС', TblPartGood);
+  if VarAsBool(Constants.УчетПоСреднейСтоим) then
+    begin
+      TblPartGood.DoCalculation('ВхЦенаБезНДС', 'СумВх/КолОбщ');
+      TblPartGood.DoCalculation('ВхЦенаВал', 'СумВалВх/КолОбщ');
+    end;
+  TblPartGood.GroupToMaster('Товар;Склад', 'КолОбщ', TblStore);
+  TblPartGood.SortBy('-ВхЦенаБезНДС;Партнер;Товар;Склад');
+  TblStore.AppendTo('Товар;Склад;КолОбщ', TempTbl);
+  TempTbl.DoGetLinks('Активность=Склад.Активность');
+  TempTbl.CopyTo('', TblStore);
+  TempTbl.Clear;
+end;
+
+end.

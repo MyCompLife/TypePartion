@@ -1,0 +1,55 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : Variant;    
+  i: Integer;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams; //Form.GetMean;
+  Label1.Caption := 'Звіт касира за ' + VarAsStr(CurrentDate);
+  i := 1;
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if i > 0 then
+    Accept := true
+  else
+    Accept := false; 
+  if not Accept then
+    exit;
+  dec(i);
+  with Table do
+    begin
+      Value['SumNal'] := FormatFloat('0.00',MasterData[0]);
+      Value['SumBN'] := FormatFloat('0.00',MasterData[1]);
+      Value['SumDebt'] := FormatFloat('0.00',MasterData[2]);
+      Value['SumSert'] := FormatFloat('0.00',MasterData[3]);
+      Value['Name'] := MasterData[3];
+      Value['Doc'] := MasterData[4];
+    end;
+end;
+
+end.
+
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+Label5:TRBLabel
+Label1:TRBLabel
+Label6:TRBLabel
+Label3:TRBLabel
+Label2:TRBLabel
+Label4:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Structure1:TRBStructure

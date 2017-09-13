@@ -1,0 +1,205 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений;
+
+implementation
+
+var
+  AccPart, AccBank, AccROutPart, AccRInPart, AccPartDog,
+    AccMag, AccBarter, AccFizTax : ISAccs;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  Partner : ISDictionary;
+  J : ISJournal;
+  DocCurrentOwner : ISDocuments;
+begin
+  DocDate := Doc.GetDate;
+  AccPart.ClearFieldBuffers();
+  AccBank.ClearFieldBuffers();
+  Partner := Doc.ѕартнер;
+  if VarAsBool(Doc.¬заиморасчет) and VarAsBool(Partner.IsFocused) then
+    begin
+      //перевод с одного банковского счета на другой
+      if VarAsBool(Partner.GetSign = '–асч—чета') then
+        begin
+          AccBank.AssignFields('–асч—чет=ѕартнер;¬алюта;—умќбщ=—умма¬¬алюте;ƒата=ƒатаƒокумента', Doc);
+          AccBank.Income(Doc, DocDate, 0);
+        end
+      else
+        begin
+          case VarAsStr(Partner.GetSign) of
+            '–еализаторы', '–еализаторы‘арм' :
+              begin
+                if not VarAsBool(Doc.Owner.IsFocused) then
+                  begin
+                    Doc.Edit;
+                    Doc.SetMaster(Partner);
+                    J := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+                    J.AddDoc(Doc);
+                    Doc.Post;
+                  end;
+                Partner := Partner.@ѕартнер;
+                //расчеты с реализатором
+                AccROutPart.AssignFields('ѕартнер;—умќпл=—умма;—умќбщ=—умма;—умќпл¬ал=—умма“в¬ал;—умќбщ¬ал=—умма“в¬ал', Doc);
+                AccROutPart.Income(Doc, DocDate, 0);
+              end;
+            'ѕостЌа–еализацию', 'ѕостЌа–еализацию‘арм' :
+              begin
+                AccRInPart.ClearFieldBuffers();
+                if not VarAsBool(Doc.Owner.IsFocused) then
+                  begin
+                    Doc.Edit;
+                    Doc.SetMaster(Partner);
+                    J := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+                    J.AddDoc(Doc);
+                    Doc.Post;
+                  end;
+                Partner := Partner.@ѕартнер;
+                //расчеты с реализатором
+                AccRInPart.AssignFields('ѕартнер;—умќпл=—умма;—умќбщ=—умма;—умќпл¬ал=—умма“в¬ал;—умќбщ¬ал=—умма“в¬ал', Doc);
+                AccRInPart.Outcome(Doc, DocDate, 0);
+              end;
+            '“орговые“очки' :
+              begin
+                if not VarAsBool(Doc.Owner.IsFocused) then
+                  begin
+                    Doc.Edit;
+                    Doc.SetMaster(Partner);
+                    J := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+                    J.AddDoc(Doc);
+                    Doc.Post;
+                  end;
+                Partner := Partner.@ѕартнер;
+                //расчеты с магазином
+                AccMag.AssignFields('ѕартнер;—умќпл=—умма;—умќбщ=—умма', Doc);
+                AccMag.Outcome(Doc, DocDate, 0);
+              end;
+            'Ѕартер' :
+              begin
+                AccBarter.ClearFieldBuffers();
+                if not VarAsBool(Doc.Owner.IsFocused) then
+                  begin
+                    Doc.Edit;
+                    Doc.SetMaster(Partner);
+                    J := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+                    J.AddDoc(Doc);
+                    Doc.Post;
+                  end;
+                Partner := Partner.@ѕартнер;
+                //расчеты с магазином
+                AccBarter.AssignFields('ѕартнер;—ум–асх=—умма;—умќбщ=—умма', Doc);
+                AccBarter.Income(Doc, DocDate, 0);
+              end;
+            'ƒоговѕоставки' :
+              begin
+                if not VarAsBool(Doc.Owner.IsFocused) then
+                  begin
+                    Doc.Edit;
+                    Doc.SetMaster(Partner);
+                    J := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+                    J.AddDoc(Doc);
+                    Doc.Post;
+                  end;
+                Partner := Partner.@ѕартнер;
+                //расчеты по договорам
+                AccPartDog.AssignFields('ѕартнер;—умќпл=—умма;—умќбщ=—умма', Doc);
+                AccPartDog.Income(Doc, DocDate, 0);
+              end
+          end;
+          //взаиморасчеты с партнерами
+          Partner := Doc.ѕартнер;
+          while Partner.HasField('ѕартнер') do
+            Partner := Partner.ѕартнер;
+          AccPart.ѕартнер := Partner;
+          AccPart.—умѕрих¬ал := Doc.—умма¬¬алюте;
+          AccPart.—умќбщ¬ал := Doc.—умма¬¬алюте;
+          AccPart.¬алюта := Doc.¬алюта;    
+         if VarAsBool(Doc.@јналитика¬заиморасчета.IsFocused) then
+           AccPart.јналитика¬заиморасчета := Doc.@јналитика¬заиморасчета;
+          AccPart.Income(Doc, DocDate, 0);
+        end;
+    end;
+  if VarAsBool(Doc.”чет¬8ƒ–) then
+    begin
+      AccFizTax := CreateObject('јккумул€торы.–асчетЌалог‘изЋиц');
+      AccFizTax.AssignFields('‘изЋицо=ѕартнер;Ѕаза=—умма; одƒохода= одƒоход¬8ƒ–', Doc);
+      AccFizTax.Income(Doc, DocDate, 0);
+      //
+      AccFizTax.AssignFields('‘изЋицо=ѕартнер;Ѕаза=—умма; одƒохода= одƒоход¬8ƒ–', Doc);
+      AccFizTax.Outcome(Doc, DocDate, 0);
+    end;
+  //остаток по банку на расчетном счету
+  if VarAsBool(Partner.GetSign = '–асч—чета') then
+    begin
+      AccBank.AssignFields('–асч—чет=—четѕредпри€ти€;¬алюта;—умќбщ=—умма¬¬алюте;ƒата=ƒатаƒокумента', Doc);
+      AccBank.Outcome(Doc, DocDate, 0);
+    end
+  else
+    begin
+      AccBank.AssignFields('–асч—чет=—четѕредпри€ти€;¬алюта;—ум–асх=—умма¬¬алюте;—умќбщ=—умма¬¬алюте;ƒата=ƒатаƒокумента', Doc);
+      AccBank.Outcome(Doc, DocDate, 0);
+    end;
+  // остаток по авансовому отчету
+  DocCurrentOwner := Doc.Owner;
+  if DocCurrentOwner.IsFocused and (DocCurrentOwner.GetSign = 'Ќовјвансовыйќтчет') then
+    begin
+      AccBank := CreateObject('јккумул€торы.ќстаткиѕојвансовомуќтчету');
+      AccBank.AssignFields('—лужащий=ѕартнер;ќстаток=—умма', Doc);
+      AccBank.Income(Doc, Doc.GetDate, 0);
+    end;
+  Accept := true;
+end;
+
+function GetChangeStateUpEP(Doc : ISDocuments) : Variant; server;
+begin
+  AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  AccBank := CreateObject('јккумул€торы.ќстаткиЌа–асч—чет');
+  case VarAsStr(Doc.ѕартнер.GetSign) of
+    'ѕостЌа–еализацию', 'ѕостЌа–еализацию‘арм' : 
+      AccRInPart := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+    '–еализаторы', '–еализаторы‘арм' : 
+      AccROutPart := CreateObject('јккумул€торы.–асчеты—–еализаторами');
+    '“орговые“очки' :
+      AccMag := CreateObject('јккумул€торы.–асчеты—“орг“очками');
+    'ƒоговѕоставки' :
+      AccPartDog := CreateObject('јккумул€торы.–асчетыѕоƒоговорам');
+    'Ѕартер' :
+      AccBarter := CreateObject('јккумул€торы.–асчетыѕоЅартеру');
+  end;
+  Result := EntryPoint(ChangeStateUp);
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+        AccBank := CreateObject('јккумул€торы.ќстаткиЌа–асч—чет');
+        case VarAsStr(Doc.ѕартнер.GetSign) of
+          'ѕостЌа–еализацию', 'ѕостЌа–еализацию‘арм' : 
+            AccRInPart := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+          '–еализаторы', '–еализаторы‘арм' :
+            AccROutPart := CreateObject('јккумул€торы.–асчеты—–еализаторами');
+          '“орговые“очки' :
+            AccMag := CreateObject('јккумул€торы.–асчеты—“орг“очками');
+          'ƒоговѕоставки' :
+            AccPartDog := CreateObject('јккумул€торы.–асчетыѕоƒоговорам');
+          'Ѕартер' :
+            AccBarter := CreateObject('јккумул€торы.–асчетыѕоЅартеру');
+        end;
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.

@@ -1,0 +1,96 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+const
+  errFindMax = 'Невозможно найти максимум величин';
+  errFindMin = 'Невозможно найти минимум величин';
+
+function Max(Values : Variant) : Variant;
+function Min(Values : Variant) : Variant;
+function CalcSumByRateAndRateSum(SumRate, Rate : Decimal; FromNetto : Boolean) : Decimal;
+function CalcSumByRate(SumIn, Rate : Decimal; FromNetto : Boolean) : Decimal;
+function CalcRateSum(SumIn, Rate : Decimal; FromNetto : Boolean) : Decimal;
+function CalcRateSumBySums(SumBeg, SumEnd : Decimal) : Decimal;
+function CalcSumAndRateSum(SumIn, Rate : Decimal; var RateSum : Decimal;
+  FromNetto : Boolean) : Decimal;
+
+implementation
+
+function Max(Values : Variant) : Variant;
+var
+  i : Integer;
+begin
+  if not IsArray(Values) then
+    raise(Trans(errFindMax));
+  Result := Values[ArrayLow(Values)];
+  for i := ArrayLow(Values) + 1 to ArrayHigh(Values) do
+    if Result < Values[i] then
+      Result := Values[i];
+end;
+
+function Min(Values : Variant) : Variant;
+var
+  i : Integer;
+begin
+  if not IsArray(Values) then
+    raise(Trans(errFindMin));
+  Result := Values[ArrayLow(Values)];
+  for i := ArrayLow(Values) + 1 to ArrayHigh(Values) do
+    if Result > Values[i] then
+      Result := Values[i];
+end;
+
+function CalcSumByRateAndRateSum(SumRate, Rate : Decimal; FromNetto : Boolean) : Decimal;
+begin
+  if Rate = 0 then
+    Result := 0
+  else
+    if FromNetto then
+      Result := SumRate * 100 / Rate
+    else
+      Result := SumRate * (100 / Rate + 1)
+end;
+
+function CalcSumByRate(SumIn, Rate : Decimal; FromNetto : Boolean) : Decimal;
+begin
+  if FromNetto then
+    Result := SumIn * (1 + Rate / 100)
+  else
+    if Rate <> -100 then
+      Result := SumIn / (1 + Rate / 100)
+    else
+      Result := 0;
+end;
+
+function CalcRateSum(SumIn, Rate : Decimal; FromNetto : Boolean) : Decimal;
+begin
+  if FromNetto then
+    Result := SumIn * Rate / 100
+  else
+    if Rate <> -100 then
+      Result := SumIn * Rate / (100 + Rate)
+    else
+      Result := 0;
+end;
+
+function CalcRateSumBySums(SumBeg, SumEnd : Decimal) : Decimal;
+begin
+  if SumBeg <> 0 then
+    Result := (SumEnd / SumBeg - 1) * 100
+  else
+    Result := 0;
+end;
+
+function CalcSumAndRateSum(SumIn, Rate : Decimal; var RateSum : Decimal;
+  FromNetto : Boolean) : Decimal;
+begin
+  RateSum := CalcRateSum(SumIn, Rate, FromNetto);
+  if FromNetto then
+    Result := SumIn + RateSum
+  else
+    Result := SumIn - RateSum;
+end;
+
+end.

@@ -1,0 +1,182 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, ПодключениеДопИнтерфейса;
+
+implementation
+var
+  Store : ISDictionary;
+  Date : DateTime;
+  DateDoc: DateTime;
+  StoreRev : ISDictionary;
+  TblDic, TblContents: ISValueTable;
+  Rule: ISDictionary;
+  OnlyMin: Boolean;
+  CtgList : ISValueList;
+  
+procedure SetFldToTblPartGood(TblPartGood : ISValueTable);
+begin
+  TblPartGood.Close;
+  TblPartGood.AddColumn('Код',vtcString,20);
+  TblPartGood.AddColumn('ЕдИзм',vtcLink,0);
+  TblPartGood.AddColumn('Товар', lftLink, 0);
+  TblPartGood.AddColumn('Склад', lftLink, 0);
+  TblPartGood.AddColumn('Партнер', lftLink, 0);
+  TblPartGood.AddColumn('Партия', lftFloat, 0);
+  TblPartGood.AddColumn('Валюта', lftLink, 0);
+  TblPartGood.AddColumn('Комиссия', lftInteger, 0);
+  TblPartGood.AddColumn('ДатаПр', lftDate, 0);
+  TblPartGood.AddColumn('Document',vtcLink,0);
+  TblPartGood.AddColumn('ДатаДокумента',lftDate,0);
+  TblPartGood.AddColumn('НомерДокумента',vtcString,20);
+  TblPartGood.AddColumn('ВалютаОтп',vtcLink,0);
+  TblPartGood.AddColumn('Тип', lftInteger, 0);
+  AddFFtColumnsList(TblPartGood, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал;СумВх;СумВалВх');
+  AddFFtColumnsList(TblPartGood, 'Цена;СумОтп;ЦенаВВалюте;СумВалОтп');
+  TblPartGood.Open;
+end;
+
+procedure GetGoodWithPart(TblPartGood:ISValueTable; Source: ISDictionary); server;
+var
+  AccsGoods, AccsPartGood : ISAccs;
+begin
+  SetFldToTblPartGood(TblPartGood);
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsGoods.ClearFieldFilters();
+  AccsGoods.ClearFieldBuffers();
+  AccsGoods.SetFieldFilter('Товар',Source);
+  AccsGoods.SetFieldFilter('Тип',midOutcome);
+  AccsGoods.AppendMotionToValueTable(0,400000,amtOutcome,'Товар;Склад;Партия;СумОтп;СумВалОтп;КолОбщ;Валюта=ВалютаОтп;Document;Тип', -1,TblPartGood);
+  TblPartGood.DoCalculation('Цена','СумОтп/КолОбщ');
+  TblPartGood.DoCalculation('ЦенаВВалюте','СумВалОтп/КолОбщ');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;ДатаПр',TblPartGood);
+  TblPartGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;Партнер=Document.Партнер;ДатаДокумента=Document.ДатаДокумента;НомерДокумента=Document.НомерДокумента');
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure TblDic_Fill(Doc : ISDocuments; var Success : Boolean);server;
+var
+  Goods: ISDictionary;
+  AccsGoods : ISAccs;
+  ByCtg, Accept: Boolean;
+  RecCnt, LstCnt, Total, i : Integer;
+  CtgName : String;
+begin
+  Success := true;  
+  i := 1;
+//----------Заполнение рабочей таблицы---------------------------
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  Goods := CreateObject('Справочники.Товары');
+  Goods.SortByName;
+  ByCtg :=  CtgList.Count > 0;
+  if ByCtg then
+    for LstCnt := 0 to CtgList.Count - 1 do
+      begin
+        CtgName := CtgList.GetValue(LstCnt).НазвТовара;
+        Goods.UseParent(CtgList.GetValue(LstCnt));
+        Goods.Select;
+        Total := Goods.RecordCount;
+        RecCnt := 0;
+        While Goods.SelectNext do
+          begin
+            AccsGoods.CalcGroupRestDirect(DateDoc, ArrayOf(Goods, StoreRev));
+            if AccsGoods.КолОбщ <> 0 then
+              begin
+                TblDic.Append;  
+                TblDic.НомСтроки := i;
+                TblDic.Товар := Goods;
+                TblDic.Категория := CtgList.GetValue(LstCnt).НазвТовара;//Goods.GetParent;
+                TblDic.КоличествоПосле := 0;
+                TblDic.КоличествоДо := AccsGoods.КолОбщ;
+                TblDic.Количество := TblDic.КоличествоПосле - TblDic.КоличествоДо;
+                TblDic.Post; 
+                inc(i);
+              end;
+            Inc(RecCnt);
+            Doc.NotifyClient(msgProceed + 'из категории - ' + CtgName + ': ' + IntToStr(RecCnt) + ':' + IntToStr(Total), RecCnt, Total);
+            if Doc.Terminated then
+              begin
+                Success := false;
+                break;
+              end;
+          end;
+      end;
+  TblDic.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;ШтрихКод=Товар.ШтрихКод;Цена=Товар.ОптЦена');
+  TblDic.SortBy('НомСтроки');
+end;
+
+function TblDicS(TblDicS: ISValueTable; DateDocS: DateTime; StoreS: ISDictionary; CtgListS: ISValueList): Variant;server;
+begin
+  TblDic := TblDicS;
+  DateDoc := DateDocS;
+  StoreRev := StoreS;
+  CtgList := CtgListS;
+  Result := EntryPoint(TblDic_Fill)
+end;
+
+procedure SaveCtgListToCtgTbl(CtgTbl: ISValueTable; CtgList: ISValueList);server;
+Var
+  Ctg : ISDictionary;
+  RecCnt : Integer;
+begin
+  Ctg := CreateObject('Справочники.Товары');
+  Ctg.IncludeOnlyLevels(true);
+  for RecCnt := 0 to CtgList.Count - 1 do
+  begin
+    CtgTbl.Append;
+    CtgTbl.Str := CtgList.GetStr(RecCnt);
+    if Ctg.Find(CtgList.GetValue(RecCnt)) then
+      begin
+        CtgTbl.ValueStrID := FloatToHexStr(Ctg.GetUniID);
+        CtgTbl.Код := Ctg.Код;
+        CtgTbl.Категория := Ctg;
+      end;
+    CtgTbl.Post;
+  end;
+end;
+
+procedure CheckCtgTbl(CtgTbl: ISValueTable; var ErrorStr: String);server;
+Var
+  Ctg : ISDictionary;
+  RecCnt : Integer;
+begin
+  Ctg := CreateObject('Справочники.Товары');
+  Ctg.IncludeOnlyLevels(true);
+  CtgTbl.Select;
+  While CtgTbl.SelectNext do
+  begin
+    if not VarAsBool(CtgTbl.Категория.IsFocused) then
+      if Ctg.FindByCode(CtgTbl.Код, false) then
+        begin
+          CtgTbl.Edit;
+          CtgTbl.ValueStrID := FloatToHexStr(Ctg.GetUniID);
+          CtgTbl.Код := Ctg.Код;
+          CtgTbl.Категория := Ctg;
+          CtgTbl.Post;
+        end
+      else
+        begin
+          if ErrorStr = '' then
+            ErrorStr := 'Категория с кодом: ' + CtgTbl.Код + ' не найдена'
+          else
+            ErrorStr := ErrorStr + #13 + 'Категория с кодом: ' + CtgTbl.Код + ' не найдена';
+          CtgTbl.Edit;
+          CtgTbl.ValueStrID := 0;
+          CtgTbl.Категория := Null;
+          CtgTbl.Post;
+        end;
+  end;
+end;
+
+
+end.

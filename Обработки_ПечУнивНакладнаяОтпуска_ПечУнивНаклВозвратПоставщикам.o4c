@@ -1,0 +1,156 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+  Tbl, DocListTbl : ICValueTable;
+  OutCome : Boolean;    
+  AccsGood, AccsPartGood : ICAccs;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+  Tbl.AddColumn('ДатаПр', vtcDateTime, 0);
+  Tbl.AddColumn('Товар', vtcLink, 0);
+  Tbl.AddColumn('Код', vtcString, 70);
+  Tbl.AddColumn('ЕдИзм', vtcString, 70);
+  Tbl.AddColumn('Количество', vtcFFt, 4);
+  Tbl.AddColumn('Цена', vtcFFt, 4);
+  Tbl.AddColumn('СуммаСтроки', vtcFFt, 4);
+  Tbl.AddColumn('Партнер', vtcLink, 0);
+  Tbl.Open;
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');  
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  //документы
+  DocListTbl := CreateObject('ТаблицаЗначений');
+  DocListTbl.AddColumn('ДатаПр', vtcDateTime, 0);
+  DocListTbl.AddColumn('Document', vtcLink, 0);
+  DocListTbl.AddColumn('DNames', vtcString, 70);
+  DocListTbl.AddColumn('MotionSign', vtcInteger, 0);
+  AddFFtColumnsList(DocListTbl, 'КолОбщ;СумВх;СумВхНДС;СумОтпНДС;СумОтп;СумНакоп;СумНац;СумОбщ');
+  DocListTbl.AddColumn('Sort', vtcInteger, 0);
+  DocListTbl.AddColumn('Документ', vtcString, 150);
+  DocListTbl.AddColumn('Партнер', vtcLink, 0);
+  DocListTbl.AddColumn('НазвПартнера', vtcString, 150);
+  DocListTbl.AddColumn('НомерДокумента', vtcString, 20);
+  DocListTbl.AddColumn('Цена', vtcFFt, 4);
+  DocListTbl.AddColumn('Товар', vtcLink, 0);
+  DocListTbl.AddColumn('Склад', vtcLink, 0);
+  DocListTbl.AddColumn('Партия', vtcFloat, 0);
+  DocListTbl.AddColumn('Отпуск', vtcInteger, 0);
+  SetFormatStdColumnsList(DocListTbl, 'КолОбщ', '0.####');
+  SetFormatStdColumnsList(DocListTbl, 'СумВх;СумВхНДС;СумОтпНДС;СумОтп;СумНакоп;СумНац;СумОбщ;Цена', '0.00##');
+  DocListTbl.Open;
+  DocListTbl.SortBy('Склад;Document;Партнер');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      Value['Summa'] := MasterData.Сумма;
+    end;  
+  AccsGood.AppendGroupMotionToValueTable(MasterData.ДатаДокумента, MasterData.ДатаДокумента + 0.99999, amtBoth, 'Товар;MotionSign;'+
+           'Партия;Document;СумОтп;СумОтпНДС;КолОбщ;СумВх;СумВхНДС;СумНац',
+           -1, DocListTbl);
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ДатаПр', DocListTbl);
+  DocListTbl.SortBy('Document');
+  DocListTbl.SetRange(MasterData,MasterData);  
+  DocListTbl.Select;
+  while DocListTbl.SelectNext do
+    begin
+      Tbl.Append;
+      Tbl.ДатаПр := DocListTbl.ДатаПр;
+      Tbl.Товар := DocListTbl.Товар;
+      Tbl.Количество := DocListTbl.КолОбщ;
+      Tbl.Цена := DocListTbl.СумВх/DocListTbl.КолОбщ;
+      Tbl.Партнер := DocListTbl.Партнер;
+      Tbl.Post;
+    end;
+ { MasterData.SaveContents('', Tbl);    }
+  //if OutCome then
+  //  Tbl.GroupBy('Товар;Цена', 'Количество');
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*Цена');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Товар');
+  Tbl.Select;
+  lbSumInWord.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058);
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+      Value['Price'] := Tbl.Цена;
+      Value['SummaStr'] := Tbl.СуммаСтроки;
+      Value['DateIn'] := Tbl.ДатаПр;
+      if VarAsBool(Tbl.Партнер.IsFocused) then
+        Value['Part'] := Tbl.Партнер.ПолноеНазвание;
+    end;
+end;
+
+procedure DetailBand2_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Label1.Caption := StrUpperCase(MasterData.GetView());
+end;
+
+procedure Structure1_ROOT_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand2:TRBDetailBand
+Label1:TRBLabel
+Label84:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label31:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+dbndGoods:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label39:TRBLabel
+SysData1:TRBSysData
+Label7:TRBLabel
+Label8:TRBLabel
+bndFtHd:TRBBand
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label81:TRBLabel
+bndFtDET:TRBBand
+Label47:TRBLabel
+lbSumInWord:TRBLabel
+Label48:TRBLabel
+Label51:TRBLabel
+Structure1:TRBStructure

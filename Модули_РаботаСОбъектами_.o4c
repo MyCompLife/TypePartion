@@ -1,0 +1,537 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными;
+
+type
+  TAppendRecVariant = T_Enum;
+  TParamName = string; // используется для запоминания имен параметров
+  TEditMode = T_Enum;
+  TFilterDescr = Variant; // описание фильтра для понятия в виде массива, за нумерацию элементов которого отвечает TFilterDescriptorLevels
+  TFilterDescriptorLevels = T_Enum;
+  To4ActionName = string;
+
+const
+  FieldDelimiter = ';';
+  DefActiveName = 'Активность';
+  DefActiveValue = -1;
+  DefInActiveValue = 0;
+  // TEditMode(DocMode - раньше) consts
+  dmAppend = 0; // TEditMode (DocMode)
+  dmEdit = 1; // TEditMode (DocMode)
+  dmReadOnly = 3; // TEditMode (DocMode)
+  //  TAppendRecVariant - варианты добавления записи в таблицу некоторого понятия
+  // не ограничивается тремя значениями ниже - остальные значения зависят от режима
+  arvSimple = 0; // просто добавление записи чего-либо
+  arvTemplate = 1; // прямой шаблон - на основании другой записи из этой же таблицы
+  arvTemplateFromOtherBase = 2; // запись из другой базы
+  // зарезервированное название параметров для передачи типа добавления записи
+  prmnAppendRecVariant = 'AppendRecVariant';
+  prmnAppendTemplateObjects = 'AppendTemplateObjects';
+  // результат после добавления записи в понятии: сейчас актуально для EditInForm
+  prmnRecSaved = 'RecSaved';
+  // идентификаторы калькулируемых полей
+  epTableCalcFields = 'TableCalcFields';
+  epCalcFields = 'CalcFields';
+  epServerTableCalcFields = 'ServerTableCalcFields';
+  epServerCalcFields = 'ServerCalcFields';
+  // сообщение при работе с записями
+  msgProceededCountFromTotal = 'Обработано %s из %s';
+  // название действий над понятиями
+  actnNone = ''; //To4ActionName
+  actnAdd = 'Добавление'; //To4ActionName
+  actnEdit = 'Редактирование'; //To4ActionName
+  actnDel = 'Удаление'; //To4ActionName
+  actnStateUp = 'Фиксация'; //To4ActionName
+  actnStateDown = 'Расфиксация'; //To4ActionName
+  actnAddLevel = 'Добавление уровня'; //To4ActionName
+  actnAddSubLevel = 'Добавление подуровня'; //To4ActionName
+  actnEditLevel = 'Редактирование уровня'; //To4ActionName
+  actnDelLevel = 'Удаление уровня'; //To4ActionName
+  actnDontUseLevel = 'Не использовать категории'; //To4ActionName
+  actnUseLevel = 'Использовать категории'; //To4ActionName
+  actnSelect = 'Выбрать'; //To4ActionName
+  actnSave = 'Сохранить'; //To4ActionName
+  actnCancel = 'Отменить'; //To4ActionName
+  actnUseNoLevel = 'Использовать безкатегорные'; //To4ActionName
+  actnGridParam = 'Настройка сетки данных'; //To4ActionName
+  //
+  fdlOwner = 0; // TFilterDescriptorLevels
+  fdlFields = 1; // TFilterDescriptorLevels
+  // название параметра, что задает фильтр в формах выбора
+  FilterDescrInSelectForm = 'FilterDescr';
+
+  // ф-ции кэширования
+  //******************************************************************************
+  // получение прокэшированного обьекта
+function GetCachedObject(var LstCachedObjects : ICValueList; ObjTypeSign : string;
+  ObjNum : Integer = 1; ParamPrefix : string = '') : IObject;
+// установка объекта как прокэшированного
+procedure SetCachedObject(var LstCachedObjects : ICValueList; Obj : IObject;
+  ObjNum : Integer = 1; TypeLangID : Integer = 2;
+  ParamPrefix : string = '');
+//******************************************************************************
+function IsObjFocused(objCurrent : Variant) : Boolean;
+function IsObjNotFocused(objCurrent : Variant) : Boolean;
+function GetOptions : ICOptions;
+function GetConstants : IC4VPAConst;
+function ExtractHumanName(var FIO : string) : string;
+// получение активной записи
+function GetActiveObject(objCurrent : IObject; ActiveField : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue) : IObject;
+// проверка на наличие активной записи
+function HasActive(ObjDetRec : IObject; ActiveFieldName : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue; AdditRecFilter : Variant = '') : Boolean;
+// сбрасывание активности у всех записей, кроме текущей
+function ResetActive(ObjDetRec : IObject; ActiveFieldName : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue; InActiveValue : Variant = DefInActiveValue;
+  AdditRecFilter : Variant = '') : Boolean;
+// получение активной подчиненной записи
+function GetActiveByMaster(objSubord, objMaster : IObject; ActiveValue : Variant = DefActiveValue;
+  ActiveFieldName : string = DefActiveName) : Variant;
+function GetActiveByMaster2(objSubord, objMaster : IObject; ActiveFieldName : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue) : Variant;
+// получение значения поля у активной подчиненной записи
+function GetSubordInfoValue(objSubord, objMaster : IObject; ExtendedField : string;
+  DefValue : Variant = ''; ActiveFieldName : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue; MasterField : string = 'Партнер';
+  LastFieldSuffix : string = '') : Variant;
+// получение итеративно "конечного" по Link-полю обьекта
+function GetObjectByLinks(ObjCurrent : IObject; LinkField : string) : IObject;
+// получение значения "расшиненного поля", т. е. позволяется синтаксис через точку (поле от link-поля)
+function GetExtendedFieldValue(ObjSource : IObject; ExtFieldName : string;
+  DefValue : Variant = ''; LastFieldSuffix : string = '') : Variant;
+function GetEmplByName(EmplName : string) : ICDictionary;
+function GetEmployeeAndSetControl(EmplName : string; ctrlCurr : TO4CustomEdit) : ICDictionary;
+procedure SaveLogToFile(AFileName, ALog : string; DoAppend : Boolean = False);
+// установка фильтра на понятие согласно дескриптору фильтра
+procedure SetFilterOnObjectByDescr(ObjFilterred : IObject; FilterDescr : TFilterDescr);
+// проверка на наличие фильтра в формах выбора
+procedure CheckFoFilterDescriptorInSelectForm(ObjForSelect : IObject);
+function GetDefaultLinkValue(ObjLink : IObject) : string;
+function GetExecProcResult(ObjForExec : IObject; ProcID : string; InParams : Variant = '') : Variant;
+function AskBeforeDeleteRecords(IsGroup : Boolean) : Boolean;
+function GetObjName(ObjectOrSign : Variant) : string;
+procedure FindSavedRecord(ObjForFindRecord : IObject);
+function CreateAllDatabaseSemaphores(SemCaption : string) : Variant;
+function WaitAllDatabaseSemaphores(AllSemaphores : Variant) : Boolean;
+function CloseAllDatabaseSemaphores(AllSemaphores : Variant) : Boolean;
+function GetObjectType(Obj : IObject; TypeLangID : Integer = 2) : string;
+function GetObjTypeSign(Obj : IObject; TypeLangID : Integer = 2) : string;
+// получение названия действия по его ID
+function GetActNameByID(ActID : To4Actions) : To4ActionName;
+// вызов исключительной ситуации, если действие над понятием не будет выполнено
+procedure RaiseForNonCompleteAction(actID : TO4Actions; ObjActioned : IObject);
+
+implementation
+
+const
+  CanDelRecord = 'Удалить запись?';
+  CanDelRecords = 'Удалить отмеченные записи?';
+  errSavedRecordNotFoundForMean = 'Не найдена сохраненная запись для понятия';
+  AllDataBaseSemaphores = DecGood + ';' + DecBank;
+  errActionNotComplete = 'Действие "%s" над записью "%s"%s' +
+    'отменено пользователем или возникла ошибка!';
+
+var
+  glbConstants : IC4VPAConst;
+  glbOptions : ICOptions;
+  DicResponsible : ICDictionary;
+  TblForLinkValue : ICValueTable; // для получения значения для отображения отображаемого объекта
+
+  // ф-ции кэширования
+  //******************************************************************************
+  // получение прокэшированного обьекта
+
+function GetCachedObject(var LstCachedObjects : ICValueList; ObjTypeSign : string;
+  ObjNum : Integer = 1; ParamPrefix : string = '') : IObject;
+begin
+  if ParamPrefix = '' then
+    ParamPrefix := ObjTypeSign;
+  if IsNil(LstCachedObjects) then
+    LstCachedObjects := CreateObject('ValueList');
+  Result := LstCachedObjects.Params[ObjTypeSign + IntToStr(ObjNum)];
+  if IsNil(Result) then
+    begin
+      Result := CreateObject(ObjTypeSign);
+      LstCachedObjects.Params[ParamPrefix + IntToStr(ObjNum)] := Result;
+    end;
+end;
+
+function GetObjectType(Obj : IObject; TypeLangID : Integer = 2) : string;
+begin
+  if IsObject(Obj) then
+    try
+      Result := ExtractWord(TypeLangID, Obj.GetType, ';');
+    except
+      // коллекции
+      Result := ExtractWord(TypeLangID, 'Collections;Коллекции;Колекції', ';');
+    end
+  else
+    Result := '';
+end;
+
+function GetObjTypeSign(Obj : IObject; TypeLangID : Integer = 2) : string;
+begin
+  Result := GetObjectType(Obj, TypeLangID) + '.' + Obj.GetSign;
+end;
+
+// установка объекта как прокэшированного
+
+procedure SetCachedObject(var LstCachedObjects : ICValueList; Obj : IObject;
+  ObjNum : Integer = 1; TypeLangID : Integer = 2;
+  ParamPrefix : string = '');
+var
+  ObjTypeSign : string;
+begin
+  ObjTypeSign := GetObjectType(Obj, TypeLangID);
+  try
+    ObjTypeSign := ObjTypeSign + '.' + Obj.GetSign;
+  except
+  end;
+  if ParamPrefix = '' then
+    ParamPrefix := ObjTypeSign;
+  LstCachedObjects.Params[ParamPrefix + IntToStr(ObjNum)] := Obj;
+end;
+//******************************************************************************
+
+function IsObjFocused(objCurrent : Variant) : Boolean;
+begin
+  if IsObject(objCurrent) then
+    Result := VarAsBool(objCurrent.IsFocused)
+  else
+    Result := False;
+end;
+
+function IsObjNotFocused(objCurrent : Variant) : Boolean;
+begin
+  Result := IsObject(objCurrent) and not VarAsBool(objCurrent.IsFocused);
+end;
+
+function GetOptions : ICOptions;
+begin
+  if IsNil(glbOptions) then
+    glbOptions := CreateObject('ОпцииКлиента');
+  Result := glbOptions;
+end;
+
+function GetConstants : IC4VPAConst;
+begin
+  if IsNil(glbConstants) then
+    glbConstants := CreateObject('Константы');
+  Result := glbConstants;
+end;
+
+function GetActiveObject(objCurrent : IObject; ActiveField : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue) : IObject;
+begin
+  if not IsObject(objCurrent) then
+    begin
+      objCurrent := CreateObject(VarAsStr(objCurrent));
+      objCurrent.Select;
+    end;
+  if VarAsBool(objCurrent.FindByField(ActiveField, ActiveValue, False)) then
+    Result := objCurrent
+  else
+    Result := Null;
+end;
+
+function HasActive(ObjDetRec : IObject; ActiveFieldName : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue; AdditRecFilter : Variant = '') : Boolean;
+begin
+  Result := server.HasActive(ObjDetRec, ActiveFieldName, ActiveValue, AdditRecFilter);
+end;
+
+function ResetActive(ObjDetRec : IObject; ActiveFieldName : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue; InActiveValue : Variant = DefInActiveValue;
+  AdditRecFilter : Variant = '') : Boolean;
+begin
+  Result := server.ResetActive(ObjDetRec, ActiveFieldName, ActiveValue, InActiveValue, AdditRecFilter);
+end;
+
+function GetObjectByLinks(ObjCurrent : IObject; LinkField : string) : IObject;
+begin
+  while IsObjFocused(ObjCurrent) and VarAsBool(ObjCurrent.HasField(LinkField)) do
+    ObjCurrent := ObjCurrent._Default[LinkField];
+  if IsObjFocused(ObjCurrent) then
+    Result := ObjCurrent
+  else
+    Result := Null;
+end;
+
+function GetActiveByMaster(objSubord, objMaster : IObject; ActiveValue : Variant = DefActiveValue;
+  ActiveFieldName : string = DefActiveName) : Variant;
+begin
+  if IsNil(objSubord) or not IsObjFocused(objMaster) then
+    begin
+      Result := Null;
+      exit;
+    end;
+  objSubord.UseMasterAndSelect(objMaster);
+  Result := GetActiveObject(objSubord, ActiveFieldName, ActiveValue);
+end;
+
+// вторая версия получения активной подчиненной записи - переставлены местами параметры 3 и 4
+
+function GetActiveByMaster2(objSubord, objMaster : IObject; ActiveFieldName : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue) : Variant;
+begin
+  if IsNil(objSubord) or not IsObjFocused(objMaster) then
+    begin
+      Result := Null;
+      exit;
+    end;
+  objSubord.UseMasterAndSelect(objMaster);
+  Result := GetActiveObject(objSubord, ActiveFieldName, ActiveValue);
+end;
+
+// получить обобщенное значение поля, допускается Self-значение (Self) и цикл через точку
+
+function GetExtendedFieldValue(ObjSource : IObject; ExtFieldName : string;
+  DefValue : Variant = ''; LastFieldSuffix : string = '') : Variant;
+var
+  i, FieldsCount : Integer;
+  FieldName : string;
+begin
+  if ExtFieldName = 'Self' then
+    begin
+      if IsObjFocused(ObjSource) then
+        Result := ObjSource
+      else
+        Result := Null;
+      exit;
+    end;
+  FieldsCount := WordCount(ExtFieldName, '.');
+  for i := 1 to FieldsCount do
+    begin
+      FieldName := ExtractWord(i, ExtFieldName, '.');
+      if IsObjFocused(ObjSource) and VarAsBool(ObjSource.HasField(FieldName)) then
+        begin
+          if i = FieldsCount then
+            ObjSource := ObjSource._Default[LastFieldSuffix + FieldName]
+          else
+            ObjSource := ObjSource._Default[FieldName]; // полный объект для ссылок на поля далее
+        end
+      else
+        break;
+    end;
+  if i > FieldsCount then
+    Result := ObjSource
+  else
+    Result := DefValue;
+end;
+
+function GetSubordInfoValue(objSubord, objMaster : IObject; ExtendedField : string;
+  DefValue : Variant = ''; ActiveFieldName : string = DefActiveName;
+  ActiveValue : Variant = DefActiveValue; MasterField : string = 'Партнер';
+  LastFieldSuffix : string = '') : Variant;
+begin
+  objMaster := GetObjectByLinks(objMaster, MasterField);
+  if IsNull(objMaster) then
+    begin
+      Result := DefValue;
+      exit;
+    end;
+  objSubord := GetActiveByMaster2(objSubord, objMaster, ActiveFieldName, ActiveValue);
+  if IsNull(objSubord) then
+    Result := DefValue
+  else
+    Result := GetExtendedFieldValue(objSubord, ExtendedField, DefValue, LastFieldSuffix);
+end;
+
+function ExtractHumanName(var FIO : string) : string;
+begin
+  Result := server.ExtractHumanName(FIO);
+end;
+
+function GetEmplByName(EmplName : string) : ICDictionary;
+begin
+  if IsNil(DicResponsible) then
+    DicResponsible := CreateObject('Справочники.Служащие');
+  if DicResponsible.FindByField('ПолноеНазвание', EmplName, False) then
+    Result := DicResponsible
+  else
+    Result := Null;
+end;
+
+function GetEmployeeAndSetControl(EmplName : string; ctrlCurr : TO4CustomEdit) : ICDictionary;
+begin
+  ctrlCurr.Enabled := GetUDASet('ChangeResp');
+  Result := GetEmplByName(EmplName);
+end;
+
+procedure SaveLogToFile(AFileName, ALog : string; DoAppend : Boolean = False);
+var
+  slLog : TStringList;
+begin
+  slLog := CreateStringList;
+  try
+    if DoAppend and FileExists(AFileName) then
+      slLog.LoadFromFile(AFileName);
+    if slLog.Text <> '' then
+      slLog.Text := slLog.Text + #13;
+    slLog.Text := slLog.Text + ALog;
+    slLog.SaveToFile(AFileName);
+  finally
+    slLog.Free;
+    nil(slLog);
+  end;
+end;
+
+procedure SetFilterOnObjectByDescr(ObjFilterred : IObject; FilterDescr : TFilterDescr);
+var
+  OneDescr : Variant;
+  i : Integer;
+begin
+  if not IsArray(FilterDescr) then
+    exit;
+  OneDescr := FilterDescr[fdlOwner];
+  if IsObjFocused(OneDescr) then
+    ObjFilterred.UseMaster(OneDescr);
+  OneDescr := FilterDescr[fdlFields];
+  if not IsArray(OneDescr) then
+    exit;
+  for i := ArrayLow(OneDescr) to ArrayHigh(OneDescr) do
+    ObjFilterred.SetFieldFilter(OneDescr[i][0], OneDescr[i][1], OneDescr[i][2], '', '', '');
+end;
+
+procedure CheckFoFilterDescriptorInSelectForm(ObjForSelect : IObject);
+begin
+  if VarAsBool(ObjForSelect.HasParam(FilterDescrInSelectForm)) then
+    SetFilterOnObjectByDescr(ObjForSelect, ObjForSelect.Params[FilterDescrInSelectForm]);
+end;
+
+function GetDefaultLinkValue(ObjLink : IObject) : string;
+begin
+  if IsNil(TblForLinkValue) then
+    begin
+      TblForLinkValue := CreateObject('ValueTable');
+      TblForLinkValue.AddColumn('FLink', vtcLink, 0);
+      TblForLinkValue.Open;
+    end;
+  TblForLinkValue.Append;
+  try
+    TblForLinkValue.FLink := ObjLink;
+    Result := TblForLinkValue.DefValue['FLink'];
+  finally
+    TblForLinkValue.Cancel;
+  end;
+end;
+
+function GetExecProcResult(ObjForExec : IObject; ProcID : string; InParams : Variant = '') : Variant;
+begin
+  Result := Null;
+  ObjForExec.ExecProc(Null, ProcID, InParams, Result);
+end;
+
+function AskBeforeDeleteRecords(IsGroup : Boolean) : Boolean;
+begin
+  if IsGroup then
+    Result := (MessageDlg(Trans(CanDelRecords), mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes)
+  else
+    Result := (MessageDlg(Trans(CanDelRecord), mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes);
+end;
+
+function GetObjName(ObjectOrSign : Variant) : string;
+begin
+  if IsObject(ObjectOrSign) then
+    Result := Trans(ObjectOrSign.GetName)
+  else
+    Result := Trans(CreateObject(ObjectOrSign).GetName)
+end;
+
+procedure FindSavedRecord(ObjForFindRecord : IObject);
+begin
+  try
+    if not VarAsBool(ObjForFindRecord.Find(ObjForFindRecord.Params[prmnRecSaved])) then
+      raise(VarAsStr(Trans(errSavedRecordNotFoundForMean) + ' "' + Trans(ObjForFindRecord.GetName) + '"'));
+  finally
+    ObjForFindRecord.Params[prmnRecSaved] := Null; // освобождение запомненного интерфейса
+  end;
+end;
+
+function CreateAllDatabaseSemaphores(SemCaption : string) : Variant;
+var
+  i : Integer;
+begin
+  ArrayCreate(Result, [1, WordCount(AllDataBaseSemaphores, ';')], Variant);
+  for i := ArrayLow(Result) to ArrayHigh(Result) do
+    Result[i] := CreateSemaphore(ExtractWord(i, AllDataBaseSemaphores, ';'), SemCaption); // блокируется вся база
+end;
+
+function WaitAllDatabaseSemaphores(AllSemaphores : Variant) : Boolean;
+var
+  i : Integer;
+  v : ICSemaphore;
+begin
+  Result := True;
+  for i := ArrayLow(AllSemaphores) to ArrayHigh(AllSemaphores) do
+    begin
+      V := AllSemaphores[i];
+      Result := Result and V.WaitSemaphore;
+      if not Result then
+        break;
+    end;
+  // по результатам выхода из цикла все семафоры системы заблокируются.
+  // После этого необходимо открывать транзакции
+end;
+
+function CloseAllDatabaseSemaphores(AllSemaphores : Variant) : Boolean;
+var
+  i : Integer;
+begin
+  for i := ArrayLow(AllSemaphores) to ArrayHigh(AllSemaphores) do
+    AllSemaphores[i].CloseSemaphore;
+end;
+
+function GetActNameByID(ActID : To4Actions) : To4ActionName;
+begin
+  case ActID of
+    actNone :
+      Result := actnNone;
+    actAdd :
+      Result := actnAdd;
+    actEdit :
+      Result := actnEdit;
+    actDel :
+      Result := actnDel;
+    actStateUp :
+      Result := actnStateUp;
+    actStateDown :
+      Result := actnStateDown;
+    actAddLevel :
+      Result := actnAddLevel;
+    actAddSubLevel :
+      Result := actnAddSubLevel;
+    actEditLevel :
+      Result := actnEditLevel;
+    actDelLevel :
+      Result := actnDelLevel;
+    actDontUseLevel :
+      Result := actnDontUseLevel;
+    actUseLevel :
+      Result := actnUseLevel;
+    actSelect :
+      Result := actnSelect;
+    actSave :
+      Result := actnSave;
+    actCancel :
+      Result := actnCancel;
+    actUseNoLevel :
+      Result := actnUseNoLevel;
+    actGridParam :
+      Result := actnGridParam;
+  end;
+end;
+
+procedure RaiseForNonCompleteAction(actID : TO4Actions; ObjActioned : IObject);
+var
+  ObjName : string;
+begin
+  ObjName := GetDefaultLinkValue(ObjActioned);
+  if ObjName = '' then // проблема, если запись не была добавлена: actID=actAdd
+    ObjName := Trans(VarAsStr(ObjActioned.GetName));
+  raise(GetTranslation(errActionNotComplete, ArrayOf(Trans(GetActNameByID(actID)), ObjName, #13#10)));
+end;
+
+end.

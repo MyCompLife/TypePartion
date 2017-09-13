@@ -1,0 +1,181 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+function CanFixDel(Data : ICDocuments; var Accept : Boolean; SemMsg, UniMsg, OptName : string; CheckChildPays:boolean=false) : string;
+function CheckRestrictions(Data: ICDocuments; StoreField: String): Boolean;
+function HasChildPays(Data : ICDocuments):Boolean;
+procedure DelAllChildPayDoc(Data : ICDocuments);
+
+implementation
+
+var
+
+  DelChildPayJrnOut, DelChildPayJrnIn:ICJournal;
+  Semaphore : ICSemaphore;
+
+function CheckRestrictions(Data: ICDocuments; StoreField: String): Boolean;
+var
+  TblContents, tmpTblContents: ICValueTable;
+  Accs: ICAccs;
+  MinusRest : boolean;
+begin
+  result := true;    
+  tmpTblContents := CreateObject('ValueTable');
+  TblContents := CreateObject('ValueTable');
+  TblContents.AddColumn('Товар',vtcLink,0);
+  TblContents.AddColumn('Количество',vtcFFT,5);
+  TblContents.AddColumn('Услуга',vtcInteger,0);
+  TblContents.Open;
+  TblContents.CopyColumnsTo(tmpTblContents);
+  Data.AppendLinesTo('Товар;Количество',tmpTblContents);
+  tmpTblContents.GroupBy('Товар','Количество');
+  tmpTblContents.DoGetLinks('Услуга=Товар.Услуга');
+  tmpTblContents.DoCalculation('Услуга','Услуга=-1');
+  tmpTblContents.SortBy('Услуга');
+  tmpTblContents.SetRange(0,0);
+  tmpTblContents.AppendTo('Товар;Количество',TblContents);  
+  tmpTblContents.Close;
+  TblContents.DoCalculation('Количество','Количество*-1');
+  Accs := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      Accs.CalcGroupRestDirect(RoundDate(Data.GetDate,rdDay,true), ArrayOf(TblContents.@Товар, Data._Default[StoreField]));
+      TblContents.Edit;
+      TblContents.Количество := TblContents.Количество + Accs.КолОбщ;
+      TblContents.Post;
+    end;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    if TblContents.Количество < 0 then
+      begin
+        MinusRest := true;
+        break
+      end;
+  if MinusRest then
+    begin
+      if MessageDlg('В документе есть товар, количество которого'+#13+
+                    'превышает наличие на складе!!!'+#13+'Продолжить фиксацию?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrNo then
+        begin
+          result := false;
+          exit;
+        end
+      else
+        if not GetUDASet('OverGoodStore') then
+          begin
+            ShowMessage(TakeHimAway);
+            result := false;
+            exit
+          end;
+    end;
+end;
+
+function GroupMove(Data : ICDocuments; StrMsg : string) : Boolean; //;Var Accept:Boolean
+var
+  Resultat : Integer;
+begin
+  Resultat := mrYesToAll;
+  if not Data.IsGroupAction then
+    Resultat := MessageDlg(StrMsg + ' ?', mtConfirmation, ArrayOf(mbYes, mbNo))
+  else
+    if (not Data.YesToAllInGroupAction) or Data.FirstInGroupAction then
+      Resultat := MessageDlg(StrMsg + ' ?', mtConfirmation, ArrayOf(mbYes, mbYesToAll, mbNo, mbNoToAll));
+  Data.NoToAllInGroupAction := Resultat = mrNoToAll;
+  Data.YesToAllInGroupAction := Resultat = mrYesToAll;
+  Result := Bits(Resultat) and Bits(mrYesToAll, mrYes) <> 0;
+end;  
+
+function HasChildPays(Data : ICDocuments):Boolean;
+begin
+ Result := false;
+ if IsNil(DelChildPayJrnOut) then
+   DelChildPayJrnOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+ DelChildPayJrnOut.UseMaster(Data);
+ Result := DelChildPayJrnOut.Select;
+ if not Result then
+   begin
+     if IsNil(DelChildPayJrnIn) then
+       DelChildPayJrnIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+     DelChildPayJrnIn.UseMaster(Data);
+     Result := DelChildPayJrnIn.Select;
+   end;
+end; 
+
+procedure DelAllChildPayDoc(Data : ICDocuments);
+var CurDelAck : Boolean;
+    PayDoc : ICDocuments; 
+begin
+ try
+  CurDelAck := GetOptions.GetServerPrm(DelAck);
+  GetOptions.SetServerPrm(DelAck,false);
+  if IsNil(DelChildPayJrnOut) then
+    DelChildPayJrnOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  DelChildPayJrnOut.UseMaster(Data);
+  if DelChildPayJrnOut.Select then
+    While DelChildPayJrnOut.SelectNext do
+      begin
+        PayDoc := DelChildPayJrnOut.GetDoc;
+        if IsObjFocused(PayDoc) then
+          begin
+            PayDoc.Delete;
+            PayDoc.ApplyUpdates;
+          end;
+      end;  
+  if IsNil(DelChildPayJrnIn) then
+    DelChildPayJrnIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  DelChildPayJrnIn.UseMaster(Data);
+  if DelChildPayJrnIn.Select then
+    While DelChildPayJrnIn.SelectNext do
+      begin
+        PayDoc := DelChildPayJrnIn.GetDoc;
+        if IsObjFocused(PayDoc) then
+          begin
+            PayDoc.Delete;
+            PayDoc.ApplyUpdates;
+          end;
+      end;
+ finally
+  GetOptions.SetServerPrm(DelAck,CurDelAck);
+ end;
+end;
+
+function CanFixDel(Data : ICDocuments; var Accept : Boolean; SemMsg, UniMsg, OptName : string; CheckChildPays:boolean=false) : string;
+var P:ICProcessing;  
+
+begin
+  Result := VarAsStr(trans(Data.GetName)) + ' № ' + VarAsStr(Data.GetNumber);
+  if (UniMsg=UniDel) and CheckChildPays and not (Data.HasParam('NotCheckChildPays') and
+     VarAsBool(Data.Params['NotCheckChildPays'])) and HasChildPays(Data) then
+    begin
+      P := CreateObject('Обработки.Диалоги');
+      case P.Execute('УдалениеДокументаСПодчДокОплат',Data) of
+        mrYes : Accept := true;
+        mrYesToAll :
+          begin    
+            DelAllChildPayDoc(Data);
+            Accept := true;
+          end
+        else
+          Accept := false;
+      end;
+    end
+  else
+  if Accept and VarAsBool(GetOptions.GetServerPrm(OptName)) then
+    Accept := GroupMove(Data, UniMsg + Result);
+  if Accept and (SemMsg <> '') then
+    begin
+      case SemMsg of
+        DecGood, IncGood, IncResGood, DecResGood,
+          DecGoodRIn, IncGoodRIn, DecGoodROut, IncGoodROut : SemMsg := DecGood;
+        IncCash, DecCash, IncBank, DecBank : SemMsg := DecBank;
+      end;
+      Semaphore := CreateSemaphore(SemMsg, UniMsg + Result);
+      Accept := Semaphore.WaitSemaphore;
+    end
+end;
+
+
+
+end.

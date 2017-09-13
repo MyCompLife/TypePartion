@@ -1,0 +1,1413 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСПеременными, РаботаСОбъектами, ДополнительныйФункционал, РаботаСВесами;
+
+implementation
+Var
+  Cursor: TCursor;
+  TblGroups, TblGoods : IcValueTable;
+  UserDic : ICDictionary;
+  Options: ICOptions;
+  GroupsButtonCount, PageGroups, PageGroupsCount, GoodsButtonCount, PageGoods, PageGoodsCount : Integer;
+  ImagePath : String;
+  MasterProc : IcProcessing;
+  ShowGroupPicture, ShowGoodsPicture, IsWeightError, ShowGoodsPrice : Boolean;
+
+  Driver: OleVariant;
+  ComPort: String;
+  Error : Integer;
+  PriceD, Summa : Decimal;
+  Weight, OldWeight : Integer;
+  IsGoodClickZeroWeight, OpenedPort, WeightOneGood, StopPrint, IsChieldGroup : Boolean;
+
+
+
+procedure CreateObjects;
+begin
+  TblGroups := CreateObject('ValueTable');
+  TblGroups.AddColumn('Группа',vtcLink,0);
+  TblGroups.AddColumn('Код',vtcString,10);
+  TblGroups.AddColumn('Название',vtcString,150);
+  TblGroups.AddColumn('Номер',vtcInteger,0);
+  TblGroups.AddColumn('Фото',vtcBlob,0);
+  TblGroups.AddColumn('ПутьФото',vtcString,255);
+  TblGroups.Open;
+
+  TblGoods := CreateObject('ValueTable');
+  TblGoods.AddColumn('Товар',vtcLink,0);
+  TblGoods.AddColumn('Код',vtcString,10);
+  TblGoods.AddColumn('Название',vtcString,150);
+  TblGoods.AddColumn('Цена',vtcFFt,2);
+  TblGoods.AddColumn('Номер',vtcInteger,0);
+  TblGoods.AddColumn('Фото',vtcBlob,0);
+  TblGoods.AddColumn('ПутьФото',vtcString,255);
+  TblGoods.AddColumn('НазвФотоФильтр',vtcString,100);
+  TblGoods.AddColumn('ДатаФото',vtcString,50);
+  TblGoods.Open;
+
+
+  UserDic := CreateObject('Справочники.Пользователи');
+  Options := GetOptions;
+  IsGoodClickZeroWeight := False;
+
+
+end;
+
+
+Function CheckButtonSettings : Boolean;
+begin
+  try
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceScreenColor'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceScreenColor',16117715);
+
+
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceCountGroupsButtonGor'))=0 then
+      Options.SetLocalPrm('WorkPlaceCountGroupsButtonGor',3);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceCountGroupsButtonVert'))=0 then
+      Options.SetLocalPrm('WorkPlaceCountGroupsButtonVert',2);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonHeight'))=0 then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonHeight',187);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonWidth'))=0 then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonWidth',213);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameHeight'))=0 then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameHeight',42);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonShowPicture'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonShowPicture',True);
+
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontCharset'),-500)=-500 then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontCharset',RUSSIAN_CHARSET);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontColor'),-1)=-1 then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontColor',clWindowText);
+    if VarAsStr(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontName'))='' then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontName','Arial');
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontSize'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontSize',16);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontStyle'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontStyle',1);
+
+
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceCountGoodsButtonVert'))=0 then
+      Options.SetLocalPrm('WorkPlaceCountGoodsButtonVert',2);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceCountGoodsButtonGor'))=0 then
+      Options.SetLocalPrm('WorkPlaceCountGoodsButtonGor',7);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonHeight'))=0 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonHeight',180);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonWidth'))=0 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonWidth',114);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPictureHeight'))=0 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPictureHeight',112);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceHeight'))=0 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameHeight',24);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonShowPicture'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonShowPicture',True);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonShowPrice'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonShowPrice',True);
+
+
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontCharset'),-500)=-500 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontCharset',RUSSIAN_CHARSET);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontColor'),-1)=-1 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontColor',clWindowText);
+    if VarAsStr(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontName'))='' then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontName','Times New Roman');
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontSize'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontSize',10);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontStyle'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontStyle',1);
+
+     if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontCharset'),-500)=-500 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontCharset',RUSSIAN_CHARSET);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontColor'),-1)=-1 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontColor',clWindowText);
+    if VarAsStr(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontName'))='' then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontName','Times New Roman');
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontSize'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontSize',16);
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontStyle'),-5)=-5 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontStyle',1);
+
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+
+Procedure GetVLCParamsForGroups;
+Var
+  CountGor, CountVert, i, j, PNumber, ButtWidth, ButtHeight, NameHeight : Integer;
+  PTop, PLeft : Integer;
+
+  FontCharset, FontColor, FontSize, FontStyle : Integer;
+  FontName : String;
+
+
+Begin
+  CountGor := VarAsInt(Options.GetLocalPrm('WorkPlaceCountGroupsButtonGor'));
+  CountVert := VarAsInt(Options.GetLocalPrm('WorkPlaceCountGroupsButtonVert'));
+  GroupsButtonCount := CountGor * CountVert;
+  TblGroups.CancelRange;
+  TblGroups.Select;
+{
+  PageGroupsCount := TblGroups.LineCount div GroupsButtonCount;
+  if  (TblGroups.LineCount mod GroupsButtonCount)>0 then
+    inc(PageGroupsCount);
+  PageGroups :=0;
+  if (PageGroupsCount)= 1 then
+//    pnNextPage.Visible := False
+    RightPanel.Visible := False
+  else
+//    pnNextPage.Visible := True;
+    RightPanel.Visible := True;
+
+//  pnPriorPage.Visible := false;
+  LeftPanel.Visible := false;
+}
+  ButtWidth := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonWidth'));
+  ButtHeight := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonHeight'));
+  NameHeight := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameHeight'));
+  ShowGroupPicture := VarAsBool(Options.GetLocalPrm('WorkPlaceGroupsButtonShowPicture'));
+
+//  FontName := GetFontByOptions(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFont'));
+
+  FontCharset := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontCharset'));
+  FontColor := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontColor'));
+  FontSize := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontSize'));
+  FontStyle := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontStyle'));
+  FontName := VarAsStr(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontName'));
+  for i := 1 to 30 do
+    (Form.FindComponent('pnGroup' + VarAsStr(i)) as TO4Panel).Visible := false;
+  PNumber :=1;
+  PTop := 10;
+  for i := 1 to CountVert do
+    begin
+      PLeft := 10;
+      if i<> 1 then
+        PTop := PTop + ButtHeight + 10;
+      for j := 1 to CountGor do
+        begin
+          (Form.FindComponent('pnGroup' + VarAsStr(PNumber)) as TO4Panel).Height := ButtHeight;
+          (Form.FindComponent('pnGroup' + VarAsStr(PNumber)) as TO4Panel).width := ButtWidth;
+          (Form.FindComponent('pnGroup' + VarAsStr(PNumber)) as TO4Panel).Top := PTop;
+          (Form.FindComponent('pnGroup' + VarAsStr(PNumber)) as TO4Panel).Left := PLeft;
+          (Form.FindComponent('dbiGroupPicture' + VarAsStr(PNumber)) as TO4Image).Visible := ShowGroupPicture;
+          if ShowGroupPicture then
+            begin
+              (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Align := alBottom;
+              (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Height := NameHeight;
+            end
+          else
+            begin
+              (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Align := alClient;
+            end;
+          (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Font.Charset := FontCharset;
+          (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Font.Color := FontColor;
+          (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Font.Size := FontSize;
+          (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Font.Style := FontStyle;
+          (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Font.Name := FontName;
+          (Form.FindComponent('pnGroupName' + VarAsStr(PNumber)) as TO4Panel).Refresh;
+
+          PLeft := PLeft + ButtWidth + 10;
+          inc(PNumber);
+        end;
+    end;
+end;
+
+
+procedure ShowGroups;
+var
+  i : Integer;
+begin
+  pnGroups.Visible := false;
+  TblGroups.SortBy('Номер');
+  for i := 1 to GroupsButtonCount do
+    (Form.FindComponent('pnGroup' + VarAsStr(i)) as TO4Panel).Visible := false;
+  TblGroups.SetRange(PageGroups*GroupsButtonCount+1,(PageGroups+1)*GroupsButtonCount);
+  TblGroups.Select;
+  while TblGroups.SelectNext do
+    begin
+      i := VarAsInt(TblGroups.Номер)-(PageGroups*GroupsButtonCount);
+      if ShowGroupPicture then
+        begin
+          if FileExists(TblGroups.ПутьФото) then
+           (Form.FindComponent('dbiGroupPicture' + VarAsStr(i)) as TO4Image).Picture.LoadFromFile(TblGroups.ПутьФото)
+          else
+           (Form.FindComponent('dbiGroupPicture' + VarAsStr(i)) as TO4Image).Picture.LoadFromFile(ImagePath+ '\NoImage.jpg');
+        end;
+      (Form.FindComponent('pnGroupName' + VarAsStr(i)) as TO4Panel).Caption := TblGroups.Название;
+      (Form.FindComponent('pnGroup' + VarAsStr(i)) as TO4Panel).Visible := true;
+    end;
+
+  pnGroups.Visible := true;
+end;
+
+
+
+
+Procedure GetVLCParamsForGoods;
+Var
+  CountGor, CountVert, i, j, PNumber, ButtWidth, ButtHeight, ImageHeight, PriceHeight : Integer;
+  PTop, PLeft : Integer; 
+  FontCharsetName, FontColorName, FontSizeName, FontStyleName : Integer;
+  FontNameName : String;
+  FontCharsetPrice, FontColorPrice, FontSizePrice, FontStylePrice : Integer;
+  FontNamePrice : String;
+Begin
+  CountGor := VarAsInt(Options.GetLocalPrm('WorkPlaceCountGoodsButtonGor'));
+  CountVert := VarAsInt(Options.GetLocalPrm('WorkPlaceCountGoodsButtonVert'));
+  GoodsButtonCount := CountGor * CountVert;
+  PageGoods :=0;
+  ButtWidth := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonWidth'));
+  ButtHeight := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonHeight'));
+
+
+    if VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPictureHeight'))=0 then
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPictureHeight',112);
+
+
+  ImageHeight := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPictureHeight'));
+  ShowGoodsPicture := VarAsBool(Options.GetLocalPrm('WorkPlaceGoodsButtonShowPicture'));
+
+  PriceHeight := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceHeight'));
+  ShowGoodsPrice := VarAsBool(Options.GetLocalPrm('WorkPlaceGoodsButtonShowPrice'));
+
+//  FontName := GetFontByOptions(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFont'));
+//  FontPrice := GetFontByOptions(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFont'));
+
+
+  FontCharsetName := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontCharset'));
+  FontColorName := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontColor'));
+  FontSizeName := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontSize'));
+  FontStyleName := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontStyle'));
+  FontNameName := VarAsStr(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontName'));
+
+
+  FontCharsetPrice := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontCharset'));
+  FontColorPrice := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontColor'));
+  FontSizePrice := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontSize'));
+  FontStylePrice := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontStyle'));
+  FontNamePrice := VarAsStr(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontName'));
+
+  for i := 1 to 40 do
+    (Form.FindComponent('pnGood' + VarAsStr(i)) as TO4Panel).Visible := false;
+  PNumber :=1;
+  PTop := 10;
+  for i := 1 to CountVert do
+    begin
+      PLeft := 10;
+      if i<> 1 then
+        PTop := PTop + ButtHeight + 7;
+      for j := 1 to CountGor do
+        begin
+          (Form.FindComponent('pnGood' + VarAsStr(PNumber)) as TO4Panel).Height := ButtHeight;
+          (Form.FindComponent('pnGood' + VarAsStr(PNumber)) as TO4Panel).width := ButtWidth;
+          (Form.FindComponent('pnGood' + VarAsStr(PNumber)) as TO4Panel).Top := PTop;
+          (Form.FindComponent('pnGood' + VarAsStr(PNumber)) as TO4Panel).Left := PLeft;
+
+          (Form.FindComponent('pnGoodPrice' + VarAsStr(PNumber)) as TO4Panel).Visible := ShowGoodsPrice;
+          if ShowGoodsPrice then
+            begin
+              (Form.FindComponent('pnGoodPrice' + VarAsStr(PNumber)) as TO4Panel).Height := PriceHeight;
+              (Form.FindComponent('pnGoodPrice' + VarAsStr(PNumber)) as TO4Panel).Font.Charset := FontCharsetPrice;
+              (Form.FindComponent('pnGoodPrice' + VarAsStr(PNumber)) as TO4Panel).Font.Color := FontColorPrice;
+              (Form.FindComponent('pnGoodPrice' + VarAsStr(PNumber)) as TO4Panel).Font.Size := FontSizePrice;
+              (Form.FindComponent('pnGoodPrice' + VarAsStr(PNumber)) as TO4Panel).Font.Style := FontStylePrice;
+              (Form.FindComponent('pnGoodPrice' + VarAsStr(PNumber)) as TO4Panel).Font.Name := FontNamePrice;
+              (Form.FindComponent('pnGoodPrice' + VarAsStr(PNumber)) as TO4Panel).Refresh;
+            end;
+          (Form.FindComponent('pnGoodName' + VarAsStr(PNumber)) as TO4Panel).Font.Charset := FontCharsetName;
+          (Form.FindComponent('pnGoodName' + VarAsStr(PNumber)) as TO4Panel).Font.Color := FontColorName;
+          (Form.FindComponent('pnGoodName' + VarAsStr(PNumber)) as TO4Panel).Font.Size := FontSizeName;
+          (Form.FindComponent('pnGoodName' + VarAsStr(PNumber)) as TO4Panel).Font.Style := FontStyleName;
+          (Form.FindComponent('pnGoodName' + VarAsStr(PNumber)) as TO4Panel).Font.Name := FontNameName;
+          (Form.FindComponent('pnGoodName' + VarAsStr(PNumber)) as TO4Panel).Refresh;
+
+
+          (Form.FindComponent('pnGoodName' + VarAsStr(PNumber)) as TO4Panel).Refresh;
+
+          (Form.FindComponent('dbiGoodPicture' + VarAsStr(PNumber)) as TO4Image).Visible := ShowGoodsPicture;
+          if ShowGoodsPicture then
+            (Form.FindComponent('dbiGoodPicture' + VarAsStr(PNumber)) as TO4Image).Height := ImageHeight;
+          PLeft := PLeft + ButtWidth + 7;
+          inc(PNumber);
+        end;
+    end;
+end;
+
+
+procedure ShowGoods;
+var
+  i, j : Integer;
+  Files : String;
+  Photo : Variant;
+begin
+  pnGoods.Visible := false;
+  TblGoods.SortBy('Номер');
+  for i := 1 to GoodsButtonCount do
+    (Form.FindComponent('pnGood' + VarAsStr(i)) as TO4Panel).Visible := false;
+  TblGoods.SetRange(PageGoods*GoodsButtonCount+1,(PageGoods+1)*GoodsButtonCount);
+
+  TblGoods.UseDataSource(CtrlToVar(TVSSavesPictures));
+  TempImage.O4FieldName := '';
+  TempImage.O4MDSource := TVSSavesPictures;
+  TempImage.O4FieldName := 'Фото';
+
+  TblGoods.Select;
+  while TblGoods.SelectNext do
+    begin
+      i := VarAsInt(TblGoods.Номер)-(PageGoods*GoodsButtonCount);
+      if ShowGoodsPicture then
+        begin
+
+          if FileExists(TblGoods.ПутьФото) then
+           (Form.FindComponent('dbiGoodPicture' + VarAsStr(i)) as TO4Image).Picture.LoadFromFile(TblGoods.ПутьФото)
+          else
+            Begin
+              Photo := TblGoods.Фото;
+              if not isNull(Photo) and not IsNil(Photo) and (VarAsStr(Photo)<>'') then
+                begin
+                  Files := EnumerateFolder(ImagePath,VarAsStr(TblGoods.НазвФотоФильтр),true,true,true);
+                  for j :=1 to WordCount(Files,';') do
+                    DeleteFile(ExtractWord(j,Files,';'));
+
+                  TempImage.SaveToFile(VarAsStr(TblGoods.ПутьФото));
+                  (Form.FindComponent('dbiGoodPicture' + VarAsStr(i)) as TO4Image).Picture.LoadFromFile(TblGoods.ПутьФото);
+
+                end
+              else
+                (Form.FindComponent('dbiGoodPicture' + VarAsStr(i)) as TO4Image).Picture.LoadFromFile(ImagePath+ '\NoImage.jpg');
+            end;
+        end;
+      if ShowGoodsPrice then
+        (Form.FindComponent('pnGoodPrice' + VarAsStr(i)) as TO4Panel).Caption := FormatFloat('0.00',TblGoods.Цена);
+
+      (Form.FindComponent('pnGoodName' + VarAsStr(i)) as TO4Panel).Caption := TblGoods.Название;
+      (Form.FindComponent('pnGood' + VarAsStr(i)) as TO4Panel).Visible := true;
+    end;
+  TblGoods.UseDataSource(Null);
+  pnGoods.Visible := true;
+end;
+
+
+Procedure GetGroupTbl(Group : Variant);
+Var
+  ImageCount : Integer;
+  Photo : Variant;
+begin
+  TblGroups.CopyDataToServer;
+  Server.GetGroupsTbl(TblGroups.SrvMean, Group, GroupsButtonCount, ImagePath+ '\GroupGood');
+  TblGroups.CopyDataFromServer;
+  TblGroups.SrvMean.Clear;
+  if ShowGroupPicture then
+    begin
+      ImageCount := 1;
+      TblGroups.UseDataSource(CtrlToVar(TVSSavesPictures));
+      TempImage.O4FieldName := '';
+      TempImage.O4MDSource := TVSSavesPictures;
+      TempImage.O4FieldName := 'Фото';
+      TblGroups.Select;
+      while TblGroups.SelectNext do
+        begin
+          Photo := TblGroups.Фото;
+          if not isNull(Photo) and not IsNil(Photo) and (VarAsStr(Photo)<>'') then
+            TempImage.SaveToFile(VarAsStr(TblGroups.ПутьФото));
+        end;
+      if not FileExists(ImagePath+ '\NoImage.jpg') then
+        imNoImage.Picture.SaveToFile(ImagePath+ '\NoImage.jpg');
+      TblGroups.UseDataSource(Null);
+    end;
+  PageGroups := 0;
+
+  PageGroupsCount := TblGroups.LineCount div GroupsButtonCount;
+  if  (TblGroups.LineCount mod GroupsButtonCount)>0 then
+    inc(PageGroupsCount);
+  PageGroups :=0;
+  if (PageGroupsCount)= 1 then
+    RightPanel.Visible := False
+  else
+    RightPanel.Visible := True;
+
+  if IsChieldGroup then
+    begin
+      LeftPanel.Visible := true;
+      pnPriorPage.Visible := false;
+    end
+  else
+    begin
+      LeftPanel.Visible := false;
+      pnPriorPage.Visible := True;
+    end;
+
+  ShowGroups;
+
+
+
+
+end;
+
+
+procedure GetGoodsTbl(GroupDic: IcDictionary);
+begin
+  TblGoods.CancelRange;
+  TblGoods.Select;
+  TblGoods.Clear;
+  TblGoods.CopyDataToServer;
+  GroupDic.SetSrvToClientPos;
+  Server.GetGoodsTbl(TblGoods.SrvMean,GroupDic.SrvMean, ImagePath+'\Good','\Good');
+  TblGoods.CopyDataFromServer;
+  TblGoods.SrvMean.Clear;
+  TblGoods.Select;
+  PageGoodsCount := TblGoods.LineCount div GoodsButtonCount;
+  if  (TblGoods.LineCount mod GoodsButtonCount)>0 then
+    inc(PageGoodsCount);
+
+  if (PageGoodsCount)<= 1 then
+    pnNextGoodPage.Visible := False
+  else
+    pnNextGoodPage.Visible := True;
+  pnPriorGoodPage.Visible := False;
+  PageGoods :=0;
+  ShowGoods;
+
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+end;
+
+ 
+procedure GetTimeTimer_Timer(Sender: TObject);
+begin
+  lCurTime.Caption := FormatDateTime('hh:mm',CurrentTime);
+  lCurDate.Caption := FormatDateTime('dd MMM yyyy',CurrentDate);
+end;
+ 
+procedure Form_Show(Sender: TObject);
+begin
+  pnZag2.Height := (LeftPanel.Height div 2)-(pnPriorPage.Height div 2);
+  pnZag1.Height := (RightPanel.Height div 2)-(pnNextPage.Height div 2);
+
+  Form.Color := VarAsInt(Options.GetLocalPrm('WorkPlaceScreenColor'));
+  Form.Refresh;
+  Form.Parent.Refresh;
+  miBarCodeFocusF12.ShortCut := GetShortCut;
+end;
+
+
+procedure Form_Open(Sender: TObject);
+Var
+  ImageCount : Integer;
+  Photo : Variant;
+  Files : String;
+
+begin
+  Cursor := WaitCursorStart;
+  try
+    StopPrint := False;
+    lCurTime.Caption := FormatDateTime('hh:mm',CurrentTime);
+    lCurDate.Caption := FormatDateTime('dd MMM yyyy',CurrentDate);
+    nbMain.PageIndex :=0;
+    CreateObjects;
+
+    if UserDic.FindByCode(GetUserLogin,false) and CheckButtonSettings then
+      begin
+
+        IsWeightError := False;
+        if IsObjFocused(UserDic.Весы) then
+          try
+            if UserDic.Весы.Тип = 'ВТА' then
+              Driver := CreateOleObject('ScalesCOMServer.ScalesServerBTA.1');
+            OpenedPort:= True;
+          except
+            ShowMessage('Ошибка подключения весов!!');
+            IsWeightError := true;
+            OpenedPort := False;
+          end;
+        if not IsWeightError then
+          begin
+            if UserDic.Весы.ComPort <= 8 then
+              ComPort := 'COM' + IntToStr(UserDic.Весы.ComPort)
+            else
+              ComPort := '\\.\COM' + IntToStr(UserDic.Весы.ComPort);
+          end;
+
+        GroupsButtonCount := VarAsInt(Options.GetLocalPrm('WorkPlaceCountGroupsButtonGor')) *  VarAsInt(Options.GetLocalPrm('WorkPlaceCountGroupsButtonVert'));
+        ImagePath := ExtractFilePath(RunPath);
+//        StrDelete(ImagePath, StrLength(ImagePath),1);
+        ImagePath := ImagePath + 'Temp';
+        if not DirectoryExists(ImagePath) then
+          ForceDir(ImagePath);
+
+
+        ShowGroupPicture := VarAsBool(Options.GetLocalPrm('WorkPlaceGroupsButtonShowPicture'));
+
+        GetVLCParamsForGroups;
+        GetGroupTbl(Null);
+        GetVLCParamsForGoods;
+      end;
+//      Form.Parent.Enabled := False;
+
+  finally
+    WaitCursorFinish(Cursor);
+  end;
+
+end;
+
+procedure miSettings_Click(Sender: TObject);
+Var
+  SetDialog : IcProcessing;
+begin
+  SetDialog := CreateObject('Обработки.РаботаСВесами');
+  if nbMain.PageIndex = 0 then
+    SetDialog.Execute('НастройкаТачПанели',ArrayOf(MasterProc,0))
+  else
+    begin
+      GetWeitTimer.Enabled := False;
+      SetDialog.Execute('НастройкаТачПанели',ArrayOf(MasterProc,1));
+      GetWeitTimer.Enabled := True;
+    end;
+end;
+
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+Var
+  ErrorMessage : String;
+begin
+
+  case StrLowerCase(ProcID) of
+   'setvlcgroups' : begin
+     GetVLCParamsForGroups;
+     PageGroupsCount := TblGroups.LineCount div GroupsButtonCount;
+     if  (TblGroups.LineCount mod GroupsButtonCount)>0 then
+       inc(PageGroupsCount);
+     PageGroups :=0;
+     if (PageGroupsCount)= 1 then
+       RightPanel.Visible := False
+     else
+       RightPanel.Visible := True;
+
+     if IsChieldGroup then
+       begin
+         LeftPanel.Visible := true;
+         pnPriorPage.Visible := false;
+       end
+     else
+       begin
+         LeftPanel.Visible := false;
+         pnPriorPage.Visible := True;
+       end;
+     ShowGroups;
+   end;
+   'setvlcgoods' : begin
+     GetVLCParamsForGoods;
+     TblGoods.CancelRange;
+     TblGoods.Select;
+     PageGoodsCount := TblGoods.LineCount div GoodsButtonCount;
+     if  (TblGoods.LineCount mod GoodsButtonCount)>0 then
+       inc(PageGoodsCount);
+
+     if (PageGoodsCount)= 1 then
+       pnNextGoodPage.Visible := False
+     else
+       pnNextGoodPage.Visible := True;
+     pnPriorGoodPage.Visible := False;
+     PageGoods :=0;
+     ShowGoods;
+   end;
+   'setvlcscreencolor' : begin
+      Form.Color := VarAsInt(Options.GetLocalPrm('WorkPlaceScreenColor'));
+      Form.Refresh;
+      Form.Parent.Refresh;
+   end;
+   'changeuservesy' : begin
+     IsWeightError := False;
+     if IsObjFocused(UserDic.Весы) then
+       try
+         if UserDic.Весы.Тип = 'ВТА' then
+           Driver := CreateOleObject('ScalesCOMServer.ScalesServerBTA.1'); 
+         OpenedPort := True;
+       except
+         ShowMessage('Ошибка подключения весов!!');
+         IsWeightError := true;
+         OpenedPort := False;
+       end;
+     if not IsWeightError then
+       begin
+         if UserDic.Весы.ComPort <= 8 then
+           ComPort := 'COM' + IntToStr(UserDic.Весы.ComPort)
+         else
+           ComPort := '\\.\COM' + IntToStr(UserDic.Весы.ComPort);
+       end;
+     if not IsWeightError then
+       begin
+         Driver.OpenComPort(ComPort, Error);
+         if not CheckError(Error,ErrorMessage) then
+           begin
+             ShowMessage(ErrorMessage);
+             IsWeightError := True;
+             OpenedPort := False;
+           end;
+       end;
+   end;
+  end;
+
+
+
+
+
+end;
+
+
+
+
+procedure imPriorPage_Click(Sender: TObject);
+Var
+  Panel : TObject;
+  Tag : Integer;
+begin
+  Panel := (Sender as TO4Image).Parent;
+  Tag := (Sender as TO4Image).Tag;
+  (Panel as TO4Panel).BevelOuter := bvLowered;
+  (Panel as TO4Panel).Refresh;
+  (Panel as TO4Panel).SetFocus;
+  Sleep(50);
+  (Panel as TO4Panel).BevelOuter := bvRaised;
+
+  case Tag of
+    1: begin
+      if (PageGroups)<> 0 then
+        dec(PageGroups);
+      if (PageGroups)= 0 then 
+        if IsChieldGroup then
+          pnPriorPage.Visible := false
+        else
+          begin
+            LeftPanel.Visible := false;
+            pnPriorPage.Visible := True;
+          end;
+//      pnNextPage.Visible := True;
+      RightPanel.Visible := True;
+      ShowGroups;
+    end;
+    2: begin
+      if (PageGoods)<> 0 then
+        dec(PageGoods);
+      if (PageGoods)= 0 then
+        pnPriorGoodPage.Visible := false;
+      pnNextGoodPage.Visible := True;
+      ShowGoods;
+    end;
+
+  end;
+end;
+
+procedure imNextPage_Click(Sender: TObject);
+Var
+  Panel : TObject;
+  Tag : Integer;
+begin
+  Panel := (Sender as TO4Image).Parent;
+  Tag := (Sender as TO4Image).Tag;
+  (Panel as TO4Panel).BevelOuter := bvLowered;
+  (Panel as TO4Panel).Refresh;
+  (Panel as TO4Panel).SetFocus;
+  Sleep(50);
+  (Panel as TO4Panel).BevelOuter := bvRaised;
+
+  case tag of
+    1: begin
+      if (PageGroups+1)<> PageGroupsCount then
+        inc(PageGroups);
+      if (PageGroups+1)= PageGroupsCount then
+//        pnNextPage.Visible := false;
+        RightPanel.Visible := false;
+//      pnPriorPage.Visible := True;
+
+      if IsChieldGroup then
+        begin
+           pnZag2.Height := (LeftPanel.Height div 2)-(pnPriorPage.Height div 2)- pnReturnGriup.Height;
+           pnReturnGriup.Visible := True; 
+           pnPriorPage.Visible := True;
+
+        end
+      else
+        begin
+          pnZag2.Height := (LeftPanel.Height div 2)-(pnPriorPage.Height div 2);
+          pnReturnGriup.Visible := False;
+        end;
+      LeftPanel.Visible := True;
+      ShowGroups;
+    end;
+    2: begin
+      if (PageGoods+1)<> PageGoodsCount then
+        inc(PageGoods);
+      if (PageGoods+1)= PageGoodsCount then
+        pnNextGoodPage.Visible := false;
+      pnPriorGoodPage.Visible := True;
+      ShowGoods;
+    end;
+  end;
+end;
+
+procedure Group_Click(Sender: TObject);
+Var
+  Panel : TObject;
+  Tag : Integer;            
+  ErrorMessage : String;
+begin
+  case Sender.ClassName of
+    'TO4Image' : begin
+      Panel := (Sender as TO4Image).Parent;
+      Tag := (Sender as TO4Image).Tag;
+    end;
+    'TO4Panel' : begin
+      Panel := (Sender as TO4Panel).Parent;
+      Tag := (Sender as TO4Panel).Tag;
+    end;
+  end;
+ TblGroups.CancelRange;
+ TblGroups.SortBy('Номер');
+ TblGroups.Select;
+ TblGroups.Find(Tag+(PageGroups*GroupsButtonCount));
+
+ if not IsWeightError and not VarAsBool(TblGroups.Группа.НаличиеПодгрупы) then
+   begin
+     Driver.OpenComPort(ComPort, Error);
+     if not CheckError(Error,ErrorMessage) then
+       begin
+         ShowMessage(ErrorMessage);
+         IsWeightError := True;
+         OpenedPort := False;
+       end;
+   end;
+  if not IsWeightError then
+    begin
+{
+      case Sender.ClassName of
+        'TO4Image' : begin
+          Panel := (Sender as TO4Image).Parent;
+          Tag := (Sender as TO4Image).Tag;
+        end;
+        'TO4Panel' : begin
+          Panel := (Sender as TO4Panel).Parent;
+          Tag := (Sender as TO4Panel).Tag;
+        end;
+      end;
+}
+      (Panel as TO4Panel).BevelOuter := bvLowered;
+      (Panel as TO4Panel).Refresh;
+      (Panel as TO4Panel).SetFocus;
+      Sleep(50);
+      (Panel as TO4Panel).BevelOuter := bvRaised;
+
+//      TblGroups.CancelRange;
+//      TblGroups.SortBy('Номер');
+//      TblGroups.Select;
+//      TblGroups.Find(Tag+(PageGroups*GroupsButtonCount));
+      if VarAsBool(TblGroups.Группа.НаличиеПодгрупы) then
+        begin
+          pnReturnGriup.Visible := true;
+          IsChieldGroup := true;
+          GetGroupTbl(TblGroups.Группа);
+        end
+      else
+        begin
+          GetGoodsTbl(TblGroups.Группа);
+          lTitle.Caption := 'Будь ласка, оберіть товар';
+          nbMain.PageIndex := 1;
+          if pnSelectOneGood.Visible then
+            pnZag5.Width := (InfoPanel.Width div 2)-((pnSelectOneGood.Width +pnReturn.Width + pnWeight.Width + pnPrice.Width + pnSumma.Width) div 2)
+          else
+            pnZag5.Width := (InfoPanel.Width div 2)-((pnReturn.Width + pnWeight.Width + pnPrice.Width + pnSumma.Width) div 2);
+
+          pnZag3.Height := (LeftPanelGood.Height div 2)-(pnPriorGoodPage.Height div 2);
+          pnZag4.Height := (RightPanelGood.Height div 2)-(pnNextGoodPage.Height div 2);
+          GetWeitTimer.Enabled := true;
+        end;
+
+    end;
+end;
+
+
+procedure PrintWeightGood(Good:ICDictionary; WeightGood:Integer);
+var
+  PrinterName, PrintFormName : string;
+  PreviewPrintForm:boolean;
+  PrintWeitProc : IcProcessing;
+begin
+ PrintFormName := VarAsStr(Options.GetLocalPrm('WorkPlacePrintForm'));
+ PreviewPrintForm := VarAsBool(Options.GetLocalPrm('WorkPlacePreviewPrintForm'));
+
+ if PrintFormName='' then
+   PrintFormName := 'ПечВесЦенника40х25';
+
+ PrinterName := GetPrintNameForCurPrintForm('WeightWorkPlace');
+ if PrinterName<>'' then
+   SetActivePrinter(PrinterName);
+ PrintWeitProc := CreateObject('Обработки.РаботаСВесами');
+ PrintWeitProc.PrintForm(PrintFormName,PreviewPrintForm,ArrayOf(Good,WeightGood));
+
+end;
+
+
+procedure Good_Click(Sender: TObject);
+Var
+  Panel : TObject;
+  Tag : Integer;
+begin
+  case Sender.ClassName of
+    'TO4Image' : begin
+      Panel := (Sender as TO4Image).Parent;
+      Tag := (Sender as TO4Image).Tag;
+    end;
+    'TO4Panel' : begin
+      Panel := (Sender as TO4Panel).Parent;
+      Tag := (Sender as TO4Panel).Tag;
+    end;
+  end;
+  (Panel as TO4Panel).BevelOuter := bvLowered;
+  (Panel as TO4Panel).Refresh;
+  (Panel as TO4Panel).SetFocus;
+  Sleep(50);
+  (Panel as TO4Panel).BevelOuter := bvRaised;
+
+  TblGoods.CancelRange;
+  TblGoods.SortBy('Номер');
+  TblGoods.Select;
+  if TblGoods.Find(Tag+(PageGoods*GoodsButtonCount)) then
+    begin
+      PriceD := VarAsDec(TblGoods.Цена);
+      lbPrice.Caption := FormatFloat('0.00',PriceD);
+      Summa := (Weight/1000)*PriceD;
+      lbSumma.Caption := FormatFloat('0.00',Summa);
+
+      if (Weight = 0) or WeightOneGood then
+        begin
+          IsGoodClickZeroWeight := true;
+          lTitle.Caption := VarAsStr(TblGoods.Товар.NameField);
+        end
+      else
+        begin
+          GetWeitTimer.Enabled := false;
+          IsGoodClickZeroWeight := False;
+          PrintWeightGood(TblGoods.Товар,Weight);
+          GetWeitTimer.Enabled := True;
+        end;
+    end;
+
+end;
+
+procedure pnHomeButt_Click(Sender: TObject);
+Var
+  ErrorMessage : String;
+begin
+  pnReturn.BevelOuter := bvLowered;
+  pnHomeButt.Refresh;
+  pnHomeButt.SetFocus;
+  Sleep(50);
+  pnReturn.BevelOuter := bvRaised;
+  lTitle.Caption := 'Будь ласка, оберіть групу товарів';
+  PriceD := 0;
+  lbPrice.Caption := FormatFloat('0.00',PriceD);
+  IsGoodClickZeroWeight := False;
+  nbMain.PageIndex := 0;
+  GetWeitTimer.Enabled := False;
+  if OpenedPort then
+    begin
+      Driver.CloseComPort(Error);
+      if not CheckError(Error,ErrorMessage) then
+        ShowMessage(ErrorMessage);
+    end;
+end;
+
+procedure pnOneGood_Click(Sender: TObject);
+begin
+  if pnSelectOneGood.BevelOuter = bvRaised then
+    begin
+      pnSelectOneGood.BevelOuter := bvLowered;
+      pnOneGood.Color := clMenu;
+      WeightOneGood := True;
+    end
+  else
+    begin
+      pnSelectOneGood.BevelOuter := bvRaised;
+      pnOneGood.Color := clWhite;
+      WeightOneGood := False;
+      lTitle.Caption := 'Будь ласка, оберіть товар'; 
+      IsGoodClickZeroWeight := false;
+
+    end;
+
+end;
+
+procedure GetWeitTimer_Timer(Sender: TObject);
+Var
+  Cost, Error, Price: Integer;
+  PrintWeitProc : IcProcessing;
+  ErrorMessage : String;
+begin
+  Cost :=-1;
+  Price := Round(PriceD*100);
+//  Driver.SetPrice(Price, Error);
+//  if not CheckError(Error,ErrorMessage) then
+//    exit;
+  Weight :=0;
+  Driver.GetInfo(Weight, Price, Cost, Error);
+  if not CheckError(Error, ErrorMessage) and (Weight<>0) then
+    exit;
+
+  if StopPrint and (Weight<>0) then
+    exit
+  else
+    StopPrint := False;
+
+  lbWeight.Caption := FormatFloat('0.000',(Weight/1000));
+  lbPrice.Caption := FormatFloat('0.00',PriceD);
+  Summa := (Weight/1000)*PriceD;
+  lbSumma.Caption := FormatFloat('0.00',Summa);
+
+  if IsGoodClickZeroWeight and (OldWeight=Weight) and (Weight<>0) then
+    begin
+      GetWeitTimer.Enabled := false;
+      StopPrint := True;
+      if not WeightOneGood then
+        begin
+          lTitle.Caption := 'Будь ласка, оберіть товар';
+          IsGoodClickZeroWeight := False;
+          StopPrint := False;
+        end;
+      OldWeight := 0;
+
+      PrintWeightGood(TblGoods.Товар,Weight);
+      GetWeitTimer.Enabled := True;
+    end
+  else
+    OldWeight := Weight;
+
+end;
+
+
+
+
+
+
+
+procedure Form_Close(Sender: TObject);
+Var
+  ErrorMessage : String;
+begin
+  GetWeitTimer.Enabled := False;
+  if OpenedPort then
+    begin
+      Driver.CloseComPort(Error);
+      if not CheckError(Error,ErrorMessage) then
+        showMessage(ErrorMessage);
+    end;
+end;
+
+procedure Image2_Click(Sender: TObject);
+begin
+  TerminateClient;
+end;
+
+
+
+procedure miBarCodeFocusF12_Click(Sender: TObject);
+begin
+  edBarCode.SetFocus;
+end;
+
+
+function FindGoodByCodeCount(Code: String; Var Source: ICDictionary): boolean;
+var
+  Find: Boolean;
+  FieldName : string;
+begin
+  result := false;
+  Source := CreateObject('Справочники.ШтрихКодыТоваров');
+  if Source.FindByCode(Code, false) then
+    begin
+      Source := Source._GetOwner;
+      if not IsNil(Source) and Source.IsFocused then
+        Find := true;
+    end;
+  if not Find then
+    begin
+      Source := CreateObject('Справочники.Товары');
+      if StrLength(Code) > 10 then
+        FieldName := 'ШтрихКод'
+      else
+        FieldName := 'Код';
+      if not Source.FindByField(FieldName,Code, false) then
+        begin
+          ShowMessage('Товар с кодом: ' + Code + ', не найден');
+          exit;
+        end;
+    end;
+  result := true;
+
+end;
+
+procedure edBarCode_KeyDown(Sender: TObject; var Key: Integer);
+var
+  BarCode : String;
+  BarCodeWeitGoodLength : Integer;
+  PrefixWeitGood : String;
+  FindsGood : IcDictionary;
+  InfoGood : IcProcessing;
+  TimerOldEn : Boolean;
+begin
+  if key=13 then
+    begin
+      PlaySound('Ding');
+      BarCode := edBarCode.Text;
+      edBarCode.Text := '';
+      if BarCode = '' then
+        exit;
+      BarCodeWeitGoodLength := VarAsInt(GetConstants.ШтрихКодТовараВнутреннийКолСимв,0)+9;
+      if (BarCodeWeitGoodLength mod 2)>0 then
+        begin
+          inc(BarCodeWeitGoodLength);
+          PrefixWeitGood := '0201';
+        end
+      else
+        PrefixWeitGood := '201';
+
+      if (StrLength(BarCode)=BarCodeWeitGoodLength) and
+         ((StrCopy(BarCode,1,3)=PrefixWeitGood) or (StrCopy(BarCode,1,4)=PrefixWeitGood)) then
+          BarCode := StrCopy(BarCode,StrLength(PrefixWeitGood)+1,VarAsInt(GetConstants.ШтрихКодТовараВнутреннийКолСимв,0));
+      if FindGoodByCodeCount(BarCode, FindsGood) then
+        begin
+          TimerOldEn := GetWeitTimer.Enabled;
+          GetWeitTimer.Enabled := false;
+          InfoGood := CreateObject('Обработки.РаботаСВесами');
+          InfoGood.Execute('ИнфоПроТовар',FindsGood);
+          GetWeitTimer.Enabled := TimerOldEn;
+        end;
+    end;
+end;
+
+procedure imHomeGr_Click(Sender: TObject);
+begin
+  IsChieldGroup := False;
+  pnReturnGriup.Visible := False;
+  GetGroupTbl(Null);
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+nbMain:TO4Notebook
+pnGroups:TO4Panel
+pnGroup1:TO4Panel
+dbiGroupPicture1:TO4Image
+pnGroupName1:TO4Panel
+pnGroup30:TO4Panel
+dbiGroupPicture30:TO4Image
+pnGroupName30:TO4Panel
+pnGroup29:TO4Panel
+dbiGroupPicture29:TO4Image
+pnGroupName29:TO4Panel
+pnGroup28:TO4Panel
+dbiGroupPicture28:TO4Image
+pnGroupName28:TO4Panel
+pnGroup27:TO4Panel
+dbiGroupPicture27:TO4Image
+pnGroupName27:TO4Panel
+pnGroup26:TO4Panel
+dbiGroupPicture26:TO4Image
+pnGroupName26:TO4Panel
+pnGroup25:TO4Panel
+dbiGroupPicture25:TO4Image
+pnGroupName25:TO4Panel
+pnGroup24:TO4Panel
+dbiGroupPicture24:TO4Image
+pnGroupName24:TO4Panel
+pnGroup23:TO4Panel
+dbiGroupPicture23:TO4Image
+pnGroupName23:TO4Panel
+pnGroup22:TO4Panel
+dbiGroupPicture22:TO4Image
+pnGroupName22:TO4Panel
+pnGroup21:TO4Panel
+dbiGroupPicture21:TO4Image
+pnGroupName21:TO4Panel
+pnGroup20:TO4Panel
+dbiGroupPicture20:TO4Image
+pnGroupName20:TO4Panel
+pnGroup19:TO4Panel
+dbiGroupPicture19:TO4Image
+pnGroupName19:TO4Panel
+pnGroup18:TO4Panel
+dbiGroupPicture18:TO4Image
+pnGroupName18:TO4Panel
+pnGroup17:TO4Panel
+dbiGroupPicture17:TO4Image
+pnGroupName17:TO4Panel
+pnGroup16:TO4Panel
+dbiGroupPicture16:TO4Image
+pnGroupName16:TO4Panel
+pnGroup15:TO4Panel
+dbiGroupPicture15:TO4Image
+pnGroupName15:TO4Panel
+pnGroup14:TO4Panel
+dbiGroupPicture14:TO4Image
+pnGroupName14:TO4Panel
+pnGroup13:TO4Panel
+dbiGroupPicture13:TO4Image
+pnGroupName13:TO4Panel
+pnGroup12:TO4Panel
+dbiGroupPicture12:TO4Image
+pnGroupName12:TO4Panel
+pnGroup11:TO4Panel
+dbiGroupPicture11:TO4Image
+pnGroupName11:TO4Panel
+pnGroup10:TO4Panel
+dbiGroupPicture10:TO4Image
+pnGroupName10:TO4Panel
+pnGroup9:TO4Panel
+dbiGroupPicture9:TO4Image
+pnGroupName9:TO4Panel
+pnGroup8:TO4Panel
+dbiGroupPicture8:TO4Image
+pnGroupName8:TO4Panel
+pnGroup7:TO4Panel
+dbiGroupPicture7:TO4Image
+pnGroupName7:TO4Panel
+pnGroup6:TO4Panel
+dbiGroupPicture6:TO4Image
+pnGroupName6:TO4Panel
+pnGroup5:TO4Panel
+dbiGroupPicture5:TO4Image
+pnGroupName5:TO4Panel
+pnGroup4:TO4Panel
+dbiGroupPicture4:TO4Image
+pnGroupName4:TO4Panel
+pnGroup3:TO4Panel
+dbiGroupPicture3:TO4Image
+pnGroupName3:TO4Panel
+pnGroup2:TO4Panel
+dbiGroupPicture2:TO4Image
+pnGroupName2:TO4Panel
+LeftPanel:TO4Panel
+pnPriorPage:TO4Panel
+imPriorPage:TO4Image
+pnZag2:TO4Panel
+pnReturnGriup:TO4Panel
+pnHomeButtGr:TO4Panel
+imHomeGr:TO4Image
+pnHomeGr:TO4Panel
+RightPanel:TO4Panel
+pnNextPage:TO4Panel
+imNextPage:TO4Image
+pnZag1:TO4Panel
+pnGoods:TO4Panel
+pnGood1:TO4Panel
+dbiGoodPicture1:TO4Image
+pnGoodName1:TO4Panel
+pnGoodPrice1:TO4Panel
+pnGood30:TO4Panel
+dbiGoodPicture30:TO4Image
+pnGoodName30:TO4Panel
+pnGoodPrice30:TO4Panel
+pnGood29:TO4Panel
+dbiGoodPicture29:TO4Image
+pnGoodName29:TO4Panel
+pnGoodPrice29:TO4Panel
+pnGood28:TO4Panel
+dbiGoodPicture28:TO4Image
+pnGoodName28:TO4Panel
+pnGoodPrice28:TO4Panel
+pnGood27:TO4Panel
+dbiGoodPicture27:TO4Image
+pnGoodName27:TO4Panel
+pnGoodPrice27:TO4Panel
+pnGood26:TO4Panel
+dbiGoodPicture26:TO4Image
+pnGoodName26:TO4Panel
+pnGoodPrice26:TO4Panel
+pnGood25:TO4Panel
+dbiGoodPicture25:TO4Image
+pnGoodName25:TO4Panel
+pnGoodPrice25:TO4Panel
+pnGood24:TO4Panel
+dbiGoodPicture24:TO4Image
+pnGoodName24:TO4Panel
+pnGoodPrice24:TO4Panel
+pnGood23:TO4Panel
+dbiGoodPicture23:TO4Image
+pnGoodName23:TO4Panel
+pnGoodPrice23:TO4Panel
+pnGood22:TO4Panel
+dbiGoodPicture22:TO4Image
+pnGoodName22:TO4Panel
+pnGoodPrice22:TO4Panel
+pnGood21:TO4Panel
+dbiGoodPicture21:TO4Image
+pnGoodName21:TO4Panel
+pnGoodPrice21:TO4Panel
+pnGood20:TO4Panel
+dbiGoodPicture20:TO4Image
+pnGoodName20:TO4Panel
+pnGoodPrice20:TO4Panel
+pnGood19:TO4Panel
+dbiGoodPicture19:TO4Image
+pnGoodName19:TO4Panel
+pnGoodPrice19:TO4Panel
+pnGood18:TO4Panel
+dbiGoodPicture18:TO4Image
+pnGoodName18:TO4Panel
+pnGoodPrice18:TO4Panel
+pnGood17:TO4Panel
+dbiGoodPicture17:TO4Image
+pnGoodName17:TO4Panel
+pnGoodPrice17:TO4Panel
+pnGood16:TO4Panel
+dbiGoodPicture16:TO4Image
+pnGoodName16:TO4Panel
+pnGoodPrice16:TO4Panel
+pnGood15:TO4Panel
+dbiGoodPicture15:TO4Image
+pnGoodName15:TO4Panel
+pnGoodPrice15:TO4Panel
+pnGood14:TO4Panel
+dbiGoodPicture14:TO4Image
+pnGoodName14:TO4Panel
+pnGoodPrice14:TO4Panel
+pnGood13:TO4Panel
+dbiGoodPicture13:TO4Image
+pnGoodName13:TO4Panel
+pnGoodPrice13:TO4Panel
+pnGood12:TO4Panel
+dbiGoodPicture12:TO4Image
+pnGoodName12:TO4Panel
+pnGoodPrice12:TO4Panel
+pnGood11:TO4Panel
+dbiGoodPicture11:TO4Image
+pnGoodName11:TO4Panel
+pnGoodPrice11:TO4Panel
+pnGood10:TO4Panel
+dbiGoodPicture10:TO4Image
+pnGoodName10:TO4Panel
+pnGoodPrice10:TO4Panel
+pnGood9:TO4Panel
+dbiGoodPicture9:TO4Image
+pnGoodName9:TO4Panel
+pnGoodPrice9:TO4Panel
+pnGood8:TO4Panel
+dbiGoodPicture8:TO4Image
+pnGoodName8:TO4Panel
+pnGoodPrice8:TO4Panel
+pnGood7:TO4Panel
+dbiGoodPicture7:TO4Image
+pnGoodName7:TO4Panel
+pnGoodPrice7:TO4Panel
+pnGood6:TO4Panel
+dbiGoodPicture6:TO4Image
+pnGoodName6:TO4Panel
+pnGoodPrice6:TO4Panel
+pnGood5:TO4Panel
+dbiGoodPicture5:TO4Image
+pnGoodName5:TO4Panel
+pnGoodPrice5:TO4Panel
+pnGood4:TO4Panel
+dbiGoodPicture4:TO4Image
+pnGoodName4:TO4Panel
+pnGoodPrice4:TO4Panel
+pnGood3:TO4Panel
+dbiGoodPicture3:TO4Image
+pnGoodName3:TO4Panel
+pnGoodPrice3:TO4Panel
+pnGood2:TO4Panel
+dbiGoodPicture2:TO4Image
+pnGoodName2:TO4Panel
+pnGoodPrice2:TO4Panel
+pnGood31:TO4Panel
+dbiGoodPicture31:TO4Image
+pnGoodName31:TO4Panel
+pnGoodPrice31:TO4Panel
+pnGood32:TO4Panel
+dbiGoodPicture32:TO4Image
+pnGoodName32:TO4Panel
+pnGoodPrice32:TO4Panel
+pnGood33:TO4Panel
+dbiGoodPicture33:TO4Image
+pnGoodName33:TO4Panel
+pnGoodPrice33:TO4Panel
+pnGood34:TO4Panel
+dbiGoodPicture34:TO4Image
+pnGoodName34:TO4Panel
+pnGoodPrice34:TO4Panel
+pnGood35:TO4Panel
+dbiGoodPicture35:TO4Image
+pnGoodName35:TO4Panel
+pnGoodPrice35:TO4Panel
+pnGood36:TO4Panel
+dbiGoodPicture36:TO4Image
+pnGoodName36:TO4Panel
+pnGoodPrice36:TO4Panel
+pnGood37:TO4Panel
+dbiGoodPicture37:TO4Image
+pnGoodName37:TO4Panel
+pnGoodPrice37:TO4Panel
+pnGood38:TO4Panel
+dbiGoodPicture38:TO4Image
+pnGoodName38:TO4Panel
+pnGoodPrice38:TO4Panel
+pnGood39:TO4Panel
+dbiGoodPicture39:TO4Image
+pnGoodName39:TO4Panel
+pnGoodPrice39:TO4Panel
+pnGood40:TO4Panel
+dbiGoodPicture40:TO4Image
+pnGoodName40:TO4Panel
+pnGoodPrice40:TO4Panel
+LeftPanelGood:TO4Panel
+pnPriorGoodPage:TO4Panel
+imPriorGoodPage:TO4Image
+pnZag3:TO4Panel
+RightPanelGood:TO4Panel
+pnNextGoodPage:TO4Panel
+imNextGoodPage:TO4Image
+pnZag4:TO4Panel
+InfoPanel:TO4Panel
+pnZag5:TO4Panel
+pnWeight:TO4Panel
+Label1:TO4Label
+lbWeight:TO4Label
+pnSumma:TO4Panel
+Label3:TO4Label
+lbSumma:TO4Label
+pnPrice:TO4Panel
+Label2:TO4Label
+lbPrice:TO4Label
+pnReturn:TO4Panel
+pnHomeButt:TO4Panel
+imHome:TO4Image
+pnHomeName:TO4Panel
+Panel6:TO4Panel
+pnSelectOneGood:TO4Panel
+pnOneGood:TO4Panel
+Panel10:TO4Panel
+Panel4:TO4Panel
+imNoImage:TO4Image
+Panel5:TO4Panel
+lCurDate:TO4Label
+lCurTime:TO4Label
+TempImage:TO4DBImage
+edBarCode:TO4Edit
+Panel3:TO4Panel
+Image1:TO4Image
+lTitle:TO4Label
+Image2:TO4Image
+Panel2:TO4Panel
+Panel1:TO4Panel
+TVSSavesPictures:TO4TableValueSource
+pmSettingsButtonPanel:TO4PopupMenu
+miSettings:TO4MenuItem
+GetTimeTimer:TO4Timer
+GetWeitTimer:TO4Timer
+pmMainFocus:TO4PopupMenu
+miBarCodeFocusF12:TO4MenuItem

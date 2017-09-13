@@ -1,0 +1,102 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsPartRealiz : ISAccs;
+
+function —формироватьѕлатежѕоƒокументу(DocOwner : Variant) : Decimal; server;
+var
+  Pays, Nakls, Orders : ISJournal;
+  V : Variant;
+  “амѕроц—уммаƒекл, ѕошл—уммаƒекл, —уммаЌƒ—ƒекл, ќпл“ам : Decimal;
+begin
+  if DocOwner.GetType() <> 'Dictionaries;—правочники;ƒов≥дники' then
+    begin
+      if (DocOwner.ќтпуск = 1) then
+        Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп')
+      else
+        Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+      Pays.UseMaster(DocOwner);
+      Pays.SetDocMultiStateRange('1;2;');
+      Result := DocOwner.—умма - Pays.Total('—умма');
+    end
+  else
+    begin
+      case VarAsStr(DocOwner.GetSign) of
+        ' урьер' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—умќбщ;
+          end;
+        '–еализаторы', '–еализаторы‘арм' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—–еализаторами');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—ум—пис + AccsPartRealiz.—умќпл;
+          end;
+        'ѕостЌа–еализацию', 'ѕостЌа–еализацию‘арм' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—ѕостЌа–еал');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—ум—пис + AccsPartRealiz.—умќпл;
+          end;
+        'ќбъектыѕроизводства' : 
+          Result := 0;
+        'ƒоговѕоставки' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчетыѕоƒоговорам');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—ум—пис + AccsPartRealiz.—умќпл;
+          end;
+        '“орговые“очки' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчеты—“орг“очками');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—ум—пис + AccsPartRealiz.—умќпл;
+          end;
+        'Ѕартер' :
+          begin
+            AccsPartRealiz := CreateObject('јккумул€торы.–асчетыѕоЅартеру');
+            AccsPartRealiz.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), DocOwner);
+            Result := -AccsPartRealiz.—умќбщ;
+          end;
+        ' онтракт»мпорт' :
+          begin
+            “амѕроц—уммаƒекл := 0;
+            ѕошл—уммаƒекл := 0;
+            —уммаЌƒ—ƒекл := 0;
+            Orders := CreateObject('∆урналы.∆урнал‘актур');
+            Nakls := CreateObject('∆урналы.∆урналЌаклѕрих»мп');
+            if VarAsBool(DocOwner.IsFocused) then
+              begin
+                Orders.SetDocStateRange(1);
+                Orders.UseMaster(DocOwner);
+                Orders.Select();
+                while Orders.SelectNext() do
+                  begin
+                    Nakls.SetDocStateRange(1);
+                    Nakls.UseMaster(Orders);
+                    Nakls.Select();
+                    V := Nakls.Total('“амѕроц—уммаƒекл;ѕошл—уммаƒекл;—уммаЌƒ—ƒекл');
+                    “амѕроц—уммаƒекл := “амѕроц—уммаƒекл + V[0];
+                    ѕошл—уммаƒекл := ѕошл—уммаƒекл + V[1];
+                    —уммаЌƒ—ƒекл := —уммаЌƒ—ƒекл + V[2];
+                  end;
+              end;
+            Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+            Pays.SetDocMultiStateRange('1;2;');
+            Pays.UseMaster(DocOwner);
+            Pays.Select();
+            while Pays.SelectNext() do
+              ќпл“ам := ќпл“ам + Pays.—умма;
+            Result := “амѕроц—уммаƒекл + ѕошл—уммаƒекл + —уммаЌƒ—ƒекл - ќпл“ам;
+          end;
+      end;
+    end;
+end;
+end.

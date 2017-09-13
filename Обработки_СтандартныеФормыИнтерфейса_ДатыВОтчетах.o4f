@@ -1,0 +1,410 @@
+object Form: TO4Form
+  Left = 0
+  Top = 1
+  Width = 380
+  Height = 30
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'lbDateFrom.Caption'
+    0
+    #1'-1'#1' Период: с '
+    'lbDateTo.Caption'
+    0
+    #1'-1'#1' по '
+    'miApr.Caption'
+    0
+    #1'-1'#1'  Апрель'
+    'miAug.Caption'
+    0
+    #1'-1'#1'  Август'
+    'miDec.Caption'
+    0
+    #1'-1'#1'  Декабрь'
+    'miFeb.Caption'
+    0
+    #1'-1'#1'  Февраль'
+    'miFirstHalfYear.Caption'
+    0
+    #1'-1'#1'Первое полугодие'
+    'miFirstQuartal.Caption'
+    0
+    #1'-1'#1'I квартал'
+    'miFourthQuartal.Caption'
+    0
+    #1'-1'#1'IV квартал'
+    'miJan.Caption'
+    0
+    #1'-1'#1'  Январь'
+    'miJul.Caption'
+    0
+    #1'-1'#1'  Июль'
+    'miJun.Caption'
+    0
+    #1'-1'#1'  Июнь'
+    'miLastYear.Caption'
+    0
+    #1'-1'#1'Предыдущий год'
+    'miMar.Caption'
+    0
+    #1'-1'#1'  Март'
+    'miMay.Caption'
+    0
+    #1'-1'#1'  Май'
+    'miNov.Caption'
+    0
+    #1'-1'#1'  Ноябрь'
+    'miOct.Caption'
+    0
+    #1'-1'#1'  Октябрь'
+    'miSecondHalfYear.Caption'
+    0
+    #1'-1'#1'Второе полугодие'
+    'miSecondQuartal.Caption'
+    0
+    #1'-1'#1'II квартал'
+    'miSep.Caption'
+    0
+    #1'-1'#1'  Сентябрь'
+    'miThirdQuartal.Caption'
+    0
+    #1'-1'#1'III квартал'
+    'miThisYear.Caption'
+    0
+    #1'-1'#1'Текущий год'
+    'tbSelectDates.Caption'
+    0
+    #1'-1'#1'Выбор периода'
+    'tbSelectDates.Hint'
+    0
+    #1'-1'#1'Выбор периода')
+  Translat.LangDict.Cols = (
+    16
+    180
+    120)
+  Translat.LangDict.Words = (
+    0
+    #1'-1'#1'I квартал'#1'1058'#1'I квартал'
+    0
+    #1'-1'#1'II квартал'#1'1058'#1'II квартал'
+    0
+    #1'-1'#1'III квартал'#1'1058'#1'III квартал'
+    0
+    #1'-1'#1'IV квартал'#1'1058'#1'IV квартал')
+  Alignment = taLeftJustify
+  Anchors = []
+  AutoSize = True
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  VPAOnExecute.EventName = 'Form_Execute'
+  VPAOnExecProc.EventName = 'Form_ExecProc'
+  VPAOnShow.EventName = 'Form_Show'
+  object tbrData: TO4ToolBar
+    Left = 0
+    Top = 0
+    Width = 380
+    Height = 22
+    Align = alNone
+    ButtonWidth = 105
+    EdgeBorders = []
+    EdgeInner = esNone
+    EdgeOuter = esNone
+    Flat = True
+    HotImages = ImagesHolder.Bmp16x16
+    Images = ImagesHolder.Bmp16x16
+    List = True
+    ShowCaptions = True
+    TabOrder = 0
+    Wrapable = False
+    object pnDates: TO4Panel
+      Left = 0
+      Top = 0
+      Width = 260
+      Height = 22
+      Align = alLeft
+      AutoSize = True
+      BevelSides = []
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object lbDateFrom: TO4Label
+        Left = 0
+        Top = 4
+        Width = 56
+        Height = 13
+        Caption = ' Период: с '
+        Layout = tlCenter
+      end
+      object lbDateTo: TO4Label
+        Left = 150
+        Top = 4
+        Width = 18
+        Height = 13
+        Caption = ' по '
+        Layout = tlCenter
+      end
+      object edDateFrom: TO4Edit
+        Left = 58
+        Top = 0
+        Width = 90
+        Height = 21
+        EditStyle = fesDate
+        Period.Enabled = False
+        Period.StrStartDate = '31.12.1899'
+        TabOrder = 0
+        VPAOnChange.EventName = 'edDateFrom_Change'
+      end
+      object edDateTo: TO4Edit
+        Tag = 1
+        Left = 170
+        Top = 0
+        Width = 90
+        Height = 21
+        EditStyle = fesDate
+        Period.Enabled = False
+        Period.StrStartDate = '31.12.1899'
+        TabOrder = 1
+        VPAOnChange.EventName = 'edDateFrom_Change'
+      end
+    end
+    object tbSelectDates: TO4ToolButton
+      Left = 260
+      Top = 0
+      Hint = 'Выбор периода'
+      Caption = 'Выбор периода'
+      DropdownMenu = pmDates
+      ImageIndex = 160
+      Style = tbsDropDown
+      O4Action = actNone
+      VPAOnClick.EventName = 'tbSelectDates_Click'
+    end
+  end
+  object pmDates: TO4PopupMenu
+    object miFirstHalfYear: TO4MenuItem
+      Caption = 'Первое полугодие'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem7: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miFirstQuartal: TO4MenuItem
+      Tag = 1
+      Caption = 'I квартал'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miJan: TO4MenuItem
+      Tag = 2
+      Caption = '  Январь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miFeb: TO4MenuItem
+      Tag = 3
+      Caption = '  Февраль'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miMar: TO4MenuItem
+      Tag = 4
+      Caption = '  Март'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem9: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSecondQuartal: TO4MenuItem
+      Tag = 5
+      Caption = 'II квартал'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miApr: TO4MenuItem
+      Tag = 6
+      Caption = '  Апрель'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miMay: TO4MenuItem
+      Tag = 7
+      Caption = '  Май'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miJun: TO4MenuItem
+      Tag = 8
+      Caption = '  Июнь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem14: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miLastYear: TO4MenuItem
+      Tag = 9
+      Caption = 'Предыдущий год'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSecondHalfYear: TO4MenuItem
+      Tag = 10
+      Break = mbBarBreak
+      Caption = 'Второе полугодие'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem17: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miThirdQuartal: TO4MenuItem
+      Tag = 11
+      Caption = 'III квартал'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miJul: TO4MenuItem
+      Tag = 12
+      Caption = '  Июль'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miAug: TO4MenuItem
+      Tag = 13
+      Caption = '  Август'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSep: TO4MenuItem
+      Tag = 14
+      Caption = '  Сентябрь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem22: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miFourthQuartal: TO4MenuItem
+      Tag = 15
+      Caption = 'IV квартал'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miOct: TO4MenuItem
+      Tag = 16
+      Caption = '  Октябрь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miNov: TO4MenuItem
+      Tag = 17
+      Caption = '  Ноябрь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miDec: TO4MenuItem
+      Tag = 18
+      Caption = '  Декабрь'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object MenuItem27: TO4MenuItem
+      Caption = '-'
+      GroupIndex = 1
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miThisYear: TO4MenuItem
+      Tag = 19
+      Caption = 'Текущий год'
+      GroupIndex = 1
+      RadioItem = True
+      VPAOnClick.EventName = 'miFirstHalfYear_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+  end
+end

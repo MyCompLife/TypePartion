@@ -1,0 +1,58 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений,
+  Интерфейс, InitColors, Расчеты;
+
+implementation
+
+var
+  Date : DateTime;
+
+procedure InitSrvData; server;
+begin
+  Date := CurrentDate;
+end;
+
+procedure GetMyGoodCount(tmpCtx : ISValueTable; Date : DateTime; AccsGoods, AccsReserv : ISAccs); server;
+begin
+  GetGoodCount(tmpCtx, Date, AccsGoods, AccsReserv);
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure СформироватьНакладнуюПоСчету(tmpCtx : ISValueTable; Order, Nakls : ISDocuments); server;
+begin
+  tmpCtx.DoGetLinks('КоличествоУпаковок=Товар.Услуга');
+  DeleteColumnsByCondition(tmpCtx, 'ОбщКол', 'КоличествоУпаковок<>0');
+  tmpCtx.DoCalculation('ОбщКол', 'Количество');
+  tmpCtx.SortBy('Товар;Цена');
+  Nakls.UseMaster(Order);
+  if Nakls.Select then
+    while Nakls.SelectNext do
+      if (Nakls.GetDocState > 0) and Nakls.SelectLines then
+        while Nakls.SelectNextLine do
+          begin
+            tmpCtx.SetRange(ArrayOf(Nakls.@Товар, Nakls.Цена), ArrayOf(Nakls.@Товар, Nakls.Цена));
+            tmpCtx.Select;
+            if tmpCtx.SelectNext then
+              begin
+                tmpCtx.Edit;
+                tmpCtx.ОбщКол := tmpCtx.ОбщКол - Nakls.Количество;
+                tmpCtx.Post;
+              end;
+            tmpCtx.CancelRange;
+         end;
+  DeleteColumnsByCondition(tmpCtx, 'КоличествоУпаковок', 'ОбщКол<=0');
+  tmpCtx.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+end;
+
+end.

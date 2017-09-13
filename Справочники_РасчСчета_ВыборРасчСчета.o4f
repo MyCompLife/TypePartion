@@ -1,0 +1,269 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 500
+  Height = 300
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'dbgData.PosColumns[  0].Title.Caption'
+    0
+    #1'-1'#1'№ счета'
+    'dbgData.PosColumns[  1].Title.Caption'
+    0
+    #1'-1'#1'МФО банка'
+    'dbgData.PosColumns[  2].Title.Caption'
+    0
+    #1'-1'#1'Банк'
+    'dbgData.PosColumns[  3].Title.Caption'
+    0
+    #1'-1'#1'Назначение р/счета'
+    'miAdd.Caption'
+    0
+    #1'-1'#1'Добавить'
+    'miAdd.Hint'
+    0
+    #1'-1'#1'Добавить'
+    'miDelete.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'miDelete.Hint'
+    0
+    #1'-1'#1'Удалить'
+    'miEdit.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'miEdit.Hint'
+    0
+    #1'-1'#1'Изменить'
+    'miPrint.Caption'
+    0
+    #1'-1'#1'Печатать'
+    'miPrint.Hint'
+    0
+    #1'-1'#1'Печатать'
+    'miRefresh.Caption'
+    0
+    #1'-1'#1'Обновить'
+    'miRefresh.Hint'
+    0
+    #1'-1'#1'Обновить'
+    'miSort.Caption'
+    0
+    #1'-1'#1'Сортировать'
+    'miSort.Hint'
+    0
+    #1'-1'#1'Сортировать')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  ActiveControl = dbgData
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object dbgData: TO4DBGrid
+    Left = 0
+    Top = 0
+    Width = 500
+    Height = 272
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    IndicatorWidth = 18
+    Images = ImagesHolder.Bmp16x16
+    DragDisabled = False
+    Options = [dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgRowSelect, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = MDS
+    PopupMenu = pmData
+    TabOrder = 0
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    VPAOnGetImageIndex.EventName = 'dbgData_GetImageIndex'
+    PosColumns = <
+      item
+        Alignment = taCenter
+        O4FieldName = 'НомерСчета'
+        Title.Alignment = taCenter
+        Title.Caption = '№ счета'
+        Width = 90
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.06.2002'
+      end
+      item
+        Alignment = taCenter
+        O4FieldName = 'МФОбанка'
+        Title.Alignment = taCenter
+        Title.Caption = 'МФО банка'
+        Width = 90
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.06.2002'
+      end
+      item
+        O4FieldName = 'Банк'
+        Title.Alignment = taCenter
+        Title.Caption = 'Банк'
+        Width = 171
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.06.2002'
+      end
+      item
+        O4FieldName = 'Комментарий'
+        Title.Caption = 'Назначение р/счета'
+        Width = 121
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '10.06.2002'
+      end>
+  end
+  object BottomPanel: TO4Panel
+    Left = 0
+    Top = 272
+    Width = 500
+    Height = 28
+    Align = alBottom
+    BevelSides = []
+    BorderSides = []
+    BevelOuter = bvNone
+    TabOrder = 1
+    Transparent = False
+    object ButtonPanel: TO4Panel
+      Left = 325
+      Top = 0
+      Width = 175
+      Height = 28
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 14
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actSave
+      end
+      object btCancel: TO4Button
+        Left = 90
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        WordWrap = False
+        O4MDSource = MDS
+        O4Action = actCancel
+      end
+    end
+  end
+  object MDS: TO4DataSource
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    VPAOnSelect.EventName = 'MDS_Select'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 9
+    Top = 169
+  end
+  object pmData: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 43
+    Top = 168
+    object miAdd: TO4MenuItem
+      Caption = 'Добавить'
+      Hint = 'Добавить'
+      ImageIndex = 0
+      ShortCut = 45
+      O4Action = actAdd
+      SortMenuParent = False
+    end
+    object miEdit: TO4MenuItem
+      Caption = 'Изменить'
+      Hint = 'Изменить'
+      ImageIndex = 1
+      ShortCut = 113
+      O4Action = actEdit
+      SortMenuParent = False
+    end
+    object miDelete: TO4MenuItem
+      Caption = 'Удалить'
+      Hint = 'Удалить'
+      ImageIndex = 2
+      ShortCut = 46
+      O4Action = actDel
+      SortMenuParent = False
+    end
+    object miDelimiter1: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miPrint: TO4MenuItem
+      Caption = 'Печатать'
+      Enabled = False
+      Hint = 'Печатать'
+      ImageIndex = 93
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miDelimiter2: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSort: TO4MenuItem
+      Caption = 'Сортировать'
+      Hint = 'Сортировать'
+      ImageIndex = 37
+      O4Action = actSelect
+      SortMenuParent = True
+    end
+    object miDelimiter3: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miRefresh: TO4MenuItem
+      Caption = 'Обновить'
+      Hint = 'Обновить'
+      ImageIndex = 39
+      VPAOnClick.EventName = 'miRefresh_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSettings: TO4MenuItem
+      Caption = 'Настройки'
+      Hint = 'Настройки'
+      ImageIndex = 48
+      O4Action = actGridParam
+      SortMenuParent = False
+    end
+  end
+end

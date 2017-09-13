@@ -1,0 +1,284 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, НумерацияДокументов;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV  : ICWriNums;
+  Tbl, ResultTbl  : ICValueTable;
+  OutCome : Boolean;
+  Constants : IC4VPAConst;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  Constants := GetConstants;
+  CNV := CreateObject('ЧислаПрописью');
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  Tbl := CreateObject('ТаблицаЗначений');
+  Tbl.AddColumn('Товар',vtcLink,0);
+  Tbl.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,7);
+  Tbl.AddColumn('ПроцентСкидкиНадбавки',vtcFFT,7);
+  Tbl.AddColumn('ЦенаБезНДС',vtcFFT,7);
+  Tbl.AddColumn('Цена',vtcFFT,7);
+  Tbl.AddColumn('Количество',vtcFFT,5);
+  Tbl.AddColumn('Код',vtcString,20);
+  Tbl.AddColumn('ЕдИзм',vtcLink,0);
+  Tbl.AddColumn('СуммаСтроки',vtcFFT,7);
+  Tbl.AddColumn('СуммаСтрокиБезСкидки',vtcFFT,7);
+  Tbl.AddColumn('СуммаСкидки',vtcFFT,7);
+  Tbl.Open;
+  ResultTbl := CreateObject('ТаблицаЗначений');
+  ResultTbl.AddColumn('NAME',vtcString,120);
+  ResultTbl.AddColumn('UnitName',vtcString,20);
+  ResultTbl.AddColumn('Count',vtcFFT,5);
+  ResultTbl.AddColumn('Price',vtcFFT,7);
+  ResultTbl.AddColumn('SummaStr',vtcFFT,7);
+  ResultTbl.AddColumn('IsDiscount',vtcBoolean,0);
+  ResultTbl.AddColumn('DrawBottom',vtcBoolean,0);
+  ResultTbl.Open;
+
+  if VarAsBool(MasterData.HasField('ВашеПредприятие')) then
+    begin
+      if VarAsBool(MasterData.@ВашеПредприятие.IsFocused) then
+        MYF.Find(MasterData.ВашеПредприятие)
+      else
+        ShowMessage('Поле "Ваше предприятие" в документе не заполнено!')
+    end
+  else
+    ShowMessage('Поле "Ваше предприятие" в документе отсутствует!');  
+ if VarAsStr(Constants.ТекстПодвалаЧека)<>'' then
+   begin
+     lbFooter.Caption := VarAsStr(Constants.ТекстПодвалаЧека);
+     bndFooter.Height := Label14.Height;
+   end;
+
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+
+  Tbl.Clear;
+  MasterData.AppendLinesTo('Товар;ЦенаБезСкидкиНадбавки;ПроцентСкидкиНадбавки;ЦенаБезНДС;Цена;Количество', Tbl);
+  if OutCome then
+    Tbl.GroupBy('Товар;ЦенаБезСкидкиНадбавки;ПроцентСкидкиНадбавки;ЦенаБезНДС;Цена', 'Количество');
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*Цена');
+  Tbl.DoCalculation('СуммаСтрокиБезСкидки', 'Количество*ЦенаБезСкидкиНадбавки');
+  Tbl.DoCalculation('СуммаСкидки', 'СуммаСтрокиБезСкидки-СуммаСтроки');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Товар');
+  // Создание результирующей таблицы
+  Tbl.Select;
+  ResultTbl.Clear;
+  While Tbl.SelectNext do
+   begin
+     ResultTbl.Append;
+     ResultTbl.NAME := Tbl.Код + ' ' + Tbl.DefValue['Товар'];
+     ResultTbl.UnitName := Tbl.DefValue['ЕдИзм'];
+     ResultTbl.Count := Tbl.Количество;
+     ResultTbl.Price := Tbl.ЦенаБезСкидкиНадбавки;
+     ResultTbl.SummaStr := Tbl.СуммаСтрокиБезСкидки;
+     ResultTbl.IsDisCount := false;
+     if VarAsDec(Tbl.СуммаСкидки,0)<>0 then
+       ResultTbl.DrawBottom := false
+     else
+       ResultTbl.DrawBottom := true;
+     ResultTbl.Post;
+     if VarAsDec(Tbl.СуммаСкидки,0)<>0 then
+       begin
+         ResultTbl.Append;
+         ResultTbl.NAME := 'Надано знижку, % :';
+         ResultTbl.UnitName := '';
+     //    ResultTbl.Count := 0;
+         ResultTbl.Price := Tbl.ПроцентСкидкиНадбавки;
+         ResultTbl.SummaStr := Tbl.СуммаСкидки;
+         ResultTbl.IsDisCount := true;
+         ResultTbl.DrawBottom := true;
+         ResultTbl.Post;
+       end;
+   end;
+  Tbl.Select;
+  ResultTbl.Select;
+
+  with Table do
+    begin
+     Value['NUMBER'] := ПолучитьНомерНалоговогоДокументаНаПечать(MasterData);//MasterData.НомерДокумента;
+     Value['Date'] := MasterData.ДатаДокумента;
+     Value['DocNumberDate'] := 'Чек №'+ VarAsStr(Value['NUMBER'],'')+' від '+ DateToStr(VarAsDate(Value['Date'],0));
+     Value['Summa'] := MasterData.Сумма;
+     Value['SummaDiscount'] := Tbl.Total('СуммаСкидки');
+     Value['SummaWDiscount'] := Tbl.Total('СуммаСтрокиБезСкидки');
+     Value['SumNT'] := MasterData.СуммаБезНДС;
+     Value['Tax'] := MasterData.СуммаНДС;
+     if MasterData.HasField('СуммаВозврТары') then
+        Value['SUMREVTARE'] := MasterData.СуммаВозврТары;
+     if MasterData.HasField('СуммаТары') then
+       begin
+         Value['SUMNTTARE'] := MasterData.СуммаБезНДСТары;
+         Value['TAXTARE'] := MasterData.СуммаНДСТары;
+         Value['SUMTARE'] := MasterData.СуммаТары;
+        end;
+    if MasterData.HasField('СуммаТрансп') then
+      begin
+        Value['TRANSNT'] := MasterData.СуммаБезНДСТрансп;
+        Value['TRANSTAX'] := MasterData.СуммаНДСТрансп;
+        Value['TRANSSUM'] := MasterData.СуммаТрансп;
+      end;
+     Value['ISLOW'] := MasterData.СуммаСкидкиНадбавки<0;
+     if MasterData.СуммаСкидкиНадбавки<0 then
+       begin
+         Value['LOWHIGHNT'] := -MasterData.СуммаБезНДССкидкиНадбавки;
+         Value['LOWHIGHTAX'] := -MasterData.СуммаНДССкидкиНадбавки;;
+         Value['LOWHIGHSUM'] := -MasterData.СуммаСкидкиНадбавки;;
+       end
+     else
+       begin
+         Value['LOWHIGHNT'] := MasterData.СуммаБезНДССкидкиНадбавки;
+         Value['LOWHIGHTAX'] := MasterData.СуммаНДССкидкиНадбавки;;
+         Value['LOWHIGHSUM'] := MasterData.СуммаСкидкиНадбавки;;
+       end;
+    end;
+
+//  lbSumInWord.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058);
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  Accept := ResultTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do
+    begin
+      Value['NAME'] := ResultTbl.NAME;
+      Value['UnitName'] := ResultTbl.UnitName;
+      Value['Price'] := ResultTbl.Price;
+      Value['SummaStr'] := ResultTbl.SummaStr;
+      if VarAsBool(ResultTbl.IsDiscount,false) then
+        Value['Count'] := ''
+      else
+        Value['Count'] := ResultTbl.Count;
+    end;
+end;
+
+procedure bndFtRetTara_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+//  lblTaxRevTara.Caption := FormatFloat('0.00',0);
+  if MasterData.HasField('СуммаВозврТары') then
+    Accept := MasterData.СуммаВозврТары <> 0
+  else
+    Accept := false
+end;
+
+procedure bndFtTara_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+  if MasterData.HasField('СуммаТары') then
+    Accept := MasterData.СуммаТары <> 0
+  else
+    Accept := false
+end;
+
+procedure bndFtMinus_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+  Accept := (MasterData.СуммаСкидкиНадбавки < 0);
+end;
+
+procedure bndFtPlus_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+  Accept := (MasterData.СуммаСкидкиНадбавки > 0);
+end;
+
+procedure bndFtTTV_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+  Accept := False;
+  if MasterData.HasField('СуммаТрансп') then
+    Accept := MasterData.СуммаТрансп <> 0;
+end;
+
+procedure bndFtMassa_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+  Accept := MasterData.HasField('ОбщаяМасса') and MasterData.HasField('ОбщаяПлощадь');
+  if not Accept then Exit;
+  Accept := (MasterData.ОбщаяМасса <> 0) or (MasterData.ОбщаяПлощадь <> 0);
+end;
+
+procedure DetailBand2_BeforePrint(Band:TRBCustomBand; var Accept:Boolean);
+begin
+  lbCashName.Caption := GetUserLogin;
+end;
+
+procedure Structure1_ROOT_Det_GetCount(Table:TRBTable; var Count:Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if GetMyFirm(Table, MYF, ADR, TLF, RRR) then
+    with Table do
+      begin
+        if not IsNull(Value['BankTown']) then
+          Value['BankName'] := Value['BankName'] + ',' + Value['BankTown'];
+        Value['PayAccNum'] := Value['PayAccNum'] + ' в ' + Value['BankName'];  
+        Value['Phone'] := 'тел.: '+VarAsStr(Value['Phone'],'');
+
+      end;
+end;
+
+procedure dbndGoods_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+ if VarAsBool(ResultTbl.DrawBottom,false) then
+  begin
+   LabelName.Frame.DrawBottom := true;
+   LabelUnitName.Frame.DrawBottom := true;
+   LabelCount.Frame.DrawBottom := true;
+   LabelPrice.Frame.DrawBottom := true;
+   LabelSummaStr.Frame.DrawBottom := true;
+  end
+ else
+  begin
+   LabelName.Frame.DrawBottom := false;
+   LabelUnitName.Frame.DrawBottom := false;
+   LabelCount.Frame.DrawBottom := false;
+   LabelPrice.Frame.DrawBottom := false;
+   LabelSummaStr.Frame.DrawBottom := false;
+  end;
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand2:TRBDetailBand
+Label2:TRBLabel
+Label6:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+bndHdDet:TRBBand
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label31:TRBLabel
+Label32:TRBLabel
+dbndGoods:TRBDetailBand
+LabelUnitName:TRBLabel
+LabelCount:TRBLabel
+LabelSummaStr:TRBLabel
+LabelName:TRBLabel
+LabelPrice:TRBLabel
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label81:TRBLabel
+lbCashName:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+Label17:TRBLabel
+Structure1:TRBStructure
+bndFooter:TRBBand
+lbFooter:TRBLabel
+Label72:TRBLabel

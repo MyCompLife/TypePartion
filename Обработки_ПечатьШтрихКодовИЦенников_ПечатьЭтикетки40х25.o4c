@@ -1,0 +1,153 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF, BarCodeDic: ICDictionary;
+  Tbl  : ICValueTable;
+  i,j, PriceRoundAfterComma: Integer;
+  Options : ICOptions;
+  Constants : IC4VPAConst;
+  TypePrice: string;
+  PrintPrice, IsRoundPrice, IsRoundPriceTo5Cop, PriceInCurrency : boolean;
+  Price : Decimal;
+  GoodDic, CurrDic : ICDictionary;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := Form.GetParams; //Form.GetMean;
+  Options := GetOptions;
+  Constants := GetConstants;
+  IsRoundPrice := VarAsBool(Constants.ОкруглятьЦеныГрн); 
+  IsRoundPriceTo5Cop := VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп);
+  PriceRoundAfterComma :=  VarAsInt(Constants.ОкруглениеЦенГрн);
+  PriceInCurrency := VarAsBool(Constants.ПечатьЭтикеткиЦенаВВалюте);
+  TypePrice := VarAsStr(Constants.ПечатьЭтикеткиТипЦены);
+  PrintPrice := VarAsBool(Constants.ПечатьЭтикеткиЦена);
+  lbDate.Visible := VarAsBool(Constants.ПечатьЭтикеткиДатаПечати);
+
+
+  PrintForm.Page.LeftMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('LeftMargin ПечатьЭтикетки40х25')), 0);
+  PrintForm.Page.TopMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('TopMargin ПечатьЭтикетки40х25')), 0);
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  GoodDic := CreateObject('Справочники.Товары');
+  CurrDic := CreateObject('Справочники.Валюты');
+
+  Tbl := CreateObject('ТаблицаЗначений');
+  BarCodeDic := CreateObject('Справочники.ШтрихКодыТоваров');
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар;Размер;Цена', 'Количество');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SelectFirst;
+  i:=VarAsInt(Tbl.Количество);
+  j:=0;
+  lbPriceTitle.Visible := PrintPrice;
+  lbPrice.Visible := PrintPrice;
+
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+var
+  GoodName : String;
+  ModelDic : ICDictionary;
+  Price : Decimal;
+begin
+  if j<i
+  then
+    begin
+      Accept:=true;
+      j:=j+1;
+    end
+  else
+    begin
+      Repeat
+        Accept:=Tbl.SelectNext();
+        i:=Tbl.Количество;
+        if not Accept then
+        exit;
+//        if not StdInpInt(Tbl.DefValue['Товар']+'  '+Tbl.Код+'  Цена = '+DecToStr(Int(Tbl.Цена), -1),i) then i:=0;//Exit;
+        j:=1;
+      until i<>0;
+    end;
+{
+  GoodName := Tbl.DefValue['Товар'];
+  if not VarAsBool(Tbl.Товар.@Модель.IsFocused) then
+    Raise('Не заполнена модель для товара.' +#10#13 +
+          GoodName);
+  ModelDic := Tbl.Товар.Модель;
+  if StrPos(Tbl.Товар.КодПроизводителя, GoodName) <> 0 then
+    GoodName := StrCopy(GoodName, 1 ,StrLength(GoodName) - (StrLength(Tbl.Товар.КодПроизводителя) + 2)); //исключаем код производителя из названия
+  bndDET.Frame.Color:=clBlack;
+  BarCodeDic.UseMaster(Tbl.Товар);
+  BarCodeDic.Select;
+  if BarCodeDic.FindByField('Активность',varAsInt(true),false) then
+    BarCode.Text := BarCodeDic.Код
+  else
+    begin
+      if BarCodeDic.SelectNext then
+        BarCode.Text := BarCodeDic.Код
+      else
+        BarCode.Text := Tbl.Код;
+    end;
+}
+  BarCode.Text := Tbl.Код;
+  if GoodDic.Find(Tbl.@Товар) and CurrDic.Find(GoodDic._Default['Валюта'+MasterData.ТипЦены]) then
+    Begin
+      with Table do
+        begin
+          Value['PCode'] := GoodDic.КодПроизводителя;
+          Value['Code'] := Tbl.Код;
+          Value['Name'] := GoodDic.НазвТовара;
+          if PrintPrice then
+            begin
+              Price := GoodDic._Default[MasterData.ТипЦены];
+              if PriceInCurrency then
+                begin
+                  Value['Price'] := DecToStr(Price,2);
+                  if IsObjFocused(CurrDic) then
+                    Value['Curr'] := 'ціна, '+CurrDic.Код;
+                end
+              else
+                begin
+                  if IsRoundPrice then
+                    begin
+                      if IsRoundPriceTo5Cop then
+                        Value['Price'] := RoundTo5Cop(Price *CurrDic.GetTimedValue('КурсНаличный', CurrentDate))
+                      else
+                        Value['Price'] := RoundDec(Price *CurrDic.GetTimedValue('КурсНаличный', CurrentDate),PriceRoundAfterComma)
+                    end
+                  else
+                    begin
+                      Value['Price'] := Price *CurrDic.GetTimedValue('КурсНаличный', CurrentDate);
+                      lbPriceTitle.Caption := 'ціна, ГРН';
+                    end;
+                end;
+            end;
+        end;
+    end;
+end;
+
+procedure Structure1_ME_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+end;
+
+end.
+
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndDET:TRBDetailBand
+Label5:TRBLabel
+BarCode:TRBBarCode
+Label4:TRBLabel
+lbPriceTitle:TRBLabel
+lbPrice:TRBLabel
+lbDate:TRBLabel
+Structure1:TRBStructure

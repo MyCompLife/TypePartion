@@ -1,0 +1,244 @@
+interface
+uses
+ System, DispIntf, ConstNames, InitColors, Расчеты, РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений, Пользователи;
+
+implementation 
+
+var MasterData : ICProcessing;
+    PartTbl, DocsTbl :ICValueTable;
+    CursorVis : TCursor;
+    PartnersDic : ICDictionary;
+
+
+procedure CreateObjects;
+begin
+  server.CreateSrvObjets;
+  PartTbl := CreateObject('ТаблицаЗначений');
+  PartTbl.AddColumn('Партнер',vtcLink,0);
+  PartTbl.AddColumn('Сумма',vtcFFt,2);
+  PartTbl.Open;
+  DocsTbl := CreateObject('ТаблицаЗначений');
+  DocsTbl.AddColumn('Партнер',vtcLink,0);
+  DocsTbl.AddColumn('Документ',vtcLink,0);
+  DocsTbl.AddColumn('ДатаДокумента',vtcDate,0);
+  DocsTbl.AddColumn('НомерДокумента',vtcString,20);
+  DocsTbl.AddColumn('Сумма',vtcFFT,2);
+  DocsTbl.AddColumn('Оплачено',vtcFFT,2);
+  DocsTbl.AddColumn('Должны',vtcFFT,2);
+  DocsTbl.AddColumn('Знак',vtcString,1);
+  DocsTbl.AddColumn('ПоискНомер',vtcInteger,0);
+  DocsTbl.Open;
+  PartnersDic := CreateObject('Справочники.ЮрПартнеры');
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  CreateObjects;
+  PartnersDic.Select;
+  eDate.Text := DateTimeToStr(CurrentDateTime);
+end;
+
+procedure tbRun_Click(Sender: TObject);
+var
+  i:integer;
+  Total: Variant;
+  Doc : IcDocuments;
+begin
+  if not IsObjFocused(PartnersDic) then
+    begin
+      ShowMessage('Выберите партнера!');
+      exit;
+    end;
+  try
+    XGrid.ColCount :=7;
+
+    XGrid.ClearAll;
+    CursorVis := WaitCursorStart;
+    PartTbl.CopyDataToServer;
+    DocsTbl.CopyDataToServer;
+    PartnersDic.SetSrvToClientPos;
+    if MasterData.RunThreadProcess(server.CreateTblEP(PartTbl.SrvMean, DocsTbl.SrvMean, PartnersDic.SrvMean), 'Формирование отчета') then
+      begin
+        PartTbl.CopyDataFromServer;
+        DocsTbl.CopyDataFromServer;
+        XGrid.AddSection('Hed');
+        XGrid.Cell(1,1).Value :=VarAsStr(PartnersDic.ПолноеНазвание);
+        PartTbl.SortBy('Партнер');
+        DocsTbl.SortBy('Партнер;ДатаДокумента');
+        i :=1;
+        PartTbl.Select;
+        While PartTbl.SelectNext do
+          if VarAsDec(PartTbl.Сумма)<>0 then
+            begin
+              PartTbl.AddToXGrid(CtrlToVar(XGrid),'PartDet','Партнер;;;;;Сумма',i,1);
+              DocsTbl.SetRange(PartTbl.@Партнер, PartTbl.@Партнер);
+              DocsTbl.Select;
+              if DocsTbl.LineCount>0 then
+                begin
+                  XGrid.AddSection('DocHed');
+                  DocsTbl.AddToXGrid(CtrlToVar(XGrid),'DocDet','Знак;Документ;ДатаДокумента;Сумма;Оплачено;Должны;;ПоискНомер',0,DocsTbl.LineCount);
+                  XGrid.AddSection('Delim');
+                end;
+              inc(i);
+            end
+          else
+            inc(i);
+
+        XGrid.ColCount :=7;
+      end;
+  finally
+    SetCursor(CursorVis);
+  end;
+
+end;
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+ 
+procedure tbXTools_Click(Sender: TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterData := Mean;
+end;
+
+procedure XGrid_DblClick(Sender: TObject);
+Var
+  Znach : Decimal;
+begin
+  Znach :=0;
+  if (VarAsStr(XGrid.Cells(XGrid.Row,8,XGrid.Row,8).Value)<>'') and (XGrid.Col=7) then
+    if StdInpDec('Введите сумму:',Znach) then
+      XGrid.Cells(XGrid.Row,7,XGrid.Row,7).Value := Znach;
+end;
+
+procedure tbCreatePaysDoc_Click(Sender: TObject);
+Var
+  i : Integer;
+  PaySum : Decimal;
+  PaysDoc, NaklDoc : IcDocuments;
+  Currency, HdCurrency : ICDictionary;
+  Constants : IC4VPAConst;
+  FixAckParam: Boolean;
+  Options : ICOptions;
+  DateDoc : DateTime;
+begin
+  DateDoc := StrToDateTimeDef(eDate.Text,0);
+  if DateDoc=0 then
+    begin
+      ShowMessage('Выберите дату');
+      exit;
+    end;
+  Options := GetOptions;
+  Constants := GetConstants;
+  Currency := CreateObject('Справочники.Валюты');
+  HdCurrency := CreateObject('Справочники.Валюты');
+  PaysDoc := CreateObject('Документы.ПриходВКассу');
+  PaysDoc.Select;
+  NaklDoc := CreateObject('Документы.НакладнаяОтпуска');
+  NaklDoc.Select;
+  DocsTbl.SortBy('ПоискНомер');
+  for i:=1 to XGrid.RowCount do
+    begin
+      if (VarAsStr(XGrid.Cells(i,8,i,8).Value)<>'') and DocsTbl.Find(VarAsInt(XGrid.Cells(i,8,i,8).Value)) then
+        begin
+          PaySum := VarAsDec(XGrid.Cells(i,7,i,7).Value);
+          if (PaySum<>0) And  NaklDoc.Find(DocsTbl.@Документ) then
+            Begin
+              PaysDoc.Append;
+//              showMessage('Оплата -'+DecToStr(PaySum,2)+#13+VarAsStr(DocsTbl.НомерДокумента));
+
+              Currency := GetNatCurrency(Currency);
+              if Currency.IsFocused then
+                begin
+                  PaysDoc.Курс := Currency.GetTimedValue(Constants.UsedCurs, PaysDoc.ДатаДокумента);
+                  PaysDoc.Валюта := Currency;
+                end;
+              HdCurrency := GetHdCurrency(HdCurrency);
+              if VarAsBool(HdCurrency.IsFocused) then
+                PaysDoc.КурсТвВал := HdCurrency.GetTimedValue(Constants.UsedCurs, PaysDoc.ДатаДокумента);
+              PaysDoc.Ответственный := GetEmplByName(GetUserName);
+              PaysDoc.Взаиморасчет := VarAsInt(True);
+              PaysDoc.ЕстьНДС := VarAsInt(True);
+              PaysDoc.СтавкаНДС := Constants.ProcentPDV;
+              PaysDoc.Касса := GetUsersField('Касса');
+              PaysDoc.SetMaster(NaklDoc);
+//              PaysDoc.Сумма := server.СформироватьПлатежПоДокументу(NaklDoc);
+              PaysDoc.Сумма := PaySum;
+//              PaysDoc.ДатаДокумента := NaklDoc.GetDate+0.0001;
+              PaysDoc.ДатаДокумента := DateDoc;
+              SetSums('Сумма', PaysDoc.Сумма, PaysDoc, Constants.ProcentPDV); //расчеты
+              PaysDoc.Комментарий := 'Оплата згідно накладної №' + NaklDoc.НомерДокумента + ' від ' + DateToStr(NaklDoc.ДатаДокумента);
+              SetCurSumma(PaysDoc);
+    
+              SetHdSumma(PaysDoc);
+              PaysDoc.Партнер := NaklDoc.Партнер;
+              PaysDoc.AppendLine();
+              PaysDoc.PostLine();  
+              PaysDoc.Post;
+              PaysDoc.ApplyUpdates;    
+              if cbFixDoc.Checked then
+                try
+                  FixAckParam := VarAsBool(Options.GetServerPrm(FixAck));
+                  Options.SetServerPrm(FixAck,false);
+                  PaysDoc.StateUp;
+                finally
+                  Options.SetServerPrm(FixAck,FixAckParam );
+                end;
+
+
+            end;
+        end;
+    end;
+end;
+
+procedure ePartners_ActionExecute(Sender: TObject);
+var DefName : String;
+begin
+  if IsNil(PartnersDic) then
+    PartnersDic := CreateObject('Справочники.ЮрПартнеры');
+  if PartnersDic.SelectInForm('',DefName,Null) then
+    begin
+      ePartners.Text := DefName;
+    end;
+end;
+
+procedure ePartners_ActionClear(Sender: TObject);
+begin
+  nil(PartnersDic);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbXTools:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbCreatePaysDoc:TO4ToolButton
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+ePartners:TO4Edit
+cbFixDoc:TO4CheckBox
+eDate:TO4Edit
+ToolButton4:TO4ToolButton

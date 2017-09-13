@@ -1,0 +1,1891 @@
+interface
+
+uses
+  System, DispIntf, РаботаСОбъектами, РаботаСПеременными, Расчеты;
+
+const
+  xlUp = $FFFFEFBE;
+  xlDown = $FFFFEFE7;
+  xlRight = $FFFFEFC8;
+  xlLeft = $FFFFEFDD;
+  xlCenter = $FFFFEFF4;
+
+procedure ExportToExcel(Source : Variant; ExportType : string);
+function InitializeOLEExcel(var OLEExcel, TrgRange : OleVariant; FileNameToOpen : String = '') : Boolean;
+procedure CloseOLEExcel(OLEExcel : OleVariant; FileNameToSave : String = '');
+procedure ExportTableToExcel(TrgRange : OleVariant; Source, FieldList, FieldTypes : Variant; CurrRow, glbCurrCol : Integer);
+procedure ExportListToExcel(Source : Variant; FieldList, FieldTypes : Variant);
+procedure ExportHeadToExcel(TrgRange : OleVariant; CurrRow, CurrCol : Integer; ArrValues : Variant);
+function GetObjRecordCount(Object : IObject) : Integer;
+procedure AddRecordsForDet(OLEExcel, TrgRange : OleVariant; StartRow, Lines : Integer);
+procedure DoWrapTextForMergeCells(TrgRange : OleVariant; Value : Variant;
+                                  CurrRow, mcCol1, mcCol2, FreeCol : Integer);
+procedure DoEntireColumnsNRows(OLEExcel : OleVariant; CurrRow, mcCol1, mcCol2 : Integer; DefWidth : Decimal = 8.43);
+
+implementation
+
+function GetThisAddress(ADR : ICDictionary) : String;
+begin
+  if not IsNil(ADR) and VarAsBool(ADR.IsFocused) then
+    begin
+      Result := ADR.Адрес;
+      if VarAsBool(ADR.@Город.IsFocused) then
+        begin
+          if Result <> '' then
+            Result := ADR.Город.Название+', '+Result
+          else
+            Result := ADR.Город.Название;
+        end;
+      if ADR.ПочтИндекс <> '' then
+        begin
+          if Result <> '' then
+            Result := ADR.ПочтИндекс+', '+Result
+          else
+            Result := ADR.ПочтИндекс;
+        end;
+    end
+  else
+    Result := '';
+end;
+
+function GetThisPhone(TLF : ICDictionary) : String;
+begin
+  if not IsNil(TLF) and VarAsBool(TLF.IsFocused) then
+    begin
+      Result := TLF.Номер;
+      if VarAsBool(TLF.@Город.IsFocused) and (VarAsStr(TLF.Город.ТелКод) <> '') then
+        Result := '('+TLF.Город.ТелКод+') '+Result;
+    end
+  else
+    Result := '';
+end;
+
+procedure ExportToExcel_OrderOut(Excel, TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  i, j, CurrRow : Integer;
+  TLF, ADR, RRR, MYF, OneGood, PrintAcc, Partner : ICDictionary;
+  CNV  : ICWriNums;
+  TblContents : ICValueTable;                
+  AssistStr : String;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  CNV := CreateObject('ЧислаПрописью');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  TblContents := CreateObject('ValueTable');
+  MasterDoc.SaveContents('', TblContents);
+  TblContents.GroupBy('Товар;ЦенаБезНДС;Цена', 'Количество;КоличествоУпаковок');
+  TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  TblContents.SortBy('Товар');
+  TrgRange.Cells(1, 3).Value := '№ '+MasterDoc.НомерДокумента+' від '+DateToStr(MasterDoc.ДатаДокумента);
+  MYF.Select;
+  if MYF.SelectNext then
+    begin
+      TrgRange.Cells(3, 3).Value := GetPartName(MYF);
+      TrgRange.Cells(4, 3).Value := GetThisAddress(GetActiveLink(ADR, MYF));
+      TrgRange.Cells(5, 3).Value := GetThisPhone(GetActiveLink(TLF, MYF));
+      if VarAsBool(MasterDoc.HasField('СчетПредприятия')) and VarAsBool(MasterDoc.@СчетПредприятия.IsFocused) then
+        PrintAcc := MasterDoc.СчетПредприятия
+      else
+      if VarAsBool(MasterDoc.Партнер.HasField('РасчСчет')) and
+         VarAsBool(MasterDoc.Партнер.РасчСчет.IsFocused) then
+        PrintAcc := MasterDoc.Партнер.РасчСчет;
+      if RRR.Find(PrintAcc) and VarAsBool(RRR.@Банк.IsFocused) then
+        begin
+          TrgRange.Cells(6, 3).Value := PrintAcc.НомерСчета + ' в ' + RRR.Банк.ПолноеНазвание + ' м.' + GetActiv(ADR, 'Город.Название', RRR.Банк);
+          TrgRange.Cells(7, 3).Value := RRR.Банк.МФО + ' Код ЗКПО ' + MYF.ЗКПО;
+        end;
+      TrgRange.Cells(8, 3).Value := MYF.НалогНом + ' № свідоцтва платника ПДВ ' + MYF.НДСсвид;
+    end;
+  if VarAsBool(MasterDoc.@Партнер.IsFocused) then
+    begin
+      Partner := MasterDoc.Партнер;
+      TrgRange.Cells(10, 3).Value := Partner.ПолноеНазвание;
+      if MasterDoc.HasField('ПартнерАдрес') and VarAsBool(MasterDoc.@ПартнерАдрес.IsFocused) then
+        TrgRange.Cells(11, 3).Value := GetThisAddress(MasterDoc.ПартнерАдрес)
+      else
+        TrgRange.Cells(11, 3).Value := GetThisAddress(GetActiveLink(ADR, Partner));
+      TrgRange.Cells(12, 3).Value := GetThisPhone(GetActiveLink(TLF, Partner));
+      if Partner.GetSign = 'ЮрПартнеры' then
+        TrgRange.Cells(13, 3).Value := Partner.НалогНом + ' № свідоцтва платника ПДВ ' + Partner.НДСсвид;
+    end;
+  if MasterDoc.Заметки <> '' then
+    TrgRange.Cells(17, 6).Value := 'Примітки: '+MasterDoc.Заметки;
+  // подготовим строки для таблицы
+  if TblContents.LineCount > 1 then
+    for i := 2 to TblContents.LineCount do // одна строка уже есть!!!
+      begin
+        Excel.Rows('17:17').Select; // следующая после пустой строки
+        Excel.Selection.Insert(-4121);
+        Excel.Rows('16:16').Select; // существующая пустая строка
+        Excel.Selection.Copy;
+        Excel.Range('A17').Select;
+        Excel.ActiveSheet.Paste;
+     end;
+  CurrRow := 16;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      OneGood := TblContents.Товар;
+      TrgRange.Cells(CurrRow, 1).Value := VarAsStr(CurrRow - 24);
+      TrgRange.Cells(CurrRow, 2).Value := OneGood.Код;
+      TrgRange.Cells(CurrRow, 3).Value := OneGood.ШтрихКод;
+      TrgRange.Cells(CurrRow, 4).Value := OneGood.СанГигСертификат;
+      TrgRange.Cells(CurrRow, 5).Value := OneGood.НазвТовара;
+      if VarAsBool(OneGood.@ЕдИзм.IsFocused) then
+        TrgRange.Cells(CurrRow, 6).Value := OneGood.ЕдИзм.Value;
+      TrgRange.Cells(CurrRow, 7).Value := VarAsDec(TblContents.Количество);
+      TrgRange.Cells(CurrRow, 8).Value := VarAsDec(TblContents.КоличествоУпаковок);
+      TrgRange.Cells(CurrRow, 9).Value := VarAsDec(TblContents.ЦенаБезНДС);
+      TrgRange.Cells(CurrRow, 10).Value := VarAsDec(TblContents.Цена);
+      TrgRange.Cells(CurrRow, 11).Value := VarAsDec(TblContents.Цена) * VarAsDec(TblContents.Количество);
+      TrgRange.Range(TrgRange.Cells(CurrRow, 9), TrgRange.Cells(CurrRow, 11)).
+               NumberFormat := '0,00';
+      inc(CurrRow);
+    end;
+  inc(CurrRow);
+  inc(CurrRow);
+  // итого - суммы
+  TrgRange.Cells(CurrRow, 9).Value := VarAsDec(MasterDoc.СуммаБезНДС);
+  TrgRange.Cells(CurrRow, 10).Value := VarAsDec(MasterDoc.СуммаНДС);
+  TrgRange.Cells(CurrRow, 11).Value := VarAsDec(MasterDoc.Сумма);
+  TrgRange.Range(TrgRange.Cells(CurrRow, 9), TrgRange.Cells(CurrRow, 11)).
+           NumberFormat := '0,00';
+  inc(CurrRow);
+  inc(CurrRow);
+  inc(CurrRow);
+  // итого - к-ство
+  TrgRange.Cells(CurrRow, 8).Value := VarAsDec(MasterDoc.ОбщееКоличество);
+  TrgRange.Cells(CurrRow, 9).Value := VarAsDec(MasterDoc.ОбщееКоличествоУпаковок);
+  TrgRange.Cells(CurrRow, 10).Value := VarAsDec(MasterDoc.ОбщееКоличествоПалет);
+  TrgRange.Cells(CurrRow, 11).Value := VarAsDec(MasterDoc.ОбщаяМасса);
+  inc(CurrRow);
+  inc(CurrRow);
+  //
+  TrgRange.Cells(CurrRow, 3).Value := CNV.MoneyToStr(MasterDoc.Сумма, 'ГРН', 1058);
+  inc(CurrRow);
+  inc(CurrRow);
+  inc(CurrRow);
+  inc(CurrRow);
+  //
+  AssistStr := TrgRange.Cells(CurrRow, 5).Value;
+  TrgRange.Cells(CurrRow, 5).Value := GetTranslation(AssistStr, ArrayOf(GetShortPartName(MasterDoc.Ответственный)));
+  //
+  if VarAsBool(MasterDoc.@Партнер.IsFocused) then
+    if not (VarAsBool(MasterDoc.Партнер.HasField('НДСплат')) and VarAsBool(MasterDoc.Партнер.НДСплат)) then
+      Excel.Rows('13:13').Delete($FFFFEFBE); // xlUp
+  if MYF.IsFocused then
+    if not VarAsBool(MYF.НДСплат) then
+      Excel.Rows('8:8').Delete($FFFFEFBE); // xlUp
+  //
+  Excel.Cells(1, 1).Select;
+end;
+
+procedure ExportToExcel_NaklOut(Excel, TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  i, j, CurrRow : Integer;
+  TLF, ADR, RRR, MYF, OneGood, PrintAcc, Partner : ICDictionary;
+  CNV  : ICWriNums;
+  TblContents : ICValueTable;                
+  AssistStr : String;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  CNV := CreateObject('ЧислаПрописью');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  TblContents := CreateObject('ValueTable');
+  MasterDoc.SaveContents('', TblContents);
+  TblContents.GroupBy('Товар;ЦенаБезНДС;Цена', 'Количество;КоличествоУпаковок');
+  TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  TblContents.SortBy('Товар');
+  TrgRange.Cells(1, 3).Value := '№ '+MasterDoc.НомерДокумента+' від '+DateToStr(MasterDoc.ДатаДокумента);
+  MYF.Select;
+  if MYF.SelectNext then
+    begin
+      TrgRange.Cells(3, 3).Value := GetPartName(MYF);
+      TrgRange.Cells(4, 3).Value := GetThisAddress(GetActiveLink(ADR, MYF));
+      TrgRange.Cells(5, 3).Value := GetThisPhone(GetActiveLink(TLF, MYF));
+      if VarAsBool(MasterDoc.HasField('СчетПредприятия')) and VarAsBool(MasterDoc.@СчетПредприятия.IsFocused) then
+        PrintAcc := MasterDoc.СчетПредприятия
+      else
+      if VarAsBool(MasterDoc.Партнер.HasField('РасчСчет')) and
+         VarAsBool(MasterDoc.Партнер.РасчСчет.IsFocused) then
+        PrintAcc := MasterDoc.Партнер.РасчСчет;
+      if RRR.Find(PrintAcc) and VarAsBool(RRR.@Банк.IsFocused) then
+        begin
+          TrgRange.Cells(6, 3).Value := PrintAcc.НомерСчета + ' в ' + RRR.Банк.ПолноеНазвание + ' м.' + GetActiv(ADR, 'Город.Название', RRR.Банк);
+          TrgRange.Cells(7, 3).Value := RRR.Банк.МФО + ' Код ЗКПО ' + MYF.ЗКПО;
+        end;
+      TrgRange.Cells(8, 3).Value := MYF.НалогНом + ' № свідоцтва платника ПДВ ' + MYF.НДСсвид;
+    end;
+  if VarAsBool(MasterDoc.@Партнер.IsFocused) then
+    begin
+      Partner := MasterDoc.Партнер;
+      TrgRange.Cells(10, 3).Value := Partner.ПолноеНазвание;
+      if MasterDoc.HasField('ПартнерАдрес') and VarAsBool(MasterDoc.@ПартнерАдрес.IsFocused) then
+        TrgRange.Cells(11, 3).Value := GetThisAddress(MasterDoc.ПартнерАдрес)
+      else
+        TrgRange.Cells(11, 3).Value := GetThisAddress(GetActiveLink(ADR, Partner));
+      TrgRange.Cells(12, 3).Value := GetThisPhone(GetActiveLink(TLF, Partner));
+      if Partner.GetSign = 'ЮрПартнеры' then
+        TrgRange.Cells(13, 3).Value := Partner.НалогНом + ' № свідоцтва платника ПДВ ' + Partner.НДСсвид;
+    end;
+  if MasterDoc.Доверенность <> '' then
+    begin
+      TrgRange.Cells(15, 3).Value := MasterDoc.ЧерезКогоСтр;
+      TrgRange.Cells(16, 3).Value := MasterDoc.Доверенность+' від '+DateToStr(MasterDoc.ДатаДоверенности);
+      TrgRange.Cells(17, 3).Value := MasterDoc.ОснованиеДоверенности;
+    end;
+  if MasterDoc.Заметки <> '' then
+    TrgRange.Cells(17, 6).Value := 'Примітки: '+MasterDoc.Заметки;
+  if VarAsBool(MasterDoc.@Перевозчик.IsFocused) then
+    begin
+      AssistStr := GetThisPhone(GetActiveLink(TLF, MasterDoc.Водитель));
+      if AssistStr <> '' then
+        AssistStr := ', тел. ' + AssistStr;
+      TrgRange.Cells(19, 3).Value := GetDefaultLinkValue(MasterDoc.Перевозчик);
+      TrgRange.Cells(20, 3).Value := GetDefaultLinkValue(MasterDoc.Водитель) + AssistStr;
+      TrgRange.Cells(21, 3).Value := GetDefaultLinkValue(MasterDoc.Автомобиль);
+      TrgRange.Cells(22, 3).Value := DateToStr(MasterDoc.ДатаОтгрузки);
+    end;
+  if not VarAsBool(MasterDoc.@Перевозчик.IsFocused) then
+    Excel.Rows('38:39').Delete($FFFFEFBE); // xlUp
+  // подготовим строки для таблицы
+  if TblContents.LineCount > 1 then
+    for i := 2 to TblContents.LineCount do // одна строка уже есть!!!
+      begin
+        Excel.Rows('26:26').Select;
+        Excel.Selection.Insert(-4121);
+        Excel.Rows('25:25').Select;
+        Excel.Selection.Copy;
+        Excel.Range('A26').Select;
+        Excel.ActiveSheet.Paste;
+     end;
+  CurrRow := 25;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      OneGood := TblContents.Товар;
+      TrgRange.Cells(CurrRow, 1).Value := VarAsStr(CurrRow - 24);
+      TrgRange.Cells(CurrRow, 2).Value := OneGood.Код;
+      TrgRange.Cells(CurrRow, 3).Value := OneGood.ШтрихКод;
+      TrgRange.Cells(CurrRow, 4).Value := OneGood.СанГигСертификат;
+      TrgRange.Cells(CurrRow, 5).Value := OneGood.НазвТовара;
+      if VarAsBool(OneGood.@ЕдИзм.IsFocused) then
+        TrgRange.Cells(CurrRow, 6).Value := OneGood.ЕдИзм.Value;
+      TrgRange.Cells(CurrRow, 7).Value := VarAsDec(TblContents.Количество);
+      TrgRange.Cells(CurrRow, 8).Value := VarAsDec(TblContents.КоличествоУпаковок);
+      TrgRange.Cells(CurrRow, 9).Value := VarAsDec(TblContents.ЦенаБезНДС);
+      TrgRange.Cells(CurrRow, 10).Value := VarAsDec(TblContents.Цена);
+      TrgRange.Cells(CurrRow, 11).Value := VarAsDec(TblContents.Цена) * VarAsDec(TblContents.Количество);
+      TrgRange.Range(TrgRange.Cells(CurrRow, 9), TrgRange.Cells(CurrRow, 11)).
+               NumberFormat := '0,00';
+      inc(CurrRow);
+    end;
+  inc(CurrRow);
+  inc(CurrRow);
+  // итого - суммы
+  TrgRange.Cells(CurrRow, 9).Value := VarAsDec(MasterDoc.СуммаБезНДС);
+  TrgRange.Cells(CurrRow, 10).Value := VarAsDec(MasterDoc.СуммаНДС);
+  TrgRange.Cells(CurrRow, 11).Value := VarAsDec(MasterDoc.Сумма);
+  TrgRange.Range(TrgRange.Cells(CurrRow, 9), TrgRange.Cells(CurrRow, 11)).
+           NumberFormat := '0,00';
+  inc(CurrRow);
+  inc(CurrRow);
+  inc(CurrRow);
+  // итого - к-ство
+  TrgRange.Cells(CurrRow, 8).Value := VarAsDec(MasterDoc.ОбщееКоличество);
+  TrgRange.Cells(CurrRow, 9).Value := VarAsDec(MasterDoc.ОбщееКоличествоУпаковок);
+  TrgRange.Cells(CurrRow, 10).Value := VarAsDec(MasterDoc.ОбщееКоличествоПалет);
+  TrgRange.Cells(CurrRow, 11).Value := VarAsDec(MasterDoc.ОбщаяМасса);
+  inc(CurrRow);
+  inc(CurrRow);
+  //
+  TrgRange.Cells(CurrRow, 3).Value := CNV.MoneyToStr(MasterDoc.Сумма, 'ГРН', 1058);
+  inc(CurrRow);
+  inc(CurrRow);
+  //
+  AssistStr := TrgRange.Cells(CurrRow, 1).Value;
+  TrgRange.Cells(CurrRow, 1).Value := GetTranslation(AssistStr, ArrayOf(TrgRange.Cells(3, 3).Value, TrgRange.Cells(10, 3).Value));
+  //
+  if not VarAsBool(MasterDoc.@Перевозчик.IsFocused) then
+    Excel.Rows('19:23').Delete($FFFFEFBE); // xlUp
+  if MasterDoc.Доверенность = '' then
+    Excel.Rows('15:18').Delete($FFFFEFBE); // xlUp
+  if VarAsBool(MasterDoc.@Партнер.IsFocused) then
+    if not (VarAsBool(MasterDoc.Партнер.HasField('НДСплат')) and VarAsBool(MasterDoc.Партнер.НДСплат)) then
+      Excel.Rows('13:13').Delete($FFFFEFBE); // xlUp
+  if MYF.IsFocused then
+    if not VarAsBool(MYF.НДСплат) then
+      Excel.Rows('8:8').Delete($FFFFEFBE); // xlUp
+  //
+  Excel.Cells(1, 1).Select;
+end;
+
+procedure ExportToExcel_Internal(Excel, TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  i, j, CurrRow : Integer;
+  TLF, ADR, OneGood : ICDictionary;
+  CNV  : ICWriNums;
+  TblContents : ICValueTable;
+  AssistStr : String;
+begin
+  ADR := CreateObject('Справочники.Адреса');
+  TLF := CreateObject('Справочники.Телефоны');
+  //
+  TblContents := CreateObject('ТаблицаЗначений');
+  MasterDoc.SaveContents('', TblContents);
+  TblContents.GroupBy('Товар;Склад;Упаковка', 'Количество;КоличествоУпаковок');
+  TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;ЦенаБезНДС=Упаковка.Количество');
+  TblContents.SortBy('Товар');
+  //
+  TrgRange.Cells(1, 5).Value := '№ '+MasterDoc.НомерДокумента+' від '+DateToStr(MasterDoc.ДатаДокумента);
+  TrgRange.Cells(3, 3).Value := GetPartName(MasterDoc.Отправитель);
+  if VarAsBool(MasterDoc.@ОтправительАдрес.IsFocused) then
+    TrgRange.Cells(4, 3).Value := GetThisAddress(MasterDoc.ОтправительАдрес)
+  else
+    TrgRange.Cells(4, 3).Value := GetThisAddress(GetActiveLink(ADR, MasterDoc.Отправитель));
+  //
+  TrgRange.Cells(6, 3).Value := GetPartName(MasterDoc.Партнер);
+  if VarAsBool(MasterDoc.@ПартнерАдрес.IsFocused) then
+    TrgRange.Cells(7, 3).Value := GetThisAddress(MasterDoc.ПартнерАдрес)
+  else
+    TrgRange.Cells(7, 3).Value := GetThisAddress(GetActiveLink(ADR, MasterDoc.Партнер));
+  //
+  if VarAsBool(MasterDoc.@Перевозчик.IsFocused) then
+    begin
+      AssistStr := GetThisPhone(GetActiveLink(TLF, MasterDoc.Водитель));
+      if AssistStr <> '' then
+        AssistStr := ', тел. ' + AssistStr;
+      TrgRange.Cells(9, 3).Value := GetDefaultLinkValue(MasterDoc.Перевозчик);
+      TrgRange.Cells(10, 3).Value := GetDefaultLinkValue(MasterDoc.Водитель) + AssistStr;
+      TrgRange.Cells(11, 3).Value := GetDefaultLinkValue(MasterDoc.Автомобиль);
+      TrgRange.Cells(12, 3).Value := DateToStr(MasterDoc.ДатаОтгрузки);
+    end;
+  //
+  if not VarAsBool(MasterDoc.@Перевозчик.IsFocused) then
+    Excel.Rows('24:25').Delete($FFFFEFBE); // xlUp
+  // подготовим строки для таблицы
+  if TblContents.LineCount > 1 then
+    for i := 2 to TblContents.LineCount do // одна строка уже есть!!!
+      begin
+        Excel.Rows('16:16').Select;
+        Excel.Selection.Insert(-4121);
+        Excel.Rows('15:15').Select;
+        Excel.Selection.Copy;
+        Excel.Range('A16').Select;
+        Excel.ActiveSheet.Paste;
+     end;
+  CurrRow := 15;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      OneGood := TblContents.Товар;
+      TrgRange.Cells(CurrRow, 1).Value := VarAsStr(CurrRow - 14);
+      TrgRange.Cells(CurrRow, 2).Value := OneGood.Код;
+      TrgRange.Cells(CurrRow, 3).Value := OneGood.ШтрихКод;
+      TrgRange.Cells(CurrRow, 4).Value := OneGood.НазвТовара;
+      if VarAsBool(OneGood.@ЕдИзм.IsFocused) then
+        TrgRange.Cells(CurrRow, 5).Value := OneGood.ЕдИзм.Value;
+      TrgRange.Cells(CurrRow, 6).Value := VarAsDec(TblContents.КоличествоУпаковок);
+      TrgRange.Cells(CurrRow, 7).Value := VarAsDec(TblContents.ЦенаБезНДС);
+      TrgRange.Cells(CurrRow, 8).Value := VarAsDec(TblContents.Количество);
+      inc(CurrRow);
+    end;
+  inc(CurrRow);
+  inc(CurrRow);
+  // итого - к-ство
+  TrgRange.Cells(CurrRow, 5).Value := VarAsDec(MasterDoc.ОбщееКоличество);
+  TrgRange.Cells(CurrRow, 6).Value := VarAsDec(MasterDoc.ОбщееКоличествоУпаковок);
+  TrgRange.Cells(CurrRow, 7).Value := VarAsDec(MasterDoc.ОбщееКоличествоПалет);
+  TrgRange.Cells(CurrRow, 8).Value := VarAsDec(MasterDoc.ОбщаяМасса);
+  //
+  if not VarAsBool(MasterDoc.@Перевозчик.IsFocused) then
+    Excel.Rows('9:13').Delete($FFFFEFBE); // xlUp
+  //
+  Excel.Cells(1, 1).Select;
+end;
+
+procedure ExportToExcel_OrderOnDelivery(Excel, TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  i, CurrRow : Integer;
+  TblContents : ICValueTable;
+  AssistStr : String;
+begin
+  TblContents := CreateObject('ТаблицаЗначений');
+  MasterDoc.SaveContents('', TblContents);
+  TblContents.GroupBy('Товар;Цена', 'Количество');
+  TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;ЦенаБезНДС=Товар.Масса');
+  TblContents.DoCalculation('ЦенаБезНДС', 'Количество*ЦенаБезНДС');
+  TblContents.DoCalculation('СуммаСтроки', 'Количество*Цена');
+  TblContents.SortBy('Товар');
+  //
+  AssistStr := TrgRange.Cells(2, 1).Value;
+  TrgRange.Cells(2, 1).Value := GetTranslation(AssistStr, ArrayOf(MasterDoc.НомерДокумента, DateToStr(MasterDoc.ДатаДокумента)));
+  //
+  if MasterDoc.GetSign = 'НакладнаяОтпускаНужд' then
+    TrgRange.Cells(16, 3).Value := GetDefaultLinkValue(MasterDoc.Партнер);
+  // подготовим строки для таблицы
+  if TblContents.LineCount > 1 then
+    for i := 2 to TblContents.LineCount do // одна строка уже есть!!!
+      begin
+        Excel.Rows('22:22').Select;
+        Excel.Selection.Insert(-4121);
+        Excel.Rows('21:21').Select;
+        Excel.Selection.Copy;
+        Excel.Range('A22').Select;
+        Excel.ActiveSheet.Paste;
+     end;
+  CurrRow := 21;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      TrgRange.Cells(CurrRow, 1).Value := VarAsStr(CurrRow - 20);
+      TrgRange.Cells(CurrRow, 2).Value := TblContents.Код;
+      TrgRange.Cells(CurrRow, 3).Value := TblContents.DefValue['Товар'];
+      TrgRange.Cells(CurrRow, 4).Value := TblContents.DefValue['ЕдИзм'];
+      TrgRange.Cells(CurrRow, 5).Value := TblContents.Количество;
+      TrgRange.Cells(CurrRow, 6).Value := TblContents.Цена;
+      TrgRange.Cells(CurrRow, 7).Value := TblContents.СуммаСтроки;
+      TrgRange.Cells(CurrRow, 8).Value := TblContents.ЦенаБезНДС;
+      inc(CurrRow);
+    end;
+  //
+  Excel.Cells(1, 1).Select;
+end;
+
+procedure ExportToExcel_TTN(var TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  i, j : Integer;
+  DataDir, FactTown, FactAdres, CodePhone, S : string;
+  TableRange : Variant;
+  TLF, ADR, RRR, MYF, OneGood, TmpPartner, PartAdres, Respons, Avto : ICDictionary;
+  CNV  : ICWriNums;
+  Tbl : ICValueTable;
+  DocDate : DateTime;
+  SumType : integer;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  CNV := CreateObject('ЧислаПрописью');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  Tbl := CreateObject('ValueTable');
+  MasterDoc.SaveContents('',Tbl);
+  SumType := 0;
+  Tbl.Select;
+  while Tbl.SelectNext do
+    begin
+      if (Tbl.Накладная.GetSign = 'НакладнаяВнутПеремещ') then
+        begin
+          SumType := 1;
+          break;
+        end;
+    end;
+
+  TrgRange.Cells(6,10) := MasterDoc.НомерДокумента;
+  DocDate := MasterDoc.ДатаДокумента;
+  TrgRange.Cells(8,4) := FormatFloat('00',GetDay(DocDate))+' '+
+                         StrLowerCase(CNV.MonthToStr(GetMonth(DocDate),1,1058))+' '+
+                         FormatDateTime('yyyy',DocDate);
+  TmpPartner := MasterDoc.Партнер;
+  if TmpPartner.IsFocused then
+    begin
+      if (TmpPartner.GetSign() = 'Реализаторы') or
+         (TmpPartner.GetSign() = 'ПостНаРеализацию') or
+         (TmpPartner.GetSign() = 'ДоговПоставки') then
+        TmpPartner := TmpPartner.Партнер;
+      if VarAsBool(TmpPartner.IsFocused) then
+        begin
+          if VarAsBool(MasterDoc.@АдресДоставки.IsFocused) then
+            begin
+              PartAdres := MasterDoc.АдресДоставки;
+              if VarAsBool(PartAdres.@Город.IsFocused) then
+                begin
+                  TrgRange.Cells(18,11) := PartAdres.Город.Название;
+                  FactTown := PartAdres.Город.Название;
+                end;
+              FactAdres := PartAdres.Адрес;
+            end
+          else
+            begin
+              ADR.UseMasterAndSelect(TmpPartner);
+              while ADR.SelectNext do
+                begin
+                  if VarAsBool(ADR.Тип.IsFocused) then
+                    begin
+                      s := StrLowerCase(ADR.Тип.Value);
+                      if StrPos('факт',s) > 0 then
+                        begin
+                          if VarAsBool(ADR.@Город.IsFocused) then
+                            begin
+                              TrgRange.Cells(18,11) := ADR.Город.Название;
+                              FactTown := ADR.Город.Название;
+                            end;
+                          FactAdres := ADR.Адрес;
+                          break
+                        end
+                    end
+                end;
+            end;
+          TrgRange.Cells(16,4) := GetPartName(TmpPartner,0)+' '+FactTown+' '+FactAdres;
+        end;
+    end;
+  Respons := MasterDoc.Ответственный;
+  if VarAsBool(Respons.IsFocused) then
+    begin
+      if VarAsBool(Respons.Должность.IsFocused) then
+        TrgRange.Cells(29,12) := Respons.Должность.Value + ' ' + GetShortPartName(Respons)
+      else
+        TrgRange.Cells(29,12) := GetShortPartName(Respons);
+      TrgRange.Cells(35,3) := GetShortPartName(Respons);
+    end;
+  Avto := MasterDoc.Автомобиль;
+  TrgRange.Cells(8,16) := MasterDoc.ДорожныйЛист;
+  TrgRange.Cells(8,10) := Avto.Название+' '+Avto.ГосНомер;
+  TrgRange.Cells(10,9) := GetShortPartName(MasterDoc.Водитель);
+  TrgRange.Cells(35,11) := TrgRange.Cells(10,9);
+  TrgRange.Cells(37,5) := TrgRange.Cells(10,9);
+  TrgRange.Cells(10,4) := GetPartName(MasterDoc.Перевозчик,0);
+  TrgRange.Cells(29,5) := CNV.MoneyToStr(MasterDoc.Сумма,'ГРН',1058);
+
+  if SumType = 1 then
+    TrgRange.Cells(30,5) := 'ПЕРЕМІЩЕННЯ ТОВАРУ МІЖ СКЛАДАМИ';
+
+  if Tbl.LineCount <> 0 then
+    begin
+      TrgRange.Cells(27,2) := '1';
+      TrgRange.Cells(27,4) := 'ПРОМ. ХОЗ. ТОВАРИ';
+      TrgRange.Cells(27,7) := 'ЯЩИК';
+      TrgRange.Cells(27,8) := DecToStr(MasterDoc.ОбщееКоличествоУпаковок);
+      TrgRange.Cells(27,9) := 'Х';
+      TrgRange.Cells(27,10) := DecToStr(MasterDoc.Сумма);
+      TrgRange.Cells(27,12) := 'ЯЩИК';
+      TrgRange.Cells(27,13) := DecToStr(MasterDoc.ОбщееКоличествоУпаковок);
+      TrgRange.Cells(27,14) := 'КГ';
+      TrgRange.Cells(27,17) := DecToStr(MasterDoc.ОбщаяМасса);
+      // если есть документы - тогда печатаем их номера
+      TrgRange.Cells(27,11) := 'Накл. № '
+    end;
+  TrgRange.Cells(33,4) := DecToStr(MasterDoc.ОбщаяМасса);
+  TrgRange.Cells(28,8) := DecToStr(MasterDoc.ОбщееКоличествоУпаковок);
+  TrgRange.Cells(28,10) := DecToStr(MasterDoc.Сумма);
+  TrgRange.Cells(31,8) := DecToStr(MasterDoc.КоличествоЕвропалет);
+
+  // номера накладных
+  Tbl.Select;
+  while Tbl.SelectNext do
+    S := S + Tbl.Накладная.GetNumber + ', ';
+  StrDelete(S,StrLength(S)-1,2);
+  TrgRange.Cells(27,11) := TrgRange.Cells(27,11).Value + S;
+
+  MYF.Select;
+  MYF.SelectNext;
+  ADR.UseMasterAndSelect(MYF);
+  while ADR.SelectNext do
+    begin
+      if VarAsBool(ADR.@Тип.IsFocused) then
+        begin
+          s := StrLowerCase(ADR.Тип.Value);
+          if StrPos('факт',s) > 0 then
+            begin
+              if VarAsBool(ADR.@Город.IsFocused) then
+                TrgRange.Cells(18,4) := ADR.Город.Название;
+              break;
+            end
+        end;
+    end;
+  TrgRange.Cells(12,4) := GetPartName(MYF)+' '+TrgRange.Cells(18,4).Value+' '+ADR.Адрес;
+  TrgRange.Cells(14,4) := TrgRange.Cells(12,4);
+  Nil(TrgRange);
+end;
+
+procedure ExportToExcel_Order(var TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  StartRow, EndRow, Col : Integer;
+  DocNumbers, DocDates, Code, AllCodes : String;
+  AccsZakaz : ICAccs;
+  Tbl : ICValueTable;
+  Options : ICOptions;
+  Log : TStringList;
+  i : Integer;
+begin
+  Options := GetOptions;
+  StartRow := VarAsInt(Options.GetServerPrm('OrderExport_StartRow'));
+  EndRow := VarAsInt(Options.GetServerPrm('OrderExport_EndRow'));
+  Col := VarAsInt(Options.GetServerPrm('OrderExport_Col'));
+  if (Col = 0) or (StartRow = 0) or (EndRow = 0) then
+    begin
+      ShowMessage('Определите параметры экспорта для заказов на поставку.');
+      exit;
+    end;        
+  Log := CreateStringList;
+  Tbl := CreateObject('ТаблицаЗначений');
+  MasterDoc.SaveContents('',Tbl);
+  Tbl.DoGetLinks('Код=Товар.Код');
+  Tbl.GroupBy('Код', 'Количество');
+  Tbl.SortBy('Код');
+
+  // проверка шаблона на наличие всех кодов
+  for i := StartRow to EndRow do
+    AllCodes := AllCodes + TrgRange.Cells(i,Col+1).Value + ';';
+  AllCodes := StrLowerCase(AllCodes);
+  Tbl.Select;
+  while Tbl.SelectNext do
+    begin
+      Tbl.Edit;
+      Tbl.Код := StrLowerCase(Tbl.Код);
+      Tbl.Post;
+      if StrPos(Tbl.Код,AllCodes) = 0 then
+        Log.Add('В шаблоне не найден товар! Код: '+Tbl.Код+', название: '+Tbl.DefValue['Товар']+'.');
+    end;
+  if Log.Count > 0 then
+    begin
+      Log.SaveToFile(ExtractFilePath(RunPath)+'log_exp_excel.txt');
+      if MessageDlg('В шаблоне не найдены некоторые товары. Хотите вы просмотреть log-файл?'+#13#10+
+                    ExtractFilePath(RunPath)+'log_exp_excel.txt',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+        Run('notepad '+ExtractFilePath(RunPath)+'log_exp_excel.txt', False);
+      Log.Free;
+      exit;
+    end
+  else
+    Log.Free;
+
+  // определение номеров и дат накладных
+  if MasterDoc.SetSrvToClientPos then
+    server.GetDocNumbers(MasterDoc.SrvMean, DocNumbers, DocDates);
+  if DocNumbers <> '' then
+    begin
+      StrDelete(DocNumbers,StrLength(DocNumbers)-1,2);
+      TrgRange.Cells(2,5) := DocNumbers;
+    end;
+  if DocDates <> '' then
+    begin
+      StrDelete(DocDates,StrLength(DocDates)-1,2);
+      TrgRange.Cells(2,7) := DocDates;
+    end;
+  TrgRange.Cells(6,4) := MasterDoc.Партнер.ПолноеНазвание;
+
+  // экспорт данных
+  for i := StartRow to EndRow do
+    begin
+      Code := StrLowerCase(TrgRange.Cells(i,Col+1));
+      if Tbl.Find(Code) then
+        begin
+          if VarAsBool(Tbl.@Упаковка.IsFocused) then
+            begin
+              TrgRange.Cells(i,7) := Tbl.КоличествоУпаковок;
+              if Tbl.КоличествоУпаковок <> 0 then
+                TrgRange.Cells(i,8) := Tbl.Количество/Tbl.КоличествоУпаковок;
+            end;                                            
+          TrgRange.Cells(i,9) := Tbl.Количество;
+        end;
+    end;
+  TrgRange.Cells(EndRow+1,7) := MasterDoc.ОбщееКоличествоУпаковок;
+  TrgRange.Cells(EndRow+1,9) := MasterDoc.ОбщееКоличество;
+end;
+
+procedure ExportToExcel_TransNakl(var TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  TblGoods : ICValueTable;
+  MYF, ADR, TLF, TradePart : ICDictionary;
+  i : Integer;
+begin
+  TblGoods := CreateObject('ТаблицаЗначений');
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  MYF.Select;
+  MYF.SelectNext;
+
+  TrgRange.Cells(3, 5) := MasterDoc.НомерДокумента;
+  TrgRange.Cells(3, 9) := DateToStr(MasterDoc.ДатаДокумента);
+  if MYF.IsFocused then
+    begin
+      TrgRange.Cells(6, 5) := MYF.ЗКПО;
+      TrgRange.Cells(7, 5) := GetPartName(MYF);
+      ADR.UseMasterAndSelect(MYF);
+      while ADR.SelectNext do
+        if VarAsBool(ADR.@Тип.IsFocused) and (StrPos('факт', StrLowerCase(ADR.Тип.Value)) <> 0) then
+          begin
+            TrgRange.Cells(8, 2) := GetThisAddress(ADR);
+            break;
+          end;
+      if VarAsStr(TrgRange.Cells(8, 2)) = '' then
+        TrgRange.Cells(8, 2) := GetThisAddress(GetActiveLink(ADR, MYF));
+      TrgRange.Cells(9, 2) := GetThisPhone(GetActiveLink(TLF, MYF));
+    end;
+  if VarAsBool(MasterDoc.HasField('ТорговаяТочка')) and VarAsBool(MasterDoc.@ТорговаяТочка.IsFocused) then
+    begin
+      TradePart := MasterDoc.ТорговаяТочка;
+      case VarAsStr(TradePart.ВладелецТочки.GetSign) of
+        'ЮрПартнеры' :
+          TrgRange.Cells(6, 13) := TradePart.ВладелецТочки.ЗКПО;
+        'ФизЛица' :
+          TrgRange.Cells(6, 13) := TradePart.ВладелецТочки.НалогНом;
+      end;
+      TrgRange.Cells(7, 13) := GetPartName(TradePart.ВладелецТочки);
+      TrgRange.Cells(8, 10) := GetThisAddress(GetActiveLink(ADR, TradePart));
+      TrgRange.Cells(9, 10) := GetThisPhone(GetActiveLink(TLF, TradePart));
+    end
+  else
+  if VarAsBool(MasterDoc.@Партнер.IsFocused) then
+    begin
+      case VarAsStr(MasterDoc.Партнер.GetSign) of
+        'ЮрПартнеры' :
+          TrgRange.Cells(6, 13) := MasterDoc.Партнер.ЗКПО;
+        'ФизЛица' :
+          TrgRange.Cells(6, 13) := MasterDoc.Партнер.НалогНом;
+      end;
+      TrgRange.Cells(7, 13) := GetPartName(MasterDoc.Партнер);
+      TrgRange.Cells(8, 10) := GetThisAddress(GetActiveLink(ADR, MasterDoc.Партнер));
+      TrgRange.Cells(9, 10) := GetThisPhone(GetActiveLink(TLF, MasterDoc.Партнер));
+    end;
+
+  MasterDoc.SaveContents('', TblGoods);
+  TblGoods.CopyDataToServer;
+  server.GetTable(TblGoods.SrvMean, MasterDoc.Партнер);
+  TblGoods.CopyDataFromServer;
+  TblGoods.SrvMean.Clear;
+
+  i := 14;
+  TblGoods.Select;
+  while TblGoods.SelectNext do
+    begin
+      TrgRange.Cells(i, 1) := i - 13;
+      TrgRange.Cells(i, 2) := TblGoods.Код;
+      TrgRange.Cells(i, 4) := TblGoods.DefValue['Товар'];
+      TrgRange.Cells(i, 10) := TblGoods.DefValue['ЕдИзм'];
+      TrgRange.Cells(i, 11) := VarAsDec(TblGoods.Количество);
+      inc(i);
+    end;
+
+  TrgRange.Cells(35, 4) := MasterDoc.ОбщееКоличество;
+  TrgRange.Cells(37, 4) := MasterDoc.ОбщаяМасса;
+  if VarAsBool(MasterDoc.@Ответственный.IsFocused) then
+    TrgRange.Cells(40, 4) := GetShortPartName(MasterDoc.Ответственный);
+end;
+
+//******************************************************************************
+procedure ExportToExcel_NaklPDVOut(Excel, TrgRange : Variant; MasterDoc : Variant);
+var
+  i, j, CurrRow : Integer;
+  TLF, ADR, RRR, MYF, TmpPartner  : ICDictionary;
+  TblContents : ICValueTable;
+  RowHeight, Sum : Decimal;
+  Code : String;
+  SumState5, SumExport, SumZero, SumNT20, SumTax, SumAll20, SumTara, GdSum,
+  PercLH, LHSum20, LHSum0, LHSumExport, LHSumSt5, LHSum : Decimal;
+  Constants : Variant;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  TblContents := CreateObject('ТаблицаЗначений');
+  Constants := GetConstants;
+  // шапка документа
+  TrgRange.Cells(7, 10) := DateToStr(MasterDoc.ДатаДокумента);
+  TrgRange.Cells(7, 29) := MasterDoc.НомерДокумента;
+  MYF.Select;
+  if MYF.SelectNext then
+    begin
+      TrgRange.Cells(9, 7) := GetPartName(MYF);
+      for j := 1 to 12 do
+        TrgRange.Cells(12, 6+j) := StrCopy(MYF.НалогНом, j, 1);
+      TrgRange.Cells(15, 7) := GetThisAddress(GetUrAddress(ADR, MYF));
+      TrgRange.Cells(18, 7) := GetThisPhone(GetActiveLink(TLF, MYF));
+      TrgRange.Cells(20, 10) := MYF.НДСсвид;
+    end;
+  TmpPartner := MasterDoc.Партнер;
+  while TmpPartner.IsFocused and TmpPartner.HasField('Партнер') do
+    TmpPartner := TmpPartner.Партнер;
+  if TmpPartner.IsFocused then
+    begin
+      TrgRange.Cells(9, 26) := GetPartName(TmpPartner);
+      TrgRange.Cells(15, 26) := GetThisAddress(MasterDoc.ПартнерАдрес);
+      TrgRange.Cells(18, 26) := GetThisPhone(MasterDoc.ПартнерТелефон);
+    end;
+  for j := 1 to 12 do
+    TrgRange.Cells(12, 25+j) := StrCopy(MasterDoc.НалогНом, j, 1);
+  TrgRange.Cells(20, 29) := MasterDoc.НДССвид;
+  if VarAsBool(MasterDoc.@Ответственный.IsFocused) then
+    TrgRange.Cells(53, 23) := MasterDoc.Ответственный.Фамилия + ' ' + MasterDoc.Ответственный.ИмяОтчество;
+  TrgRange.Cells(24, 9) := MasterDoc.УсловияПокупки;
+  if VarAsBool(MasterDoc.@ФормаРасчетов.IsFocused) then
+    TrgRange.Cells(27, 9) := MasterDoc.ФормаРасчетов.Value;
+  // табличная часть
+  MasterDoc.SaveContents('',TblContents);
+  TblContents.SortBy('Тара');
+  TblContents.SetRange(2, 2);
+  TblContents.DoCalculation('СуммаСтрокиБезНДС', 'ЦенаБезНДС*Количество');
+  SumTara := VarAsDec(TblContents.Total('СуммаСтрокиБезНДС'));
+  while TblContents.SelectFirst do
+    TblContents.Delete;
+  TblContents.SortBy(''); // отмена фильтра и сортировки
+  TblContents.GroupBy('Товар;ЦенаБезНДС;Цена;НДС;Тара;НольПроц;ДатаОтгрузки;СтавкаНДС','Количество');
+  TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм;ВидНалогообложения=Товар.БезКоличества');
+  TblContents.DoCalculation('СуммаСтроки', 'Цена*Количество');
+  TblContents.DoCalculation('СуммаСтрокиБезНДС', 'ЦенаБезНДС*Количество');
+  TblContents.DoCalculation('НДССтроки', 'НДС*Количество');
+  SumState5 := 0;
+  SumExport := 0;
+  SumZero := 0;
+  SumNT20 := 0;
+  SumTax := 0;
+  SumAll20 := 0;
+  // подготовим строки для таблицы
+  if TblContents.LineCount > 0 then
+    for i := 2 to TblContents.LineCount do // одна строка уже есть!!!
+      begin
+        Excel.Rows('40:40').Select;
+        Excel.Selection.Insert(-4121);
+        Excel.Rows('39:39').Select;
+        Excel.Selection.Copy;
+        Excel.Range('A40').Select;
+        Excel.ActiveSheet.Paste;
+     end;
+  CurrRow := 39;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      TrgRange.Cells(CurrRow, 1) := CurrRow - 38;
+      TrgRange.Cells(CurrRow, 3) := DateToStr(TblContents.ДатаОтгрузки);
+      if VarAsBool(GetOptions.GetServerPrm(ShowCodeUnitName)) then
+        Code := TblContents.Код
+      else
+        Code := '';
+      if Code <> '' then
+        Code := Code + ' ';
+      // сначала в вспомогательную ячейку, чтобы узнать высоту строки
+      TrgRange.Cells(CurrRow, 39) := Code + TblContents.DefValue['Товар'];
+      Excel.Rows(IntToStr(CurrRow)+':'+IntToStr(CurrRow)).Select;
+      RowHeight := Excel.Selection.RowHeight;
+      TrgRange.Cells(CurrRow, 39) := '';
+      TrgRange.Cells(CurrRow, 6) := Code + TblContents.DefValue['Товар'];
+      Excel.Selection.RowHeight := RowHeight;
+      TrgRange.Cells(CurrRow, 15) := TblContents.DefValue['ЕдИзм'];
+      //
+      if VarAsBool(TblContents.ВидНалогообложения) then // услуга без количественного учета
+        TrgRange.Cells(CurrRow, 17) := Constants.ОтметкаУслугиВНалНакладной
+      else
+        TrgRange.Cells(CurrRow, 17) := FormatFloat('0.#####',TblContents.Количество);
+      //
+      TrgRange.Cells(CurrRow, 19) := TblContents.ЦенаБезНДС;
+      if TblContents.СтавкаНДС = 0 then
+        case VarAsInt(TblContents.НольПроц) of
+          0 :
+            begin
+              TrgRange.Cells(CurrRow, 25) := TblContents.СуммаСтрокиБезНДС;
+              SumZero := SumZero + TblContents.СуммаСтрокиБезНДС;
+            end;
+          1 :
+            begin
+              TrgRange.Cells(CurrRow, 28) := TblContents.СуммаСтрокиБезНДС;
+              SumExport := SumExport + TblContents.СуммаСтрокиБезНДС;
+            end;
+          2 :
+            begin
+              TrgRange.Cells(CurrRow, 31) := TblContents.СуммаСтрокиБезНДС;
+              SumState5 := SumState5 + TblContents.СуммаСтрокиБезНДС;
+            end;
+          else // предполагается, что таких случаев не будет
+            begin
+              TrgRange.Cells(CurrRow, 22) := TblContents.СуммаСтрокиБезНДС;
+              SumAll20 := SumAll20 + TblContents.СуммаСтрокиБезНДС; // налог и так нулевой
+            end;
+          end
+      else
+        begin
+          TrgRange.Cells(CurrRow, 22) := TblContents.СуммаСтрокиБезНДС;
+          SumTax := SumTax + TblContents.НДССтроки;
+          SumAll20 := SumAll20 + TblContents.СуммаСтроки;
+        end;
+      inc(CurrRow);
+    end;
+  GdSum := MasterDoc.СуммаБезНДСТовара;
+  SumNT20 := RoundFloat(RoundFloat(SumAll20, 2) - RoundFloat(SumTax, 2), 2);
+  // раздел I - суммы по товару
+  if SumNT20 <> 0 then
+    TrgRange.Cells(CurrRow, 22) := FormatFloat('0.00', SumNT20);
+  if SumZero <> 0 then
+    TrgRange.Cells(CurrRow, 25) := FormatFloat('0.00', SumZero);
+  if SumExport <> 0 then
+    TrgRange.Cells(CurrRow, 28) := FormatFloat('0.00', SumExport);
+  if SumState5 <> 0 then
+    TrgRange.Cells(CurrRow, 31) := FormatFloat('0.00', SumState5);
+  TrgRange.Cells(CurrRow, 34) := FormatFloat('0.00', (GdSum - SumTara)); // = SumNT20+SumZero+SumExport+SumState5
+  inc(CurrRow);
+  // раздел II - товаротранспортные
+  if VarAsDec(MasterDoc.СуммаБезНДСТрансп) <> 0 then
+    if VarAsDec(MasterDoc.СуммаНДСТрансп) = 0 then
+      TrgRange.Cells(CurrRow, 25) := FormatFloat('0.00', MasterDoc.СуммаБезНДСТрансп)// поскольку отсутствуют доп. поля, то, предполагается, что такие тов.-тр. реализованы на территории Украины
+    else
+      TrgRange.Cells(CurrRow, 22) := FormatFloat('0.00', MasterDoc.СуммаБезНДСТрансп);
+  inc(CurrRow);
+  // раздел III  - возвр. тара
+  if SumTara <> 0 then
+    TrgRange.Cells(CurrRow, 34) := FormatFloat('0.00', SumTara);
+  inc(CurrRow);
+  // раздел IV - скидки/надбавки   
+  PercLH := VarAsDec(MasterDoc.ПроцентОбщий);
+  if PercLH <> 0 then
+    begin
+      LHSum0 := RoundFloat(SumZero*PercLH/100, 2);
+      LHSumExport := RoundFloat(SumExport*PercLH/100, 2);
+      LHSumSt5 := RoundFloat(SumState5*PercLH/100, 2);
+      LHSum := MasterDoc.СуммаБезНДССкидкиНадбавки - RoundFloat(SumTara*PercLH/100, 2); // необходимо отнять скидку/надбавку на возвратную тару
+      LHSum20 := LHSum - LHSum0 - LHSumExport - LHSumSt5;
+      if PercLH < 0 then
+        begin
+          inc(CurrRow);
+          if VarAsDec(LHSum20) <> 0 then
+            TrgRange.Cells(CurrRow, 22) := FormatFloat('0.00', -LHSum20);
+          if VarAsDec(LHSum0) <> 0 then
+            TrgRange.Cells(CurrRow, 25) := FormatFloat('0.00', -LHSum0);
+          if VarAsDec(LHSumExport) <> 0 then
+            TrgRange.Cells(CurrRow, 28) := FormatFloat('0.00', -LHSumExport);
+          if VarAsDec(LHSumSt5) <> 0 then
+            TrgRange.Cells(CurrRow, 31) := FormatFloat('0.00', -LHSumSt5);
+          if VarAsDec(LHSum) <> 0 then
+            TrgRange.Cells(CurrRow, 34) := FormatFloat('0.00', -LHSum);
+          inc(CurrRow);
+        end
+      else
+        begin
+          if VarAsDec(LHSum20) <> 0 then
+            TrgRange.Cells(CurrRow, 22) := FormatFloat('0.00', LHSum20);
+          if VarAsDec(LHSum0) <> 0 then
+            TrgRange.Cells(CurrRow, 25) := FormatFloat('0.00', LHSum0);
+          if VarAsDec(LHSumExport) <> 0 then
+            TrgRange.Cells(CurrRow, 28) := FormatFloat('0.00', LHSumExport);
+          if VarAsDec(LHSumSt5) <> 0 then
+            TrgRange.Cells(CurrRow, 31) := FormatFloat('0.00', LHSumSt5);
+          if VarAsDec(LHSum) <> 0 then
+            TrgRange.Cells(CurrRow, 34) := FormatFloat('0.00', LHSum);
+          inc(CurrRow);
+          inc(CurrRow);
+        end;
+    end
+  else
+    CurrRow := CurrRow + 2; // CurrRow - раздел V
+  // раздел VI - налог
+  if MasterDoc.СуммаНДС <> 0 then
+    begin
+      TrgRange.Cells(CurrRow+1, 22) := MasterDoc.СуммаНДС;
+      TrgRange.Cells(CurrRow+1, 34) := MasterDoc.СуммаНДС;
+    end;
+  if SumZero <> 0 then
+    TrgRange.Cells(CurrRow+1, 25) := FormatFloat('0.00', 0);
+  if SumExport <> 0 then
+    TrgRange.Cells(CurrRow+1, 28) := FormatFloat('0.00', 0);
+  if SumState5 <> 0 then
+    TrgRange.Cells(CurrRow+1, 31) := MasterDoc.ОтметкаБезНДС;
+  // раздел V - общие суммы
+  for i := 1 to 5 do
+    begin
+      Sum := VarAsDec(TrgRange.Cells(CurrRow-5, 19+i*3)) + // раздел I
+             VarAsDec(TrgRange.Cells(CurrRow-4, 19+i*3)) + // раздел II
+             VarAsDec(TrgRange.Cells(CurrRow-2, 19+i*3)) - // раздел IV - надбавки
+             VarAsDec(TrgRange.Cells(CurrRow-1, 19+i*3));  // раздел IV - скидки с минусом!
+      if (Sum <> 0) or (SumTara <> 0) then
+        begin
+          TrgRange.Cells(CurrRow, 19+i*3) := Sum;
+          if i = 1 then
+            TrgRange.Cells(CurrRow+2, 19+i*3) := Sum + VarAsDec(TrgRange.Cells(CurrRow+1, 19+i*3))
+          else
+          if i = 5 then
+            TrgRange.Cells(CurrRow+2, 19+i*3) := Sum + VarAsDec(TrgRange.Cells(CurrRow+1, 19+i*3)) + SumTara
+          else
+            TrgRange.Cells(CurrRow+2, 19+i*3) := Sum;
+        end;
+    end;
+
+  Excel.Columns('AM:AM').Select;
+  Excel.Selection.Delete(-4159);
+  Excel.Range('A1:H1').Select;
+end;
+
+procedure ExportToExcel_CorrectNaklPDVOut(Excel, TrgRange : Variant; MasterDoc : Variant);
+const
+  DogovStr = ' за договором № %s від %s';
+var
+  i, j : Integer;
+  TLF, ADR, RRR, MYF, TmpPartner  : ICDictionary;
+  TblContents, tmpTbl : ICValueTable;
+  RowHeight : Decimal;
+  V, V1 : Variant;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  TblContents := CreateObject('ТаблицаЗначений');
+  // шапка документа
+  TrgRange.Cells(2, 26) := GetTranslation(VarAsStr(TrgRange.Cells(2, 26).Value),
+                                          ArrayOf(MasterDoc.НомерДокумента, MasterDoc.НомерКорректНакл));
+  TrgRange.Cells(4, 26) := GetTranslation(VarAsStr(TrgRange.Cells(4, 26).Value),
+                                          ArrayOf(MasterDoc.НомерКорректНакл, DateToStr(MasterDoc.ДатаКорректНакл)));
+  if not IsNull(MasterDoc.ДатаДоговора) and (MasterDoc.НомерДоговора <> '') then
+    TrgRange.Cells(4, 26) := TrgRange.Cells(4, 26) + GetTranslation(DogovStr,
+                                                                    ArrayOf(MasterDoc.НомерДоговора, DateToStr(MasterDoc.ДатаДоговора)));
+  TrgRange.Cells(45, 1) := GetTranslation(VarAsStr(TrgRange.Cells(45, 1).Value),
+                                          ArrayOf(MasterDoc.НомерДокумента, DateToStr(MasterDoc.ДатаДокумента),
+                                                  MasterDoc.НомерКорректНакл, DateToStr(MasterDoc.ДатаКорректНакл)));
+  MYF.Select;
+  if MYF.SelectNext then
+    begin
+      TrgRange.Cells(6, 10) := GetPartName(MYF);
+      for j := 1 to 12 do
+        TrgRange.Cells(9, 10+j) := StrCopy(MYF.НалогНом, j, 1);
+      TrgRange.Cells(12, 8) := GetThisAddress(GetUrAddress(ADR, MYF));
+      TrgRange.Cells(14, 8) := GetThisPhone(GetActiveLink(TLF, MYF));
+      TrgRange.Cells(16, 14) := MYF.НДСсвид;
+    end;
+  TmpPartner := MasterDoc.Партнер;
+  while TmpPartner.IsFocused and TmpPartner.HasField('Партнер') do
+    TmpPartner := TmpPartner.Партнер;
+  if TmpPartner.IsFocused then
+    begin
+      TrgRange.Cells(6, 39) := GetPartName(TmpPartner);
+      TrgRange.Cells(12, 37) := GetThisAddress(MasterDoc.ПартнерАдрес);
+      TrgRange.Cells(14, 37) := GetThisPhone(MasterDoc.ПартнерТелефон);
+    end;
+  for j := 1 to 12 do
+    TrgRange.Cells(9, 39+j) := StrCopy(MasterDoc.НалогНом,j,1);
+  TrgRange.Cells(16, 43) := MasterDoc.НДССвид;
+  if VarAsBool(MasterDoc.@Ответственный.IsFocused) then
+    TrgRange.Cells(42, 35) := MasterDoc.Ответственный.Фамилия + ' ' + MasterDoc.Ответственный.ИмяОтчество;
+  TrgRange.Cells(19, 8) := MasterDoc.УсловияПокупки;
+  if not IsNull(MasterDoc.ДатаРасчета) then
+    TrgRange.Cells(21, 8) := DateToStr(MasterDoc.ДатаРасчета);
+  if VarAsBool(MasterDoc.@ФормаРасчетов.IsFocused) then
+    TrgRange.Cells(23, 8) := MasterDoc.ФормаРасчетов.Value;
+  // табличная часть
+  MasterDoc.SaveContents('',TblContents);
+  TblContents.Select;
+  TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  TblContents.Select;
+  TblContents.DoCalculation('СуммаСтрокиБезНДС', 'ЦенаБезНДС*Количество');
+  TblContents.SortBy('КорКолЦена');
+  TblContents.SetRange(1, 1); // корректировка цены
+  TblContents.DoCalculation('КорПоле7', 'КорПоле7-ЦенаБезНДС');
+  // нужная сортировка
+  TblContents.SortBy('Тара');
+  // суммы по таре
+  TblContents.SetRange(2, 2);
+  while TblContents.SelectFirst do
+    TblContents.Delete;
+  TblContents.SortBy('Дата');
+  TblContents.Select;
+  // подготовим строки для таблицы
+  if TblContents.LineCount > 0 then
+    for i := 2 to TblContents.LineCount do // одна строка уже есть!!!
+      begin
+        Excel.Rows('37:37').Select;
+        Excel.Selection.Insert(-4121);
+        Excel.Rows('36:36').Select;
+        Excel.Selection.Copy;
+        Excel.Range('A37').Select;
+        Excel.ActiveSheet.Paste;
+     end;
+  i := 36;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      if VarAsInt(MasterDoc.КорДата) <> 0 then
+        TrgRange.Cells(i, 1) := DateToStr(MasterDoc.КорДата);
+      TrgRange.Cells(i, 4) := MasterDoc.КорПричина;
+      // сначала в вспомогательную ячейку, чтобы узнать высоту строки
+      TrgRange.Cells(i, 54) := TblContents.DefValue['Товар'];
+      Excel.Rows(IntToStr(i)+':'+IntToStr(i)).Select;
+      RowHeight := Excel.Selection.RowHeight;
+      TrgRange.Cells(i, 54) := '';
+      TrgRange.Cells(i, 9) := TblContents.DefValue['Товар'];
+      Excel.Selection.RowHeight := RowHeight;
+      TrgRange.Cells(i, 18) := TblContents.DefValue['ЕдИзм'];
+      case VarAsInt(TblContents.КорКолЦена) of
+        0 : // корректируется количество
+          begin
+            if VarAsDec(TblContents.КорПоле5) > 0 then
+              TrgRange.Cells(i, 20) := '+' + FormatFloat('0.#####', TblContents.КорПоле5)
+            else
+              TrgRange.Cells(i, 20) := FormatFloat('0.#####', TblContents.КорПоле5);
+            TrgRange.Cells(i, 23) := TblContents.КорПоле6;
+          end;
+        1 : // корректируется цена
+          begin
+            if VarAsDec(TblContents.КорПоле7) > 0 then
+              TrgRange.Cells(i, 26) := '+' + FormatFloat('0.00', TblContents.КорПоле7)
+            else
+              TrgRange.Cells(i, 26) := FormatFloat('0.00', VarAsDec(TblContents.КорПоле7));
+            TrgRange.Cells(i, 29) := TblContents.КорПоле8;
+          end;
+      end;
+      if VarAsDec(TblContents.КорПоле9) <> 0 then
+        begin
+          if VarAsDec(TblContents.КорПоле9) > 0 then
+            TrgRange.Cells(i, 32) := '+' + FormatFloat('0.00', TblContents.КорПоле9)
+          else
+            TrgRange.Cells(i, 32) := FormatFloat('0.00', TblContents.КорПоле9);
+        end;
+      if VarAsDec(TblContents.КорПоле10) <> 0 then
+        begin
+          if VarAsDec(TblContents.КорПоле10) > 0 then
+            TrgRange.Cells(i, 35) := '+' + FormatFloat('0.00', TblContents.КорПоле10)
+          else
+            TrgRange.Cells(i, 35) := FormatFloat('0.00', TblContents.КорПоле10);
+        end;
+      if VarAsDec(TblContents.КорПоле11) > 0 then
+        begin
+          if VarAsDec(TblContents.КорПоле11) > 0 then
+            TrgRange.Cells(i, 38) := '+' + FormatFloat('0.00', TblContents.КорПоле11)
+          else
+            TrgRange.Cells(i, 38) := FormatFloat('0.00', TblContents.КорПоле11);
+        end;
+      if VarAsDec(TblContents.КорПоле9) < 0 then
+        begin
+          TrgRange.Cells(i, 41) := TblContents.КорПоле1214;
+          TrgRange.Cells(i, 44) := TblContents.КорПоле1315;
+        end
+      else
+        begin
+          TrgRange.Cells(i, 47) := TblContents.КорПоле1214;
+          TrgRange.Cells(i, 50) := TblContents.КорПоле1315;
+        end;                  
+      inc(i);
+    end;    
+
+  tmpTbl := CreateObject('Valuetable');
+  tmpTbl.AddColumn('КорПоле12', lftFFt, 4);
+  tmpTbl.AddColumn('КорПоле13', lftFFt, 4);
+  tmpTbl.AddColumn('КорПоле14', lftFFt, 4);
+  tmpTbl.AddColumn('КорПоле15', lftFFt, 4);
+  tmpTbl.Open;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      tmpTbl.Append;
+      if VarAsDec(TblContents.КорПоле9) < 0 then
+        begin
+          tmpTbl.КорПоле12 := TblContents.КорПоле1214;
+          tmpTbl.КорПоле13 := TblContents.КорПоле1315;
+        end
+      else
+        begin
+          tmpTbl.КорПоле14 := TblContents.КорПоле1214;
+          tmpTbl.КорПоле15 := TblContents.КорПоле1315;
+        end;
+      tmpTbl.Post;
+    end;
+  V := TblContents.Total('КорПоле9;КорПоле10;КорПоле11');
+  V1 := tmpTbl.Total('КорПоле12;КорПоле13;КорПоле14;КорПоле15');
+  if VarAsDec(V[0]) <> 0 then
+    if VarAsDec(V[0]) > 0 then
+      TrgRange.Cells(i, 32) := '+' + FormatFloat('0.00', V[0])
+    else
+      TrgRange.Cells(i, 32) := FormatFloat('0.00', V[0]);
+  if VarAsDec(V[1]) <> 0 then
+    if VarAsDec(V[1]) > 0 then
+      TrgRange.Cells(i, 35) := '+' + FormatFloat('0.00', V[1])
+    else
+      TrgRange.Cells(i, 35) := FormatFloat('0.00', V[1]);
+  if VarAsDec(V[2]) <> 0 then
+    if VarAsDec(V[2]) > 0 then
+      TrgRange.Cells(i, 38) := '+' + FormatFloat('0.00', V[2])
+    else
+      TrgRange.Cells(i, 38) := FormatFloat('0.00', V[2]);
+  if VarAsDec(V1[0]) <> 0 then
+    TrgRange.Cells(i, 41) := FormatFloat('0.00',V1[0]);
+  if VarAsDec(V1[1]) <> 0 then
+    TrgRange.Cells(i, 44) := FormatFloat('0.00',V1[1]);
+  if VarAsDec(V1[2]) <> 0 then
+    TrgRange.Cells(i, 47) := FormatFloat('0.00',V1[2]);
+  if VarAsDec(V1[3]) <> 0 then
+    TrgRange.Cells(i, 50) := FormatFloat('0.00',V1[3]);
+
+  Excel.Columns('BB:BB').Select;
+  Excel.Selection.Delete(-4159);
+  Excel.Range('A1:H1').Select;
+end;                                
+
+procedure ExportToExcel_NaklOutExport(Excel, TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  i, j : Integer;
+  Town, DataDir, PhoneCode, AddrIndex, AddrTown : String;
+  WorkBook, WorkSheet, TableRange : Variant;
+  TLF, ADR, RRR, MYF, OneGood, PrintAcc, PartGoodCodes : ICDictionary;
+  CNV  : ICWriNums;
+  Tbl : ICValueTable;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  CNV := CreateObject('ЧислаПрописью');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  PartGoodCodes := CreateObject('Справочники.ТоварыПартнеров');
+  Tbl := CreateObject('ValueTable');
+  MasterDoc.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар;ЦенаБезНДС;Цена;Упаковка', 'Количество;КоличествоУпаковок');
+  Tbl.DoGetLinks('ЕдИзм=Товар.ЕдИзм;НДС=Упаковка.Количество');
+  //
+  TrgRange.Cells(1, 3).Value := MasterDoc.НомерДокумента+' від '+DateToStr(MasterDoc.ДатаДокумента);
+  MYF.Select;
+  if MYF.SelectNext then
+    begin
+      TrgRange.Cells(2, 3).Value := GetPartName(MYF);
+      TrgRange.Cells(3, 3).Value := GetThisAddress(GetActiveLink(ADR, MYF));
+      TrgRange.Cells(4, 3).Value := GetThisPhone(GetActiveLink(TLF, MYF));
+      if VarAsBool(MasterDoc.Партнер.HasField('РасчСчет')) and
+         VarAsBool(MasterDoc.Партнер.РасчСчет.IsFocused) then
+        begin
+          PrintAcc := MasterDoc.Партнер.РасчСчет;
+          if RRR.Find(PrintAcc) and VarAsBool(RRR.@Банк.IsFocused) then
+            begin
+              TrgRange.Cells(5, 3).Value := PrintAcc.НомерСчета+' в '+RRR.Банк.ПолноеНазвание+' м.' +GetActiv(ADR,'Город.Название',RRR.Банк);
+              TrgRange.Cells(6, 3).Value := RRR.Банк.МФО+' Код ЗКПО '+MYF.ЗКПО;
+            end;
+        end;    
+      TrgRange.Cells(13, 3).Value := MYF.GLN;
+    end;
+  //
+  if VarAsBool(MasterDoc.@Партнер.IsFocused) then
+    begin
+      TrgRange.Cells(8, 3).Value := MasterDoc.Партнер.ПолноеНазвание;
+      if MasterDoc.HasField('ПартнерАдрес') and
+         VarAsBool(MasterDoc.@ПартнерАдрес.IsFocused) then
+        TrgRange.Cells(9, 3).Value := GetThisAddress(MasterDoc.ПартнерАдрес)
+      else
+        TrgRange.Cells(9, 3).Value := GetThisAddress(GetActiveLink(ADR, MasterDoc.Партнер));
+      TrgRange.Cells(10, 3).Value := GetThisPhone(GetActiveLink(TLF, MasterDoc.Партнер));
+      if VarAsBool(MasterDoc.Партнер.HasField('КороткоеНазвание')) then
+        TrgRange.Cells(19, 2).Value := 'Код ' + MasterDoc.Партнер.КороткоеНазвание;
+    end;
+  //
+  if MasterDoc.HasField('НомерЗаказа') and (MasterDoc.НомерЗаказа <> '') and (VarAsInt(MasterDoc.ДатаЗаказа) <> 0) then
+    TrgRange.Cells(11, 3).Value := MasterDoc.НомерЗаказа + ' від ' + DateToStr(MasterDoc.ДатаЗаказа);
+  if MasterDoc.HasField('НомерВашегоПредприятия') then
+    TrgRange.Cells(12, 3).Value := MasterDoc.НомерВашегоПредприятия;
+  if MasterDoc.HasField('НомерСегмента') then
+    TrgRange.Cells(14, 3).Value := MasterDoc.НомерСегмента;
+  if MasterDoc.Доверенность <> '' then
+    begin
+      TrgRange.Cells(15, 3).Value := MasterDoc.ЧерезКогоСтр;
+      TrgRange.Cells(16, 3).Value := MasterDoc.Доверенность+' від '+DateToStr(MasterDoc.ДатаДоверенности);
+      TrgRange.Cells(17, 3).Value := MasterDoc.ОснованиеДоверенности;
+    end;
+  if MasterDoc.Заметки <> '' then
+    TrgRange.Cells(17, 9) := 'Примітки: '+MasterDoc.Заметки;
+  // подготовим строки для таблицы
+  if Tbl.LineCount > 0 then
+    for i := 2 to Tbl.LineCount+1 do // одна строка уже есть!!!, одну строку - для общего к-ства
+      begin
+        Excel.Rows('21:21').Select;
+        Excel.Selection.Insert(-4121);
+        Excel.Rows('20:20').Select;
+        Excel.Selection.Copy;
+        Excel.Range('A21').Select;
+        Excel.ActiveSheet.Paste;
+     end;
+  Tbl.Select;
+  i := 20;
+  while Tbl.SelectNext do
+    begin
+      OneGood := Tbl.Товар;
+      TrgRange.Cells(i, 1).Value := VarAsStr(i-19);
+      PartGoodCodes.UseMaster(Tbl.Товар);
+      if PartGoodCodes.FindByField('Партнер', MasterDoc.Партнер, False) then
+        TrgRange.Cells(i, 2).Value := PartGoodCodes.Код;
+      TrgRange.Cells(i, 3).Value := OneGood.ШтрихКод;
+      TrgRange.Cells(i, 4).Value := OneGood.СанГигСертификат;
+      TrgRange.Cells(i, 5).Value := OneGood.НазвТовара;
+      if VarAsBool(OneGood.@ЕдИзм.IsFocused) then
+        TrgRange.Cells(i, 6).Value := OneGood.ЕдИзм.Value;
+      TrgRange.Cells(i, 7).Value := Tbl.КоличествоУпаковок;
+      TrgRange.Cells(i, 8).Value := Tbl.НДС;
+      TrgRange.Cells(i, 9).Value := Tbl.Количество;
+      TrgRange.Cells(i, 10).Value := Tbl.ЦенаБезНДС;
+      TrgRange.Cells(i, 11).Value := Tbl.Цена;
+      TrgRange.Cells(i, 12).Value := VarAsDec(Tbl.Цена * Tbl.Количество);
+      inc(i);
+    end;
+  // общее Количество
+  TrgRange.Range(TrgRange.Cells(i, 1), TrgRange.Cells(i, 6)).
+           MergeCells := True;
+  TrgRange.Cells(i, 1).HorizontalAlignment := $FFFFEFC8; // xlRight
+  TrgRange.Cells(i, 1).Value := 'ЗАГАЛЬНО';
+  TrgRange.Cells(i, 7).Value := Tbl.Total('КоличествоУпаковок');
+  TrgRange.Cells(i, 9).Value := Tbl.Total('Количество');
+  inc(i);
+  // общая Сумма
+  TrgRange.Cells(i, 9).Value := 'Сума:';
+  TrgRange.Cells(i, 10).Value := 'без ПДВ';
+  TrgRange.Cells(i, 11).Value := 'ПДВ';
+  TrgRange.Cells(i, 12) := 'з ПДВ';
+  TrgRange.Range(TrgRange.Cells(i, 9), TrgRange.Cells(i, 12)).
+           Font.Bold := True;
+  TrgRange.Cells(i, 9).HorizontalAlignment := $FFFFEFC8; // xlRight
+  TrgRange.Range(TrgRange.Cells(i, 10), TrgRange.Cells(i, 12)).
+           HorizontalAlignment := $FFFFEFF4; // xlCenter
+  TrgRange.Range(TrgRange.Cells(i, 10), TrgRange.Cells(i, 12)).
+           Borders.LineStyle := 1;
+  inc(i);
+  //
+  TrgRange.Cells(i, 9).Value := 'Всього:';                         
+  TrgRange.Cells(i, 9).HorizontalAlignment := $FFFFEFC8; // xlRight
+  TrgRange.Cells(i, 10).Value := VarAsDec(MasterDoc.СуммаБезНДС);
+  TrgRange.Cells(i, 11).Value := VarAsDec(MasterDoc.СуммаНДС);
+  TrgRange.Cells(i, 12).Value := VarAsDec(MasterDoc.Сумма);
+  TrgRange.Range(TrgRange.Cells(i, 9), TrgRange.Cells(i, 12)).
+           Font.Bold := True;
+  TrgRange.Range(TrgRange.Cells(i, 9), TrgRange.Cells(i, 12)).
+           HorizontalAlignment := $FFFFEFC8;//  xlRight
+  TrgRange.Range(TrgRange.Cells(i, 10), TrgRange.Cells(i, 12)).
+           Borders.LineStyle := 1;
+  TrgRange.Range(TrgRange.Cells(i, 10), TrgRange.Cells(i, 12)).
+           NumberFormat := '0,00';
+  inc(i);
+  //
+  TrgRange.Cells(i, 9) := 'Загальна вага:';
+  TrgRange.Cells(i, 10) := VarAsDec(MasterDoc.ОбщаяМасса);
+  TrgRange.Cells(i, 11) := 'Площа:';
+  TrgRange.Cells(i, 12) := VarAsDec(MasterDoc.ОбщаяПлощадь);
+  TrgRange.Range(TrgRange.Cells(i, 9), TrgRange.Cells(i, 12)).
+           Font.Bold := True;
+  TrgRange.Range(TrgRange.Cells(i, 9), TrgRange.Cells(i, 12)).
+           HorizontalAlignment := $FFFFEFC8; // xlRight
+  TrgRange.Cells(i, 10).NumberFormat := '0,00';
+  TrgRange.Cells(i, 10).Borders.LineStyle := 1;
+  TrgRange.Cells(i, 12).NumberFormat := '0,00';
+  TrgRange.Cells(i, 12).Borders.LineStyle := 1;
+  inc(i);
+  inc(i);
+  //
+  TrgRange.Cells(i, 2).Value := 'Сума прописом ';
+  TrgRange.Cells(i, 2).HorizontalAlignment := $FFFFEFDD; // xlLeft
+  TrgRange.Cells(i, 3).Value := CNV.MoneyToStr(MasterDoc.Сумма, 'ГРН', 1058);
+  TrgRange.Cells(i, 3).Font.Bold := true;
+  TrgRange.Cells(i, 3).HorizontalAlignment := $FFFFEFDD; // xlLeft
+  inc(i);
+  inc(i);
+  inc(i);
+  //
+  TrgRange.Cells(i, 2).Value := 'Здав _____________________';
+  TrgRange.Cells(i, 2).HorizontalAlignment := $FFFFEFDD; // xlLeft
+  TrgRange.Cells(i, 6).Value := 'Отримав _____________________';
+  TrgRange.Cells(i, 6).HorizontalAlignment := $FFFFEFDD; // xlLeft
+  Nil(TrgRange);
+end;
+
+procedure ExportToExcel_TTN1(Excel, TrgRange : Variant; MasterDoc : ICDocuments);
+var
+  i, j, CurrRow : Integer;
+  TLF, ADR, RRR, MYF, OneGood, PrintAcc, Partner : ICDictionary;
+  CNV  : ICWriNums;
+  TblContents : ICValueTable;                
+  AssistStr : String;
+begin
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  CNV := CreateObject('ЧислаПрописью');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  TblContents := CreateObject('ValueTable');
+  MasterDoc.SaveContents('', TblContents);
+  TblContents.GroupBy('Товар', 'Количество');
+  TblContents.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  TblContents.SortBy('Товар');
+  TrgRange.Cells(1, 3).Value := MasterDoc.НомерДокумента;
+  TrgRange.Cells(2, 3).Value := DateToStr(MasterDoc.ДатаДокумента);
+  TrgRange.Cells(7, 3).Value := DateToStr(MasterDoc.ДатаДокумента);
+  MYF.Select;
+  if MYF.SelectNext then
+    TrgRange.Cells(3, 3).Value := GetPartName(MYF);
+  if VarAsBool(MasterDoc.@Партнер.IsFocused) then
+    begin
+      TrgRange.Cells(5, 3).Value := GetDefaultLinkValue(MasterDoc.Партнер);
+      if VarAsBool(MasterDoc.@ТорговаяТочка.IsFocused) then
+        TrgRange.Cells(8, 3).Value := GetThisAddress(GetActiveLink(ADR, MasterDoc.ТорговаяТочка))
+      else
+        TrgRange.Cells(8, 3).Value := GetThisAddress(GetActiveLink(ADR, MasterDoc.Партнер));
+    end;
+  // подготовим строки для таблицы
+  AddRecordsForDet(Excel, TrgRange, 13, TblContents.LineCount);
+  CurrRow := 13;
+  TblContents.Select;
+  while TblContents.SelectNext do
+    begin
+      OneGood := TblContents.Товар;
+      TrgRange.Cells(CurrRow, 1).Value := VarAsStr(CurrRow - 12);
+      TrgRange.Cells(CurrRow, 2).Value := TblContents.Товар.ШтрихКод;
+      TrgRange.Cells(CurrRow, 3).Value := TblContents.DefValue['Товар'];
+      TrgRange.Cells(CurrRow, 4).Value := TblContents.Количество;
+      TrgRange.Cells(CurrRow, 5).Value := TblContents.DefValue['ЕдИзм'];
+      inc(CurrRow);
+    end;
+  TrgRange.Cells(CurrRow+1, 4).Value := TblContents.Total('Количество');
+  if MasterDoc.Доверенность <> '' then
+    TrgRange.Cells(CurrRow+8, 1).Value := 'Доверенность № ' + MasterDoc.Доверенность+' від '+DateToStr(MasterDoc.ДатаДоверенности);
+  //
+  Excel.Cells(1, 1).Select;
+end;
+
+procedure ExportToExcel(Source : Variant; ExportType : string);
+var
+  Excel, TrgRange : OleVariant;
+  DataDir, FilePath, FileName, DocOwnerNumber : String;
+  Nakl, PDVNakl, TTN : Variant;
+begin
+  DataDir := ExtractFilePath(RunPath);
+  FilePath := VarAsStr(GetOptions.GetServerPrm('PathExcelFiles'));
+  Excel := CreateOleObject('Excel.Application');
+  Excel.Visible := False;
+  Excel.Interactive := False;
+  Excel.ScreenUpdating := False;
+  Excel.DisplayStatusBar := False;           
+  StatusText('Экспорт...');
+  try
+    case ExportType of
+      'ДокументУчетаПродаж' :
+        begin
+          if VarAsBool(Source.Owner.IsFocused) and VarAsBool(Source.Owner.IsType('Документы')) then
+            DocOwnerNumber := Source.Owner.GetNumber;
+          FileName := FilePath + Source.GetNumber + '_' + DocOwnerNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\НалоговаяНакладная.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_NaklPDVOut(Excel, TrgRange, Source);
+        end;
+      'СчетНаПродажу' :
+        begin
+          FileName := FilePath + Source.GetNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\СчетНаПродажу.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_OrderOut(Excel, TrgRange, Source);
+        end;
+      'НакладнаяОтпускаПоСчету' :
+        begin
+          FileName := FilePath + Source.GetNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\НакладнаяОтпуска.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_NaklOut(Excel, TrgRange, Source);
+        end;
+      'ТТН' :
+        begin
+          FileName := FilePath + Source.GetNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\ТТН.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_TTN(TrgRange, Source);
+        end;
+      'ВсеНакладные' :
+        begin
+          Nakl := Source[0];
+          PDVNakl := Source[1];
+          TTN := Source[2];
+          FileName := FilePath + Nakl.GetNumber + '_' + FormatDateTime('ddmmyy', Nakl.GetDate);
+          if IsObjFocused(TTN) then
+            begin
+              Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\ВсеНакладныеТТН.xls');
+              Excel.WorkBooks(1).Sheets('ТТН').Select;
+              TrgRange := Excel.Range('A1:A1');
+              ExportToExcel_TTN(TrgRange, TTN);
+            end
+          else
+            begin
+              Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\ВсеНакладные.xls');
+            end;
+          Excel.WorkBooks(1).Sheets('ТТН1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_TTN1(Excel, TrgRange, Nakl);
+          Excel.WorkBooks(1).Sheets('Налоговая').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_NaklPDVOut(Excel, TrgRange, PDVNakl);
+          Excel.WorkBooks(1).Sheets('Накладная').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_NaklOut(Excel, TrgRange, Nakl);
+        end;
+      'ЗаказНаПоставку' :
+        begin
+          FileName := FilePath + 'Заказ_' + Source.GetNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\ЗаказНаПоставку.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_Order(TrgRange, Source);
+        end;
+      'ТранспортнаяНакладная' :
+        begin
+          FileName := FilePath + 'ТранспортнаяНакладная_'+Source.GetNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\ТранспортнаяНакладная.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_TransNakl(TrgRange, Source);
+        end;
+      'КорНалогНакл' :
+        begin
+          if VarAsBool(Source.Owner.IsFocused) and VarAsBool(Source.Owner.IsType('Документы')) then
+            DocOwnerNumber := Source.Owner.GetNumber;
+          FileName := FilePath + Source.GetNumber + '_' + DocOwnerNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\КорректировочнаяНалоговаяНакладная.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_CorrectNaklPDVOut(Excel, TrgRange, Source);
+        end;
+      'НакладнаяОтпускаЭкспорт' :
+        begin
+          FileName := FilePath + 'НакладнаяОтпускаЭкспорт_'+Source.GetNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\НакладнаяОтпускаЭкспорт.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_NaklOutExport(Excel, TrgRange, Source);
+          Excel.Cells(1, 1).Select;
+        end;
+      'РаспоряжениеНаВыдачу' :
+        begin
+          FileName := FilePath + 'РаспоряжениеНаВыдачу_'+Source.GetNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\РаспоряжениеНаВыдачу.xls');
+          Excel.WorkBooks(1).Sheets('Лист1').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_OrderOnDelivery(Excel, TrgRange, Source);
+          Excel.Cells(1, 1).Select;
+        end;
+      'НакладнаяПеремещения' :
+        begin
+          FileName := FilePath + 'НакладнаяПеремещения_'+Source.GetNumber + '_' + FormatDateTime('ddmmyy', Source.GetDate);
+          Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\НакладнаяПеремещения.xls');
+          Excel.WorkBooks(1).Sheets('Акт').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_Internal(Excel, TrgRange, Source);
+          Excel.Cells(1, 1).Select;
+          Excel.WorkBooks(1).Sheets('Накладная').Select;
+          TrgRange := Excel.Range('A1:A1');
+          ExportToExcel_Internal(Excel, TrgRange, Source);
+        end;
+    end;
+  finally
+    StatusText('');
+    if FileExists(FileName + '.xls') then
+      DeleteFile(FileName + '.xls');
+    Excel.WorkBooks(1).SaveAs(FileName + '.xls');
+    Excel.WorkBooks(1).Close;
+    Excel.Application.Quit;
+    Nil(Excel);
+  end;
+end;
+                                
+function GetObjRecordCount(Object : IObject) : Integer;
+begin
+  Result := 0;
+  if IsObject(Object) then
+    begin
+      if VarAsBool(Object.IsType('Журналы')) then
+        begin
+          Object.SrvAssignClientSelectParams;
+          Result := server.GetJourRecordCount(Object.SrvMean);
+        end
+      else
+      if VarAsBool(Object.IsType('Справочники')) then
+        begin
+          Object.AssignSelectParamsOnSrv(Null);
+          Result := server.GetDictRecordCount(Object.SrvMean);
+        end
+      else
+      if VarAsBool(Object.IsType('ТаблицаЗначений')) then
+        Result := Object.LineCount;
+    end
+end;
+
+function InitializeOLEExcel(var OLEExcel, TrgRange : OleVariant; FileNameToOpen : String = '') : Boolean;
+begin
+  try
+    OLEExcel := CreateOleObject('Excel.Application');
+    Result := True;
+  except
+    Result := False;
+  end;
+  if not Result then
+    begin
+      MessageDlg('Microsoft Excel не найден в системе', mtError, mbOk);
+      Exit;
+    end;
+  if FileNameToOpen = '' then
+    begin
+      OLEExcel.Application.SheetsInNewWorkbook := 1;
+      OLEExcel.Application.WorkBooks.Add;
+      OLEExcel.Interactive := False;
+      OLEExcel.ScreenUpdating := False;
+      OLEExcel.Cells.Font.Size := 9;
+      OLEExcel.Cells.NumberFormat := '@';
+      TrgRange := OLEExcel.Application.WorkSheets[1].Range('A1:A1');
+    end
+  else
+  if FileExists(FileNameToOpen) then
+    begin
+      //
+    end;
+end;
+
+procedure CloseOLEExcel(OLEExcel : OleVariant; FileNameToSave : String = '');
+begin
+  StatusText('');
+  if not IsNil(OLEExcel) then
+    begin
+      if FileNameToSave = '' then
+        begin
+          OLEExcel.ScreenUpdating := True;
+          OLEExcel.Interactive := True;
+          OLEExcel.Visible := True;
+        end
+      else
+        begin
+          if FileExists(FileNameToSave) then
+            DeleteFile(FileNameToSave);
+          OLEExcel.Workbooks(1).SaveAs(FileNameToSave);
+          OLEExcel.Workbooks(1).Close;
+          OLEExcel.Application.Quit;
+        end;
+      Nil(OLEExcel);
+    end;
+end;
+
+procedure ExportOneValue(TrgRange, Value : Variant; ValueType : Integer; CurrRow, CurrCol : Integer);
+begin
+  case ValueType of
+    lftLink :
+      TrgRange.Cells(CurrRow, CurrCol).Value := GetDefaultLinkValue(Value);
+    lftDate :
+      TrgRange.Cells(CurrRow, CurrCol).Value := DateToStr(Value);
+    lftDateTime :
+      TrgRange.Cells(CurrRow, CurrCol).Value := DateTimeToStr(Value);
+    else
+      TrgRange.Cells(CurrRow, CurrCol).Value := Value;
+  end;
+end;
+
+// процедура для экспорта любой таблицы (ТаблицаЗначений, Справочник, Журнал) в уже открытый Excel
+procedure ExportTableToExcel(TrgRange : OleVariant; Source, FieldList, FieldTypes : Variant; CurrRow, glbCurrCol : Integer);
+var
+  Count, Total, arrCounter, i, CurrCol : Integer;
+  FieldName, SubFieldNames, AssistStr : String;
+begin
+  Count := 1;
+  Total := GetObjRecordCount(Source);
+  Source.Select;
+  while VarAsBool(Source.SelectNext) do
+    begin
+      StatusText('Обработано ' + IntToStr(Count) + ':' + IntToStr(Total));
+      CurrCol := glbCurrCol;
+      if not IsArray(FieldList) then
+        begin
+          FieldName := FieldList;
+          if StrPos('.', FieldName) <> 0 then
+            begin
+              AssistStr := FieldName;
+              FieldName := ExtractWord(1, AssistStr, '.'); // основное поле (ссылки)
+              SubFieldNames := ExtractWord(2, AssistStr, '.'); // поля ссылки
+              // извлекаем второе слово через разделитель '.' -
+              // перечисляем поля через ';'
+              // например 'Партнер.ЗКПО;ИдентНомер' - для ЮрПартнеры - ЗКПО, для ФизЛица - ИдентНомер
+              case SubFieldNames of
+                'GetName' :
+                  ExportOneValue(TrgRange, Source._Default[FieldName].GetName, FieldTypes, CurrRow, CurrCol);
+                'GetSign' :
+                  ExportOneValue(TrgRange, Source._Default[FieldName].GetSign, FieldTypes, CurrRow, CurrCol);
+                else
+                  begin
+                    for i := 1 to WordCount(SubFieldNames, ';') do
+                      if VarAsBool(Source._Default[FieldName].HasField(ExtractWord(i, SubFieldNames, ';'))) then
+                        begin
+                          ExportOneValue(TrgRange, Source._Default[FieldName]._Default[ExtractWord(i, SubFieldNames, ';')], FieldTypes[arrCounter], CurrRow, CurrCol);
+                          Break;
+                        end;
+                  end;
+              end;
+            end
+          else
+            ExportOneValue(TrgRange, Source._Default[FieldName], FieldTypes, CurrRow, CurrCol);
+        end
+      else
+      for arrCounter := 0 to ArrayHigh(FieldList) do
+        begin
+          FieldName := FieldList[arrCounter];
+          if StrPos('.', FieldName) <> 0 then
+            begin
+              AssistStr := FieldName;
+              FieldName := ExtractWord(1, AssistStr, '.'); // основное поле (ссылки)
+              SubFieldNames := ExtractWord(2, AssistStr, '.'); // поля ссылки
+              // извлекаем второе слово через разделитель '.' -
+              // перечисляем поля через ';'
+              // например 'Партнер.ЗКПО;ИдентНомер' - для ЮрПартнеры - ЗКПО, для ФизЛица - ИдентНомер
+              case SubFieldNames of
+                'GetName' :
+                  ExportOneValue(TrgRange, Source._Default[FieldName].GetName, FieldTypes[arrCounter], CurrRow, CurrCol);
+                'GetSign' :
+                  ExportOneValue(TrgRange, Source._Default[FieldName].GetSign, FieldTypes[arrCounter], CurrRow, CurrCol);
+                else
+                  begin
+                    for i := 1 to WordCount(SubFieldNames, ';') do
+                      if VarAsBool(Source._Default[FieldName].HasField(ExtractWord(i, SubFieldNames, ';'))) then
+                        begin
+                          ExportOneValue(TrgRange, Source._Default[FieldName]._Default[ExtractWord(i, SubFieldNames, ';')], FieldTypes[arrCounter], CurrRow, CurrCol);
+                          Break;
+                        end;
+                  end;
+              end;
+            end
+          else
+            ExportOneValue(TrgRange, Source._Default[FieldName], FieldTypes[arrCounter], CurrRow, CurrCol);
+          inc(CurrCol);
+        end;
+      inc(Count);
+      inc(CurrRow);
+    end;
+end;
+
+// процедура для экспорта любой таблицы (ТаблицаЗначений, Справочник, Журнал) в Excel, результат - на экран
+procedure ExportListToExcel(Source : Variant; FieldList, FieldTypes : Variant);
+var
+  OLEExcel, TrgRange : OleVariant;
+  CurrRow, CurrCol, i : Integer;
+  TmpDict : ICDictionary;
+  TmpJour : ICJournal;
+begin
+  OLEExcel := CreateOleObject('Excel.Application');
+  try
+    OLEExcel.Application.SheetsInNewWorkbook := 1;
+    OLEExcel.Application.WorkBooks.Add;
+    OLEExcel.Interactive := False;
+    OLEExcel.ScreenUpdating := False;
+    OLEExcel.Cells.Font.Size := 9;
+    OLEExcel.Cells.NumberFormat := '@';
+    TrgRange := OLEExcel.Application.WorkSheets[1].Range('A1:A1');
+    CurrRow := 1;
+    CurrCol := 1;
+    // шапка
+    ExportHeadToExcel(TrgRange, CurrRow, CurrCol, FieldList);
+    inc(CurrRow);
+    //
+    case VarAsStr(Source.GetType) of
+      'ValueTable;ТаблицаЗначений;ТаблицяЗначень' :
+        begin
+          ExportTableToExcel(TrgRange, Source, FieldList, FieldTypes, CurrRow, CurrCol);
+        end;
+      'Dictionaries;Справочники;Довідники' :
+        begin
+          TmpDict := CreateObject('Справочники.' + VarAsStr(Source.GetSign));
+          TmpDict.AssignSelectParams(Source);
+          ExportTableToExcel(TrgRange, TmpDict, FieldList, FieldTypes, CurrRow, CurrCol);
+        end;
+      'Journals;Журналы;Журнали' :
+        begin
+          TmpJour := CreateObject('Журналы.' + VarAsStr(Source.GetSign));
+          TmpJour.AssignSelectParams(Source);
+          ExportTableToExcel(TrgRange, TmpJour, FieldList, FieldTypes, CurrRow, CurrCol);
+        end;
+    end;
+    if IsArray(FieldList) then
+      i := ArrayHigh(FieldList) + 1
+    else
+      i := 1;
+    DoEntireColumnsNRows(OLEExcel, GetObjRecordCount(Source)+1, 1, i);
+  finally
+    StatusText('');
+    if not IsNil(OLEExcel) then
+      begin
+        OLEExcel.ScreenUpdating := True;
+        OLEExcel.Interactive := True;
+        OLEExcel.Visible := True;
+        Nil(OLEExcel);
+      end;
+  end;
+end;
+
+procedure ExportHeadToExcel(TrgRange : OleVariant; CurrRow, CurrCol : Integer; ArrValues : Variant);
+var
+  i : Integer;
+  CurrColCounter : Integer;
+begin
+  CurrColCounter := CurrCol;
+  if IsArray(ArrVAlues) then
+    begin
+      for i := 0 to ArrayHigh(ArrValues) do
+        begin
+          TrgRange.Cells(CurrRow, CurrColCounter).Value := ArrValues[i];
+          inc(CurrColCounter);
+        end;
+      dec(CurrColCounter);
+    end
+  else
+    TrgRange.Cells(CurrRow, CurrColCounter).Value := ArrValues;
+  TrgRange.Range(TrgRange.Cells(CurrRow, CurrCol), TrgRange.Cells(CurrRow, CurrColCounter)).
+           Font.Bold := True;
+  TrgRange.Range(TrgRange.Cells(CurrRow, CurrCol), TrgRange.Cells(CurrRow, CurrColCounter)).
+           HorizontalAlignment := $FFFFEFF4; // xlCenter
+end;
+      
+// подготавливает таблцу для экспорта, копирую подготовленную строку в шаблоне
+procedure AddRecordsForDet(OLEExcel, TrgRange : OleVariant; StartRow, Lines : Integer);
+var
+  i : Integer;
+begin
+  // одна строка уже есть
+  for i := 2 to Lines do
+    begin
+      OLEExcel.Rows(IntToStr(StartRow+1)+':'+IntToStr(StartRow+1)).Select;
+      OLEExcel.Selection.Insert(xlDown);
+      OLEExcel.Rows(IntToStr(StartRow)+':'+IntToStr(StartRow)).Select;
+      OLEExcel.Selection.Copy;
+      OLEExcel.Range('A'+IntToStr(StartRow+1)).Select;
+      OLEExcel.ActiveSheet.Paste;
+    end;
+  OLEExcel.Application.CutCopyMode := False;
+  OLEExcel.Cells(1, 1).Select;
+end;
+
+// устанавливает высоту объединенных ячеек, если в нее внесен текст, который
+// должен перенестись на следующую строку
+procedure DoWrapTextForMergeCells(TrgRange : OleVariant; Value : Variant;
+                                  CurrRow, mcCol1, mcCol2, FreeCol : Integer);
+var
+  i : Integer;
+  fcColWidth, ccColWidth, crRowHeight : Decimal; // начальная ширина свободной ячейки, общая ширина перед объединением
+begin
+  fcColWidth := TrgRange.Cells(CurrRow, FreeCol).ColumnWidth;
+  for i := mcCol1 to mcCol2 do
+    ccColWidth := ccColWidth + TrgRange.Cells(CurrRow, i).ColumnWidth;
+  TrgRange.Cells(CurrRow, FreeCol).ColumnWidth := ccColWidth;
+  TrgRange.Cells(CurrRow, FreeCol).WrapText := True;
+  TrgRange.Cells(CurrRow, FreeCol).HorizontalAlignment := xlLeft;
+  TrgRange.Range(TrgRange.Cells(CurrRow, mcCol1), TrgRange.Cells(CurrRow, mcCol2)).
+           MergeCells := True;
+  TrgRange.Cells(CurrRow, mcCol1).WrapText := True;
+  TrgRange.Cells(CurrRow, mcCol1).HorizontalAlignment := xlLeft;
+  //
+  TrgRange.Cells(CurrRow, FreeCol).Value := Value;
+  crRowHeight := TrgRange.Cells(CurrRow, FreeCol).RowHeight;
+  TrgRange.Cells(CurrRow, mcCol1).Value := Value;
+  TrgRange.Cells(CurrRow, FreeCol).Value := '';
+  TrgRange.Cells(CurrRow, FreeCol).ColumnWidth := fcColWidth;
+  TrgRange.Cells(CurrRow, mcCol1).RowHeight := crRowHeight;
+end;
+
+procedure DoEntireColumnsNRows(OLEExcel : OleVariant; CurrRow, mcCol1, mcCol2 : Integer; DefWidth : Decimal = 8.43);
+var
+  i : Integer;
+begin
+  // сперва автоширина колонок
+  OLEExcel.Cells.EntireColumn.AutoFit;
+  // потом устанавливаем минимальую ширину колонок - ширина Excel по умолчанию - 8.43
+  // строка при этом не должна иметь объединенные ячейки
+  for i := mcCol1 to mcCol2 do
+    if OLEExcel.Cells(CurrRow, i).ColumnWidth < DefWidth then
+      OLEExcel.Cells(CurrRow, i).ColumnWidth := DefWidth;
+  // теперь автовыстоа строк
+  OLEExcel.Cells.EntireRow.AutoFit;
+end;
+
+end.

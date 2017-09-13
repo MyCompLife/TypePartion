@@ -1,0 +1,210 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  ChangeLock, DropMode, LockCalc, isSave : Boolean;
+  Constants : IC4VPAConst;
+  MasterData : ICDocuments;
+  CursorVis : TCursor;
+  AccBank, AccKassa: ICAccs;
+  tblBank, tblKassa: ICValueTable;
+  Date : DateTime;
+  PartAcc, MyFirm, Currency, Cash : ICDictionary;           
+  Options : ICOptions;
+  AddDoc : Boolean;
+
+procedure CreateObjects;
+begin                          
+  Options := GetOptions;
+  Constants := GetConstants;
+  Cash := CreateObject('Справочники.Кассы');
+  Currency := CreateObject('Справочники.Валюты');
+  AccBank := CreateObject('Аккумуляторы.ОстаткиНаРасчСчет');
+  AccKassa := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+  PartAcc := CreateObject('Справочники.РасчСчета');
+  MyFirm := CreateObject('Справочники.ВашеПредприятие');
+  tblBank := CreateObject('ТаблицаЗначений');
+  tblKassa := CreateObject('ТаблицаЗначений');
+  tblBank.Close();
+  tblBank.AddColumn('РасчСчет', lftLink, 0);
+  tblBank.AddColumn('Валюта', lftLink, 0);
+  tblBank.AddColumn('Курс', lftFFT, 6);
+  tblBank.AddColumn('СумОбщ', lftFFT, 2);
+  tblBank.Open();
+
+  tblKassa.Close();
+  tblKassa.AddColumn('Касса', lftLink, 0);
+  tblKassa.AddColumn('Валюта', lftLink, 0);
+  tblKassa.AddColumn('Курс', lftFFT, 6);
+  tblKassa.AddColumn('СумОбщ', lftFFT, 2);
+  tblKassa.Open();
+end;
+
+procedure TableCalcFields(Doc : ICDocuments);
+begin
+  if VarAsBool(Doc.@Счет.IsFocused) then
+    Doc.СчетКасса := Doc.Счет.НомерСчета
+  else
+    if VarAsBool(Doc.@Касса.IsFocused) then
+      Doc.СчетКасса := Doc.Касса.Название;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  LockCalc := False;
+  CreateObjects;
+  server.SetSrvParams;
+  MasterData.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+  MasterData.SetSrvTableOnCalcFields(server.GetCalcParams(MasterData.GetDate()));
+end;
+
+procedure eTransSummaNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    eRespons.Enabled := GetUDASet('changeresp');
+end;
+
+procedure ePriceNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateLine(True);
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin 
+  AddDoc := true;
+  MasterData.TableAutoCalcFields := False;
+  LockCalc := True;
+  try
+    MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+    MasterData.Партнер := MasterData.Ответственный;
+    Date := RoundDate(MasterData.ДатаДокумента, rdDay, True);
+    AccBank.ClearFieldBuffers();
+    AccKassa.ClearFieldBuffers();
+    tblBank.Clear();
+    tblKassa.Clear();
+    AccBank.AppendRestToValueTable(Date, 'РасчСчет;Валюта;СумОбщ', tblBank);
+    AccKassa.AppendRestToValueTable(Date, 'Касса;Валюта;СумОбщ', tblKassa);
+    MyFirm.Select;
+    PartAcc.UseMasterAndSelect(MyFirm);
+    Currency.Select;
+    tblBank.SortBy('РасчСчет;Валюта');
+    tblKassa.SortBy('Касса;Валюта');
+    while PartAcc.SelectNext do
+      while Currency.SelectNext do
+        if not tblBank.Find(ArrayOf(PartAcc, Currency)) then
+          begin
+            tblBank.Append;
+            tblBank.РасчСчет := PartAcc;
+            tblBank.Валюта := Currency;
+            tblBank.СумОбщ := 0;
+            tblBank.Post;
+          end;
+    Cash.Select;
+    while Cash.SelectNext do
+      begin
+        Currency.Select;
+        while Currency.SelectNext do
+         if not tblKassa.Find(ArrayOf(Cash,Currency)) then
+           begin
+             tblKassa.Append;
+             tblKassa.Касса := Cash;
+             tblKassa.Валюта := Currency;
+             tblKassa.СумОбщ := 0;
+             tblKassa.Post;
+           end;
+      end;
+    MasterData.SelectLines();
+    tblBank.Select();
+    while tblBank.SelectNext() do
+      begin
+        MasterData.AppendLine();
+        MasterData.Тип := 0;
+        MasterData.Счет := tblBank.РасчСчет;
+        MasterData.Валюта := tblBank.Валюта;
+        MasterData.РасчСумма := tblBank.СумОбщ;
+        MasterData.СуммаВВалюте := 0;
+        if VarAsBool(MasterData.@Валюта.IsFocused) then
+          MasterData.Курс := MasterData.Валюта.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+        MasterData.PostLine();
+      end;
+    tblKassa.Select();
+    while tblKassa.SelectNext() do
+      begin
+        MasterData.AppendLine();
+        MasterData.Тип := 1;
+        MasterData.Касса := tblKassa.Касса;
+        MasterData.Валюта := tblKassa.Валюта;
+        MasterData.РасчСумма := tblKassa.СумОбщ;
+        MasterData.СуммаВВалюте := 0;
+        if VarAsBool(MasterData.@Валюта.IsFocused) then
+          MasterData.Курс := MasterData.Валюта.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+        MasterData.PostLine();
+      end;
+  finally
+    LockCalc := False;
+    MasterData.TableAutoCalcFields := True;
+  end;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  if AddDoc then
+    ChangeDoc(clmtAppend,MasterData)
+  else
+    ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel4:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label26:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+dbgListData:TO4DBGrid
+ToolBar1:TO4ToolBar
+tbDelete:TO4ToolButton
+tbParam:TO4ToolButton
+TDS:TO4DocContentsSource
+MDS:TO4DataSource

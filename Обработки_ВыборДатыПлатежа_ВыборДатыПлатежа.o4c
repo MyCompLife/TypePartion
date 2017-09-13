@@ -1,0 +1,35 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  PaysTbl : ICValueTable;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  PaysTbl := Params;
+  cbUsePayDate.Visible := PaysTbl.Params['ShowUsePayDate'];
+  cbUsePayDate.Checked := PaysTbl.Params['ShowUsePayDate'];
+  PaysTbl.SortBy('Дата');
+  PaysTbl.SelectLast;
+  PaysTbl.UseDataSource(CtrlToVar(tvsPays));
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  PaysTbl.Params['Date'] := PaysTbl.Дата;
+  PaysTbl.Params['UsePayDate'] := cbUsePayDate.Checked;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+Panel3:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+cbUsePayDate:TO4CheckBox
+DBGrid1:TO4DBGrid
+tvsPays:TO4TableValueSource

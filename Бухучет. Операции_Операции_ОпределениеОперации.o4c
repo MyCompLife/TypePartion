@@ -1,0 +1,70 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Opers : ICOpers;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  Opers := MDS.GetMean;
+end;
+
+procedure TDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  case StrLowerCase(FieldName) of
+    'цена', 'количество' :
+      Opers.СуммаПроводки := Opers.Количество * Opers.Цена;
+    'суммапроводки' : 
+      Opers.Сумма := Opers.Total('СуммаПроводки');
+  end;
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  if FieldName = 'Дата' then
+    begin
+      Opers.SelectLines;
+      while Opers.SelectNextLine do
+        begin
+          Opers.EditLine;
+          Opers.ДатаПроводки := Opers.Дата;
+          Opers.PostLine;
+        end;
+    end;
+end;
+
+procedure TDS_VPAAfterDelete(Sender : TObject);
+begin
+  Opers.Сумма := Opers.Total('СуммаПроводки');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+DBEdit1:TO4DBEdit
+DBEdit2:TO4DBEdit
+DBEdit3:TO4DBEdit
+DBEdit4:TO4DBEdit
+Panel2:TO4Panel
+Panel3:TO4Panel
+Button1:TO4Button
+Button2:TO4Button
+dbgList:TO4DocTableGrid
+ToolBar1:TO4ToolBar
+ToolButton1:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbParam:TO4ToolButton
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+PopupMenu1:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem3:TO4MenuItem
+MenuItem2:TO4MenuItem

@@ -1,0 +1,28 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+
+var
+  UseConst : IC4VPAConst;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin         
+  UseConst := GetConstants;
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      Params.UseDataSource(CtrlToVar(TVSGood));
+      Params.SetColumnFormat('Цена', UseConst.ФорматЦеныГРН);
+      Params.SetColumnFormat('Количество', UseConst.ФорматКол);
+      Params.SetColumnFormat('ОбщКол', UseConst.ФорматКол);
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+dbgData:TO4DBGrid
+TVSGood:TO4TableValueSource

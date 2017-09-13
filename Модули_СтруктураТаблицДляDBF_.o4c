@@ -1,0 +1,613 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, ConstNames, InitColors;
+
+procedure CreateStructureDic(Dic: ICValueTable; DicName : String);
+procedure CreateStructureDoc(Docs: ICValueTable; DocsList : ICValueTable; DocName : String);
+procedure CreateStructureJour(Jorn: ICValueTable; JournName : String);
+function CreateAllDocsList : String;
+procedure CreateStructureBLOBField(TblContents: ICValueTable; FieldName : String);
+
+implementation
+
+procedure CreateStructureDic(Dic: ICValueTable; DicName : String);
+Begin
+  Case DicName Of
+    'Товары':
+      begin
+        Dic.AddColumn('КатегорияКод_D', vtcString, 20);
+        Dic.AddColumn('Код', vtcString, 20);
+        Dic.AddColumn('НазвТовара', vtcString, 150);
+        Dic.AddColumn('ЕдИзм', vtcLink, 0);
+        Dic.AddColumn('ЕдИзмНазвание_D', vtcString, 20);
+        Dic.AddColumn('Валюта', vtcLink, 0);
+        Dic.AddColumn('ОптЦена', vtcFft, 7);
+        Dic.AddColumn('Информация', vtcMemo, 0);
+        Dic.AddColumn('Услуга', vtcInteger, 0);
+        Dic.AddColumn('БезКоличества', vtcInteger, 0);
+        Dic.AddColumn('Группа', vtcString, 100); 
+        Dic.AddColumn('ШтрихКод', vtcString, 15);
+        Dic.AddColumn('СвойТовар', vtcBoolean, 0);
+        Dic.Open;
+      end;
+    'ЮрПартнеры':
+      begin
+        Dic.AddColumn('Код',vtcString,20);
+        Dic.AddColumn('ЗКПО',vtcString,10);
+        Dic.AddColumn('ОПФ', vtcLink, 0);
+        Dic.AddColumn('Название', vtcString, 100);
+        Dic.AddColumn('ОПФНазвание_D', vtcString, 20);
+        Dic.AddColumn('НалогНом', vtcString, 12);
+        Dic.AddColumn('НДСсвид', vtcString, 9);
+        Dic.AddColumn('НДСплат', vtcInteger, 0);
+        Dic.AddColumn('Заметки', vtcMemo, 0);
+        Dic.AddColumn('ПолноеНазвание', vtcString, 100);
+        Dic.AddColumn('Статус', vtcInteger, 0);
+        Dic.AddColumn('ГруппаСкидки', vtcLink, 0);
+        Dic.AddColumn('ГруппаСкидкиКод_D', vtcInteger, 0);
+        Dic.AddColumn('Регион', vtcLink, 0);
+        Dic.AddColumn('РегионКод_D', vtcInteger, 0);
+        Dic.Open;
+      end;
+    'Служащие':
+      begin
+        Dic.AddColumn('Код',vtcString,20);
+        Dic.AddColumn('НалогНом',vtcString,10);
+        Dic.AddColumn('Фамилия', vtcString, 50);
+        Dic.AddColumn('ПолноеНазвание', vtcString, 100);
+        Dic.AddColumn('ИмяОтчество', vtcString, 70);
+        Dic.AddColumn('ДатаПриема', vtcDate, 0);
+        Dic.AddColumn('Регион', vtcLink, 0);
+        Dic.AddColumn('РегионКод_D', vtcInteger, 0);
+        Dic.Open;
+      end;
+    'Валюта':
+      begin
+        Dic.AddColumn('Код', vtcString, 3);
+        Dic.AddColumn('Название', vtcString, 50);
+        Dic.AddColumn('КурсНацБанка',vtcFft,6);
+        Dic.AddColumn('КурсНаличный', vtcFft, 6);
+        Dic.Open;
+      end;
+    'Склады':
+      begin
+        Dic.AddColumn('Код', vtcString, 2);
+        Dic.AddColumn('Название', vtcString, 50);
+        Dic.AddColumn('Регион', vtcLink, 0);
+        Dic.AddColumn('РегионКод_D', vtcString, 2);
+        Dic.Open;
+      end;
+    'Кассы':
+      begin
+        Dic.AddColumn('Код', vtcString, 2);
+        Dic.AddColumn('Название', vtcString, 50);
+        Dic.AddColumn('Регион', vtcLink, 0);
+        Dic.AddColumn('РегионКод_D', vtcString, 2);
+        Dic.Open;
+      end;
+    'Регионы':
+      begin
+        Dic.AddColumn('Код',vtcString, 2);
+        Dic.AddColumn('Название',vtcString,50);
+        Dic.Open;
+      end;
+    'ТоварыНаСкладах':
+      begin
+        Dic.AddColumn('РегионКод',lftInteger,0);
+        Dic.AddColumn('РегионНазвание',lftString,100);
+        Dic.AddColumn('Товар',lftLink,0);
+        Dic.AddColumn('ТоварКод',lftString,20);
+        Dic.AddColumn('ТоварНазвание',lftString,100);
+        Dic.AddColumn('Склад',lftLink,0);
+        Dic.AddColumn('СкладКод',lftInteger,0);
+        Dic.AddColumn('IsFindRec',lftInteger,0);
+        AddFFtColumnsList(Dic, 'КолОбщ');
+        Dic.Open;
+      end;
+  end;
+end;
+
+procedure CreateStructureDoc(Docs, DocsList: ICValueTable; DocName : String);
+Var
+  DocObj : ICDocuments;
+Begin
+  Case DocName Of
+//--------------------Финансовые документы--------------------------------------
+  'ПеремещениеМеждуКассами':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 20);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('КассаОтп', vtcLink, 0);
+      Docs.AddColumn('КассаОтпКод_D', vtcString, 2);
+      Docs.AddColumn('КассаПол', vtcLink, 0);
+      Docs.AddColumn('КассаПолКод_D', vtcString, 2);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 3);
+      Docs.AddColumn('Курс', vtcFft, 6);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 2);
+      Docs.AddColumn('Комментарий',  vtcMemo, 0);
+      Docs.AddColumn('ЕстьНДС',vtcInteger,0);
+      Docs.AddColumn('СтавкаНДС', vtcFft, 2);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+//      Docs.AddColumn('ДокументОснования', vtcString, 200);
+      Docs.Open;
+    end;
+  'ПриходВКассу','РасходИзКассы':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 20);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('ПартнерDB_D', vtcBlob, 0);
+      Docs.AddColumn('Партнер', vtcLink, 0);
+      Docs.AddColumn('ПартнерКод_D', vtcInteger, 0);
+      Docs.AddColumn('Касса', vtcLink, 0);
+      Docs.AddColumn('КассаКод_D', vtcString, 2);
+      Docs.AddColumn('Сумма', vtcFft, 2);
+      Docs.AddColumn('СуммаБезНДС', vtcFft, 2);
+      Docs.AddColumn('СуммаНДС', vtcFft, 2);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 3);
+      Docs.AddColumn('Курс', vtcFft, 6);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 2);
+      Docs.AddColumn('Комментарий',  vtcMemo, 0);
+      Docs.AddColumn('Взаиморасчет',vtcInteger,0);
+      Docs.AddColumn('ЕстьНДС',vtcInteger,0);
+      Docs.AddColumn('СтавкаНДС', vtcFft, 2);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+//      Docs.AddColumn('ДокументОснования', vtcString, 200);
+      Docs.Open;
+    end;
+  'АктНаПолучениеУслуг':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('Партнер', vtcLink, 0);
+      Docs.AddColumn('ПартнерDB_D', vtcBlob, 0);
+      Docs.AddColumn('ПартнерКод_D', vtcInteger, 0);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+      Docs.AddColumn('Сумма', vtcFft, 7);
+      Docs.AddColumn('СуммаБезНДС', vtcFft, 7);
+      Docs.AddColumn('СуммаНДС', vtcFft, 7);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 7);
+      Docs.AddColumn('СуммаТовара', vtcFft, 7);
+      Docs.AddColumn('СуммаБезНДСТовара', vtcFft, 7);
+      Docs.AddColumn('СуммаНДСТовара', vtcFft, 7);
+      Docs.AddColumn('ПроцентОбщий', vtcFft, 7);
+      Docs.AddColumn('ИспПроцентТрансп', vtcFft, 7);
+      Docs.AddColumn('ПроцентТрансп', vtcFft, 7);
+      Docs.AddColumn('СуммаТрансп', vtcFft, 7);
+      Docs.AddColumn('СуммаБезНДСТрансп', vtcFft, 7);
+      Docs.AddColumn('СуммаНДСТрансп', vtcFft, 7);
+      Docs.AddColumn('ПризнакСрокаОплаты', vtcInteger, 0);
+      Docs.AddColumn('СрокОплаты', vtcDate, 0);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('Заметки', vtcMemo, 0);
+      Docs.AddColumn('Статья', vtcLink, 0);
+      Docs.AddColumn('СтатьяКод_D', vtcString, 6);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('ВалютаТовара', vtcLink, 0);
+      DocsList.AddColumn('ВалютаТовараКод_D', lftString, 20);
+      DocsList.AddColumn('Цена', vtcFft, 7);
+      DocsList.AddColumn('ЦенаБезНДС', vtcFft, 7);
+      DocsList.AddColumn('НДС', vtcFft, 7);
+      DocsList.AddColumn('СтавкаНДС', lftInteger, 0);
+      DocsList.AddColumn('ПроцентСкидкиНадбавки', vtcFft, 7);
+      DocsList.AddColumn('ЦенаБезСкидкиНадбавки', vtcFft, 7);
+      DocsList.AddColumn('КурсТовара', vtcFft, 7);
+      DocsList.AddColumn('ЦенаВВалюте', vtcFft, 7);
+      DocsList.Open;
+    end;
+  'ИзмЦенОптЦены':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('ОптЦена', vtcFft, 7);
+      DocsList.AddColumn('ПрНац', vtcFft, 2);
+      DocsList.Open;
+    end;
+  'ВводОстатков':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('Партнер', vtcLink, 0);
+      Docs.AddColumn('ПартнерDB_D', vtcBlob, 0);
+      Docs.AddColumn('ПартнерКод_D', vtcInteger, 0);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('СкладПр', vtcLink, 0);
+      Docs.AddColumn('СкладПрКод_D', vtcInteger, 0);
+      Docs.AddColumn('СуммаОптВВалюте', vtcFft, 2);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('ВалютаТовара', vtcLink, 0);
+      DocsList.AddColumn('ВалютаТовараКод_D', lftString, 20);
+      DocsList.AddColumn('КурсТовара', vtcFft, 7);
+      DocsList.AddColumn('Склад', vtcLink, 0);
+      DocsList.AddColumn('СкладКод_D', lftString, 50);
+      DocsList.AddColumn('ОптЦена', vtcFft, 7);
+      DocsList.Open;
+    end;
+  'Чек':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('Партнер', vtcLink, 0);
+      Docs.AddColumn('ПартнерDB_D', vtcBlob, 0);
+      Docs.AddColumn('ПартнерКод_D', vtcInteger, 0);
+      Docs.AddColumn('СкладПоУмолч', vtcLink, 0);
+      Docs.AddColumn('СкладПоУмолчКод_D', vtcInteger, 0);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+      Docs.AddColumn('ТипЦены', vtcString, 10);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('ПроцСкидки', vtcFft, 2);
+      Docs.AddColumn('Статья', vtcLink, 0);
+      Docs.AddColumn('СтатьяКод_D', vtcString, 6);
+      Docs.AddColumn('Наценка', vtcFft, 2);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 2);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('Заметки', vtcMemo, 0);
+      Docs.AddColumn('Импорт', vtcInteger, 0);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('Цена', vtcFft, 7);
+      DocsList.AddColumn('ШтрихКод', lftString, 15);
+      DocsList.AddColumn('ЦенаБезСкидкиНадбавки', vtcFft, 7);
+      DocsList.Open;
+    end;
+  'СписаниеТовара':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+      Docs.AddColumn('СкладПоУмолч', vtcLink, 0);
+      Docs.AddColumn('СкладПоУмолчКод_D', vtcInteger, 0);
+      Docs.AddColumn('ТипЦены', vtcString, 10);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('Статья', vtcLink, 0);
+      Docs.AddColumn('СтатьяКод_D', vtcString, 6);
+      Docs.AddColumn('Сумма', vtcFft, 2);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 2);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('Заметки', vtcMemo, 0);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('Цена', vtcFft, 7);
+      DocsList.AddColumn('ШтрихКод', lftString, 15);
+      DocsList.Open;
+    end;
+  'РевизияТовара':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+      Docs.AddColumn('СкладПоУмолч', vtcLink, 0);
+      Docs.AddColumn('СкладПоУмолчКод_D', vtcInteger, 0);
+      Docs.AddColumn('ТипЦены', vtcString, 10);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('Статья', vtcLink, 0);
+      Docs.AddColumn('СтатьяКод_D', vtcString, 6);
+      Docs.AddColumn('Сумма', vtcFft, 2);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 2);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('Заметки', vtcMemo, 0);
+      Docs.AddColumn('Категории', vtcBlob, 0);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('КоличествоДо', vtcFft, 7);
+      DocsList.AddColumn('КоличествоПосле', vtcFft, 7);
+      DocsList.AddColumn('Цена', vtcFft, 7);
+      DocsList.AddColumn('ШтрихКод', lftString, 15);
+      DocsList.AddColumn('Категория', lftString, 150);
+      DocsList.Open;
+    end;
+  'НакладнаяВнутрПеремещ':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+      Docs.AddColumn('СкладОтп', vtcLink, 0);
+      Docs.AddColumn('СкладОтпКод_D', vtcInteger, 0);
+      Docs.AddColumn('СкладПр', vtcLink, 0);
+      Docs.AddColumn('СкладПрКод_D', vtcInteger, 0);
+
+      Docs.AddColumn('ТипЦены', vtcString, 10);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('Сумма', vtcFft, 2);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 2);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('Заметки', vtcMemo, 0);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('Цена', vtcFft, 7);
+      DocsList.AddColumn('ШтрихКод', lftString, 15);
+      DocsList.Open;
+    end;
+  'ВводОстатков':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('Партнер', vtcLink, 0);
+      Docs.AddColumn('ПартнерDB_D', vtcBlob, 0);
+      Docs.AddColumn('ПартнерКод_D', vtcInteger, 0);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('СкладПр', vtcLink, 0);
+      Docs.AddColumn('СкладПрКод_D', vtcInteger, 0);
+      Docs.AddColumn('СуммаОптВВалюте', vtcFft, 2);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('ВалютаТовара', vtcLink, 0);
+      DocsList.AddColumn('ВалютаТовараКод_D', lftString, 20);
+      DocsList.AddColumn('КурсТовара', vtcFft, 7);
+      DocsList.AddColumn('Склад', vtcLink, 0);
+      DocsList.AddColumn('СкладКод_D', lftString, 50);
+      DocsList.AddColumn('ОптЦена', vtcFft, 7);
+      DocsList.Open;
+    end;
+  'НакладнаяПрихода':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('ПартнерDB_D', vtcBlob, 0);
+      Docs.AddColumn('Партнер', vtcLink, 0);
+      Docs.AddColumn('ПартнерКод_D', vtcInteger, 0);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+      Docs.AddColumn('ВалютаDB_D', vtcBlob, 0);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('Заметки', vtcMemo, 0);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('СкладПр', vtcLink, 0);
+      Docs.AddColumn('СкладПрКод_D', vtcInteger, 0);
+      Docs.AddColumn('СуммаОптВВалюте', vtcFft, 2);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('ВалютаТовара', vtcLink, 0);
+      DocsList.AddColumn('ВалютаТовараКод_D', lftString, 20);
+      DocsList.AddColumn('КурсТовара', vtcFft, 7);
+      DocsList.AddColumn('Склад', vtcLink, 0);
+      DocsList.AddColumn('СкладКод_D', lftString, 50);
+      DocsList.AddColumn('ОптЦена', vtcFft, 7);
+      DocsList.Open;
+    end;
+  'ВозвратОтПокупателей':
+    begin
+      Docs.AddColumn('DocID_D',vtcInteger,0);
+      Docs.AddColumn('NumID',vtcInteger,0);
+      Docs.AddColumn('BaseID',vtcInteger,0);
+      Docs.AddColumn('Регион', vtcLink, 0);
+      Docs.AddColumn('РегионКод_D', vtcString, 2);
+      Docs.AddColumn('НомерДокумента', vtcString, 15);
+      Docs.AddColumn('ДатаДокумента', vtcDateTime, 0);
+      Docs.AddColumn('Партнер', vtcLink, 0);
+      Docs.AddColumn('ПартнерDB_D', vtcBlob, 0);
+      Docs.AddColumn('ПартнерКод_D', vtcInteger, 0);
+      Docs.AddColumn('СкладПоУмолч', vtcLink, 0);
+      Docs.AddColumn('СкладПоУмолчКод_D', vtcInteger, 0);
+      Docs.AddColumn('ОтветственныйDB_D', vtcBlob, 0);
+      Docs.AddColumn('Ответственный', vtcLink, 0);
+      Docs.AddColumn('ОтветственныйКод_D', vtcInteger, 0);
+      Docs.AddColumn('ТипЦены', vtcString, 10);
+      Docs.AddColumn('Валюта', vtcLink, 0);
+      Docs.AddColumn('ВалютаКод_D', vtcString, 20);
+      Docs.AddColumn('Курс', vtcFft, 7);
+      Docs.AddColumn('Статья', vtcLink, 0);
+      Docs.AddColumn('СтатьяКод_D', vtcString, 6);
+      Docs.AddColumn('Сумма', vtcFft, 2);
+      Docs.AddColumn('СуммаВВалюте', vtcFft, 2);
+      Docs.AddColumn('Отпуск', vtcInteger, 0);
+      Docs.AddColumn('Заметки', vtcMemo, 0);
+      Docs.Open;
+
+      DocsList.AddColumn('DocID_D',vtcInteger,0);
+      DocsList.AddColumn('НомСтроки', lftInteger, 0);
+      DocsList.AddColumn('ТоварDB_D', vtcBlob, 0);
+      DocsList.AddColumn('Товар', vtcLink, 0);
+      DocsList.AddColumn('ТоварКод_D', lftString, 20);
+      DocsList.AddColumn('Количество', vtcFft, 7);
+      DocsList.AddColumn('Цена', vtcFft, 7);
+      DocsList.AddColumn('ШтрихКод', lftString, 15);
+      DocsList.Open;
+    end;
+  end;
+end;
+
+procedure CreateStructureJour(Jorn: ICValueTable; JournName : String);
+begin
+  Case JournName Of
+    'AllJournal' :
+      begin
+        Jorn.AddColumn('NumID',lftInteger,0);
+        Jorn.AddColumn('BaseID',lftInteger,0);
+        Jorn.AddColumn('КодИБ',lftInteger,0);
+        Jorn.AddColumn('НомерДокумента', vtcString, 20);
+        Jorn.AddColumn('ДатаДокумента', vtcDate, 0);
+        Jorn.AddColumn('Партнер', vtcLink, 0);
+        Jorn.AddColumn('ПартнерНазвание', vtcString, 100);
+        Jorn.AddColumn('ПартнерКод', vtcInteger, 0);
+        Jorn.AddColumn('Сумма', vtcFft, 2);
+        Jorn.AddColumn('СостояниеДокумента', vtcInteger, 0);
+        Jorn.AddColumn('ТипДокумента', vtcString, 100);
+        Jorn.AddColumn('ИндексТипаДокумента', vtcInteger, 0);
+        Jorn.AddColumn('IsFindRec',lftInteger,0);
+        Jorn.Open;
+      end;
+  end;
+end;
+
+function CreateAllDocsList : String;
+begin
+  Result := 'ПриходВКассу;РасходИзКассы;ПеремещениеМеждуКассами;'+ //(Финансовые документы)
+            'НакладнаяПрихода;Чек;ВозвратОтПокупателей;'+ //(Складские документы)
+            'НакладнаяВнутрПеремещ;СписаниеТовара;РевизияТовара;ВводОстатков;'+ //(Внутрение документы)
+            'АктНаПолучениеУслуг;'+ //(Услуги)
+            'ИзмЦенОптЦены';
+end;
+
+procedure CreateStructureBLOBField(TblContents: ICValueTable; FieldName : String);
+begin
+ case StrLowerCase(FieldName) of
+   'таб_товарыпочекам':
+     begin
+       TblContents.AddColumn('NumID',vtcString,20);
+       TblContents.AddColumn('НомСтроки',vtcInteger,0);
+       TblContents.AddColumn('Код',vtcString,20);
+       TblContents.AddColumn('Товар',vtcLink,0);
+       TblContents.AddColumn('ТоварКод_D',lftInteger,0);
+       TblContents.AddColumn('Количество',vtcFFT,5);
+       TblContents.AddColumn('Цена',vtcFFT,7);
+       TblContents.AddColumn('ПроцентСкидкиНадбавки',vtcFFT,7);
+       TblContents.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,7);
+       TblContents.AddColumn('Сумма',vtcFFT,7);
+       TblContents.AddColumn('ТипДокумента',vtcFFT,7);
+       TblContents.AddColumn('Комментарий',vtcString,200);
+     end;
+ end;
+ TblContents.Open;
+end;
+
+end.

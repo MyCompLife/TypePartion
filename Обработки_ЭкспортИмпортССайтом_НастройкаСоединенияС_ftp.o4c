@@ -1,0 +1,82 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, УстановкаКонстант, Расчеты, РаботаСОбъектами, РаботаСТаблицамиЗначений, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  TblLang: ICValueTable;
+  ftpManager: OLEVariant;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Constants := CreateObject('Константы');
+  eLibrary.Text := VarAsStr(Constants.FtpБиблиотека);
+  eServer.Text := VarAsStr(Constants.FtpСервер);
+  eLogin.Text := VarAsStr(Constants.FtpЛогин);
+  ePass.Text := VarAsStr(Constants.FtpПароль);
+end;
+
+procedure btnOK_Click(Sender : TObject);
+begin
+  Constants.FtpБиблиотека := eLibrary.Text;
+  Constants.FtpСервер := eServer.Text;
+  Constants.FtpЛогин := eLogin.Text;
+  Constants.FtpПароль := ePass.Text;
+  Form.ModalResult := mrOk;
+end;
+
+procedure btLibraryPath_Click(Sender: TObject);
+var
+  FilePath: string;
+begin
+  with OpenDialog do begin
+    Filter := 'addl_func.dll|addl_func.dll';
+    FileName := 'addl_func.dll';
+    Title := Trans('Определите путь к dll-библиотеке');
+    if Execute then
+      eLibrary.Text := FileName
+    else
+      exit;
+  end;
+end;
+
+procedure btReg_Click(Sender: TObject);
+begin
+  if not FileExists(eLibrary.Text) then
+    begin
+      ShowMessage('По указанному пути файл отсутствует!');
+      exit;
+    end;
+  Run('RegSvr32 ' + eLibrary.Text, true);
+//  HKEY_LOCAL_MACHINE\SOFTWARE\Classes\addl_func.ftpManager
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label5:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+Label1:TO4Label
+eServer:TO4Edit
+eLogin:TO4Edit
+ePass:TO4Edit
+eLibrary:TO4Edit
+btLibraryPath:TO4Button
+btReg:TO4Button
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+TVS:TO4TableValueSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miDel:TO4MenuItem
+MenuItem3:TO4MenuItem
+miActive:TO4MenuItem
+OpenDialog:TO4OpenDialog

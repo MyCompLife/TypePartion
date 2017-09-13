@@ -1,0 +1,44 @@
+interface
+
+uses System, DispIntf, Фиксация, Расчеты;
+
+implementation
+
+var
+ AccKassa : ISAccs;
+
+procedure ChangeStateUp(Doc:ISDocuments; var Accept : boolean);
+var
+ DocDate : DateTime;
+begin
+ DocDate := Doc.GetDate;
+ AccKassa.ClearFieldBuffers();
+ AccKassa.AssignFields('Валюта=ВалютаРасхода;Касса;СумРасх=СумВалРасхода;СумОбщ=СумВалРасхода;Дата=ДатаДокумента',Doc);
+ AccKassa.Outcome(Doc, DocDate, 0);
+ AccKassa.AssignFields('Валюта=ВалютаПрихода;Касса;СумПрих=СумВалПрихода;СумОбщ=СумВалПрихода;Дата=ДатаДокумента',Doc);
+ AccKassa.Income(Doc, DocDate, 0);
+ Accept := true;
+end;
+
+function GetChangeStateUpEP(Doc:ISDocuments) : Variant; server;
+begin
+  AccKassa:= CreateObject('Аккумуляторы.ОстаткиПоКассе');
+  Result := EntryPoint(ChangeStateUp);
+end;
+
+procedure DoChangeStateUp(Doc:ISDocuments);
+var
+ Accept : boolean;
+begin
+  Accept := true;
+  case Doc.GetDocState of
+    1 : begin
+      AccKassa:= CreateObject('Аккумуляторы.ОстаткиПоКассе');
+      ChangeStateUp(Doc,Accept);
+    end;
+    2 : begin
+    end;
+  end;
+end;
+
+end.

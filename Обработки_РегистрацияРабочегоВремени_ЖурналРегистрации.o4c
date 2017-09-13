@@ -1,0 +1,242 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Интерфейс, Расчеты, Пользователи, Reports, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation 
+
+var 
+  TabDic, RegDic, EmplDic, Regions: ICDictionary;
+  tabTbl: ICValueTable;  
+  Constants : IC4VPAConst;
+  RegionsList : ICValueList;
+
+procedure Form_Open(Sender: TObject);
+var
+  ActiveRegion: ICDictionary;
+begin  
+  Constants := GetConstants;
+  SetColors(Constants);
+
+  tabTbl := CreateObject('ValueTable');
+  tabTbl.AddColumn('Служащий',vtcLink,0);
+  tabTbl.AddColumn('Регион',vtcLink,0);
+  tabTbl.AddColumn('ПослДействие',vtcTime,0);
+  tabTbl.AddColumn('Время',vtcString,5);
+  tabTbl.AddColumn('Событие',vtcInteger,0);
+  tabTbl.Open;
+
+  TabDic := CreateObject('Справочники.ТабельРабочегоВремени');
+  TabDic.SetFieldFilter('Дата','=',CurrentDate,'','',Null);
+  RegDic := CreateObject('Справочники.РегистрРабочегоВремени');
+  RegDic.UseMaster(TabDic);
+  EmplDic := CreateObject('Справочники.Служащие');
+  EmplDic.SetFieldFilter('ВестиТабель','=',true,'','',Null);
+  EmplDic.Select;
+  while EmplDic.SelectNext do
+    begin
+      if not TabDic.FindByField('Служащий',EmplDic,false) then
+        begin
+          TabDic.Append;
+          TabDic.Служащий := EmplDic;
+          TabDic.Дата := CurrentDate;
+          TabDic.Post;
+          TabDic.ApplyUpdates;
+        end;
+      tabTbl.Append;
+      tabTbl.Служащий := EmplDic;
+      RegDic.SortByField('Артикул');
+      RegDic.Select;
+      if RegDic.SelectPrior then
+        begin
+          tabTbl.ПослДействие := RegDic.Время;
+          tabTbl.Событие := VarAsInt(RegDic.Событие);
+          tabTbl.Время := TabDic.СтрокаВремени;
+        end
+      else
+        tabTbl.Событие := 0;
+      tabTbl.Post;
+    end; 
+  tabTbl.DoGetLinks('Регион=Служащий.Регион');
+
+  RegionsList := CreateObject('СписокЗначений');
+  Regions := CreateObject('Справочники.Регионы');
+  RegionsList.AddValue(Trans('Все регионы'), Null);
+  Regions.Select;
+  while Regions.SelectNext do
+    RegionsList.AddValue(Regions.Название, Regions); // или ('',S)
+  RegionsList.UseControl(CtrlToVar(eRegion));
+  RegionsList.CurIndex := 0;
+  eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+  ActiveRegion := GetUsersField('Регион');
+  if not IsNil(ActiveRegion) then
+    RegionsList.CurIndex := RegionsList.FindByValue(ActiveRegion);
+
+  tabTbl.SortBy('Регион;Служащий');
+  tabTbl.SetRange(ActiveRegion,ActiveRegion);
+  tabTbl.UseDataSource(ctrlToVar(TVS));
+end;
+
+{$D-}
+procedure dbgData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if tabTbl.IsFocused and (tabTbl.Событие = 0) then
+    if Highlight then
+      BackColor := NoPaySel
+    else
+      BackColor := NoPayNorm;
+end;
+{$D+}
+
+procedure eRegion_Change(Sender: TObject);
+var ActiveRegion: ICDictionary;
+begin
+  tabTbl.UseDataSource(0);
+  if RegionsList.ValidIndex(RegionsList.CurIndex) and (RegionsList.CurIndex <> 0) then
+    begin
+      ActiveRegion := RegionsList.GetValue(RegionsList.CurIndex);
+      tabTbl.SortBy('Регион;Служащий');
+      tabTbl.SetRange(ActiveRegion,ActiveRegion);
+    end;
+  if RegionsList.CurIndex = 0 then
+    tabTbl.CancelRange;
+
+  tabTbl.UseDataSource(ctrlToVar(TVS));
+end;      
+
+procedure checkYesterday;
+var
+  Вчера: DateTime;
+  Empls: String;
+begin
+  Вчера := CurrentDate - 1;
+  TabDic.CancelFieldFilter('Дата');
+  TabDic.SetFieldFilter('Дата','=',Вчера,'','',Null);
+  TabDic.Select;
+  while TabDic.SelectNext do
+    begin
+      RegDic.SortByField('Артикул');
+      RegDic.Select;
+      if RegDic.SelectPrior then
+        if RegDic.Событие = '1' then
+          if StrLength(Empls) > 0 then
+            Empls := Empls + ', ' +  TabDic.Служащий.ПолноеНазвание
+          else
+            Empls := TabDic.Служащий.ПолноеНазвание;
+    end;
+  if StrLength(Empls) > 0 then
+    MessageDlg('Есть незакрытые табеля!',mtWarning,ArrayOf(mbOk));
+end;
+
+procedure miCode_Click(Sender: TObject);
+var 
+  ActiveRegion: ICDictionary;  
+  Событие: String;  
+  Время: DateTime;
+begin
+
+  if not EmplDic.FindByField('Код',VarAsInt(eCode.Text),false) then
+    begin
+      ShowMessage('Служащий не найден!');
+      exit;
+    end;
+  if RegionsList.ValidIndex(RegionsList.CurIndex) then
+    ActiveRegion := RegionsList.GetValue(RegionsList.CurIndex);
+  if not tabTbl.Find(ArrayOf(ActiveRegion, EmplDic)) then
+    begin
+      ShowMessage('Для служащего не ведется регистрация рабочего времени по данному региону!');
+      exit;
+    end;
+
+  //checkYesterday;
+
+  tabTbl.UseDataSource(0);
+
+  TabDic.CancelFieldFilter('Дата');
+  TabDic.SetFieldFilter('Дата','=',CurrentDate,'','',Null);
+  TabDic.Select;
+
+  if not TabDic.FindByField('Служащий',EmplDic,false) then
+    begin
+      TabDic.Append;
+      TabDic.Служащий := EmplDic;
+      TabDic.Дата := CurrentDate;
+      TabDic.Post;
+      TabDic.ApplyUpdates;
+    end;
+
+  // Регистрируем текущее событие
+  Событие := '0';
+  Время := CurrentTime;
+  RegDic.SortByField('-Артикул');
+  RegDic.Select;
+  if RegDic.SelectNext then
+    begin
+      Событие := RegDic.Событие;
+      Время := RegDic.Время;
+    end;
+  RegDic.Append;
+  RegDic.Артикул := GetNextNumberForField('Справочники.РегистрРабочегоВремени','Артикул');
+  RegDic.Время := CurrentTime;
+  if Событие = '0' then
+    RegDic.Событие := '1'
+  else
+    RegDic.Событие := '0';
+  RegDic.SetMaster(TabDic);
+  RegDic.Post;
+  RegDic.ApplyUpdates;
+  
+  // Обновляем отработанное время, если служащий ушел
+  if Событие = '1' then 
+    begin
+      TabDic.Edit;
+      TabDic.Время := TabDic.Время - GetHour(Время) - GetMinute(Время)/60 - GetSecond(Время)/3600 + GetHour(RegDic.Время) + GetMinute(RegDic.Время)/60 + GetSecond(RegDic.Время)/3600;
+      TabDic.СтрокаВремени := DecToStr(DecInt(TabDic.Время),0) + ':' + DecToStr(DecFrac(TabDic.Время)*60,0);
+      TabDic.Post;
+      TabDic.ApplyUpdates;
+    end;
+
+
+  tabTbl.Edit;
+  tabTbl.ПослДействие := RegDic.Время;
+  tabTbl.Событие := VarAsInt(RegDic.Событие);  
+  tabTbl.Время := TabDic.СтрокаВремени;
+  tabTbl.Post;
+  
+  eCode.Text := '';
+
+  tabTbl.UseDataSource(ctrlToVar(TVS));
+end;
+
+procedure dbgData_DblClick(Sender: TObject);
+begin
+  if tabTbl.IsFocused and (tabTbl.Событие = 0) then
+    if TabDic.FindByField('Служащий',tabTbl.Служащий, false) then
+      begin
+        TabDic.EditInForm('ТабельЗаДень',1);
+      end;
+end;
+
+procedure miTimeSheet_Click(Sender: TObject);  
+var V: ICProcessing;
+begin
+  V := CreateObject('Обработки.РегистрацияРабочегоВремени'); 
+  V.OpenForm('ТабельРабочегоВремени');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+eCode:TO4Edit
+eRegion:TO4Edit
+dbgData:TO4DBGrid
+ToolBar1:TO4ToolBar
+tbGridParam:TO4ToolButton
+TVS:TO4TableValueSource
+pmCode:TO4PopupMenu
+miCode:TO4MenuItem
+pmData:TO4PopupMenu
+miTimeSheet:TO4MenuItem

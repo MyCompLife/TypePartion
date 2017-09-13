@@ -1,0 +1,30 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Pays, Nakls : ISJournal;
+
+procedure OrderCalcFields(Order : ISJournal);
+begin
+  Order. ќплате := Order.—умма - Order.ќплачено;
+  Order.¬заиморасчет := Order.ќтпущено“овара - Order.ќплачено;
+  Order. ќплате¬ал := Order.—умма¬ал - Order.ќплачено¬ал;
+  Order.¬заиморасчет¬ал := Order.ќтпущено“овара¬ал - Order.ќплачено¬ал;
+end;
+
+function GetCalcEP(Order : ISJournal) : Variant; server;
+begin
+  Pays := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  Nakls := CreateObject('∆урналы.∆урналЌакладныхќтпускаѕо—чету');
+  Order.SetCalcFieldInDBServer(ArrayOf(Pays), ArrayOf('ќплачено', '—умма'), ArrayOf('1;2'));
+  Order.SetCalcFieldInDBServer(ArrayOf(Pays), ArrayOf('ќплачено¬ал', '—умма“в¬ал'), ArrayOf('1;2'));
+  Order.SetCalcFieldInDBServer(ArrayOf(Nakls), ArrayOf('ќтпущено“овара', '—умма'), ArrayOf('1;2'));
+  Order.SetCalcFieldInDBServer(ArrayOf(Nakls), ArrayOf('ќтпущено“овара¬ал', '—умма¬ал'), ArrayOf('1;2'));
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+end.

@@ -1,0 +1,223 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData, Dic: ICDictionary;
+  UseLevels : Boolean;
+  Opt : ICOptions;
+  DelLine, DelGroup: Integer;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Dic := CreateObject('Справочники.ТаблицаРазмеров');
+  MasterData.SortByField('НомСтроки');
+  server.InitSrvData;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itInPlaceForMain;
+  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+end;
+
+procedure tbRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+{$D-}
+procedure dbgData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if MasterData.IsFocused and (MasterData.НомПозиции = 0) then
+    begin
+      if Highlight then
+        BackColor := clGray
+      else
+        BackColor := clSilver;
+      DrawFont.Color := clWhite;
+      DrawFont.Style := 1;
+      DrawFont.Size := 9;
+    end;
+end;
+{$D+}
+
+procedure tbAdd_Click(Sender: TObject);
+var
+  GroupNum, PosNum, LineNum: Integer;
+begin
+  case (Sender as TO4ToolButton).Tag of
+    0 : begin
+      Dic.SortByField('НомСтроки');
+      Dic.Select;
+      if Dic.SelectPrior then
+        begin
+          GroupNum := Dic.НомГруппы + 1;
+          LineNum := Dic.НомСтроки + 1;
+        end
+      else
+        begin
+          GroupNum := 1;
+          LineNum := 1;
+        end;
+      PosNum :=  0;
+    end;
+    1: begin
+      GroupNum := MasterData.НомГруппы;
+      Dic.SetFieldFilter('НомГруппы','=',GroupNum,'','',Null);
+      Dic.SortByField('НомПозиции');
+      Dic.Select;
+      if Dic.SelectPrior then
+        begin
+          PosNum := Dic.НомПозиции + 1;
+          LineNum := Dic.НомСтроки + 1;
+        end;
+      Dic.CancelFieldFilter('НомГруппы');
+    end;
+  end;
+  if PosNum = 0 then
+    MasterData.Params['code'] := ArrayOf(GroupNum,PosNum,VarAsStr(GroupNum), LineNum)
+  else
+    MasterData.Params['code'] := ArrayOf(GroupNum,PosNum,VarAsStr(GroupNum) + '.' +VarAsStr(PosNum), LineNum);
+end;
+
+procedure miAdd_Click(Sender: TObject);
+var
+  GroupNum, PosNum, LineNum: Integer;
+begin
+  case (Sender as TO4MenuItem).Tag of
+    0 : begin
+      Dic.SortByField('НомСтроки');
+      Dic.Select;
+      if Dic.SelectPrior then
+        begin
+          GroupNum := Dic.НомГруппы + 1;
+          LineNum := Dic.НомСтроки + 1;
+        end
+      else
+        begin
+          GroupNum := 1;
+          LineNum := 1;
+        end;
+      PosNum :=  0;
+    end;
+    1: begin
+      GroupNum := MasterData.НомГруппы;
+      Dic.SetFieldFilter('НомГруппы','=',GroupNum,'','',Null);
+      Dic.SortByField('НомПозиции');
+      Dic.Select;
+      if Dic.SelectPrior then
+        begin
+          PosNum := Dic.НомПозиции + 1;
+          LineNum := Dic.НомСтроки + 1;
+        end;
+      Dic.CancelFieldFilter('НомГруппы');
+    end;
+  end;
+  if PosNum = 0 then
+    MasterData.Params['code'] := ArrayOf(GroupNum,PosNum,VarAsStr(GroupNum), LineNum)
+  else
+    MasterData.Params['code'] := ArrayOf(GroupNum,PosNum,VarAsStr(GroupNum) + '.' +VarAsStr(PosNum), LineNum);
+end;
+
+procedure tbAddAfterClick(Sender: TObject);
+begin
+  if MasterData.HasParam('add') and VarAsBool(MasterData.Params['add']) then
+    begin
+      MasterData.SetSrvToClientPos;
+      server.ChangeDicLineNum(MasterData.НомСтроки, MasterData.SrvMean);
+      MasterData.Params['add'] := false;
+      MasterData.Refresh;
+    end;
+end;
+
+procedure tpUp_Click(Sender: TObject);
+var
+  GroupNum, PosNum, LineNum: Integer;
+begin
+  if MasterData.IsFocused then
+    begin
+      GroupNum := MasterData.НомГруппы;
+      PosNum := MasterData.НомПозиции;
+      LineNum := MasterData.НомСтроки;
+      if LineNum > 1 then
+        server.MoveUp(GroupNum, PosNum, LineNum);
+      MasterData.Refresh;
+    end;
+end;
+
+procedure tpDown_Click(Sender: TObject);
+var
+  GroupNum, PosNum, LineNum: Integer;
+begin
+  if MasterData.IsFocused then
+    begin
+      GroupNum := MasterData.НомГруппы;
+      PosNum := MasterData.НомПозиции;
+      LineNum := MasterData.НомСтроки;
+      server.MoveDown(GroupNum, PosNum, LineNum);
+      MasterData.Refresh;
+    end;
+end;
+
+procedure ToolButton11_Click(Sender: TObject);
+begin   
+  if (MasterData.НомПозиции = 0) and (MessageDlg('Удалить группу размеров?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrNo) then
+    exit;
+  if (MasterData.НомПозиции <> 0) and (MessageDlg('Удалить запись?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrNo) then
+    exit;
+  DelLine := MasterData.НомСтроки;
+  DelGroup := MasterData.НомГруппы;
+  server.DeleteLine(DelLine, DelGroup);
+  MasterData.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+eMemo:TO4DBMemo
+Panel2:TO4Panel
+ToolBar1:TO4ToolBar
+tpUp:TO4ToolButton
+tpDown:TO4ToolButton
+ToolBar2:TO4ToolBar
+ToolButton8:TO4ToolButton
+ToolButton9:TO4ToolButton
+ToolButton10:TO4ToolButton
+ToolButton11:TO4ToolButton
+ToolButton12:TO4ToolButton
+ToolButton13:TO4ToolButton
+ToolButton14:TO4ToolButton
+ToolButton15:TO4ToolButton
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAddGroup:TO4MenuItem
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+MenuItem1:TO4MenuItem
+miUp:TO4MenuItem
+miDown:TO4MenuItem

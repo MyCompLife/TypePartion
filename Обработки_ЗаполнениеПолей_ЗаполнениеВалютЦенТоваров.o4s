@@ -1,0 +1,32 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure FillCurrencyGood(Currency:ISDictionary; TypePrice:string); server;
+var MasterData : ISDictionary;
+    Count, Total : integer;
+begin
+ MasterData := CreateObject('Справочники.Товары');
+ MasterData.Select;
+ Count := 0;
+ Total := MasterData.RecordCount;
+ While MasterData.SelectNext do
+   begin
+     if not IsObjFocused(MasterData._Default[TypePrice]) then
+       begin
+         MasterData.Edit;
+         MasterData._Default[TypePrice] := Currency;
+         MasterData.Post;
+       end;
+     inc(Count);
+     if Count mod 10 = 0 then
+       SysProgress(0,Total,Count,'Заполнение валюты цены товара');
+   end; 
+ MasterData.ApplyUpdates; 
+ SysProgress(0,0,0,'');
+end;
+
+end.

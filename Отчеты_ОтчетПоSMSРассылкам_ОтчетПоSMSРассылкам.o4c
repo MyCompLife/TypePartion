@@ -1,0 +1,550 @@
+interface
+
+uses
+  System, DispIntf, ConstNames,  Расчеты, Reports,  РаботаСSMS;
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  Constants : IC4VPAConst;
+  V : ICReport;
+  DateFrom, DateTo : DateTime;
+  ReportTbl, HistoryTbl : ICValueTable;
+  SMSDoc, SMSDocBookMark : ICDocuments;
+  RunReportLock : Boolean;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  ReportTbl := CreateObject('ТаблицаЗначений');
+  HistoryTbl := CreateObject('ТаблицаЗначений');
+  ReportTbl.AddColumn('Document',vtcLink,0);
+  ReportTbl.AddColumn('Date',vtcDateTime,0);
+  ReportTbl.AddColumn('Партнер',vtcLink,0);
+  ReportTbl.AddColumn('ПолноеНазваниеПартнера',vtcString,100);
+  ReportTbl.AddColumn('НомерТелефона',vtcString,20);
+  ReportTbl.AddColumn('MessageID',vtcString,20);
+  ReportTbl.AddColumn('КодСтатусаСообщения',vtcInteger,0);
+  ReportTbl.AddColumn('СтатусСообщения',vtcString,20);
+  ReportTbl.AddColumn('КоличествоSMS',vtcFFT,0);
+  ReportTbl.AddColumn('Сумма',vtcFFT,2);
+  ReportTbl.Open;
+  ReportTbl.CopyColumnsTo(HistoryTbl);
+  HistoryTbl.Open; 
+  SMSDoc := CreateObject('Документы.SMSРассылка');
+  SMSDocBookMark := CreateObject('Документы.SMSРассылка');
+end;
+
+procedure TVSReport_VPATimedAfterScroll(Sender:TObject);
+begin
+ HistoryTbl.SetRange(ArrayOf(ReportTbl.MessageID,0),
+                     ArrayOf(ReportTbl.MessageID,400000));
+ if SMSDoc.Find(ReportTbl.Document) then
+  begin
+   if VarAsBool(SMSDoc.ИспОбщТекстСообщения,false) then
+     mTextMessage.Lines.text :=  VarAsStr(SMSDoc.ОбщТекстСообщения,'')
+   else
+   if SMSDoc.FindLineBy('MessageID',VarAsStr(ReportTbl.MessageID,'')) then
+       mTextMessage.Lines.text :=  VarAsStr(SMSDoc.ТекстСообщения,'')
+  end;
+
+end;
+
+procedure RunReport(SMSDocBookMark:ICDocuments; MessageIDBookMark:string);
+begin
+ try
+    CursorVis := WaitCursorStart;
+    ReportTbl.UseDataSource(0);
+    HistoryTbl.UseDataSource(0);
+    ReportTbl.CopyDataToServer;
+    HistoryTbl.CopyDataToServer;
+    V.RunThreadProcess(Server.GetRunReportEP(ReportTbl.SrvMean,HistoryTbl.SrvMean,DateFrom, DateTo),ReportRunning);
+    ReportTbl.CopyDataFromServer;
+    HistoryTbl.CopyDataFromServer;
+    ReportTbl.SortBy('-Date');
+    HistoryTbl.SortBy('MessageID;Date');
+    if (not IsNil(SMSDocBookMark)) and  SMSDocBookMark.IsFocused and
+       (not ReportTbl.Locate('Document;MessageID',ArrayOf(SMSDocBookMark,MessageIDBookMark))) then
+       ReportTbl.SelectFirst;
+    miSortByDate.Checked := true;
+    miSortByPartner.Checked := false;
+    miSortByTel.Checked := false;
+    miSortByStatus.Checked := false;
+    eTotalCount.Text := DecToStr(ReportTbl.Total('КоличествоSMS'));
+    eTotalSum.Text := DecToStr(ReportTbl.Total('Сумма'));
+    ReportTbl.UseDataSource(CtrlToVar(TVSReport));
+    HistoryTbl.UseDataSource(CtrlToVar(TVSHistory));
+    TVSReport_VPATimedAfterScroll(form);
+  finally
+    SetCursor(CursorVis);
+  end;  
+  if ReportTbl.Linecount>0 then
+   begin
+    tbPrint.Enabled := True;
+    tbCheckAllStatus.Enabled := True;
+    miCheckAllStatus.Enabled := True;
+   end
+  else
+   begin
+    tbCheckAllStatus.Enabled := False;
+    miCheckAllStatus.Enabled := False;
+   end;
+end; 
+
+procedure SetDatesByPeriodType(var DateFrom, DateTo : DateTime; eDateFrom, eDateTo : TO4Edit);
+var rndDatesType : TRoundDateType;
+begin 
+  rndDatesType := VarAsInt(GetOptions.GetServerPrm('DatesPeriodTypeForReports'),0);
+  DateFrom :=  RoundDate(CurrentDate,rndDatesType,false);
+  DateTo :=  RoundDate(CurrentDate,rndDatesType,true)-1;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  RunReportLock := true;
+  SetDatesByPeriodType(DateFrom, DateTo, eDateFrom, eDateTo);
+  CreateObjects;
+  RunReport(Null,'');
+  RunReportLock := false;
+end;
+
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+ V.PrintForm('ОтчетSMS',true,ArrayOf(ReportTbl,DateFrom, DateTo));
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+{$D-}
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+{$D+}
+procedure eDateFrom_Change(Sender : TObject);
+begin   
+ if RunReportLock then exit;
+  SetOneDates(Sender, DateFrom, DateTo);
+  if ReportTbl.IsFocused and VarAsBool((ReportTbl.Document.IsFocused)) then
+    RunReport(ReportTbl.Document,ReportTbl.MessageID)
+  else
+    RunReport(Null,'');
+end;
+
+procedure SetMenuDatesCL(Sender : TObject; var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+var
+  Prd : Variant;
+  Year,Month : Integer;
+begin
+  if (Sender as TO4MenuItem).Tag>18 then
+   Year := GetYear(CurrentDate)
+  else
+   Year := GetYear(DateTo);
+  Month := GetMonth(CurrentDate);
+  case (Sender as TO4MenuItem).Tag of
+    0 :
+      Prd := ArrayOf(1, 1, 6, 30); //первое полугодие
+    1 :
+      Prd := ArrayOf(1, 1, 3, 31); //первый квартал
+    2 :
+      Prd := ArrayOf(1, 1, 1, 31); //январь
+    3 :
+      begin //февраль
+        Prd := ArrayOf(2, 1, 2, 28);
+        if IsLeapYear(Year) then
+          Prd[3] := 29;
+      end;
+    4 : 
+      Prd := ArrayOf(3, 1, 3, 31); //март
+    5 : 
+      Prd := ArrayOf(4, 1, 6, 30); //второй квартал
+    6 :
+      Prd := ArrayOf(4, 1, 4, 30); //апрель
+    7 :
+      Prd := ArrayOf(5, 1, 5, 31); //май
+    8 : 
+      Prd := ArrayOf(6, 1, 6, 30); //июнь
+    9 :
+      begin //предыдущий год
+        Prd := ArrayOf(1, 1, 12, 31);
+        Year := GetYear(CurrentDate);
+        Dec(Year);
+      end;
+    10 :
+      Prd := ArrayOf(7, 1, 12, 31); //второе полугодие
+    11 :
+      Prd := ArrayOf(7, 1, 9, 30); //третий квартал
+    12 :
+      Prd := ArrayOf(7, 1, 7, 31); //июль
+    13 :
+      Prd := ArrayOf(8, 1, 8, 31); //август
+    14 :
+      Prd := ArrayOf(9, 1, 9, 30); //сентябрь
+    15 :
+      Prd := ArrayOf(10, 1, 12, 31); //четвертый квартал
+    16 :
+      Prd := ArrayOf(10, 1, 10, 31); //октябрь
+    17 : 
+      Prd := ArrayOf(11, 1, 11, 30); //ноябрь
+    18 :
+      Prd := ArrayOf(12, 1, 12, 31); //декабрь
+    19:
+      Prd := ArrayOf(Month, GetDay(CurrentDate), Month, GetDay(CurrentDate)); // текущий день
+    20: begin                         // текущий месяц
+         Prd := ArrayOf(Month, 1, Month, 31);
+         case Month of
+          1,3,5,7,8,10,12 : Prd[3] := 31;
+                 4,6,9,11 : Prd[3] := 30;
+                        2 : if IsLeapYear(Year) then Prd[3] := 29 else Prd[3] := 28;
+         end;
+        end;
+    21: case Month of  // текущий квартал
+         1,2,3    : Prd := ArrayOf(1, 1, 3, 31);
+         4,5,6    : Prd := ArrayOf(4, 1, 6, 30);
+         7,8,9    : Prd := ArrayOf(7, 1, 9, 30);
+         10,11,12 : Prd := ArrayOf(10, 1, 12, 31);
+        end;
+    22:  Prd := ArrayOf(1, 1, 12, 31); //текущий год (весь, 22)
+    //23:   // предыдущий день
+    24: begin  // предыдущий месяц
+          if month>1 then
+           dec(Month)
+          else
+           begin
+            Dec(Year);
+            Month:=12;
+           end;
+          Prd := ArrayOf(Month, 1, Month, 31);
+          case Month of
+           1,3,5,7,8,10,12 : Prd[3] := 31;
+                  4,6,9,11 : Prd[3] := 30;
+                         2 : if IsLeapYear(Year) then Prd[3] := 29 else Prd[3] := 28;
+          end;
+        end;
+     25: case Month of  // текущий квартал
+          1,2,3    : begin   
+                      Dec(Year);
+                      Prd := ArrayOf(10, 1, 12, 31);
+                     end;
+          4,5,6    : Prd := ArrayOf(1, 1, 3, 31);
+          7,8,9    : Prd := ArrayOf(4, 1, 6, 30);
+          10,11,12 : Prd := ArrayOf(7, 1, 9, 30);
+        end;
+  end;
+  if (Sender as TO4MenuItem).Tag = 23 then
+   begin
+    DateFrom := CurrentDate-1;
+    DateTo := CurrentDate-1;
+   end
+  else
+   begin
+    DateFrom := EncodeDate(Year, Prd[0], Prd[1]);
+    DateTo := EncodeDate(Year, Prd[2], Prd[3]);
+   end;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  RunReportLock := true;
+  SetMenuDatesCL(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;  
+  RunReportLock := false;
+ if ReportTbl.IsFocused and VarAsBool((ReportTbl.Document.IsFocused)) then
+    RunReport(ReportTbl.Document,ReportTbl.MessageID)
+  else
+    RunReport(Null,'');
+end;
+
+
+procedure dbgReport_DblClick(Sender: TObject);
+begin
+ if (ReportTbl.IsFocused) and (SMSDoc.Find(ReportTbl.Document)) then
+   SMSDoc.EditInForm('SMSРассылка',3);
+end;
+
+{$D-}
+procedure dbgReport_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if not ReportTbl.IsFocused then
+    exit;
+  if (VarAsInt(ReportTbl.КодСтатусаСообщения,-1) = 0) or
+     (VarAsInt(ReportTbl.КодСтатусаСообщения,-1) = 1) or
+     (VarAsInt(ReportTbl.КодСтатусаСообщения,-1) = 2)  then
+    Index1 := 117
+  else
+  if (VarAsInt(ReportTbl.КодСтатусаСообщения,-1) = 3) or
+     (VarAsInt(ReportTbl.КодСтатусаСообщения,-1) = 50) or
+     (VarAsInt(ReportTbl.КодСтатусаСообщения,-1) = 10)  then
+    Index1 := 52
+  else
+    Index1 := 125;
+end;
+
+
+procedure dbgHistorySMS_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if not HistoryTbl.IsFocused then
+    exit;
+  if (VarAsInt(HistoryTbl.КодСтатусаСообщения,-1) = 0) or
+     (VarAsInt(HistoryTbl.КодСтатусаСообщения,-1) = 1) or
+     (VarAsInt(HistoryTbl.КодСтатусаСообщения,-1) = 2)  then
+    Index1 := 117
+  else
+  if (VarAsInt(HistoryTbl.КодСтатусаСообщения,-1) = 3) or
+     (VarAsInt(HistoryTbl.КодСтатусаСообщения,-1) = 50) or
+     (VarAsInt(HistoryTbl.КодСтатусаСообщения,-1) = 10)  then
+    Index1 := 52
+  else
+    Index1 := 125;
+end;
+{$D+}
+
+procedure miSortBy_Click(Sender: TObject);
+begin
+ miSortByDate.Checked := false;
+ miSortByPartner.Checked := false;
+ miSortByTel.Checked := false;
+ miSortByStatus.Checked := false;
+ with Sender as TO4MenuItem do
+   case Tag of
+    0: begin
+         miSortByDate.Checked := true;
+         ReportTbl.SortBy('-Date');
+       end;
+    1: begin
+         miSortByPartner.Checked := true;
+         ReportTbl.SortBy('Партнер;-Date');
+       end;
+    2: begin
+         miSortByTel.Checked := true;
+         ReportTbl.SortBy('НомерТелефона;-Date');
+       end;
+    3: begin
+         miSortByStatus.Checked := true;
+         ReportTbl.SortBy('СтатусСообщения;-Date');
+       end;
+   end;
+end;
+
+procedure tbHideDetPanel_Click(Sender: TObject);
+begin
+ if pDetal.Visible then
+  begin
+    pDetal.Visible := false;
+    SplitterDet.Visible := false;
+    tbHideDetPanel.ImageIndex := 0;
+    tbHideDetPanel.Caption := 'Показать детализацию';
+  end
+ else
+  begin
+    pDetal.Visible := true;
+    SplitterDet.Visible := true;
+    tbHideDetPanel.ImageIndex := 1;
+    tbHideDetPanel.Caption := 'Спрятать детализацию';
+  end;
+end;     
+
+procedure SaveDatesPeriodType(var DateFrom, DateTo : DateTime);
+begin
+ if (RoundDate(DateFrom,rdDay,false)=RoundDate(CurrentDate,rdDay,false)) and
+    (RoundDate(DateTo,rdDay,false)=RoundDate(CurrentDate,rdDay,false)) then
+      GetOptions.SetServerPrm('DatesPeriodTypeForReports',rdDay)
+ else
+ if (RoundDate(DateFrom,rdDay,false)=RoundDate(CurrentDate,rdMonth,false)) and
+    (RoundDate(DateTo,rdDay,false)=RoundDate(CurrentDate,rdMonth,true)-1) then
+      GetOptions.SetServerPrm('DatesPeriodTypeForReports',rdMonth)
+ else
+ if (RoundDate(DateFrom,rdDay,false)=RoundDate(CurrentDate,rdQuarter,false)) and
+    (RoundDate(DateTo,rdDay,false)=RoundDate(CurrentDate,rdQuarter,true)-1) then
+      GetOptions.SetServerPrm('DatesPeriodTypeForReports',rdQuarter)
+ else
+ if (RoundDate(DateFrom,rdDay,false)=RoundDate(CurrentDate,rdYear,false)) and
+    (RoundDate(DateTo,rdDay,false)=RoundDate(CurrentDate,rdYear,true)-1) then
+      GetOptions.SetServerPrm('DatesPeriodTypeForReports',rdYear);
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+ SaveDatesPeriodType(DateFrom, DateTo);
+end;
+
+procedure tbCheckAllStatus_Click(Sender: TObject);
+var  GoodSMSCount:integer;
+     ProgressBar:TO4ProgressBar; 
+     BookMarkSaved : boolean;
+begin
+if MessageDlg('Вы действительно хотите проверить статус всех SMS-сообщений?',mtInformation,ArrayOf(mbYes,mbNo))=mrYes then
+  try
+    CursorVis := WaitCursorStart;
+    TVSReport.AfterScrollLock := true;
+    BookMarkSaved := SMSDocBookMark.Find(ReportTbl.Document);
+    SMSDocBookMark.FindLineBy('MessageID',ReportTbl.MessageID);
+    ReportTbl.Select;
+    While ReportTbl.SelectNext do
+     if (ReportTbl.КодСтатусаСообщения<>3) and (ReportTbl.КодСтатусаСообщения<>10) and (ReportTbl.КодСтатусаСообщения<>50) and
+        SMSDoc.Find(ReportTbl.Document) and (SMSDoc.FindLineBy('MessageID',ReportTbl.MessageID)) then
+      begin
+       if(SMSDoc.КодСтатусаСообщения<>3) and (SMSDoc.КодСтатусаСообщения<>50) and (SMSDoc.КодСтатусаСообщения<>10)then
+        begin
+         CheckStatusSMSDocument(SMSDoc, GoodSMSCount, ProgressBar);
+         SMSDoc.FindLineBy('MessageID',ReportTbl.MessageID)
+        end;
+       ReportTbl.Edit;
+       ReportTbl.КодСтатусаСообщения := SMSDoc.КодСтатусаСообщения;
+       ReportTbl.СтатусСообщения := SMSDoc.СтатусСообщения;
+       ReportTbl.Post; 
+      end;
+    TVSReport.AfterScrollLock := false;
+  finally
+    SetCursor(CursorVis); 
+    if BookMarkSaved then
+      RunReport(SMSDocBookMark,SMSDocBookMark.MessageID)
+    else
+      RunReport(Null,'');
+  end;
+end;
+
+procedure miAddByTemplate_Click(Sender: TObject);
+var P : ICProcessing; 
+    TextMessage : string;
+begin
+ if ReportTbl.IsFocused then
+  begin
+   if SMSDoc.Find(ReportTbl.Document) then
+    begin
+     if VarAsBool(SMSDoc.ИспОбщТекстСообщения,false) then
+       TextMessage :=  VarAsStr(SMSDoc.ОбщТекстСообщения,'')
+     else
+     if SMSDoc.FindLineBy('MessageID',VarAsStr(ReportTbl.MessageID,'')) then
+         TextMessage :=  VarAsStr(SMSDoc.ТекстСообщения,'');
+     P := CreateObject('Обработки.РаботаСSMS');
+     P.Execute('ОтправкаSMSСообщения',ArrayOf(ReportTbl.Партнер,ReportTbl.НомерТелефона,TextMessage,SMSDoc.Комментарий));
+     if P.HasParam('SMSDoc') and VarAsBool((P.Params['SMSDoc'].IsFocused)) and
+        P.HasParam('MessageID') and (VarAsStr(P.Params['MessageID'])<>'') then
+      RunReport(P.Params['SMSDoc'],P.Params['MessageID'])
+     else
+      RunReport(Null,P.Params['MessageID']);
+    end;
+  end;
+end;
+
+procedure miCheckStatus_Click(Sender: TObject);       
+var  GoodSMSCount:integer;
+     ProgressBar:TO4ProgressBar;
+begin
+ try
+   CursorVis := WaitCursorStart;
+    if (ReportTbl.КодСтатусаСообщения<>3) and (ReportTbl.КодСтатусаСообщения<>10) and (ReportTbl.КодСтатусаСообщения<>50) and
+       SMSDoc.Find(ReportTbl.Document) and (SMSDoc.FindLineBy('MessageID',ReportTbl.MessageID)) then
+     begin
+      if(SMSDoc.КодСтатусаСообщения<>3) and (SMSDoc.КодСтатусаСообщения<>50) and (SMSDoc.КодСтатусаСообщения<>10)then
+       begin
+        CheckStatusSMSDocument(SMSDoc, GoodSMSCount, ProgressBar);
+        SMSDoc.FindLineBy('MessageID',ReportTbl.MessageID)
+       end;
+      ReportTbl.Edit;
+      ReportTbl.КодСтатусаСообщения := SMSDoc.КодСтатусаСообщения;
+      ReportTbl.СтатусСообщения := SMSDoc.СтатусСообщения;
+      ReportTbl.Post;
+     end;
+ finally
+   SetCursor(CursorVis);  
+   dbgReport.Refresh;
+ end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+SplitterDet:TO4Splitter
+Label3:TO4Label
+pDetal:TO4Panel
+Panel1:TO4Panel
+Label2:TO4Label
+dbgHistorySMS:TO4DBGrid
+Panel2:TO4Panel
+Label5:TO4Label
+mTextMessage:TO4Memo
+pTop:TO4Panel
+ToolBarMain:TO4ToolBar
+tbCheckAllStatus:TO4ToolButton
+tbParams:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton4:TO4ToolButton
+Panel8:TO4Panel
+Label1:TO4Label
+Label4:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+ToolBarHide:TO4ToolBar
+tbHideDetPanel:TO4ToolButton
+pMain:TO4Panel
+dbgReport:TO4DBGrid
+Panel3:TO4Panel
+Panel4:TO4Panel
+Label7:TO4Label
+Label6:TO4Label
+eTotalSum:TO4Edit
+eTotalCount:TO4Edit
+TVSReport:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastDay:TO4MenuItem
+miLastMonth:TO4MenuItem
+miLastQuartal:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisDay:TO4MenuItem
+miThisMonth:TO4MenuItem
+miThisQuartal:TO4MenuItem
+miThisYear:TO4MenuItem
+TVSHistory:TO4TableValueSource
+pmReport:TO4PopupMenu
+miAddByTemplate:TO4MenuItem
+miViewDoc:TO4MenuItem
+miCheckStatus:TO4MenuItem
+miSort:TO4MenuItem
+miSortByDate:TO4MenuItem
+miSortByPartner:TO4MenuItem
+miSortByTel:TO4MenuItem
+miSortByStatus:TO4MenuItem
+tbCheckStatus:TO4ToolButton
+miCheckAllStatus:TO4MenuItem

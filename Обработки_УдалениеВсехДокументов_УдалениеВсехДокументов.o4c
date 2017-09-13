@@ -1,0 +1,78 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation    
+
+var MasterProc : ICProcessing;
+    OnDate : DateTime;
+    Empl : ICDictionary;
+    LogList : ICValueList;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+  edDate.Text := DateToStr(CurrentDate);    
+  Empl := CreateObject('Справочники.Служащие');
+  if Empl.FindByField('ПолноеНазвание', GetUserName, False) then
+   edEmpl.Text := Empl.ПолноеНазвание
+  else
+    Nil(Empl); 
+  LogList := CreateObject('СписокЗначений');
+end;
+
+procedure btOK_Click(Sender: TObject);  
+var P:ICProcessing;
+begin
+ OnDate := StrToDateDef(edDate.Text,0);
+ if not IsObjFocused(Empl) then
+  ShowMessage('Укажите ответсвенного для документов ввода остатков!')
+ else
+ if OnDate=0 then
+   ShowMessage('Дата введена неверно!')
+ else
+ if MessageDlg('Удалить все документы до даты '+edDate.Text+' ?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+   begin    
+     Empl.SetSrvToClientPos; 
+     LogList.CopyDataToServer;
+     if MasterProc.RunThreadProcess(server.ClearAllDocsEP(OnDate, Empl.SrvMean, LogList.SrvMean),'Удаление документов') then
+       begin
+         LogList.CopyDataFromServer;
+         P := CreateObject('Обработки.Диалоги');
+         P.Execute('ПросмотрЛога',ArrayOf(LogList.ComaStr[#13],'c:\Log.txt'));
+       end
+     else
+       ShowMessage('Процесс прерван пользователем либо произошла ошибка!');
+   end;
+end;
+
+procedure edEmpl_ActionClear(Sender: TObject);
+begin
+ Nil(Empl);
+ edEmpl.Text := '';
+end;
+
+procedure edEmpl_ActionExecute(Sender: TObject);    
+var DefName : string;
+    SelEmpl : ICDictionary;
+begin
+ SelEmpl := CreateObject('Справочники.Служащие');
+ if SelEmpl.SelectInForm('',DefName,Null) then
+   begin
+     if IsNil(Empl) then
+       Empl := CreateObject('Справочники.Служащие');
+     if Empl.Find(SelEmpl) then
+       edEmpl.Text := DefName;
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+edDate:TO4Edit
+btOK:TO4Button
+btCancel:TO4Button
+edEmpl:TO4Edit

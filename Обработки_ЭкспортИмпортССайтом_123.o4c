@@ -1,0 +1,447 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, Расчеты, ConstNames, Reports, XMLИмпортЭкспорт;
+
+const
+  procnmXMLNewNodeRead = 'XMLNewNodeRead';
+  XMLDOMDocumentOleName = 'Msxml2.DOMDocument.4.0';
+  XMLSchemaCacheOleName = 'Msxml2.XMLSchemaCache.4.0';
+  NilXMLAttr = 'xsi:nil';
+  TrueXMLValue = 'true';
+  XmlFileExt = '.xml';
+  XsdFileExt = '.xsd';
+  XmlWord = 'xml';
+  XmlVersionCode1251 = 'version="1.0" encoding="UTF-8"';
+implementation
+
+var
+  Options : ICOptions;
+  Сonstants: IC4VPAConst;
+  CursorVis : TCursor;
+  Stores, GoodList : ICValueList;
+  CurDic, S, UrPartner, ManPartner, Partner, Store, GoodDict, GoodCtg : ICDictionary;
+  GoodsTbl, StoreTbl, CtgTbl : ICValueTable;
+  V: ICReport;
+  IsDate : DateTime;
+  DataDir: String;
+  Cursor: TCursor;
+  ErrorList : TStringList;
+  DateBeg, DateEnd : DateTime;
+
+procedure GetStore(Stores: ICValueList; var Store: ICDictionary);
+begin
+  if Stores.ValidIndex(Stores.CurIndex) then
+    Store := Stores.GetValue(Stores.CurIndex)
+  else Nil(Store);
+end;
+
+function GetFileName: String;
+Var
+  FileDir: String;
+begin
+  if VarAsBool(Store.IsFocused) and (IsDate <> 0) then
+    begin
+      FileDir :=  VarAsStr(Options.GetServerPrm('WayForXMLFile'));
+      if FileDir = '' then
+        FileDir := 'C:\';
+      Result := FileDir + VarAsStr(IsDate) + '_остатки.xml';
+    end
+  else
+    Result := '';
+end;
+
+function CheckDataDir: Boolean;
+begin
+  Cursor := WaitCursorStart;
+  DataDir := edFilePath.Text;
+  if DataDir[StrLength(DataDir)]<>'\' then DataDir := DataDir + '\';
+  edFilePath.Font.Color := clWindowText;
+  WaitCursorFinish(Cursor);
+end;
+
+procedure btnBrowse_Click(Sender : TObject);
+begin
+  with SAVEDIALOG do begin
+    Filter := '*.xml|*.xml';
+    FileName := '*.xml';
+    Title := Trans('Определите путь к xml-файлу');
+    if Execute then begin
+      edFilePath.Text := FileName;
+    end;
+  end;
+  if edFilePath.Text = '' then btnStart.Enabled := false
+    else  btnStart.Enabled := true;
+end;
+
+
+procedure SetGoodsTblColumns(GoodsTbl : ICValueTable; DoOpen : boolean = true);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn('Код', lftString, 20);
+  GoodsTbl.AddColumn('Товар', lftLink, 0);
+  GoodsTbl.AddColumn('ЕдИзм', lftLink, 0);
+  GoodsTbl.AddColumn('Количество', vtcFft, 7);
+  GoodsTbl.AddColumn('Цена', lftFft, 7);
+  GoodsTbl.AddColumn('ЦенаОпт', lftFft, 7);
+  GoodsTbl.AddColumn('Сумма', lftFft, 7);
+  GoodsTbl.AddColumn('Партия', lftFloat, 0);
+  GoodsTbl.AddColumn('НазвТовара', lftString, 100);
+  GoodsTbl.AddColumn('КодКатегории', lftString, 20);
+  GoodsTbl.AddColumn('Категория', lftLink, 0);
+  GoodsTbl.AddColumn('НазвКатегория', lftString, 150);
+  GoodsTbl.AddColumn('МинКолНаСайт', vtcFft, 7);
+  GoodsTbl.AddColumn('Информация', lftString, 255);
+  GoodsTbl.AddColumn('Новый', lftInteger, 0);
+  if DoOpen then GoodsTbl.Open();
+end;
+
+procedure CreateObjects;
+var
+  CtgsStr, OptStores: String;
+  OutPrm: Variant;  
+  i: Integer;
+begin
+  Сonstants := GetConstants;
+  Options := GetOptions;
+  Stores := CreateObject('СписокЗначений');
+  Store := CreateObject('Справочники.Склады');
+  S := CreateObject('Справочники.Склады');
+  S.Select;
+  if S.FindByField('Активность', True, False) then
+    Stores.AddValue(S.Название,S);
+  S.Select;
+  while S.SelectNext do
+    if not S.Активность = True then
+      Stores.AddValue(S.Название,S); // или ('',S)
+  Stores.UseControl(CtrlToVar(eStores));
+  Stores.CurIndex := 0;
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  SetGoodsTblColumns(GoodsTbl,False);
+  GoodsTbl.Open;
+  SetGoodsTblColumnsFormat(GoodsTbl);
+  StoreTbl := CreateObject('ТаблицаЗначений');
+  StoreTbl.AddColumn('Склад',vtcLink,0);
+  StoreTbl.AddColumn('Код',vtcString,10);
+  StoreTbl.Open();
+  OptStores := Options.GetServerPrm('OptStores');
+  for i := 1 to WordCount(OptStores, ';') do
+    begin
+      if S.FindByCode(ExtractWord(i,OptStores,';'), false) then
+        begin
+          StoreTbl.Append;
+          StoreTbl.Склад := S;
+          StoreTbl.Post;
+        end;
+    end;
+  StoreTbl.DoGetLinks('Код=Склад.Код');
+  StoreTbl.SortBy('Склад');
+  StoreTbl.UseDataSource(CtrlToVar(TVS));
+  CtgTbl := CreateObject('ТаблицаЗначений');
+  CtgTbl.AddColumn('Code',vtcString,20);
+  CtgTbl.AddColumn('Parent',vtcString,20);
+  CtgTbl.AddColumn('Name',vtcString,150);
+  CtgTbl.AddColumn('ValueStrID', lftString, 150);
+  CtgTbl.Open;
+
+  GoodCtg := CreateObject('Справочники.Товары');
+  GoodCtg.IncludeOnlyLevels(true);
+  CtgsStr := Options.GetServerPrm('КатегорииДляЭкспорта');
+  GoodCtg.Params['CtgListID'] := CtgsStr;
+  GoodCtg.OpenFormInplace('КатегорииТоваровДляЭкспорта',CtrlToVar(pnTree));
+  GoodCtg.ExecProc(CtgTbl, '', Null, OutPrm);
+
+  UrPartner := CreateObject('Справочники.ЮрПартнеры');
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  CurDic  := CreateObject('Справочники.Валюты');
+
+ //категории
+  GoodDict := CreateObject('Справочники.Товары');
+  GoodList := CreateObject('СписокЗначений');
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  CreateObjects;
+  Server.CreateSrvObjects;
+  eDate.Text := DateToStr(CurrentDate);
+  eCnt.Text := VarAsStr(Options.GetServerPrm('ОграничениеПоКоличестуДляЭкспорта'));
+  IsDate := StrToDate(eDate.text);
+  GetStore(Stores, Store);
+  edFilePath.Text := GetFileName;
+  dpDates.PeriodIndex := 1;
+  DateEnd := CurrentDate;
+  DateBeg := dpDates.DateFrom;
+end;
+
+function ReplaceOneStrWithAnother(Source, StrFrom, StrTo : string) : string;
+var
+  Pos : Integer;
+begin
+  if StrFrom = StrTo then
+    begin
+      Result := Source;
+      exit;
+    end;
+  Result := '';
+  Pos := StrPos(StrFrom, Source);
+  while Pos <> 0 do
+    begin
+      Result := Result + StrCopy(Source, 1, Pos - 1) + StrTo;
+      Source := StrCopy(Source, Pos + StrLength(StrFrom), StrLength(Source)); // сэконмлен подсчет третьего параметра - заведомо большее число
+      Pos := StrPos(StrFrom, Source);
+    end;
+  Result := Result + Source; // остаток
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  dlgError: ICProcessing;
+  nErr, i : Integer;
+  CtgDic : ICDictionary;
+  ObjXML, Root, УзелТоваров, УзелПоля, pi : OLEVariant;
+  ИмяПоля, FieldsStr, CtgsStr : String;
+  AccsGood: ICAccs;
+  tblTemp: ICValueTable;
+begin
+  try
+    GoodCtg.GetCheckLevelsAsValueList(GoodList);
+    CursorVis := WaitCursorStart;       
+    StoreTbl.GroupToList('Склад',Stores);
+    //GetStore(Stores, Store);
+    server.FileNamesDoc(edFilePath.text);
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer;
+    StoreTbl.DisableControls;
+    StoreTbl.CopyDataToServer;
+    CtgTbl.Clear;
+    CtgTbl.CopyDataToServer;
+
+    GoodDict.AssignSelectParamsOnSrv(Null);
+    GoodList.CopyDataToServer;
+    V.RunThreadProcess(Server.GetRunReportEP(GoodsTbl.SrvMean, StoreTbl.SrvMean, CtgTbl.SrvMean, GoodList.SrvMean,
+                              Partner, Store, VarAsBool(Options.GetServerPrm(ShowCodeUnitName)),
+                              GoodDict.Params['UseLevel'], GoodDict.SrvMean,
+                              IsDate,VarAsDec(eCnt.Text)), 'Экспорт остатков');
+    GoodList.CopyDataFromServer;  
+    StoreTbl.CopyDataFromServer;
+    GoodsTbl.CopyDataFromServer;
+    CtgTbl.CopyDataFromServer;
+
+    DateEnd := RoundDate(dpDates.DateTo, rdDay, true);
+    DateBeg := RoundDate(dpDates.DateFrom,rdDay, false);
+
+    tblTemp := CreateObject('ValueTable');
+    tblTemp.AddColumn('Товар',vtcLink,0);
+    tblTemp.AddColumn('Тип',vtcInteger,0);
+    tblTemp.AddColumn('Document',vtcLink,0);
+    tblTemp.AddColumn('DocSign',vtcString,50);
+    tblTemp.Open;
+    AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+    AccsGood.AppendGroupMotionToValueTable(DateBeg, DateEnd, amtIncome, 'Document;Товар;Тип', -1, tblTemp);
+
+    tblTemp.select;
+    while tblTemp.SelectNext do
+      begin
+        tblTemp.Edit;
+        tblTemp.DocSign := tblTemp.Document.GetSign;
+        tblTemp.Post;
+      end;
+
+    tblTemp.GroupBy('DocSign;Товар;Тип','');
+
+    tblTemp.SortBy('DocSign;Тип');
+    tblTemp.SetRange(ArrayOf('НакладнаяПрихода',1),ArrayOf('НакладнаяПрихода',1));
+    tblTemp.Select;
+
+    ErrorList := CreateStringList;
+    nErr := 0;
+
+    GoodsTbl.DoCalculation('Новый','0');
+    GoodsTbl.SortBy('Товар;Код');
+    while tblTemp.SelectNext do
+      if GoodsTbl.Find(tblTemp.Товар) then
+        begin
+          GoodsTbl.Edit;
+          GoodsTbl.Новый := 1;
+          GoodsTbl.Post;
+        end;
+
+    FieldsStr := 'НазвТовара;Код;Цена;ЦенаОпт;КодКатегории;НазвКатегория;Информация;Количество;Новый';
+
+    // ---------------------------------Экспорт в XML------------------------------------
+    ObjXML := CreateDOMDocument;
+    pi := ObjXML.createProcessingInstruction(XmlWord, XmlVersionCode1251);
+    ObjXML.AppendChild(pi);
+    // корневой узел
+    Root := ObjXML.CreateElement('Корневой');
+    ObjXML.AppendChild(Root);
+
+    GoodsTbl.Select;
+    while GoodsTbl.SelectNext do
+      begin
+        УзелТоваров := ObjXML.CreateElement('Товар');
+        Root.AppendChild(УзелТоваров);
+        for i := 1 to WordCount(FieldsStr, ';') do
+          begin
+            ИмяПоля := ExtractWord(i, FieldsStr, ';');
+            УзелПоля := ObjXML.CreateElement(ИмяПоля);
+            УзелТоваров.AppendChild(УзелПоля);
+            if GoodsTbl.GetColumnDataType(GoodsTbl.GetColumnIndex(ИмяПоля)) = 0 then
+              УзелПоля.AppendChild(ObjXML.createTextNode(ReplaceOneStrWithAnother(GoodsTbl._Default[ИмяПоля],'Р','P')))
+            else
+              УзелПоля.AppendChild(ObjXML.createTextNode(VarAsStr(GoodsTbl._Default[ИмяПоля])));
+          end;
+      end;
+    FieldsStr := 'Code;Name;Parent';
+    CtgTbl.SortBy('Name');
+    CtgTbl.Select;
+    while CtgTbl.SelectNext do
+      begin
+        УзелТоваров := ObjXML.CreateElement('Cat');
+        Root.AppendChild(УзелТоваров);
+        for i := 1 to WordCount(FieldsStr, ';') do
+          begin
+            ИмяПоля := ExtractWord(i, FieldsStr, ';');
+            УзелПоля := ObjXML.CreateElement(ИмяПоля);
+            УзелТоваров.AppendChild(УзелПоля);
+            if CtgTbl.GetColumnDataType(CtgTbl.GetColumnIndex(ИмяПоля)) = 0 then
+              УзелПоля.AppendChild(ObjXML.createTextNode(ReplaceOneStrWithAnother(CtgTbl._Default[ИмяПоля],'Р','P')))
+            else
+              УзелПоля.AppendChild(ObjXML.createTextNode(VarAsStr(CtgTbl._Default[ИмяПоля])));
+          end;
+      end;
+    ObjXML.Save(edFilePath.Text);
+    //----------------------------------------------------------------------------------------
+    Options.SetServerPrm('WayForXMLFile',ExtractFilePath(edFilePath.Text));
+    Options.SetServerPrm('ОграничениеПоКоличестуДляЭкспорта',eCnt.Text);
+    if CtgTbl.LineCount > 0 then
+    begin
+      CtgTbl.Select;
+      while CtgTbl.SelectNext do
+        CtgsStr := CtgsStr + CtgTbl.ValueStrID + '|';
+      Options.SetServerPrm('КатегорииДляЭкспорта',CtgsStr);
+    end;
+    ShowMessage('Экспорт завершен.');
+  finally             
+    StoreTbl.EnableControls;
+    SetCursor(CursorVis);
+  end;
+end;
+
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  IsDate := StrToDate(eDate.text);
+end;
+
+procedure eStores_ComboClick(Sender: TObject);
+begin
+  GetStore(Stores, Store);
+  edFilePath.Text := GetFileName;
+end;
+
+procedure Form_Close(Sender: TObject); 
+var
+  OptStores: String;        
+  i: integer;
+begin
+  OptStores := '';   
+  StoreTbl.Select;
+  while StoreTbl.SelectNext do
+    OptStores := OptStores + StoreTbl.Код + ';';
+  if StrLength(OptStores) > 1 then
+    StrDelete(OptStores,StrLength(OptStores), 1);
+  Options.SetServerPrm('OptStores',OptStores);
+end;
+
+procedure tbAdd_Click(Sender: TObject);
+var
+  DefName: String;
+begin
+  StoreTbl.SortBy('Склад');
+  if Store.SelectInForm('ВыборСкладаДляЭкспорта',DefName,Null) then
+    if not StoreTbl.Find(Store) then
+      begin
+        StoreTbl.DisableControls;
+        StoreTbl.Append;
+        StoreTbl.Склад := Store;
+        StoreTbl.Код := Store.Код;
+        StoreTbl.Post;
+        StoreTbl.EnableControls;
+      end;
+end;
+
+procedure tbDel_Click(Sender: TObject);
+begin
+  if VarAsBool(GetOptions.GetServerPrm(DelAck)) then
+    begin
+      if MessageDlg(Trans('Удалить склад?'), mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes then
+        StoreTbl.Delete;
+    end
+  else
+    StoreTbl.Delete;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btnClose:TO4Button
+btnStart:TO4Button
+pnTree:TO4Panel
+Panel2:TO4Panel
+GroupBox2:TO4GroupBox
+lDateFrom:TO4Label
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+eStores:TO4Edit
+eDate:TO4Edit
+eCnt:TO4Edit
+dpDates:TO4DatePeriod
+gbxFilePath:TO4GroupBox
+Label4:TO4Label
+edFilePath:TO4Edit
+btnBrowse:TO4Button
+Panel1:TO4Panel
+DBGrid1:TO4DBGrid
+Panel9:TO4Panel
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbDel:TO4ToolButton
+TVS:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+SaveDialog:TO4SaveDialog

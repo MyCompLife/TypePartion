@@ -1,0 +1,28 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+Var
+  PaysIn, PaysOut : ISJournal; 
+  AccsPart: ISAccs;
+  Currency: ISDictionary;
+
+implementation
+
+procedure InitSrvDate;server;
+begin
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  Currency := CreateObject('Справочники.Валюты');
+  if not Currency.FindByField('Активность', VarAsInt(true), false) then
+    begin
+      Currency.Select;
+      Currency.SelectNext;
+    end;
+end;
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := Data.Total('СуммаВал');
+end;
+
+end.

@@ -1,0 +1,74 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+  
+
+procedure GetGroupsTbl(TblGroups : IsValueTable; MasterGroup : Variant; PageHauseCount : Integer; ImagePath : String); server;
+var
+  TempTbl : ISValueTable;
+  DicGroup, GoodsDic, DicChieldGroup : ISDictionary;  
+  isDelete : Boolean;
+begin
+  TblGroups.Clear;
+  TempTbl := CreateObject('ValueTable');
+  TempTbl.Open;
+  GoodsDic := CreateObject('Справочники.ВессовойТовар');
+  DicGroup := CreateObject('Справочники.ГруппыВесовогоТовара');
+  DicChieldGroup := CreateObject('Справочники.ГруппыВесовогоТовара');
+  if IsObjFocused(MasterGroup) then
+    begin
+      DicGroup.UseMaster(MasterGroup);
+    end
+  else
+    DicGroup.SetFieldFilter('Тип','=',0,'','',Null);
+
+  DicGroup.Select;
+  DicGroup.SaveToValueTable('',TempTbl, 0, DicGroup.RecordCount);
+  TempTbl.SelectFirst;
+  While not TempTbl.Eof do
+    begin
+      If VarAsBool(TempTbl.self.НаличиеПодгрупы) then
+        begin
+          DicChieldGroup.UseMasterAndSelect(TempTbl.self);
+          isDelete := DicChieldGroup.RecordCount=0;
+        end
+      else
+        begin
+          GoodsDic.UseMasterAndSelect(TempTbl.self);
+          isDelete := GoodsDic.RecordCount=0;
+        end;
+      if isDelete then
+        TempTbl.Delete
+      else
+        TempTbl.SelectNext;
+    end;
+  TempTbl.AppendTo('Self=Группа;НомПозиции=Номер;Код',TblGroups);
+  TblGroups.DoGetLinks('Название=Группа.Название;Фото=Группа.Фото');
+  TblGroups.DoCalculation('ПутьФото',''''+ImagePath+'''+Код+'+'''.jpg''');
+
+  TblGroups.UpdateObjNames;
+end;
+
+
+procedure GetGoodsTbl(TblGoods : IsValueTable; GroupDic : IsDictionary;  ImagePath, ImageName : String);server;
+Var
+  GoodsDic : IsDictionary;
+  TempTbl : ISValueTable;
+begin
+  TempTbl := CreateObject('ValueTable');
+  TempTbl.Open;
+  GoodsDic := CreateObject('Справочники.ВессовойТовар');
+  GoodsDic.UseMasterAndSelect(GroupDic);
+  GoodsDic.SaveToValueTable('',TempTbl, 0, GoodsDic.RecordCount);
+  TempTbl.AppendTo('Товар;НомПозиции=Номер;Код;Фото;ДатаФото',TblGoods);
+  TblGoods.DoGetLinks('Название=Товар.НазвТовара;Цена=Товар.Цена');
+  TblGoods.DoCalculation('ПутьФото',''''+ImagePath+'''+Код+ДатаФото+'+'''.jpg''');
+  TblGoods.DoCalculation('НазвФотоФильтр',''''+ImageName+'''+Код+'+'''*.jpg''');
+end;
+
+
+
+end.

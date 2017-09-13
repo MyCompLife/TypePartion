@@ -1,0 +1,21 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation  
+
+var Tbl: ICValueTable;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  Tbl := Params;
+  Tbl.SetColumnFormat('Количество','0.#####');
+  Tbl.SetColumnFormat('Цена','0.00#####');
+  Tbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+dbgData:TO4DBGrid
+TVS:TO4TableValueSource

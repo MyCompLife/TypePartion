@@ -1,0 +1,148 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+var
+  MasterData, DetWeigtGoods : ICDictionary;
+  ChangeLock : Boolean;
+  Owner : IcDictionary;
+
+function GetCode(Article : Integer): String;
+var
+  i : integer;
+  BarCode: String;
+begin
+  BarCode := IntToStr(Article);
+  i := 4;
+  while StrLength(BarCode) < i do
+    begin
+      BarCode := '0' + BarCode;
+    end;
+  Result := BarCode;
+end;
+
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_Append(Sender: TObject);
+Var
+  OwnerDic : Variant;
+begin
+ if MasterData.HasParam('Type') then
+   MasterData.Тип := VarAsInt(MasterData.Params['Type']);
+ if MasterData.HasParam('Owner') and IsObjFocused(MasterData.Params['Owner']) then
+   MasterData.SetMaster(MasterData.Params['Owner']);
+ if IsObjFocused(MasterData._GetOwner) then
+   OwnerDic := MasterData._GetOwner
+ else
+   OwnerDic := Null;
+
+
+ MasterData.НомПозиции := Server.GetNextNumberForSort(OwnerDic);
+ MasterData.Артикул := GetNextNumberForField('Справочники.ГруппыВесовогоТовара', 'Артикул', false, '');
+ MasterData.Код := GetCode(MasterData.Артикул);
+
+end;
+
+procedure MDS_Validate(Sender: TObject);
+Var
+  OwnerDic : Variant;
+begin
+  if VarAsInt(MasterData.НомПозиции)=0 then
+    begin
+      if IsObjFocused(MasterData._GetOwner) then
+        OwnerDic := MasterData._GetOwner
+      else
+        OwnerDic := Null;
+      MasterData.НомПозиции := Server.GetNextNumberForSort(OwnerDic);
+    end;
+end;
+
+procedure miLoadFromFile_Click(Sender : TObject);
+begin
+  case (Sender as TO4MenuItem).tag of
+    0 :
+      if opDlg.Execute then
+        iLogoType.LoadFromFile(opDlg.FileName);
+    1 :
+      if spDlg.Execute then
+        iLogoType.SaveToFile(spDlg.FileName);
+    2 :
+      MasterData.Фото := Null;
+  end;
+end;
+
+procedure dbeName_Change(Sender: TObject);
+begin
+  pnName.Caption := dbeName.Text;
+end;
+
+procedure Form_Open(Sender: TObject);
+Var
+  Ima : TPicture;
+  NewGraphic: TGraphic;
+begin
+  pnName.Caption := VarAsStr(MasterData.Название);
+end;
+
+procedure PageControl1_Change(Sender: TObject);
+begin
+  case pcLists.ActivePage.Name of
+    'tsGoods' :
+      if IsNil(DetWeigtGoods) then
+        DetWeigtGoods := SetDetailDict(MasterData, 'ВессовойТовар', 'Товары', CtrlToVar(pcLists.ActivePage));
+  end;
+
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+Var
+  Owner : IcDictionary;
+begin
+  Owner := MasterData._GetOwner;
+  if IsObjFocused(Owner) and not VarAsBool(Owner.НаличиеПодгрупы) then
+    begin
+      Owner.Edit;
+      Owner.НаличиеПодгрупы := true;
+      Owner.Post;
+      Owner.ApplyUpdates;
+    end;
+  if MasterData.HasParam('MoveGoods') and VarAsBool(MasterData.Params['MoveGoods']) then
+    begin       
+      MasterData.ApplyUpdates;
+      MasterData.SetSrvToClientPos;
+      Owner.SetSrvToClientPos;
+      Server.MoveGoodsWithOwnerGroups(Owner.SrvMean, MasterData.SrvMean);
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Panel2:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+Panel3:TO4Panel
+LinkImage1:TO4LinkImage
+pcLists:TO4PageControl
+tsMain:TTabSheet
+Label1:TO4Label
+pnGroup1:TO4Panel
+pnName:TO4Label
+iLogoType:TO4DBImage
+dbeName:TO4DBEdit
+DBEdit1:TO4DBEdit
+tsGoods:TTabSheet
+MDS:TO4DataSource
+opDlg:TO4OpenPictureDialog
+pmLogoType:TO4PopupMenu
+miLoadFromFile:TO4MenuItem
+miSaveToFile:TO4MenuItem
+miClear:TO4MenuItem
+spDlg:TO4SavePictureDialog

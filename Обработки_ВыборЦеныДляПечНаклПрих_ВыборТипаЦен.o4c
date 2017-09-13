@@ -1,0 +1,85 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation    
+Var
+  Constants : IC4VPAConst;
+  V : IcProcessing;
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  PricesType: String;
+begin
+  V := mean;
+  Constants := GetConstants;
+
+
+  PricesType := Constants.“ипы÷ен;
+  if StrPos('0',PricesType)>0 then
+    cb1.Visible :=True
+  else
+    cb1.Visible :=False;
+
+  if StrPos('1',PricesType)>0 then
+    cb2.Visible :=True
+  else
+    cb2.Visible :=False;
+
+  if StrPos('2',PricesType)>0 then
+    cb3.Visible :=True
+  else
+    cb3.Visible :=False;
+
+
+
+
+  if not cb1.Visible then
+    begin
+      cb2.Top := 25;
+      cb3.Top := 48;
+    end
+  else
+    if not cb2.Visible then
+      begin
+        cb3.Top := 48;
+      end;
+
+end;
+
+procedure btOk_Click(Sender: TObject);
+Var
+  TypePrices : String;
+begin
+  TypePrices :='';
+  if cb1.Checked then
+    TypePrices := TypePrices+';÷ена';
+  if cb2.Checked then
+    TypePrices := TypePrices+';ќпт÷ена';
+  if cb3.Checked then
+    TypePrices := TypePrices+'; рќпт÷ена';
+  if TypePrices<>'' then
+    begin
+ //     StrDelete(TypePrices,StrLength(TypePrices),1);
+      V.Params['TypePrices'] := TypePrices;
+    end
+  else
+    begin
+      ShowMessage('Ќе выбран тип цен');
+      exit;
+    end;
+  Form.ModalResult := mrOk;
+  Form.Close;
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+Panel1:TO4Panel
+btOk:TO4Button
+cb1:TO4CheckBox
+cb2:TO4CheckBox
+cb3:TO4CheckBox

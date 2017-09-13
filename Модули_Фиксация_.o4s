@@ -1,0 +1,858 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты;
+
+const
+  ConsgDimFields = 'Товар;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;Комиссия;' +
+    'СтавкаНДС;ДатаПр;СертификатСоотв';
+
+procedure CreateApplyTableExternal(Doc : ISDocuments; AccsGood : ISAccs; ApplyTbl, MinTbl : ISValueTable);
+procedure MakeGoodMotion(AccGood : ISAccs; Doc : Variant; PartGoodID : Double;
+  MotionID : Integer; Resources : Variant);
+procedure MakeGoodMotionCurrent(AccGood : ISAccs; Doc : Variant; MotionID : Integer; Resources : Variant);
+procedure SetFldToTblPartGood(TblPartGood : ISValueTable);
+procedure SetFldToApplyTbl(ApplyTbl : ISValueTable);
+procedure SetFldToMinTbl(MinTbl : ISValueTable);
+procedure Discard(var Count : Decimal; ApplyTbl, MinTbl, Doc, TblPartGood : ISValueTable; Store : ISDictionary; DoAll : Boolean);
+// формирование карточки товаров при приходе
+function AppendGoodsConsignAtIncome(DocSource : ISDocuments; AccConsigns : ISAccs) : Double;
+// перенос количества с одной партии товара на другую
+function RebuildConsgs(DocSource : ISDocuments; AccConsigns : ISAccs;
+  RestructuredDimFields, SourceDimFields : string) : Double;
+function RestructureExistedConsg(DocSource : ISDocuments; AccConsigns : ISAccs;
+  MotionType : TAccsMotionType; ObjSource : IObject = '';
+  CountField : string = 'Количество') : Boolean;
+
+implementation
+
+var
+  AccsPartGood, AccsGood, AccsGoodReal : ISAccs;
+  DocDoc : ISDocuments;
+  DocDate : DateTime;
+  ApplyTbl, OverSumTbl, MinTbl, OrderMinTbl, TblOldConsgDimValues, TmpGood, TmpStoreGood,
+    TmpPartGood, MinRealTbl : ISValueTable;
+  OverOrder : Boolean;
+  Constants : IS4VPAConst; 
+  DocType : Integer;
+
+procedure SetFldToTblPartGood(TblPartGood : ISValueTable);
+begin
+  TblPartGood.Close;
+  TblPartGood.AddColumn('Товар', lftLink, 0);
+  TblPartGood.AddColumn('СертификатСоотв', lftLink, 0);
+  TblPartGood.AddColumn('Склад', lftLink, 0);
+  TblPartGood.AddColumn('Партнер', lftLink, 0);
+  TblPartGood.AddColumn('Партия', lftFloat, 0);
+  TblPartGood.AddColumn('Валюта', lftLink, 0);
+  TblPartGood.AddColumn('Комиссия', lftInteger, 0);
+  TblPartGood.AddColumn('ДатаПр', lftDate, 0);
+  AddFFtColumnsList(TblPartGood, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал;СумВх;СумВалВх');
+  TblPartGood.Open;
+end;
+
+procedure SetFldToApplyTbl(ApplyTbl : ISValueTable);
+begin
+  ApplyTbl.Close;
+  ApplyTbl.AddColumn('Товар', lftLink, 0);
+  ApplyTbl.AddColumn('Склад', lftLink, 0);
+  ApplyTbl.AddColumn('Партия', lftFloat, 0);
+  ApplyTbl.AddColumn('НомСтроки', lftInteger, 0);
+  ApplyTbl.AddColumn('ВалютаТовара', lftLink, 0);
+  ApplyTbl.AddColumn('КурсТовара', lftFFt, 6);
+  ApplyTbl.AddColumn('ДатаДокумента', lftDateTime, 0);
+  AddFFtColumnsList(ApplyTbl, 'КолОбщ;СумВх;СумВхНДС;СумОтп;СумОтпНДС;СумНац;СумВалВх;СумВалОтп;СумВалНац');
+  ApplyTbl.Open;
+end;
+
+procedure SetFldToMinTbl(MinTbl : ISValueTable);
+begin
+  MinTbl.Close;
+  MinTbl.AddColumn('Код', lftString, 20);
+  MinTbl.AddColumn('Товар', lftLink, 0);
+  MinTbl.AddColumn('ЕдИзм', lftLink, 0);
+  MinTbl.AddColumn('Склад', lftLink, 0);
+  MinTbl.AddColumn('Партия', lftFloat, 0);
+  MinTbl.AddColumn('Партнер', lftLink, 0);
+  MinTbl.AddColumn('Валюта', lftLink, 0);
+  AddFFtColumnsList(MinTbl, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал');
+  MinTbl.Open;
+end;
+
+procedure SetFldToOverSumTbl(OverSumTbl : ISValueTable);
+begin
+  OverSumTbl.Close;
+  OverSumTbl.AddColumn('Код', lftString, 20);
+  OverSumTbl.AddColumn('Товар', lftLink, 0);
+  OverSumTbl.AddColumn('ЕдИзм', lftLink, 0);
+  OverSumTbl.AddColumn('Склад', lftLink, 0);
+  OverSumTbl.AddColumn('Партия', lftFloat, 0);
+  AddFFtColumnsList(OverSumTbl, 'КолОбщ;Наценка');
+  OverSumTbl.Open;
+end;
+
+procedure SetMinTbl(MinTbl : ISValueTable; Count : Decimal; Party : Double; Store, Good : ISDictionary);
+begin
+  MinTbl.Append;
+  MinTbl.КолОбщ := Count;
+  MinTbl.Товар := Good;
+  MinTbl.Склад := Store;
+  MinTbl.Партия := Party;
+  MinTbl.Post;
+end;
+
+procedure CreateOverSumTbl(Data : ISDocuments; OverSumTbl, ApplyTbl : ISValueTable);
+var
+  TmpTbl : ISValueTable;
+begin
+  SetFldToOverSumTbl(OverSumTbl);
+  TmpTbl := CreateObject('ТаблицаЗначений');
+  ApplyTbl.GroupTo('Товар;Склад;Партия', 'КолОбщ;СумНац', TmpTbl);
+  TmpTbl.Select;
+  while TmpTbl.SelectNext do
+    if (TmpTbl.СумНац < 0) and (TmpTbl.КолОбщ <> 0) then
+      begin
+        OverSumTbl.Append;
+        OverSumTbl.AssignFields('Товар;Склад;Партия;КолОбщ', TmpTbl);
+        OverSumTbl.Наценка := VarAsDec(TmpTbl.СумНац) / VarAsDec(TmpTbl.КолОбщ);
+        OverSumTbl.Post;
+      end;
+end;
+
+procedure SetAccs(ApplyTbl, Doc : ISValueTable; Count, InPriceNT, InHdPrice : Decimal; Party : Double; Store : ISDictionary);
+var
+  Sum, SumINT, SumONT, Tax, TaxRate, InPrice : Decimal;
+begin
+  ApplyTbl.Append;
+
+  ApplyTbl.Товар := Doc.@Товар;
+  ApplyTbl.Склад := Store;
+  ApplyTbl.Партия := Party;
+  ApplyTbl.НомСтроки := Doc.НомСтроки;
+  ApplyTbl.КолОбщ := Count;
+  ApplyTbl.ВалютаТовара := Doc.@ВалютаТовара;
+  ApplyTbl.КурсТовара := Doc.КурсТовара;
+  ApplyTbl.ДатаДокумента := DocDate;
+
+  TaxRate := Doc.СтавкаНДС;
+  if Doc.HasField('МетодРасчета') and (Doc.МетодРасчета = 0) then
+    begin
+      SumONT := VarAsDec(Doc.ЦенаБезНДС) * Count;
+      if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+        SumONT := RoundFloat(SumONT, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС);
+      Tax := SumONT * Doc.СтавкаНДС / 100;
+      Sum := SumONT + Tax;
+    end
+  else
+    begin
+      Sum := VarAsDec(Doc.Цена) * Count;
+      //  SumONT  := CalcTaxPriceNT(TaxRate, Sum, Tax);
+      SumONT := VarAsDec(Doc.ЦенаБезНДС) * Count;
+      Tax := Sum - SumONT;
+    end;
+
+  if Doc.Партия <> 0 then
+    SumINT := Doc.ВхЦенаБезНДС * Count
+  else
+    SumINT := InPriceNT * Count;
+  if VarAsBool(Constants.ОкруглятьСуммуСтрокиБезНДС) then
+    SumINT := RoundFloat(SumINT, Constants.КоличествоЗнаковВСуммеСтрокиБезНДС);
+
+  ApplyTbl.СумОтп := Sum;
+  ApplyTbl.СумОтпНДС := Tax;
+  ApplyTbl.СумВх := SumINT;
+  ApplyTbl.СумНац := SumONT - SumINT;
+  ApplyTbl.СумВалОтп := VarAsDec(Doc.ЦенаВВалюте) * Count;
+
+  if AccsPartGood.SelectDimID(Party) then
+    begin
+      if VarAsBool(Constants.УчетПоСреднейСтоим) then
+        ApplyTbl.СумВалВх := InHdPrice * Count
+      else
+        ApplyTbl.СумВалВх := VarAsDec(AccsPartGood.ВхЦенаВал) * Count;
+      //CalcTaxPrice(AccsPartGood.СтавкаНДС, SumINT, Tax);
+      //ApplyTbl.СумВхНДС := Tax;
+      InPrice := RoundFloat(GetPrice(InPriceNT, AccsPartGood.СтавкаНДС), 7);
+      //    AccsPartGood.КолОбщ := Count;
+      //    AccsPartGood.СумОбщ := SumINT;
+      //    AccsPartGood.Outcome(DocDoc, ApplyTbl.ДатаДокумента, Doc.НомСтроки);
+    end
+  else
+    begin
+      ApplyTbl.СумВалВх := 0;
+      InPrice := RoundFloat(GetPrice(InPriceNT, Constants.ProcentPDV), 7);
+    end;
+  ApplyTbl.СумВхНДС := InPrice * Count - InPriceNT * Count;
+  ApplyTbl.Post;
+end;
+
+procedure Discard(var Count : Decimal; ApplyTbl, MinTbl, Doc, TblPartGood : ISValueTable; Store : ISDictionary; DoAll : Boolean);
+begin
+  if Count <= 0 then
+    exit;
+  if not TblPartGood.SelectFirst then
+    begin
+      if DoAll then
+        begin
+          SetAccs(ApplyTbl, Doc, Count, Doc.ВхЦенаБезНДС, 0, Doc.Партия, Store);
+          SetMinTbl(MinTbl, Count, Doc.Партия, Store, Doc.@Товар);
+          Count := 0;
+        end
+    end
+  else
+    while (Count > 0) do
+      begin
+        if TblPartGood.КолОбщ >= Count then
+          begin
+            SetAccs(ApplyTbl, Doc, Count, TblPartGood.ВхЦенаБезНДС, TblPartGood.ВхЦенаВал, TblPartGood.Партия, TblPartGood.@Склад);
+            TblPartGood.Edit;
+            TblPartGood.КолОбщ := TblPartGood.КолОбщ - Count;
+            TblPartGood.Post;
+            Count := 0;
+            break;
+          end
+        else
+          if TblPartGood.КолОбщ > 0 then
+            begin
+              SetAccs(ApplyTbl, Doc, TblPartGood.КолОбщ, TblPartGood.ВхЦенаБезНДС, TblPartGood.ВхЦенаВал, TblPartGood.Партия, TblPartGood.@Склад);
+              Count := Count - TblPartGood.КолОбщ;
+              TblPartGood.Edit;
+              TblPartGood.КолОбщ := 0;
+              TblPartGood.Post;
+            end;
+        if not TblPartGood.SelectNext then
+          begin
+            if DoAll and (Count > 0) then
+              begin
+                SetAccs(ApplyTbl, Doc, Count, TblPartGood.ВхЦенаБезНДС, TblPartGood.ВхЦенаВал, TblPartGood.Партия, TblPartGood.@Склад);
+                SetMinTbl(MinTbl, Count, TblPartGood.Партия, TblPartGood.@Склад, Doc.@Товар);
+                Count := 0;
+              end;
+            break;
+          end
+      end;
+end;
+
+procedure CreateApplyTableExternal(Doc : ISDocuments; AccsGood : ISAccs; ApplyTbl, MinTbl : ISValueTable);
+var
+  GdLst : ISValueList;
+  Tbl : ISValueTable;
+  TblPartGood : ISValueTable;
+  Rules : ISDictionary;
+  RulID : Integer;
+  sIdx : string;
+  Store, StoreDef : ISDictionary;
+  Count : Decimal;
+  StInRul, HasFieldPack : Boolean;
+  Options : ISOptions;
+  V, TmpParam : Variant;
+begin
+  DocDoc := Doc;
+  DocDate := Doc.GetDate;
+  GdLst := CreateObject('СписокЗначений');
+  Tbl := CreateObject('ТаблицаЗначений');
+  TblPartGood := CreateObject('ТаблицаЗначений');
+  Constants := GetConstants;
+  if IsNil(AccsPartGood) then
+    AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров')
+  else
+    begin
+      AccsPartGood.ClearFieldFilters();
+      AccsPartGood.ClearFieldBuffers();
+    end;  
+
+  Doc.SaveContents('', Tbl);
+  Tbl.GroupToList('Товар', GdLst);
+
+  SetFldToTblPartGood(TblPartGood);
+  SetFldToApplyTbl(ApplyTbl);
+  SetFldToMinTbl(MinTbl);
+
+  AccsGood.SetFieldFilter('Товар', GdLst);
+  AccsGood.AppendRestToValueTable(CurrentDateTime, 'Товар;Склад;КолОбщ;СумВх;СумВалВх;Партия', TblPartGood);
+  //  AccsGood.AppendRestToValueTable(Doc.GetDate, 'Товар;Склад;КолОбщ;СумВх;СумВалВх;Партия', TblPartGood);
+  TblPartGood.GroupBy('Товар;Склад;Партия', 'КолОбщ;СумВх;СумВалВх');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;Комиссия;ДатаПр', TblPartGood);
+  if VarAsBool(Constants.УчетПоСреднейСтоим) then
+    begin
+      TblPartGood.DoCalculation('ВхЦенаБезНДС', 'СумВх/КолОбщ');
+      TblPartGood.DoCalculation('ВхЦенаВал', 'СумВалВх/КолОбщ');
+    end;
+  RulID := 0;
+  Options := GetOptions;       
+  TmpParam := Options.GetPrm(AOSet);
+  if IsObject(TmpParam) then
+    begin
+      Rules := TmpParam; //Tbl.Правило;
+      if Rules.IsFocused then
+        RulID := VarAsInt(Rules.Признак);
+    end;
+  case RulID of
+    0 : 
+      sIdx := ';КолОбщ';
+    1 : 
+      sIdx := ';-КолОбщ';
+    2 : 
+      sIDx := ';ВхЦенаВал';
+    3 : 
+      sIDx := ';-ВхЦенаВал';
+    4 : 
+      sIDx := ';ДатаПр';
+    5 : 
+      sIDx := ';-ДатаПр';
+    else
+      sIdx := '';
+  end;
+  //для быстрой фильтрации услуг используем незадействаванное поле
+  HasFieldPack := Tbl.HasField('КоличествоУпаковок');
+  if HasFieldPack then
+    Tbl.DoGetLinks('КоличествоУпаковок=Товар.Услуга');
+  Tbl.SortBy('Товар;Склад;Партия');
+  Tbl.Select;
+  while Tbl.SelectPrior() do
+    begin
+      if (HasFieldPack and (not VarAsBool(Tbl.КоличествоУпаковок))) or (not VarAsBool(Tbl.Товар.Услуга)) then
+        begin
+          if VarAsFloat(Tbl.Партия) <> 0 then
+            begin
+              Store := Tbl.@Склад;
+              TblPartGood.SortBy('Товар;Склад;Партия');
+              V := ArrayOf(Tbl.@Товар, Tbl.@Склад, Tbl.Партия);
+              TblPartGood.SetRange(V, V);
+              Count := Tbl.Количество;
+              Discard(Count, ApplyTbl, MinTbl, Tbl, TblPartGood, Store, True);
+            end
+          else
+            if VarAsBool(Tbl.@Склад.IsFocused) then
+              begin
+                Store := Tbl.@Склад;
+                TblPartGood.SortBy('Товар;Склад' + sIdx);
+                V := ArrayOf(Tbl.@Товар, Tbl.@Склад);
+                TblPartGood.SetRange(V, V);
+                Count := Tbl.Количество;
+                Discard(Count, ApplyTbl, MinTbl, Tbl, TblPartGood, Store, True);
+              end
+            else
+              begin
+                StInRul := False;
+                if Rules.IsFocused then
+                  begin
+                    Store := Rules.@Склад;
+                    if not Store.IsFocused then
+                      Store := FindDefStore(StoreDef)
+                    else
+                      StInRul := True;
+                  end
+                else
+                  Store := FindDefStore(StoreDef);
+                Count := Tbl.Количество;
+                if StInRul then
+                  begin
+                    TblPartGood.SortBy('Товар;Склад' + sIdx);
+                    V := ArrayOf(Tbl.@Товар, Store);
+                    TblPartGood.SetRange(V, V);
+                    Discard(Count, ApplyTbl, MinTbl, Tbl, TblPartGood, Store, False);
+                  end;
+                if Count > 0 then
+                  begin
+                    TblPartGood.SortBy('Товар' + sIdx);
+                    TblPartGood.SetRange(Tbl.@Товар, Tbl.@Товар);
+                    Discard(Count, ApplyTbl, MinTbl, Tbl, TblPartGood, Store, True);
+                  end
+              end
+        end;
+    end;
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', MinTbl);
+end;
+
+procedure MakeGoodMotion(AccGood : ISAccs; Doc : Variant; PartGoodID : Double;
+  MotionID : Integer; Resources : Variant);
+var
+  Dimensions, Fields : Variant;
+  Docum : ISDocuments;
+begin
+  AccGood.ClearFieldBuffers();
+  Dimensions := ArrayOf(Doc.@Товар, Doc.@Склад, PartGoodID, MotionID);
+  Fields := ArrayOf(Doc.@ВалютаТовара, Doc.КурсТовара);
+  if VarAsBool(Doc.IsType('Documents')) then
+    Docum := Doc
+  else
+    Docum := DocDoc;
+  if MotionID and 1 = 0 then
+    AccGood.OutcomeDirect(Docum, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Fields)
+  else
+    AccGood.IncomeDirect(Docum, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Fields);
+end;
+
+procedure MakeGoodMotionCurrent(AccGood : ISAccs; Doc : Variant; MotionID : Integer; Resources : Variant);
+var
+  Dimensions : Variant;
+  Docum : ISDocuments;
+begin
+  AccGood.ClearFieldBuffers();
+  Dimensions := ArrayOf(Doc.@Товар, Doc.@Склад);
+  if VarAsBool(Doc.IsType('Documents')) then
+    Docum := Doc
+  else
+    Docum := DocDoc;
+  // if Docum.Отпуск = 1
+  if MotionID and 1 = 0 then
+    AccGood.OutcomeDirect(Docum, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Null)
+  else
+    AccGood.IncomeDirect(Docum, Doc.ДатаДокумента, Doc.НомСтроки, Dimensions, Resources, Null);
+end;
+
+procedure CreateOrderMinTbl(Data : ISDocuments; var Accept : Boolean);
+var
+  Order : ISDocuments;
+  SupportTbl : ISValueTable;
+begin
+  OrderMinTbl.Close;
+  OrderMinTbl.AddColumn('Код', lftString, 20);
+  OrderMinTbl.AddColumn('Товар', lftLink, 0);
+  OrderMinTbl.AddColumn('ЕдИзм', lftLink, 0);
+  OrderMinTbl.AddColumn('Цена', lftFFT, 7);
+  OrderMinTbl.AddColumn('Количество', lftFFT, 5);
+  OrderMinTbl.Open;
+  SupportTbl := CreateObject('ТаблицаЗначений');
+  Order := Data.Owner;
+  if not Order.IsFocused then
+    exit;
+  Data.SelectLines();
+  Data.SaveContents('', SupportTbl);
+  SupportTbl.GroupBy('Товар;Цена', 'Количество');
+  Order.SelectLines();
+  SupportTbl.Select();
+  while SupportTbl.SelectNext() do
+    begin
+      if Order.FindLineBy('Товар;Цена', ArrayOf(SupportTbl.@Товар, SupportTbl.Цена)) then
+        begin
+          if SupportTbl.Количество > Order.Количество then
+            begin
+              OrderMinTbl.Append;
+              OrderMinTbl.Товар := SupportTbl.@Товар;
+              OrderMinTbl.Цена := SupportTbl.Цена;
+              OrderMinTbl.Количество := SupportTbl.Количество - Order.Количество;
+              OrderMinTbl.Post;
+            end;
+        end;
+    end;
+  Accept := not Data.Terminated
+end;
+
+procedure CheckAllRestrs(Doc : ISDocuments; var Accept : Boolean);
+begin
+  //проверка превышения кол-ва товара по счету
+  if OverOrder then
+    begin
+      Doc.NotifyClient(CheckAboutOrder, 1, 4);
+      CreateOrderMinTbl(Doc, Accept);
+    end;
+  Accept := not Doc.Terminated;
+  if not Accept then
+    exit;
+  //проверка превышения кол-ва товаров на складах
+  Doc.NotifyClient(CheckAboutOverflow, 2, 4);
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  CreateApplyTableExternal(Doc, AccsGood, ApplyTbl, MinTbl);
+  Accept := not Doc.Terminated;
+  if not Accept then
+    exit;
+  //проверка отрицательной наценки
+  Doc.NotifyClient(CheckAboutOverSumZeroLess, 3, 4);
+  if not GetUDASet('OffCheckMarkup') then
+    CreateOverSumTbl(Doc, OverSumTbl, ApplyTbl);
+  Accept := not Doc.Terminated;
+end;
+
+function CheckAllSrv(OrderMinTbls, MinTbls, OverSumTbls, ApplyTbls : ISValueTable;
+  OverOrders : Boolean) : Variant; server;
+begin
+  OrderMinTbl := OrderMinTbls;
+  MinTbl := MinTbls;
+  OverSumTbl := OverSumTbls;
+  ApplyTbl := ApplyTbls;
+  OverOrder := OverOrders;
+  Result := EntryPoint(CheckAllRestrs);
+end;
+    
+procedure SetFldToMinRealTbl(MinRealTbl : ISValueTable);
+begin
+  MinRealTbl.Close;
+  MinRealTbl.AddColumn('Код', lftString, 20);
+  MinRealTbl.AddColumn('Товар', lftLink, 0);
+  MinRealTbl.AddColumn('ЕдИзм', lftLink, 0);
+  MinRealTbl.AddColumn('Партнер', lftLink, 0);
+  MinRealTbl.AddColumn('Партия', lftFloat, 0);
+  MinRealTbl.AddColumn('КурсТовара', lftFFt, 6);
+  MinRealTbl.AddColumn('ВалютаТовара', lftLink, 0);
+  AddFFtColumnsList(MinRealTbl, 'КолОбщ;Цена;ЦенаВВалюте;Количество');
+  MinRealTbl.Open;
+end;
+
+procedure CheckAllRealRestrs(Doc : ISDocuments; var Accept : Boolean);
+var
+  Tbl : ISValueTable; 
+  GdLst : ISValueTable;    
+  TblPartGoodReal : ISValueTable;   
+  CurPrice : Decimal;
+begin
+  //проверка превышения кол-ва товаров на реализации
+  AccsGoodReal := CreateObject('Аккумуляторы.ОстаткиТоваровНаРеализаторах');
+  GdLst := CreateObject('СписокЗначений');  
+  SetFldToMinRealTbl(MinRealTbl);
+  Tbl := CreateObject('ТаблицаЗначений');
+  TblPartGoodReal := CreateObject('ТаблицаЗначений');
+  MinRealTbl.CopyColumnsTo(TblPartGoodReal);
+  Doc.SaveContents('', Tbl);
+  Tbl.GroupToList('Товар', GdLst);
+
+  AccsGoodReal.SetFieldFilter('Товар', GdLst);
+  AccsGoodReal.SetFieldFilter('Партнер', Doc.Партнер);
+  AccsGoodReal.AppendGroupRestToValueTable(CurrentDateTime,
+    'Товар;КолОбщ;КурсТовара;ВалютаТовара;Цена;ЦенаВВалюте;Партия', TblPartGoodReal);
+  TblPartGoodReal.SortBy('Товар;Партия;Цена;КурсТовара;ВалютаТовара;ЦенаВВалюте');
+  Tbl.Select;
+  while Tbl.SelectNext do   
+    case DocType of
+      0 :
+        begin
+          if TblPartGoodReal.Find(ArrayOf(Tbl.@Товар,Tbl.Партия,Tbl.Цена,
+            Tbl.КурсТовара,Tbl.@ВалютаТовара,Tbl.ЦенаВВалюте)) then
+            begin
+              if (TblPartGoodReal.КолОбщ < Tbl.Количество) then
+                begin
+                  MinRealTbl.Append;
+                  MinRealTbl.AssignFields('Товар;КурсТовара;ВалютаТовара;Цена;ЦенаВВалюте;Партия', Tbl);
+                  MinRealTbl.Количество := Tbl.Количество - TblPartGoodReal.КолОбщ;
+                  MinRealTbl.Post;
+                end
+            end
+          else
+            begin
+              MinRealTbl.Append;
+              MinRealTbl.AssignFields('Товар;КурсТовара;ВалютаТовара;Цена;ЦенаВВалюте;Партия', Tbl);
+              MinRealTbl.Количество := Tbl.Количество;
+              MinRealTbl.Post;
+            end;
+        end;
+      1 :
+        begin
+          if TblPartGoodReal.Find(ArrayOf(Tbl.@Товар,Tbl.Партия,Tbl.ОтпЦена,
+            Tbl.ОтпКурсТовара,Tbl.@ОтпВалютаТовара,Tbl.ОтпВалЦена)) then
+            begin
+              if (TblPartGoodReal.КолОбщ < Tbl.Количество) then
+                begin
+                  MinRealTbl.Append;
+                  MinRealTbl.AssignFields('Товар;КурсТовара=ОтпКурсТовара;ВалютаТовара=ОтпВалютаТовара;' +
+                'Цена=ОтпЦена;ЦенаВВалюте=ОтпВалЦена;Партия', Tbl);
+                  MinRealTbl.Количество := Tbl.Количество - TblPartGoodReal.КолОбщ;
+                  MinRealTbl.Post;
+                end
+            end
+          else
+            begin
+              MinRealTbl.Append;
+              MinRealTbl.AssignFields('Товар;КурсТовара=ОтпКурсТовара;ВалютаТовара=ОтпВалютаТовара;' +
+                'Цена=ОтпЦена;ЦенаВВалюте=ОтпВалЦена;Партия', Tbl);
+              MinRealTbl.Количество := Tbl.Количество;
+              MinRealTbl.Post;
+            end;
+        end;
+      2 :
+        begin
+          if ((Tbl.Количество - Tbl.КоличествоДо) > 0) then
+            begin
+              if TblPartGoodReal.Find(ArrayOf(Tbl.@Товар,Tbl.Партия,Tbl.Цена,
+                  Tbl.КурсТовара,Tbl.@ВалютаТовара,Tbl.ЦенаВВалюте)) then
+                begin
+                  if (TblPartGoodReal.КолОбщ < (Tbl.Количество - Tbl.КоличествоДо)) then
+                    begin
+                      MinRealTbl.Append;
+                      MinRealTbl.AssignFields('Товар;КурсТовара;ВалютаТовара;Цена;ЦенаВВалюте;Партия', Tbl);
+                      MinRealTbl.Количество := (Tbl.Количество - Tbl.КоличествоДо) - TblPartGoodReal.КолОбщ;
+                      MinRealTbl.Post;
+                    end
+                end
+              else
+                begin
+                  MinRealTbl.Append;
+                  MinRealTbl.AssignFields('Товар;КурсТовара;ВалютаТовара;Цена;ЦенаВВалюте;Партия', Tbl);
+                  MinRealTbl.Количество := (Tbl.Количество - Tbl.КоличествоДо);
+                  MinRealTbl.Post;
+                end;
+            end;
+        end;
+      3 :
+        begin    
+          CurPrice := Tbl.ЦенаБезСкидкиНадбавки / Tbl.КурсТовара;
+          if TblPartGoodReal.Find(ArrayOf(Tbl.@Товар,Tbl.Партия,Tbl.ЦенаБезСкидкиНадбавки,
+            Tbl.КурсТовара,Tbl.@ВалютаТовара,CurPrice)) then
+            begin
+              if (TblPartGoodReal.КолОбщ < Tbl.Количество) then
+                begin
+                  MinRealTbl.Append;
+                  MinRealTbl.AssignFields('Товар;КурсТовара;ВалютаТовара;Цена=ЦенаБезСкидкиНадбавки;Партия', Tbl);
+                  MinRealTbl.ЦенаВВалюте := CurPrice;
+                  MinRealTbl.Количество := Tbl.Количество - TblPartGoodReal.КолОбщ;
+                  MinRealTbl.Post;
+                end
+            end
+          else
+            begin
+              MinRealTbl.Append;
+              MinRealTbl.AssignFields('Товар;КурсТовара;ВалютаТовара;Цена=ЦенаБезСкидкиНадбавки;Партия', Tbl);
+              MinRealTbl.ЦенаВВалюте := CurPrice;
+              MinRealTbl.Количество := Tbl.Количество;
+              MinRealTbl.Post;
+            end;
+        end;
+    end;
+  TblPartGoodReal.Clear;
+  Accept := not Doc.Terminated;
+end;
+
+function CheckAllRealSrv(MinRealTbls : ISValueTable; DocTypes : Integer) : Variant; server;
+begin
+  MinRealTbl := MinRealTbls;  
+  DocType := DocTypes;
+  Result := EntryPoint(CheckAllRealRestrs);
+end;
+
+procedure AssignValueFieldsToConsgAcc(AccConsigns : ISAccs; Count : Decimal);
+begin
+  AccConsigns.КолОбщ := Count;
+  AccConsigns.СумОбщ := VarAsDec(AccConsigns.КолОбщ) * VarAsDec(AccConsigns.ВхЦенаБезНДС);
+end;
+
+// формирование карточки товаров при приходе
+
+function AppendGoodsConsignAtIncome(DocSource : ISDocuments; AccConsigns : ISAccs) : Double;
+begin
+  AccConsigns.ClearFieldBuffers;
+  Constants := GetConstants;
+  //партии товаров
+  // дата
+  if DocSource.HasTableField('ДатаПр') and (DocSource.ДатаПр>0) then
+    AccConsigns.ДатаПр := DocSource.ДатаПр
+  else
+    AccConsigns.ДатаПр := DocSource.ДатаДокумента;
+  // средняя стоимость
+  if VarAsBool(Constants.УчетПоСреднейСтоим) then
+    AccConsigns.AssignFields('Товар;Валюта=ВалютаТовара;СтавкаНДС', DocSource)
+  else
+    begin
+      if DocSource.HasTableField('Партнеры') and VarAsBool(DocSource.@Партнеры.IsFocused) then
+        AccConsigns.Партнер := DocSource.@Партнеры
+      else
+      if DocSource.HasTableField('ПартнерДетализации') and VarAsBool(DocSource.@ПартнерДетализации.IsFocused) then
+        AccConsigns.Партнер := GetPartner(DocSource.ПартнерДетализации)
+      else    
+      if DocSource.HasField('Партнер') and VarAsBool(DocSource.@Партнер.IsFocused) then
+        AccConsigns.Партнер := GetPartner(DocSource.Партнер)
+      else
+      if DocSource.HasField('Ответственный') then
+        AccConsigns.Партнер := DocSource.@Ответственный;
+      AccConsigns.AssignFields('Товар;Валюта=ВалютаТовара;СтавкаНДС', DocSource);
+      // вх. цена
+      if DocSource.HasTableField('ЦенаБезНДС') then
+        begin
+          if DocSource.HasTableField('ВхЦенаБезНДС') and (StrPos('Возврат', DocSource.GetSign) > 0) then
+            AccConsigns.ВхЦенаБезНДС := DocSource.ВхЦенаБезНДС
+          else
+            AccConsigns.ВхЦенаБезНДС := DocSource.ЦенаБезНДС
+        end
+      else // override для цены
+        AccConsigns.ВхЦенаБезНДС := DocSource.Params['ВхЦенаБезНДС'];
+      // вх. цена в валюте
+      if DocSource.HasTableField('ЦенаВВалюте') then
+        begin
+          if DocSource.HasTableField('ВхЦенаВал') and (StrPos('Возврат', DocSource.GetSign) > 0) then
+            AccConsigns.ВхЦенаВал := DocSource.ВхЦенаВал
+          else
+            AccConsigns.ВхЦенаВал := DocSource.ЦенаВВалюте
+        end
+      else // override для цены в валюте
+        AccConsigns.ВхЦенаВал := DocSource.Params['ВхЦенаВал'];
+    end;
+  // сертификация товаров
+  if DocSource.HasTableField('СертификатСоотв') then
+    AccConsigns.СертификатСоотв := DocSource.@СертификатСоотв
+  else // override для сертификата соответствия
+    AccConsigns.СертификатСоотв := DocSource.Params['СертификатСоотв'];
+  // комиссия
+  AccConsigns.Комиссия := DocSource.HasField('Комиссия') and VarAsBool(DocSource.Комиссия);
+  // значения будут заноситься не в данной процедуре
+  AssignValueFieldsToConsgAcc(AccConsigns, DocSource.Количество);
+  Result := AccConsigns.Income(DocSource, DocSource.GetDate, DocSource.НомСтроки);
+end;
+
+function RestructureExistedConsg(DocSource : ISDocuments; AccConsigns : ISAccs;
+  MotionType : TAccsMotionType; ObjSource : IObject = '';
+  CountField : string = 'Количество') : Boolean;
+begin
+  if not IsObject(ObjSource) then
+    ObjSource := DocSource;
+  Result := AccConsigns.SelectDimID(ObjSource.Партия);
+  if Result then
+    begin
+      AssignValueFieldsToConsgAcc(AccConsigns, ObjSource._Default[CountField]);
+      case MotionType of
+        amtIncome :
+          AccConsigns.Income(DocSource, DocSource.GetDate, ObjSource.НомСтроки);
+        amtOutcome :
+          AccConsigns.Outcome(DocSource, DocSource.GetDate, ObjSource.НомСтроки);
+      end;
+    end;
+end;
+
+// перенос количества с одной партии товара на другую
+
+function RebuildConsgs(DocSource : ISDocuments; AccConsigns : ISAccs;
+  RestructuredDimFields, SourceDimFields : string) : Double;
+var
+  Counter : Integer;
+  OneDimField, OldFieldsAssgmnt, NewFieldsAssgmnt : string;
+begin
+  Constants := GetConstants;
+  // старая партия
+  if not RestructureExistedConsg(DocSource, AccConsigns, amtOutcome) then
+    begin
+      Result := DocSource.Партия;
+      exit;
+    end;
+  // список "новых" значений - из документа
+  NewFieldsAssgmnt := '';
+  for Counter := 1 to WordCount(RestructuredDimFields, ';') do
+    NewFieldsAssgmnt := NewFieldsAssgmnt + ';' +
+      ExtractWord(Counter, RestructuredDimFields, ';') + '=' +
+      ExtractWord(Counter, SourceDimFields, ';');
+  if NewFieldsAssgmnt <> '' then
+    StrDelete(NewFieldsAssgmnt, 1, 1);
+  // подготовка старых значений по партии аккумулятора
+  for Counter := 1 to WordCount(ConsgDimFields, ';') do
+    begin
+      OneDimField := ExtractWord(Counter, ConsgDimFields, ';');
+      if StrPos(';' + OneDimField + ';', ';' + RestructuredDimFields + ';') = 0 then
+        OldFieldsAssgmnt := OldFieldsAssgmnt + ';' + OneDimField;
+    end;
+  StrDelete(OldFieldsAssgmnt, 1, 1);
+  // сами старые значения
+  if IsNil(TblOldConsgDimValues) then
+    begin
+      TblOldConsgDimValues := CreateObject('ValueTable');
+      SetFldToTblPartGood(TblOldConsgDimValues);
+    end;
+  try
+    TblOldConsgDimValues.Append;
+    TblOldConsgDimValues.Партия := DocSource.Партия;
+    TblOldConsgDimValues.Post;
+    AccConsigns.AssignFieldsByDimIDTo('Партия', OldFieldsAssgmnt, TblOldConsgDimValues);
+    // запись новой партии
+    AccConsigns.ClearFieldBuffers;
+    AccConsigns.AssignFields(OldFieldsAssgmnt, TblOldConsgDimValues);
+    AccConsigns.AssignFields(NewFieldsAssgmnt, DocSource);
+    // учет даты в новой партии
+    if VarAsBool(Constants.УчетДата) then
+      AccConsigns.ДатаПр := RoundDate(DocSource.ДатаДокумента, rdDay, False)
+    else
+      AccConsigns.ДатаПр := Null;
+    AssignValueFieldsToConsgAcc(AccConsigns, DocSource.Количество);
+    Result := AccConsigns.Income(DocSource, DocSource.GetDate, DocSource.НомСтроки);
+  finally
+    TblOldConsgDimValues.Clear;
+  end;
+end;
+
+procedure ChangeStateDown(Doc : ISDocuments; var Accept : Boolean);
+var
+  AccsGood : ISAccs;
+  Tmp, Tbl : ISValueTable;
+  Date : DateTime;
+begin
+  Date := CurrentDate + 1;
+  Tbl := CreateObject('ТаблицаЗначений');
+  Tbl.AddColumn('Товар', lftLink, 0);
+  Tbl.AddColumn('Склад', lftLink, 0);
+  Tbl.AddColumn('Партия', lftFloat, 0);
+  Tbl.AddColumn('КолОбщ', lftFFt, 5);
+  Tbl.Open;
+  Tmp := CreateObject('ТаблицаЗначений');
+  Tmp.AddColumn('Товар', lftLink, 0);
+  Tmp.AddColumn('Склад', lftLink, 0);
+  Tmp.AddColumn('ЕдИзм', lftLink, 0);
+  Tmp.AddColumn('Код', lftString, 20);
+  Tmp.AddColumn('Партия', lftFloat, 0);
+  Tmp.AddColumn('КолОбщ', lftFFt, 5);
+  Tmp.AddColumn('КолОст', lftFFt, 5);
+  Tmp.Open;
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGood.AppendDocMotionToValueTable(Doc, amtIncome, 'Товар;Склад;Партия;КолОбщ', Tbl);
+  //AccsGood.SaveDocMotionToValueTable(Doc,amtIncome,Tbl);
+  Tbl.GroupTo('Товар', 'КолОбщ', TmpGood);
+  Tbl.GroupTo('Товар;Склад', 'КолОбщ', TmpStoreGood);
+  Tbl.GroupTo('Товар;Склад;Партия', 'КолОбщ', TmpPartGood);
+  if not (StrPos('НакладнаяВнутрПеремещ', Doc.GetSign) > 0) then
+    begin
+      TmpGood.Select;
+      while TmpGood.SelectNext do
+        begin
+          AccsGood.CalcGroupRestDirect(Date, TmpGood.@Товар);
+          if (TmpGood.КолОбщ > 0) and (AccsGood.КолОбщ < TmpGood.КолОбщ) then
+            begin
+              Tmp.Append;
+              Tmp.Товар := TmpGood.@Товар;
+              Tmp.КолОбщ := TmpGood.КолОбщ;
+              Tmp.КолОст := AccsGood.КолОбщ;
+              Tmp.Post;
+            end;
+        end;
+      Tmp.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+    end;
+  Tmp.CopyTo('', TmpGood);
+  Tmp.Clear;
+  TmpStoreGood.Select;
+  while TmpStoreGood.SelectNext do
+    begin
+      AccsGood.CalcGroupRestDirect(Date, ArrayOf(TmpStoreGood.@Товар, TmpStoreGood.@Склад));
+      if (TmpStoreGood.КолОбщ > 0) and (AccsGood.КолОбщ < TmpStoreGood.КолОбщ) then
+        begin
+          Tmp.Append;
+          Tmp.Товар := TmpStoreGood.@Товар;
+          Tmp.Склад := TmpStoreGood.@Склад;
+          Tmp.КолОбщ := TmpStoreGood.КолОбщ;
+          Tmp.КолОст := AccsGood.КолОбщ;
+          Tmp.Post;
+        end;
+    end;
+  Tmp.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tmp.CopyTo('', TmpStoreGood);
+  Tmp.Clear;
+  TmpPartGood.Select;
+  while TmpPartGood.SelectNext do
+    begin
+      AccsGood.CalcGroupRestDirect(Date, ArrayOf(TmpPartGood.@Товар, TmpPartGood.@Склад, TmpPartGood.Партия));
+      if (TmpPartGood.КолОбщ > 0) and (AccsGood.КолОбщ < TmpPartGood.КолОбщ) then
+        begin
+          Tmp.Append;
+          Tmp.Партия := TmpPartGood.Партия;
+          Tmp.Товар := TmpPartGood.@Товар;
+          Tmp.КолОбщ := TmpPartGood.КолОбщ;
+          Tmp.КолОст := AccsGood.КолОбщ;
+          Tmp.Post;
+        end;
+    end;
+  Tmp.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tmp.CopyTo('', TmpPartGood);
+  Accept := not Doc.Terminated
+end;
+
+function GetCanChangeStateDownEP(TmpGoods, TmpStoreGoods, TmpPartGoods : ISValueTable) : Variant; server;
+begin
+  TmpGood := TmpGoods;
+  TmpStoreGood := TmpStoreGoods;
+  TmpPartGood := TmpPartGoods;
+  Result := EntryPoint(ChangeStateDown)
+end;
+
+end.

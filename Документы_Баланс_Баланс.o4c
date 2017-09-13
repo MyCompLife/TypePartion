@@ -1,0 +1,223 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  Vtbl, StoreTbl, RealTbl, RealTypeTbl, ProdTbl, KassaTbl, BankTbl, DebTbl, KredTbl : ICValueTable;
+  AllSum, ActiveSum, PassivSum, StoreSum, RealSum, ProdSum, KassaSum, BankSum, DebSum, KredSum : Decimal;
+  AppendType : Boolean;
+  —умќбщ : Variant;             
+  Options : ICOptions;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+ //—клады
+ StoreTbl := CreateObject('“аблица«начений');
+ // асса
+ KassaTbl := CreateObject('“аблица«начений');
+ //р/с
+ BankTbl := CreateObject('“аблица«начений');
+ //дебиторы
+ DebTbl := CreateObject('“аблица«начений');
+ //кредиторы
+ KredTbl := CreateObject('“аблица«начений');
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure strGrid_Fill(ValueTable : ICValueTable; GridName : String);
+var
+  GridObject : TO4StringGrid;
+  i : Integer;
+begin
+   GridObject := Form.FindComponent(GridName) as TO4StringGrid;
+   ValueTable.SortBy('—ум¬ал');
+   GridObject.RowCount := ValueTable.LineCount+1;
+   GridObject.Cells[0, 0] := '¬сего:';
+   if (GridName = 'stgStore')or(GridName = 'stgKassa')or(GridName = 'stgBank')or(GridName = 'stgDeb')or(GridName = 'stgKred') then
+     GridObject.Cells[3, 0] := FormatFloat('0.00',ValueTable.Total('—умќбщ'));
+//   else
+//     GridObject.Cells[1, 0] := FormatFloat('0.00',ValueTable.Total('—умќбщ'));
+   i := 0;
+   ValueTable.Select;
+   while ValueTable.SelectNext do
+     begin
+       inc(i);
+       GridObject.Cells[0, i] := ValueTable.Ќаименование;
+       Case GridName of
+         'stgBank','stgDeb','stgKred':
+             begin
+               GridObject.Cells[1, i] := FormatFloat('0.00',ValueTable.—ум¬ал);
+               GridObject.Cells[2, i] := ValueTable.¬алюта. од;
+               GridObject.Cells[3, i] := FormatFloat('0.00',ValueTable.—умќбщ);
+             end;
+         'stgKassa':
+             begin
+               GridObject.Cells[1, i] := FormatFloat('0.00',ValueTable.—ум¬ал);
+               GridObject.Cells[2, i] := ValueTable. урс;
+               GridObject.Cells[3, i] := FormatFloat('0.00',ValueTable.—умќбщ);
+             end;
+         'stgStore':
+             begin
+               stgStore.Cells[1, i] := FormatFloat('0.00', ValueTable.—ум¬ал);
+               if VarAsBool(ValueTable.¬алюта.IsFocused) then
+                 stgStore.Cells[2, i] := ValueTable.¬алюта. од;
+               stgStore.Cells[3, i] := FormatFloat('0.00', ValueTable.—умќбщ);
+             end
+       else
+         GridObject.Cells[1, i] := FormatFloat('0.00',ValueTable.—умќбщ);
+       end
+     end;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  eDateTo.Text := DateToStr(MasterData.DATE);
+  edTypePart.Text := MasterData.TypePart;
+  CreateObjects;
+  Vtbl := CreateObject('“аблица«начений');
+  Vtbl.Close;
+  Vtbl.AddColumn('Ќаименование',vtcString,100);
+  Vtbl.AddColumn(' урс',vtcFFt,2);
+  Vtbl.AddColumn('—ум¬ал',vtcFFt,2);
+  Vtbl.AddColumn('¬алюта',vtcLink,0);
+  Vtbl.AddColumn('—умќбщ',vtcFFt,2);
+  Vtbl.AddColumn('“ип',vtcInteger,0);
+  Vtbl.Open;
+  MasterData.SelectLines;
+  While MasterData.SelectNextLine do
+    begin
+      Vtbl.Append;
+        Vtbl.Ќаименование := MasterData.Ќаименование;
+        Vtbl.—ум¬ал := MasterData.—ум¬ал;
+        Vtbl.—умќбщ := MasterData.—умќбщ;
+        Vtbl.¬алюта := MasterData.¬алюта;
+        Vtbl. урс := MasterData. урс;
+        Vtbl.“ип := MasterData.“ип;
+      Vtbl.Post;
+    end;
+  Vtbl.SortBy('“ип');
+  Vtbl.SetRange(0,0);
+  Vtbl.CopyTo('Ќаименование;—умќбщ;¬алюта;—ум¬ал',StoreTbl);
+  Vtbl.SetRange(4,4);
+  Vtbl.CopyTo('Ќаименование; урс;—умќбщ;—ум¬ал',KassaTbl);
+  Vtbl.SetRange(5,5);
+  Vtbl.CopyTo('Ќаименование;—умќбщ;¬алюта;—ум¬ал',BankTbl);
+  Vtbl.SetRange(6,6);
+  Vtbl.CopyTo('Ќаименование;—умќбщ;¬алюта;—ум¬ал',DebTbl);
+  Vtbl.SetRange(7,7);
+  Vtbl.CopyTo('Ќаименование;—умќбщ;¬алюта;—ум¬ал',KredTbl);
+
+  StoreSum := StoreTbl.Total('—умќбщ');
+  KassaSum := KassaTbl.Total('—умќбщ');
+  BankSum := BankTbl.Total('—умќбщ');
+  DebSum := DebTbl.Total('—умќбщ');
+  KredSum := KredTbl.Total('—умќбщ');
+  AllSum := StoreSum + RealSum + ProdSum + KassaSum + BankSum + DebSum - absD(KredSum);
+  ActiveSum := StoreSum + RealSum + ProdSum + KassaSum + BankSum + DebSum;
+  if VarAsBool(MasterData.PriceType) then
+    begin
+      lbAllSum1.Caption := 'Ѕаланс : ' + FormatFloat('0.00',AllSum);
+      lbAllSum2.Caption := 'Ѕаланс : ' + FormatFloat('0.00',AllSum);
+      lbActive.Caption := FormatFloat('0.00',ActiveSum);
+    end
+  else
+    begin
+      lbAllSum1.Caption := 'Ѕаланс : ' + FormatFloat('0.00',AllSum);
+      lbAllSum2.Caption := 'Ѕаланс : ' + FormatFloat('0.00',AllSum);
+      lbActive.Caption := FormatFloat('0.00',ActiveSum);
+    end;
+  lbPassiv.Caption := FormatFloat('0.00',MasterData.ѕасив—умма);
+  if StoreSum <> 0 then
+    strGrid_Fill(StoreTbl,'stgStore')
+  else
+    StorePanel.Visible := false;
+  if KassaSum <> 0 then
+    strGrid_Fill(KassaTbl,'stgKassa')
+  else
+    KassaPanel.Visible := false;
+  if BankSum <> 0 then
+    strGrid_Fill(BankTbl,'stgBank')
+  else
+    BankPanel.Visible := false;
+  if DebSum <> 0 then
+    strGrid_Fill(DebTbl,'stgDeb')
+  else
+    DebPanel.Visible := false;
+  if KredSum <> 0 then
+    strGrid_Fill(KredTbl,'stgKred')
+  else
+    KredPanel.Visible := false; 
+end;
+
+{$D-}
+procedure stgStore_GetCellProps(Sender : TObject; aCol, aRow : integer; aFont : TFont;var Background : TColor; var CellAlignment : TAlignment; var Layout : TTextLayout; var WrapText : boolean;Selected, Fixed, Highlight : boolean);
+begin
+ if aCol > 0 then begin
+   CellAlignment := taRightJustify;
+ end;
+ case aRow of
+    0 : aFont.Style := 1;
+ end;
+end;
+{$D+}
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+lbAllSum1:TO4Label
+lbAllSum2:TO4Label
+Panel2:TO4Panel
+Panel3:TO4Panel
+Panel4:TO4Panel
+Label1:TO4Label
+Label13:TO4Label
+Label11:TO4Label
+lbActive:TO4Label
+Panel5:TO4Panel
+Label2:TO4Label
+Label9:TO4Label
+Label5:TO4Label
+lbPassiv:TO4Label
+Label14:TO4Label
+Panel6:TO4Panel
+Splitter3:TO4Splitter
+Splitter2:TO4Splitter
+Splitter4:TO4Splitter
+StorePanel:TO4Panel
+Label4:TO4Label
+dbgStore:TO4DBGrid
+stgStore:TO4StringGrid
+KassaPanel:TO4Panel
+Label7:TO4Label
+dbgKassa:TO4DBGrid
+stgKassa:TO4StringGrid
+BankPanel:TO4Panel
+Label8:TO4Label
+dbgBank:TO4DBGrid
+stgBank:TO4StringGrid
+DebPanel:TO4Panel
+Label12:TO4Label
+dbgDebitory:TO4DBGrid
+stgDeb:TO4StringGrid
+KredPanel:TO4Panel
+Label3:TO4Label
+stgKred:TO4StringGrid
+Panel13:TO4Panel
+btnOK:TO4Button
+btCancel:TO4Button
+Panel14:TO4Panel
+lDateFrom:TO4Label
+Label15:TO4Label
+eDateTo:TO4Edit
+edTypePart:TO4Edit
+MDS:TO4DataSource

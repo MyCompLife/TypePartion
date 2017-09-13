@@ -1,0 +1,40 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  FullName : string;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniFix, FixAck);
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniUnFix, FixAck);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniDel, DelAck);  
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoChangeStateUp(Doc:ICDocuments);
+begin
+ ChangeDoc(clmtStateUp, Doc);
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin
+  ChangeDoc(clmtStateDown, Doc);
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

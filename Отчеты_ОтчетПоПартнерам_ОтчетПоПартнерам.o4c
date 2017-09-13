@@ -1,0 +1,1197 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, Расчеты, ConstNames, Reports, Пользователи;
+
+implementation
+
+var
+ PartTbl, DocsTbl, DocsTypeTbl, PrintPartner, PDocsTbl, PDocsTypeTbl,
+ AttrPartTbl, PrintGoods, PGoodsTbl, GoodsTbl, ColorTbl, DocContentsTbl, TotalSumTbl : ICValueTable;
+ Constants : IC4VPAConst;
+ Options : ICOptions;
+ CursorVis : TCursor;
+ V, PrintProc: ICProcessing;
+ DateFrom, DateTo, XGridDateFrom, XGridDateTo : DateTime;
+ ChangeSort,HasDet : Boolean;
+ Doc: ICDocuments;
+ RegionsList : ICValueList;
+ Regions: ICDictionary;
+ MYF, AdrDic, TelDic : ICDictionary;
+ AnalitField : string;  
+
+procedure ReBuildGridColumnns(dbgData:TO4DBGrid);
+const ReqColumns='Партнер;Валюта;СумНач;СумКон;ПросрочкаОплаты';
+      ReqColumnsTitle='Партнер;Вал.;На начало;На конец;Просрочка';
+      ReqColumnsWidth='160;30;50;50;40';
+var s:string;
+    i: integer;
+    ColumnTbl : ICValueTable;
+begin
+ ColumnTbl := CreateObject('ТаблицаЗначений');
+ ColumnTbl.AddColumn('Num',vtcInteger,0);
+ ColumnTbl.AddColumn('O4FieldName',vtcString,30);
+ ColumnTbl.AddColumn('Caption',vtcString,30);
+ ColumnTbl.AddColumn('Width',vtcInteger,0);
+ ColumnTbl.Open;
+ if dbgData.PosColumns.Count>0 then
+   for i:=0 to dbgData.PosColumns.Count-1 do
+     begin
+       ColumnTbl.Append;
+       ColumnTbl.Num := i*2;
+       ColumnTbl.O4FieldName := (dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName;
+       ColumnTbl.Caption := (dbgData.PosColumns.Items[i] as TO4GridColumn).Title.Caption;
+       ColumnTbl.Width := (dbgData.PosColumns.Items[i] as TO4GridColumn).Width;
+       ColumnTbl.Post;
+     end;
+ ColumnTbl.SortBy('O4FieldName');
+ for i:=1 to WordCount(ReqColumns,';') do
+   if not ColumnTbl.Find(ExtractWord(i,ReqColumns,';')) then
+     begin
+       ColumnTbl.Append;
+       ColumnTbl.Num := ColumnTbl.LineCount*2;
+       ColumnTbl.O4FieldName := ExtractWord(i,ReqColumns,';');
+       ColumnTbl.Caption := ExtractWord(i,ReqColumnsTitle,';');
+       ColumnTbl.Width := StrToDecDef(ExtractWord(i,ReqColumnsWidth,';'),50);
+       ColumnTbl.Post;
+     end;
+ if cbUseAnalit.Checked then
+   begin
+     if not ColumnTbl.Find('АналитикаВзаиморасчета') then
+       begin
+         if ColumnTbl.Find('Партнер') then
+           i := VarAsInt(ColumnTbl.Num)+1
+         else
+           i := ColumnTbl.LineCount*2+1;
+         ColumnTbl.Append;
+         ColumnTbl.Num := i;
+         ColumnTbl.O4FieldName := 'АналитикаВзаиморасчета';
+         ColumnTbl.Caption := 'Аналитика';
+         ColumnTbl.Width := 50;
+         ColumnTbl.Post;
+       end;
+   end
+ else
+   begin
+     if ColumnTbl.Find('АналитикаВзаиморасчета') then
+       ColumnTbl.Delete;
+   end;
+  ColumnTbl.SortBy('Num');
+ try
+   dbgData.AutoAlign := false;
+   dbgData.PosColumns.Clear;
+   ColumnTbl.Select;
+   i := 0;
+   While ColumnTbl.SelectNext do
+     begin
+       dbgData.PosColumns.Add;
+      (dbgData.PosColumns.Items[i] as TO4GridColumn).O4FieldName := VarAsStr(ColumnTbl.O4FieldName);
+      (dbgData.PosColumns.Items[i] as TO4GridColumn).Title.Caption := VarAsStr(ColumnTbl.Caption);
+      (dbgData.PosColumns.Items[i] as TO4GridColumn).Width := VarAsInt(ColumnTbl.Width);
+      inc(i);
+     end;
+ finally
+   dbgData.AutoAlign := true;
+ end;
+end;
+
+procedure CreateObjects;
+begin
+// V := CreateObject('Обработки.ОтчетПоПартнерам');
+ Constants := GetConstants;
+ Options := GetOptions;
+ DocContentsTbl := CreateObject('ТаблицаЗначений');
+ //партнеры
+ PartTbl := CreateObject('ТаблицаЗначений');
+ PartTbl.Close();
+ PartTbl.AddColumn('Партнер', vtcLink,0);
+ PartTbl.AddColumn('Валюта', vtcLink,0);
+ PartTbl.AddColumn('АналитикаВзаиморасчета', vtcLink,0);
+ PartTbl.AddColumn('СумОбщВал', vtcFFt,4);
+ PartTbl.AddColumn('СумПрихВал', vtcFFt,4);
+ PartTbl.AddColumn('СумРасхВал', vtcFFt,4);
+ PartTbl.AddColumn('СумНач', vtcFFt,2);
+ PartTbl.AddColumn('СумКон', vtcFFt,2);
+ PartTbl.AddColumn('Регион', vtcLink,0);
+ PartTbl.AddColumn('ПросрочкаОплаты', vtcInteger,0);
+ PartTbl.AddColumn('СрокОплаты', vtcInteger,0);
+ PartTbl.AddColumn('MeanName', vtcString,65);
+ PartTbl.Open();
+ PartTbl.UseDataSource(CtrlToVar(TVSPartner));
+ FormatPartTbl(PartTbl);
+
+ //операции (общий список)
+ DocsTbl := CreateObject('ТаблицаЗначений');
+ DocsTbl.Close();
+ DocsTbl.AddColumn('Партнер', vtcLink,0);
+ DocsTbl.AddColumn('Валюта', vtcLink,0);
+ DocsTbl.AddColumn('АналитикаВзаиморасчета', vtcLink,0);
+ DocsTbl.AddColumn('Date', vtcDateTime,0);
+ DocsTbl.AddColumn('Document', vtcLink,0);
+ DocsTbl.AddColumn('MotionSign', vtcInteger,0);
+ DocsTbl.AddColumn('DNames', vtcString,70);
+ DocsTbl.AddColumn('СумОбщВал', vtcFFt,2);
+ DocsTbl.AddColumn('СумНакоп', vtcFFt,2);
+ DocsTbl.AddColumn('СумКОплате', vtcFFt,2); 
+ DocsTbl.AddColumn('СумПриход', vtcFFt,2);
+ DocsTbl.AddColumn('СумРасход', vtcFFt,2);
+ DocsTbl.AddColumn('Num', vtcInteger,0);
+ DocsTbl.Open();
+
+ //операции, сгруппированные по типам
+ DocsTypeTbl := CreateObject('ТаблицаЗначений');
+ DocsTypeTbl.Close();
+ DocsTypeTbl.AddColumn('Партнер', vtcLink,0);
+ DocsTypeTbl.AddColumn('Валюта', vtcLink,0);
+ DocsTypeTbl.AddColumn('АналитикаВзаиморасчета', vtcLink,0);
+ DocsTypeTbl.AddColumn('Date', vtcDateTime,0);
+ DocsTypeTbl.AddColumn('Document', vtcLink,0);
+ DocsTypeTbl.AddColumn('DNames', vtcString,70);
+ DocsTypeTbl.AddColumn('MotionSign', vtcInteger,0);
+ DocsTypeTbl.AddColumn('СумОбщВал', vtcFFt,2);
+ DocsTypeTbl.AddColumn('СумНакоп', vtcFFt,2); 
+ DocsTypeTbl.AddColumn('СумПриход', vtcFFt,2);
+ DocsTypeTbl.AddColumn('СумРасход', vtcFFt,2);
+ DocsTypeTbl.AddColumn('Num', vtcInteger,0);
+ DocsTypeTbl.Open();
+ //***********************
+ PGoodsTbl:= CreateObject('ТаблицаЗначений');
+ PGoodsTbl.Open();
+ FormatDocsTbl(DocsTbl);
+ FormatDocsTbl(DocsTypeTbl);
+ GoodsTbl := CreateObject('ТаблицаЗначений');
+ GoodsTbl.Open();
+
+ ColorTbl := CreateObject('ТаблицаЗначений');
+ ColorTbl.AddColumn('КолДней', vtcInteger, 0);
+ ColorTbl.AddColumn('Цвет', vtcInteger, 0);
+ ColorTbl.Open;   
+
+ MYF := CreateObject('Справочники.ВашеПредприятие');
+ MYF.Select;
+ MYF.SelectNext;
+ AdrDic := CreateObject('Справочники.Адреса');
+ TelDic := CreateObject('Справочники.Телефоны');
+end;
+
+procedure ReadColorTbl;
+var s : string;
+    i : integer;
+begin
+  ColorTbl.Clear;
+  s := Options.GetServerPrm('ОтчетПоПартнерамЦвета');
+  if WordCount(s,' ')>1 then
+   for i:= 1 to (WordCount(s,' ') div 2) do
+    begin
+     ColorTbl.Append;
+     ColorTbl.КолДней := VarAsInt(ExtractWord(i*2-1, s,  ' '), 0);
+     ColorTbl.Цвет := VarAsInt(ExtractWord(i*2, s,  ' '), 0);
+     ColorTbl.Post;
+    end;
+  ColorTbl.SortBy('КолДней');
+  ColorTbl.Select;
+end;    
+
+function GetPartnerInfoStr(Partner:ICDictionary; AnalitValue:string=''):string;
+begin
+ Result := VarAsStr(Partner.NameField)+AnalitValue+#10;
+ AdrDic.UseMaster(Partner);
+ if AdrDic.FindByField('Активность',true,false) or (AdrDic.Select and AdrDic.SelectNext) then
+   begin
+     if VarAsStr(AdrDic.ПочтИндекс)<>'' then
+       Result := Result + VarAsStr(AdrDic.ПочтИндекс)+', ';
+     if VarAsBool(AdrDic.@Город.IsFocused) then
+       Result := Result + VarAsStr(AdrDic.Город.Название)+', ';
+     Result := Result + VarAsStr(AdrDic.Адрес)+#10;
+   end;
+ TelDic.UseMaster(Partner);
+ if TelDic.FindByField('Активность',true,false) or (TelDic.Select and TelDic.SelectNext) then
+   Result := Result + VarAsStr(TelDic.Номер)+#10;
+end;
+
+procedure FillXGrid;
+var PartnerDic : ICDictionary;
+    PartnerStr, PeriodStr, CurrencyStr, AnalitValue : string;
+    TotalSum:Variant;
+    i:integer;
+    OneDoc : ICDocuments;
+begin
+ XGrid.ClearAll;
+ if PartTbl.IsFocused then
+   begin
+     if (AnalitField<>'') and VarAsBool(PartTbl.@АналитикаВзаиморасчета.IsFocused) then
+       AnalitValue := ' ('+VarAsStr(PartTbl.АналитикаВзаиморасчета.NameField)+')';
+     if VarAsBool(PartTbl.@Валюта.IsFocused) then
+       CurrencyStr := VarAsStr(PartTbl.Валюта.CodeField);
+     DocsTbl.DoNumbering('Num',1,1);
+     DocsTypeTbl.DoNumbering('Num',1,1);
+     PeriodStr :=  DateToStr(XGridDateFrom)+' по '+DateToStr(XGridDateTo);
+     XGrid.AddSection('Title');
+     XGrid.Cell(1,1).Value := 'Акт звірки за період з '+PeriodStr;
+     PartnerDic := CreateObject('Справочники.'+VarAsStr(PartTbl.Партнер.GetSign));
+     if PartnerDic.Find(PartTbl.@Партнер) then
+       begin
+         if MYF.FindByField('Регион',PartnerDic.@Регион, false) or (MYF.Select and MYF.SelectNext) then
+           XGrid.Cell(3,2).Value := GetPartnerInfoStr(MYF);
+         XGrid.Cell(3,7).Value := GetPartnerInfoStr(PartnerDic,AnalitValue);
+         XGrid.Cells(3,2,3,5).GroupCells;
+         XGrid.Cells(3,7,3,XGrid.ColCount).GroupCells;
+         XGrid.Cells(3,1,3,XGrid.ColCount).AdjustRowHeights;
+       end;
+      XGrid.Cell(XGrid.RowCount-1,XGrid.ColCount).Value := 'Валюта взаєморозрахунку: '+CurrencyStr +' ';
+      // Остаток на начало
+      XGrid.AddSection('RestBegin');
+      XGrid.Cell(XGrid.RowCount,XGrid.ColCount).Value := VarAsDec(PartTbl.СумНач);
+      XGrid.Cell(XGrid.RowCount,1).Value := 'Залишок на початок періоду '+CurrencyStr+' :';
+
+      if cbXGridDetByContents.Checked then
+        begin
+          i := 1;
+          DocsTbl.Select;
+          While DocsTbl.SelectNext do
+            begin
+              DocsTbl.AddToXGrid(CtrlToVar(XGrid),'DocDet','Num;Date;Document;;;;;СумПриход;СумРасход;СумНакоп',i,1);
+              OneDoc := DocsTbl.Document;
+              if IsObjFocused(OneDoc) and OneDoc.HasTableField('Товар') then
+                begin
+                  OneDoc.SaveContents('Код;Товар;Количество;Цена;СуммаСтроки', DocContentsTbl);
+                  DocContentsTbl.DoGetLinks('Код=Товар.Код');
+                  DocContentsTbl.DoCalculation('СуммаСтроки','Количество*Цена');
+                  XGrid.AddSection('GoodsHed');
+                  DocContentsTbl.AddToXGrid(CtrlToVar(XGrid),'GoodsDet',';Код;Товар;;;;;Цена;Количество;СуммаСтроки',1,DocContentsTbl.LineCount);
+                  XGrid.AddSection('Empty');
+                end;
+              inc(i);
+            end;
+        end
+      else
+        DocsTbl.AddToXGrid(CtrlToVar(XGrid),'DocDet','Num;Date;Document;;;;;СумПриход;СумРасход;СумНакоп',1,DocsTbl.LineCount);
+
+      // Остаток на конец
+      XGrid.AddSection('RestEnd');
+      XGrid.Cell(XGrid.RowCount,XGrid.ColCount).Value := VarAsDec(PartTbl.СумОбщВал);
+      XGrid.Cell(XGrid.RowCount,1).Value := 'Залишок на кінець періоду '+CurrencyStr+' :';
+      // По типам документов
+      XGrid.AddSection('Empty');
+      XGrid.AddSection('Empty');
+      XGrid.Cell(XGrid.RowCount,1).Value := 'Рух за період по типам документів '+PeriodStr;
+      XGrid.AddSection('GroupTitle');
+      DocsTypeTbl.AddToXGrid(CtrlToVar(XGrid),'GroupDet','Num;DNames;;;;;;СумПриход;СумРасход',1,DocsTbl.LineCount);
+      XGrid.AddSection('GroupTotal');
+      TotalSum := DocsTypeTbl.Total('СумПриход;СумРасход');
+      XGrid.Cell(XGrid.RowCount,XGrid.ColCount-2).Value := TotalSum[0];
+      XGrid.Cell(XGrid.RowCount,XGrid.ColCount-1).Value := TotalSum[1];
+   end;
+end;
+
+procedure FillXGridWide;
+var PartnerDic : ICDictionary;
+    S, MYFNameStr, PartnerNameStr,PeriodStr, CurrencyStr, AnalitValue : string;
+    TotalSum:Variant;
+    i:integer;
+    OneDoc : ICDocuments;
+begin
+ XGridWide.ClearAll;
+ if PartTbl.IsFocused then
+   begin
+     if VarAsBool(PartTbl.@Валюта.IsFocused) then
+       CurrencyStr := VarAsStr(PartTbl.Валюта.CodeField); 
+     if (AnalitField<>'') and VarAsBool(PartTbl.@АналитикаВзаиморасчета.IsFocused) then
+       AnalitValue := ' ('+VarAsStr(PartTbl.АналитикаВзаиморасчета.NameField)+')';
+     DocsTbl.DoNumbering('Num',1,1);
+     DocsTypeTbl.DoNumbering('Num',1,1);
+     PeriodStr :=  DateToStr(XGridDateFrom)+' по '+DateToStr(XGridDateTo);
+     XGridWide.AddSection('Title');
+     XGridWide.Cell(3,1).Value := 'Акт звіряння розрахунків з '+PeriodStr;
+     XGridWide.Cell(4,1).Value := 'від  '+DateToStr(CurrentDate);
+     PartnerDic := CreateObject('Справочники.'+VarAsStr(PartTbl.Партнер.GetSign));
+     if PartnerDic.Find(PartTbl.@Партнер) then
+       begin
+         PartnerNameStr := VarAsStr(PartnerDic.NameField);
+         if MYF.FindByField('Регион',PartnerDic.@Регион, false) or (MYF.Select and MYF.SelectNext) then
+          begin
+           MYFNameStr := VarAsStr(MYF.NameField);                
+           XGridWide.Cell(2,2).Value := GetPartnerInfoStr(MYF);
+           XGridWide.Cells(2,2,2,10).GroupCells;
+           XGridWide.Cells(2,2,2,10).AdjustRowHeights;
+           XGridWide.Cell(6,1).Value := 'За даними:'+#10+VarAsStr(MYF.NameField);
+           XGridWide.Cells(6,1,6,10).GroupCells;
+           XGridWide.Cells(6,1,6,10).BorderTop := 1;
+           XGridWide.Cells(6,1,6,10).BorderLeft := 1;
+           XGridWide.Cells(6,1,6,10).BorderRight := 1;
+           XGridWide.Cells(6,1,6,10).AdjustRowHeights;
+          end;
+         S :=  GetPartnerInfoStr(PartnerDic,AnalitValue);
+         XGridWide.Cell(2,12).Value := S;
+         XGridWide.Cells(2,12,2,XGridWide.ColCount).GroupCells;
+         XGridWide.Cells(2,12,2,XGridWide.ColCount).AdjustRowHeights;
+
+         XGridWide.Cell(6,12).Value := 'За даними:'+#10+PartnerDic.NameField;
+         XGridWide.Cells(6,12,6,XGridWide.ColCount).GroupCells;
+         XGridWide.Cells(6,12,6,XGridWide.ColCount).BorderTop := 1;
+         XGridWide.Cells(6,12,6,XGridWide.ColCount).BorderRight := 1;
+         XGridWide.Cells(6,12,6,XGridWide.ColCount).BorderLeft := 1;
+         XGridWide.Cells(6,12,6,XGridWide.ColCount).AdjustRowHeights;
+       end;
+      XGridWide.Cell(5,1).Value := 'Ми, що нижще підписалися, представник '+MYFNameStr+
+      ' і представник '+PartnerNameStr+' склали даний акт про те, що в результаті проведення звіряння'+
+      ' підтвердженні наступні розрахунки';
+      XGridWide.Cells(5,1,5,XGridWide.ColCount-3).GroupCells;
+      XGridWide.Cells(5,1,5,XGridWide.ColCount-3).AdjustRowHeights;
+      XGridWide.Cell(XGridWide.RowCount-2,XGridWide.ColCount).Value := 'Валюта взаєморозрахунку: '+CurrencyStr +' ';
+
+      // Остаток на начало
+      XGridWide.AddSection('RestBegin');
+      XGridWide.Cell(XGridWide.RowCount,10).Value := VarAsDec(PartTbl.СумНач);
+      XGridWide.Cell(XGridWide.RowCount,1).Value := 'Залишок на початок періоду '+CurrencyStr+' :';
+      XGridWide.Cell(XGridWide.RowCount,12).Value := 'Залишок на початок періоду '+CurrencyStr+' :';
+      DocsTbl.AddToXGrid(CtrlToVar(XGridWide),'DocDet','Num;Date;Document;;;;;СумПриход;СумРасход;СумНакоп',1,DocsTbl.LineCount);
+
+      // Остаток на конец
+      XGridWide.AddSection('RestEnd');
+      XGridWide.Cell(XGridWide.RowCount,10).Value := VarAsDec(PartTbl.СумОбщВал);
+      XGridWide.Cell(XGridWide.RowCount,1).Value := 'Залишок на кінець періоду '+CurrencyStr+' :';
+      XGridWide.Cell(XGridWide.RowCount,12).Value := 'Залишок на кінець періоду '+CurrencyStr+' :';
+      // По типам документов
+      XGridWide.AddSection('Empty');
+      XGridWide.AddSection('Empty');
+      XGridWide.Cell(XGridWide.RowCount,1).Value := 'Рух за період по типам документів '+PeriodStr;
+      XGridWide.Cell(XGridWide.RowCount,12).Value := 'Рух за період по типам документів '+PeriodStr;
+      XGridWide.AddSection('GroupTitle');
+      DocsTypeTbl.AddToXGrid(CtrlToVar(XGridWide),'GroupDet','Num;DNames;;;;;;СумПриход;СумРасход',1,DocsTbl.LineCount);
+      XGridWide.AddSection('GroupTotal');
+      TotalSum := DocsTypeTbl.Total('СумПриход;СумРасход');
+      XGridWide.Cell(XGridWide.RowCount,8).Value := TotalSum[0];
+      XGridWide.Cell(XGridWide.RowCount,9).Value := TotalSum[1];
+
+      XGridWide.AddSection('SubScribe');
+      XGridWide.Cell(XGridWide.RowCount-2,3).Value := MYFNameStr;
+      XGridWide.Cells(XGridWide.RowCount-2,3,XGridWide.RowCount-2,8).GroupCells;
+      XGridWide.Cells(XGridWide.RowCount-2,3,XGridWide.RowCount-2,8).BorderBottom := 1;
+      XGridWide.Cells(XGridWide.RowCount-2,3,XGridWide.RowCount-2,8).AdjustRowHeights;
+
+      XGridWide.Cell(XGridWide.RowCount-2,14).Value := PartnerNameStr;
+      XGridWide.Cells(XGridWide.RowCount-2,14,XGridWide.RowCount-2,19).GroupCells;
+      XGridWide.Cells(XGridWide.RowCount-2,14,XGridWide.RowCount-2,19).BorderBottom := 1;
+      XGridWide.Cells(XGridWide.RowCount-2,14,XGridWide.RowCount-2,19).AdjustRowHeights;
+   end;
+end;
+
+procedure pcRep_Change(Sender: TObject);
+begin
+ if StrCopy(pcRep.ActivePage.Name,1,7)='tsXGrid' then
+  try
+   DocsTbl.DisableControls;
+   DocsTypeTbl.DisableControls; 
+   case pcRep.ActivePage.Name of
+     'tsXGrid' :  FillXGrid;
+     'tsXGridWide' :  FillXGridWide;
+    end;
+  finally
+   DocsTbl.EnableControls;
+   DocsTypeTbl.EnableControls;
+  end;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+ Nobody : TO4ToolBar; // заглушка на NIL
+ n : TO4DBGrid;
+ FormHeight, FormWidth, PanelHeight, PanelWidth : integer;
+ ActiveRegion : ICDictionary;
+begin
+  cbShowUroPart.Checked := true;
+  cbShowEmpl.Checked := true;
+  cbShowBank.Checked := true;
+  Server.CreateSrvObjects;
+  CreateObjects;
+  ReadColorTbl;
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  DateTo := CurrentDate;
+  eDateTo.Text := DateToStr(DateTo);
+  RegionsList := CreateObject('СписокЗначений');
+  Regions := CreateObject('Справочники.Регионы');
+  RegionsList.AddValue(Trans('Все регионы'), Null);
+  Regions.Select;
+  while Regions.SelectNext do
+    RegionsList.AddValue(Regions.Название, Regions); // или ('',S)
+  RegionsList.UseControl(CtrlToVar(eRegion));
+  RegionsList.CurIndex := 0;
+  eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+  ActiveRegion := GetUsersField('Регион');
+  if IsObjFocused(ActiveRegion) then
+    RegionsList.CurIndex := RegionsList.FindByValue(ActiveRegion);
+  cbUseAnalit.Checked := VarAsBool(Options.GetServerPrm('ОтчетПоПартнерамcbUseAnalit'));
+  ReBuildGridColumnns(dbgRT);
+end;
+
+procedure TVSPartner_VPATimedAfterScroll(Sender : TObject);
+var
+ Balans : decimal;
+begin
+ try
+   CursorVis := WaitCursorStart;
+   DocsTbl.UseDataSource(0);
+   DocsTbl.SortBy('Партнер;Валюта'+AnalitField+';Date;Document');
+   DocsTypeTbl.SortBy('Партнер;Валюта'+AnalitField+';DNames');
+   if AnalitField='' then
+     begin
+       DocsTbl.SetRange(ArrayOf(PartTbl.Партнер, PartTbl.Валюта),
+                        ArrayOf(PartTbl.Партнер, PartTbl.Валюта));
+       DocsTypeTbl.SetRange(ArrayOf(PartTbl.Партнер, PartTbl.Валюта),
+                            ArrayOf(PartTbl.Партнер, PartTbl.Валюта));
+     end
+   else
+     begin
+       DocsTbl.SetRange(ArrayOf(PartTbl.Партнер, PartTbl.Валюта, PartTbl.АналитикаВзаиморасчета),
+                        ArrayOf(PartTbl.Партнер, PartTbl.Валюта, PartTbl.АналитикаВзаиморасчета));
+       DocsTypeTbl.SetRange(ArrayOf(PartTbl.Партнер, PartTbl.Валюта, PartTbl.АналитикаВзаиморасчета),
+                            ArrayOf(PartTbl.Партнер, PartTbl.Валюта, PartTbl.АналитикаВзаиморасчета));
+     end;
+   Balans := DocsTypeTbl.Total('СумОбщВал');
+   DocsTbl.UseDataSource(CtrlToVar(TVSDocument));
+   DocsTypeTbl.UseDataSource(CtrlToVar(TVSDocTypes));
+   lBalans.Caption := FormatFloat(Constants.ФорматСумГРН, Balans);   
+    case pcRep.ActivePage.Name of
+     'tsXGrid' :  FillXGrid;
+     'tsXGridWide' :  FillXGridWide;
+    end;
+ finally
+   SetCursor(CursorVis);
+ end;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+ BalansPartBeg, BalansPartEnd : decimal;
+begin
+ try
+   tbRun.Enabled := False;
+   CursorVis := WaitCursorStart;
+   if cbUseAnalit.Checked then
+     AnalitField := ';АналитикаВзаиморасчета'
+   else
+     AnalitField := '';
+
+   PartTbl.DisableControls;
+   PartTbl.Clear();
+   PartTbl.CopyDataToServer;
+   DocsTbl.Clear();
+   DocsTbl.CopyDataToServer;
+   DocsTypeTbl.Clear();
+   DocsTypeTbl.CopyDataToServer;
+   BalansPartBeg := 0;
+   BalansPartEnd := 0;
+   if RegionsList.CurIndex <> 0 then
+     begin
+       Regions := RegionsList.GetValue(RegionsList.CurIndex);
+       Regions.SetSrvToClientPos;
+     end
+   else
+     Regions := Null;
+   if V.RunThreadProcess(Server.CreatePartTblEP(PartTbl.SrvMean,
+                         DocsTbl.SrvMean, DocsTypeTbl.SrvMean,
+                         cbShowUroPart.Checked,
+                         cbShowEmpl.Checked,
+                         cbShowBank.Checked, DateFrom, DateTo, Regions, 
+                         cbOnlyDelayPayPart.Checked, cbUseAnalit.Checked),
+                         ReportRunning) then
+     begin    
+       ReBuildGridColumnns(dbgRT);
+       PartTbl.CopyDataFromServer;
+       DocsTbl.CopyDataFromServer;
+       DocsTypeTbl.CopyDataFromServer; 
+     end;
+       if miSortByPart.Checked then
+          PartTbl.SortBy('Партнер')
+        else
+       if miSortByPartSum.Checked then
+          PartTbl.SortBy('-СумКон')
+        else
+       if miSortByPayDelay.Checked then
+          PartTbl.SortBy('-ПросрочкаОплаты'); 
+       PartTbl.EnableControls;
+       BalansPartBeg := PartTbl.Total('СумНач');
+       BalansPartEnd := PartTbl.Total('СумКон');
+       lbSumBeg.Caption := FormatFloat(Constants.ФорматСумГРН, BalansPartBeg);
+       lbSumEnd.Caption := FormatFloat(Constants.ФорматСумГРН, BalansPartEnd);
+ finally
+   CursorVis := crDefault;
+   SetCursor(CursorVis);
+ end;
+ if PartTbl.LineCount>0 then
+    tbPrint.Enabled:=True
+ else
+    tbPrint.Enabled:=false;
+ if PartTbl.LineCount>0 then
+    tbExcel.Enabled:=True
+ else
+    tbExcel.Enabled:=false;
+
+
+ TVSPartner_VPATimedAfterScroll(TVSPartner);
+ tbRun.Enabled := True;
+end;
+
+procedure CreateAttrPartTbl;
+begin
+  PrintGoods:=CreateObject('ValueTable');
+  PrintGoods.AddColumn('Партнер',vtcLink,0);
+  PrintGoods.AddColumn('СумОбщВал',vtcFFt,4);
+  PrintGoods.Open();
+  AttrPartTbl:=CreateObject('ValueTable');
+  AttrPartTbl.AddColumn('Партнер',vtcLink,0);
+  AttrPartTbl.AddColumn('Название',vtcString,70);
+  AttrPartTbl.AddColumn('Адрес',vtcString,70);
+  AttrPartTbl.AddColumn('Телефон',vtcString,40);
+  AttrPartTbl.Open();
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+Var
+  ColCount:Integer;
+  OnePartner, OneCurrPartner, OneAnalitPartner:Variant;
+begin
+ if IsNil(AttrPartTbl) then
+   CreateAttrPartTbl;
+ try
+  CursorVis := WaitCursorStart;
+  ColCount:=0;
+  if IsNil(PrintPartner) then
+    begin
+      PrintPartner:=CreateObject('ТаблицаЗначений');
+      while ColCount<PartTbl.GetColumnCount() do
+        begin
+          PrintPartner.AddColumn(PartTbl.GetColumnName(ColCount),PartTbl.GetColumnDataType(ColCount),PartTbl.GetColumnDataSize(ColCount));
+          ColCount:=ColCount+1;
+        end;
+      PrintPartner.AddColumn('НазвПартнер', vtcString,70);
+      PrintPartner.AddColumn('Tp', vtcInteger,0);
+      PrintPartner.Open();
+    end
+  else
+    PrintPartner.Clear();
+  if IsNil(PDocsTbl) then
+    begin
+      PDocsTbl:=CreateObject('ТаблицаЗначений');
+      ColCount:=0;
+      While ColCount<DocsTbl.GetColumnCount() do
+        begin
+          PDocsTbl.AddColumn(DocsTbl.GetColumnName(ColCount),DocsTbl.GetColumnDataType(ColCount),DocsTbl.GetColumnDataSize(ColCount));
+          ColCount:=ColCount+1;
+        end;
+      PDocsTbl.AddColumn('НомерДокумента', lftString, 20);
+      PDocsTbl.AddColumn('DocType',  lftString, 40);
+      PDocsTbl.AddColumn('СумОбщМин', vtcFFt,4);
+      PDocsTbl.AddColumn('СумОбщПл', vtcFFt,4);
+      PDocsTbl.AddColumn('СумНач', vtcFFt,4);
+      PDocsTbl.AddColumn('СумКон', vtcFFt,4);
+      PDocsTbl.AddColumn('Tp', vtcInteger,0);
+      PDocsTbl.Open();
+      PGoodsTbl:=CreateObject('ValueTable');
+      PGoodsTbl.AddColumn('НазвТовара',vtcString,70);
+      PGoodsTbl.AddColumn('Document',vtcLink,0);
+      PGoodsTbl.AddColumn('НомСтроки', vtcInteger,0);
+      PGoodsTbl.AddColumn('Товар',vtcLink,0);
+      PGoodsTbl.AddColumn('Партнер', vtcLink,0);
+      PGoodsTbl.AddColumn('Код',vtcString,20);
+      PGoodsTbl.AddColumn('ЕдИзм',vtcString,20);
+      PGoodsTbl.AddColumn('Количество',vtcFFt,5);
+      PGoodsTbl.AddColumn('Цена',vtcFFt,7);
+      PGoodsTbl.AddColumn('Сумма',vtcFFt,7);
+      PGoodsTbl.AddColumn('Tp', vtcInteger,0);
+      PGoodsTbl.Open();
+    end
+  else
+    begin
+      PDocsTbl.Clear();
+      PGoodsTbl.Clear();
+    end;
+  if IsNil(PDocsTypeTbl) then 
+    begin
+      PDocsTypeTbl:=CreateObject('ТаблицаЗначений');
+      ColCount:=0;
+      While ColCount<DocsTypeTbl.GetColumnCount() do
+        begin
+          PDocsTypeTbl.AddColumn(DocsTypeTbl.GetColumnName(ColCount),DocsTypeTbl.GetColumnDataType(ColCount),DocsTypeTbl.GetColumnDataSize(ColCount));
+          ColCount:=ColCount+1;
+        end;
+      PDocsTypeTbl.AddColumn('DocType',  lftString, 40);
+      PDocsTypeTbl.AddColumn('СумНач', vtcFFt,4);
+      PDocsTypeTbl.AddColumn('СумКон', vtcFFt,4);
+      PDocsTypeTbl.AddColumn('Tp', lftInteger,0);
+      PDocsTypeTbl.Open();
+    end
+  else
+    PDocsTypeTbl.Clear();
+  if cbOnePartner.Checked then
+    OnePartner:=PartTbl.Партнер
+  else 
+    OnePartner:=Null;
+  if cbOnePartner.Checked then
+    OneCurrPartner:=PartTbl.Валюта
+  else
+    OneCurrPartner:=Null;
+   if (AnalitField<>'') and VarAsBool(PartTbl.@АналитикаВзаиморасчета.IsFocused) then
+     OneAnalitPartner := PartTbl.@АналитикаВзаиморасчета
+   else
+     OneAnalitPartner :=Null;
+  if not IsNil(PrintPartner) then
+    begin
+      PrintPartner.CopyDataToServer();
+      PDocsTbl.CopyDataToServer();
+      PDocsTypeTbl.CopyDataToServer();
+      PGoodsTbl.CopyDataToServer();
+      HasDet:=cbTov.Checked;
+      if V.RunThreadProcess(Server.GetLoadPrintTableEP(PrintPartner.SrvMean,PDocsTbl.SrvMean,PDocsTypeTbl.SrvMean,
+                               PGoodsTbl.SrvMean,HasDet,OnePartner,OneCurrPartner,OneAnalitPartner,AnalitField),
+            ReportRunning) then
+            raise (Trans('Формирование отчета прекращено пользователем!'));
+      PrintPartner.CopyDataFromServer();
+      PrintPartner.SortBy('НазвПартнер');
+      PDocsTbl.CopyDataFromServer();
+      PGoodsTbl.CopyDataFromServer();
+      PGoodsTbl.SortBy('Document;НомСтроки');
+      PDocsTypeTbl.CopyDataFromServer();
+      PDocsTypeTbl.SortBy('Партнер');
+      PDocsTbl.SortBy('Партнер;Date');
+      PrintPartner.Params['PDocsTbl']:=PDocsTbl;
+      PrintPartner.Params['PDocsTypeTbl']:=PDocsTypeTbl;
+      PrintPartner.Params['PGoodsTbl']:=PGoodsTbl;
+      PrintPartner.Params['DateFrom']:=DateFrom;
+      PrintPartner.Params['DateTo']:=DateTo;
+      PrintPartner.Params['PrintAttr']:=cbPrintAttr.Checked;    
+      PrintPartner.Params['AnalitField'] := AnalitField;
+      if cbPrintAttr.Checked then begin
+        AttrPartTbl.CopyDataToServer();
+        Server.LoadPartAttr(AttrPartTbl.SrvMean);
+        AttrPartTbl.CopyDataFromServer();
+        AttrPartTbl.SortBy('Партнер');
+        PrintPartner.Params['AttrPartTbl']:=AttrPartTbl;
+      end;  
+
+      V.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)),ArrayOf(PrintPartner,HasDet));
+      AttrPartTbl.Clear();
+      PrintPartner.Clear();
+      PGoodsTbl.Clear();
+    end;
+ finally
+   SetCursor(CursorVis);
+ end;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+ SetMenuDates(Sender, DateFrom, DateTo,
+              eDateFrom, eDateTo);
+ (Sender as TO4MenuItem).Checked := true;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+ X, Y : integer;
+begin
+ tbSelectDates.GetScreenPos(X, Y);
+ Y := Y + tbSelectDates.Height;
+ pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+ SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure miSortByPart_Click(Sender : TObject);
+begin
+ ChangeSort:=True;
+ if PartTbl.IsFocused then begin
+   PartTbl.SortBy('Партнер');
+   miSortByPart.Checked:=True;
+   miSortByPartSum.Checked := False;
+   miSortByPayDelay.Checked := False;
+ end;
+end;
+
+procedure miSortByPayDelay_Click(Sender: TObject);
+begin
+  ChangeSort:=True;
+ if PartTbl.IsFocused then begin
+   PartTbl.SortBy('-ПросрочкаОплаты');
+   miSortByPart.Checked := False;
+   miSortByPartSum.Checked := False;
+   miSortByPayDelay.Checked := True;
+ end;
+end;
+
+procedure miSortByPartSum_Click(Sender : TObject);
+begin
+  ChangeSort:=True;
+ if PartTbl.IsFocused then begin
+   PartTbl.SortBy('-СумКон');
+   miSortByPart.Checked := False;
+   miSortByPartSum.Checked := True;
+   miSortByPayDelay.Checked := False;
+ end;
+end;
+
+procedure miSortByDate_Click(Sender : TObject);
+begin
+ ChangeSort:=True;
+ if DocsTbl.IsFocused then begin
+   DocsTbl.SortBy('Партнер;Валюта;Date;Document');   
+   DocsTbl.SetRange(ArrayOf(PartTbl.Партнер, PartTbl.Валюта),ArrayOf(PartTbl.Партнер, PartTbl.Валюта));
+   miSortByDate.Checked := True;
+   miSortByDoc.Checked := False;
+   miSortBySum.Checked := False;
+ end;
+end;
+
+procedure miSortBySum_Click(Sender : TObject);
+begin
+  ChangeSort:=True;
+ if DocsTbl.IsFocused then begin
+   DocsTbl.SortBy('Партнер;Валюта;СумОбщВал');
+   DocsTbl.SetRange(ArrayOf(PartTbl.Партнер, PartTbl.Валюта),ArrayOf(PartTbl.Партнер, PartTbl.Валюта));
+   miSortByDate.Checked := False;
+   miSortByDoc.Checked := False;
+   miSortBySum.Checked := True;
+ end;
+end;
+
+procedure miSortByDoc_Click(Sender : TObject);
+begin
+ ChangeSort:=True;
+ if DocsTbl.IsFocused then
+   begin
+     DocsTbl.SortBy('Партнер;Валюта;Document'); 
+     DocsTbl.SetRange(ArrayOf(PartTbl.Партнер, PartTbl.Валюта),ArrayOf(PartTbl.Партнер, PartTbl.Валюта));
+     miSortByDate.Checked := False;
+     miSortByDoc.Checked := True;
+     miSortBySum.Checked := False;
+   end;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+var i, j, ColCount : Integer;
+    DataDir : String;
+    Excel, TrgRange : Variant;
+    SB : Boolean;
+    OnePartner, OneCurrPartner, OneAnalitPartner:Variant;
+begin
+  PrintProc := CreateObject('отчеты.ОтчетПоПартнерам');
+  if IsNil(AttrPartTbl) then
+    CreateAttrPartTbl;
+  try
+   CursorVis := WaitCursorStart;
+   ColCount:=0;
+   if IsNil(PrintPartner) then begin
+    PrintPartner:=CreateObject('ТаблицаЗначений');
+     While ColCount<PartTbl.GetColumnCount() do begin
+       PrintPartner.AddColumn(PartTbl.GetColumnName(ColCount),PartTbl.GetColumnDataType(ColCount),PartTbl.GetColumnDataSize(ColCount));
+       ColCount:=ColCount+1;
+     end;
+     PrintPartner.AddColumn('НазвПартнер', vtcString,70);
+     PrintPartner.Open();
+   end
+   else PrintPartner.Clear();
+   if IsNil(PDocsTbl) then begin
+     PDocsTbl:=CreateObject('ТаблицаЗначений');
+     ColCount:=0;
+     While ColCount<DocsTbl.GetColumnCount() do begin
+       PDocsTbl.AddColumn(DocsTbl.GetColumnName(ColCount),DocsTbl.GetColumnDataType(ColCount),DocsTbl.GetColumnDataSize(ColCount));
+       ColCount:=ColCount+1;
+     end;
+     PDocsTbl.AddColumn('НомерДокумента', lftString, 20);
+     PDocsTbl.AddColumn('DocType',  lftString, 40);
+     PDocsTbl.AddColumn('СумОбщМин', vtcFFt,4);
+     PDocsTbl.AddColumn('СумОбщПл', vtcFFt,4);
+     PDocsTbl.AddColumn('СумНач', vtcFFt,4);
+     PDocsTbl.AddColumn('СумКон', vtcFFt,4);
+     PDocsTbl.AddColumn('Tp', vtcInteger,0);
+     PDocsTbl.Open();
+     PGoodsTbl:=CreateObject('ValueTable');
+     PGoodsTbl.AddColumn('НазвТовара',vtcString,70);
+     PGoodsTbl.AddColumn('Document',vtcLink,0);
+     PGoodsTbl.AddColumn('НомСтроки', vtcInteger,0);
+     PGoodsTbl.AddColumn('Товар',vtcLink,0);
+     PGoodsTbl.AddColumn('Партнер', vtcLink,0);
+     PGoodsTbl.AddColumn('Код',vtcString,20);
+     PGoodsTbl.AddColumn('ЕдИзм',vtcString,20);
+     PGoodsTbl.AddColumn('Количество',vtcFFt,5);
+     PGoodsTbl.AddColumn('Цена',vtcFFt,7);
+     PGoodsTbl.AddColumn('Сумма',vtcFFt,7);
+     PGoodsTbl.Open();
+    end
+   else
+    begin
+      PDocsTbl.Clear();
+      PGoodsTbl.Clear();
+    end;
+   if IsNil(PDocsTypeTbl) then
+     begin
+       PDocsTypeTbl:=CreateObject('ТаблицаЗначений');
+       ColCount:=0;
+       While ColCount<DocsTypeTbl.GetColumnCount() do
+         begin
+           PDocsTypeTbl.AddColumn(DocsTypeTbl.GetColumnName(ColCount),DocsTypeTbl.GetColumnDataType(ColCount),DocsTypeTbl.GetColumnDataSize(ColCount));
+           ColCount:=ColCount+1;
+         end;
+       PDocsTypeTbl.AddColumn('DocType',  lftString, 40);
+       PDocsTypeTbl.AddColumn('СумНач', vtcFFt,4);
+       PDocsTypeTbl.AddColumn('СумКон', vtcFFt,4);
+       PDocsTypeTbl.AddColumn('Tp', lftInteger,0);
+       PDocsTypeTbl.Open();
+     end
+   else
+     PDocsTypeTbl.Clear();
+   if cbOnePartner.Checked then
+     OnePartner:=PartTbl.Партнер
+   else
+     OnePartner:=Null;
+   if cbOnePartner.Checked then
+     OneCurrPartner:=PartTbl.Валюта
+   else
+     OneCurrPartner:=Null;
+   if (AnalitField<>'') and VarAsBool(PartTbl.@АналитикаВзаиморасчета.IsFocused) then
+     OneAnalitPartner := PartTbl.@АналитикаВзаиморасчета
+   else
+     OneAnalitPartner :=Null;
+   if not IsNil(PrintPartner) then
+   begin
+     PrintPartner.CopyDataToServer();
+     PDocsTbl.CopyDataToServer();
+     PDocsTypeTbl.CopyDataToServer();
+     PGoodsTbl.CopyDataToServer();
+     HasDet := cbTov.Checked;
+     if V.RunThreadProcess(Server.GetLoadPrintTableEP(PrintPartner.SrvMean,PDocsTbl.SrvMean,PDocsTypeTbl.SrvMean,
+                           PGoodsTbl.SrvMean,HasDet,OnePartner,OneCurrPartner,OneAnalitPartner,AnalitField),
+     ReportRunning) then
+       raise (Trans('Формирование отчета прекращено пользователем!'));
+     PrintPartner.CopyDataFromServer();
+     PrintPartner.SortBy('НазвПартнер');
+     PDocsTbl.CopyDataFromServer();
+     PGoodsTbl.CopyDataFromServer();
+     PGoodsTbl.SortBy('Document');
+     PDocsTypeTbl.CopyDataFromServer();
+     PDocsTypeTbl.SortBy('Партнер;Валюта'+AnalitField);
+     PDocsTbl.SortBy('Партнер;Валюта'+AnalitField+';Date');
+     PrintPartner.Params['PDocsTbl'] := PDocsTbl;
+     PrintPartner.Params['PDocsTypeTbl'] := PDocsTypeTbl;
+     PrintPartner.Params['AttrPartTbl' ]:= AttrPartTbl;
+     PrintPartner.Params['PGoodsTbl'] := PGoodsTbl;
+     PrintPartner.Params['DateFrom'] := DateFrom;
+     PrintPartner.Params['DateTo'] := DateTo;
+     PrintPartner.Params['PrintAttr'] := cbPrintAttr.Checked;
+     PrintPartner.Params['AnalitField'] := AnalitField;
+     if cbPrintAttr.Checked then
+       begin
+         AttrPartTbl.CopyDataToServer();
+         Server.LoadPartAttr(AttrPartTbl.SrvMean);
+         AttrPartTbl.CopyDataFromServer();
+         AttrPartTbl.SortBy('Партнер');
+         PrintPartner.Params['AttrPartTbl']:=AttrPartTbl;
+       end;
+      PrintPartner.Params['Period'] := 'з ' + VarAsStr(DateFrom) + ' по ' + VarAsStr(DateTo);
+      if ((not cbOnePartner.Checked) and (not cbPrintAttr.Checked) and (not cbTov.Checked)) then
+        PrintProc.Execute('ПечатьОбщСписок',PrintPartner)
+      else
+        PrintProc.Execute('ПечатьОтчета',PrintPartner);
+     AttrPartTbl.Clear();
+     PrintPartner.Clear();
+     PGoodsTbl.Clear();
+   end;
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure dbgDT_DblClick(Sender : TObject);
+begin
+ if VarAsBool(DocsTbl.Document.IsFocused)and(DocsTbl.Document.GetSign = 'АктНаПолучениеУслуг') then
+   DocsTbl.Document.EditInForm('АктНаПолучУслуг',3)
+ else
+   if VarAsBool(DocsTbl.Document.IsFocused)and(DocsTbl.Document.GetSign = 'ВводОстатковПоВзаиморасчетам') then
+     DocsTbl.Document.EditInForm('ОстПоВзаиморасч',3)
+   else
+     if VarAsBool(DocsTbl.Document.IsFocused) then
+        DocsTbl.Document.EditInForm(DocsTbl.Document.GetSign,3);
+end;
+
+{$D-}
+procedure dbgRT_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : boolean);
+begin
+ if PartTbl.IsFocused then
+  begin
+   ColorTbl.SetRange(0, PartTbl.ПросрочкаОплаты);
+   if ColorTbl.LineCount>0 then
+    begin
+     ColorTbl.SelectLast;
+     BackColor := ColorTbl.Цвет;
+    end;
+  end;
+
+  if PartTbl.IsFocused and (PartTbl.СумОбщВал < 0) then
+    if Highlight then begin
+      DrawFont.Color := $00B9B9FF;
+    end else begin
+      DrawFont.Color := clRed;
+    end;
+end;
+{$D+}
+
+procedure tbColors_Click(Sender: TObject);
+begin
+ if V.Execute('НастройкаЦветов', null)=mrOK then
+  begin
+   ReadColorTbl;
+   dbgRT.Refresh;
+  end;
+end;
+
+
+
+procedure dbgDT_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if DocsTbl.IsFocused and (DocsTbl.СумКОплате > 0) then
+    DrawFont.Color := clRed;
+
+end;
+
+procedure cbXGridDetByContents_Click(Sender: TObject);
+begin
+ try
+   DocsTbl.DisableControls;
+   DocsTypeTbl.DisableControls;
+   FillXGrid;
+ finally
+   DocsTbl.EnableControls;
+   DocsTypeTbl.EnableControls;
+ end;
+end;
+
+procedure tbCreateDoc_Click(Sender: TObject);
+var Doc : ICDocuments;
+    P : ICProcessing;
+    mResult : integer;
+    PartnerDic, EmplDic : ICDictionary;
+begin
+ if PartTbl.IsFocused then
+   begin
+    Doc := CreateObject('Документы.АктСверки');
+    Doc.SetFieldFilter('Партнер','=',PartTbl.@Партнер, '','',Null);
+    Doc.SetFieldFilter('ДатаНачало','=',DateFrom, '','',Null);
+    Doc.SetFieldFilter('ДатаКонец','=',DateTo, '','',Null);
+    mResult := mrOK;
+    if Doc.Select and Doc.SelectNext then
+      begin
+        P := CreateObject('Обработки.Диалоги');
+        mResult := P.Execute('АктСверкиУжеСуществует','Акт сверки по партнеру "'+VarAsStr(PartTbl.Партнер.NameField)+
+                             '" за период с '+DateToStr(DateFrom)+' по '+DateToStr(DateTo)+' уже существует!');
+      end;
+    case mResult of
+     mrOK, mrIgnore :
+       begin
+         if Doc.IsFocused and (mResult=mrIgnore) then
+           Doc.Edit
+         else
+           Doc.Append;
+         Doc.Партнер := PartTbl.@Партнер;
+         Doc.Валюта :=  PartTbl.@Валюта;
+         Doc.Сумма := VarAsDec(PartTbl.СумОбщВал);
+         Doc.ДатаНачало := DateFrom;
+         Doc.ДатаКонец := DateTo;
+         PartnerDic := PartTbl.Партнер;
+         EmplDic := CreateObject('Справочники.Служащие');
+         if EmplDic.FindByField('ПолноеНазвание',GetUserName,false) then
+          Doc.Ответственный := EmplDic;
+         case (Sender as TO4ToolButton).Tag of
+          0 : Doc.XGrid := XGrid.SaveToString;
+          1 : Doc.XGrid := XGridWide.SaveToString;
+         end;
+         Doc.Post;
+         Doc.ApplyUpdates;
+         ShowMessage('Акт сверки сохранен!');
+       end;
+     mrRetry :
+       begin
+        if Doc.IsFocused then
+          Doc.EditInForm('',1);
+       end;
+    end;
+   end;
+end;
+
+procedure tbPrintXGridWide_Click(Sender: TObject);
+begin
+  XGridWide.Print('', True);
+end;
+
+procedure tbXToolsWide_Click(Sender: TObject);
+begin
+begin
+ XGridToolsWide.Visible := not XGridToolsWide.Visible;
+ if XGridToolsWide.Visible
+  then tbXToolsWide.ImageIndex := 98 else tbXToolsWide.ImageIndex := 44;
+end;
+end;
+
+procedure tbExportXLSWide_Click(Sender: TObject);
+begin
+ XGridWide.ExportToExcel;
+end;
+
+procedure tbPrintXGrid_Click(Sender: TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+procedure tbXTools_Click(Sender: TObject);
+begin
+ XGridTools.Visible := not XGridTools.Visible;
+ if XGridTools.Visible
+  then tbXTools.ImageIndex := 98 else tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExportXLS_Click(Sender: TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+procedure tbSMSSend_Click(Sender: TObject);
+var P : ICProcessing;
+begin
+ try
+   TVSPartner.AfterScrollLock := true;
+   PartTbl.DisableControls;
+   P := CreateObject('Обработки.РаботаСSMS');
+   P.Execute('SMSРассылкаДолжникам',ArrayOf(PartTbl,DateTo));
+   TVSPartner.AfterScrollLock := false; 
+ finally
+   PartTbl.SelectFirst;
+   PartTbl.EnableControls;
+ end;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+ Options.SetServerPrm('ОтчетПоПартнерамcbUseAnalit',cbUseAnalit.Checked);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbParam:TO4ToolButton
+tbColors:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbExcel:TO4ToolButton
+tbSMSSend:TO4ToolButton
+Panel6:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+ControlPanel:TO4Panel
+gbPrint:TO4GroupBox
+cbOnePartner:TO4CheckBox
+cbPrintAttr:TO4CheckBox
+cbTov:TO4CheckBox
+Panel5:TO4Panel
+GroupBox1:TO4GroupBox
+cbShowUroPart:TO4CheckBox
+cbShowEmpl:TO4CheckBox
+cbShowBank:TO4CheckBox
+StatusPanel:TO4Panel
+Label10:TO4Label
+Panel11:TO4Panel
+Label6:TO4Label
+eRegion:TO4Edit
+cbOnlyDelayPayPart:TO4CheckBox
+cbUseAnalit:TO4CheckBox
+MainPanel:TO4Panel
+Label2:TO4Label
+dbgRT:TO4DBGrid
+Panel7:TO4Panel
+Panel8:TO4Panel
+Label4:TO4Label
+lbSumBeg:TO4Label
+lbSumEnd:TO4Label
+Label8:TO4Label
+pcRep:TO4PageControl
+tsRepGrid:TTabSheet
+Label3:TO4Label
+Splitter3:TO4Splitter
+dbgDT:TO4DBGrid
+pDocuments:TO4Panel
+Label7:TO4Label
+Panel3:TO4Panel
+Panel4:TO4Panel
+Label1:TO4Label
+lBalans:TO4Label
+DBGrid1:TO4DBGrid
+tsXGrid:TTabSheet
+ToolBar1:TO4ToolBar
+tbCreateDoc:TO4ToolButton
+tbPrintXGrid:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExportXLS:TO4ToolButton
+ToolButton3:TO4ToolButton
+cbXGridDetByContents:TO4CheckBox
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+tsXGridWide:TTabSheet
+ToolBar2:TO4ToolBar
+tbCreateDocWide:TO4ToolButton
+tbPrintXGridWide:TO4ToolButton
+tbXToolsWide:TO4ToolButton
+tbExportXLSWide:TO4ToolButton
+XGridToolsWide:TXGridTools
+XGridWide:TO4XGrid
+pmPartSort:TO4PopupMenu
+miSortByPart:TO4MenuItem
+miSortByPartSum:TO4MenuItem
+miSortByPayDelay:TO4MenuItem
+TVSPartner:TO4TableValueSource
+TVSDocument:TO4TableValueSource
+pmDocSort:TO4PopupMenu
+miSortByDate:TO4MenuItem
+miSortBySum:TO4MenuItem
+miSortByDoc:TO4MenuItem
+TVSTypeSums:TO4TableValueSource
+TVSDocTypes:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

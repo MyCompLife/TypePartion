@@ -1,0 +1,25 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+procedure GetStoreList(TblGood : ISValueTable; Partner : Variant; DateFrom, DateTo : DateTime); server;
+var
+  AccsPartGood, AccsRealizGood : ISAccs;
+begin
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+  AccsRealizGood := CreateObject('Аккумуляторы.ОстаткиТоваровНаРеализаторах');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsRealizGood.ClearFieldFilters();
+  AccsRealizGood.SetFieldFilter('Партнер', Partner);
+  AccsRealizGood.SetFieldFilter('Тип', midDiscard);
+  AccsRealizGood.AppendGroupRest2ToValueTable(DateFrom, DateTo,
+    'Товар;Цена;Партия;ВалютаТовара;КурсТовара;ЦенаВВалюте', '', '', 'КолОбщ', '', TblGood);
+  GetGoodCUtxt_Tbl(TblGood);
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ВхЦенаБезНДС;Партнер;СтавкаНДС;ВхЦенаВал', TblGood);
+end;
+
+end.

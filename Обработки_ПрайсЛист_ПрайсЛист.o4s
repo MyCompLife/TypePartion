@@ -1,0 +1,38 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+var
+  Doc : ISDocuments;
+  ShowCodeUnitname : Boolean;
+  Tbl : ISValueTable;
+  OptPrice : Decimal;
+
+procedure SetGoods(Docs : ISReport; var Accept : Boolean);
+var
+  TblDel : ISValueTable;
+begin
+  TblDel := CreateObject('ТаблицаЗначений');
+  TblDel.Open;
+  {if Doc.Terminated then
+  exit;}
+  Doc.SaveContents('', TblDel);
+ // if ShowCodeUnitname then
+  TblDel.AppendTo('НомСтроки;Товар', Tbl);
+  Tbl.SortBy('Товар');
+  Tbl.DoGetLinks('Код=Товар.Код;Товар=Товар.НазвТовара;ЕдИзм=Товар.ЕдИзм;ОптЦена=Товар.ОптЦена;Цена=Товар.Цена');
+  Tbl.DoCalculation('Цена','Цена');
+  Accept := true;
+end;
+
+function GetRunReportEP(Tbls: ISValueTable; Docs: ISDocuments; ShowCodeUnitnames : Boolean ): Variant; server;
+begin
+  Tbl :=Tbls;
+  Doc := Docs;
+  ShowCodeUnitname :=ShowCodeUnitnames;
+  result := EntryPoint(SetGoods);
+end;  
+
+end.

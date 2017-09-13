@@ -1,0 +1,90 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€CL, ‘иксаци€ѕрибыли»«атрат;
+
+implementation
+
+var
+  AccsGoods, AccsPart, AccsPartGood, AccsGoodCurrent, AccsGoodMotion, AccsInOutCome : ISAccs;
+  ApplyTbl : ISValueTable;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc:ISDocuments);
+var
+  DocDate : DateTime;
+  Sum, Col : Decimal;
+  Dimensions, Fields, Resources: Variant;
+  Currency: ISDictionary;
+begin    
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  AccsGoods := CreateObject('јккумул€торы.ќстатки“оваров');
+  ApplyTbl := CreateObject('“аблица«начений');
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccsGoodCurrent := CreateObject('јккумул€торы.ќстатки“оваровЌа—егодн€');
+  AccsInOutCome := CreateObject('јккумул€торы.ƒоходы–асходы');
+  SetFldToApplyTbl(ApplyTbl);
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+    if not VarAsBool(Doc.“овар.”слуга) then
+      CreateApplyTableExternal(Doc.“овар, Doc, ApplyTbl, AccsGoods, AccsPartGood);
+
+  Doc.Edit;
+  ApplyTbl.SortBy('“овар');
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+    begin
+      ApplyTbl.SetRange(Doc.“овар,Doc.“овар);
+      Doc.EditLine;
+      Doc.÷ена := ApplyTbl.Total('—ум¬х')/ApplyTbl.Total(' олќбщ');
+      Doc.PostLine;
+    end;
+  ApplyTbl.CancelRange;
+  Doc.—умма¬х        := ApplyTbl.Total('—ум¬х');
+  if VarAsDec(Doc. урс)>0 then
+    Doc.—умма¬х¬¬алюте := VarAsDec(Doc.—умма¬х) / VarAsDec(Doc. урс);
+  Doc.—умма¬¬алюте   := Doc.—умма¬х¬¬алюте;
+  Doc.—умма          := Doc.—умма¬х;
+  Doc.Post;
+  ApplyTbl.Select;
+  While ApplyTbl.SelectNext do
+    begin
+      //----oстатки товаров-----------------------------------------------
+      Currency := ApplyTbl.¬алюта“овара;
+      Dimensions := ArrayOf(ApplyTbl.@“овар, ApplyTbl.@—клад, ApplyTbl.ѕарти€, midRetSupplier);
+      Fields     := ArrayOf(Currency, ApplyTbl. урс“овара);
+      AccsGoods.ClearFieldBuffers();
+      AccsGoods.OutcomeDirect(Doc, Doc.ƒатаƒокумента, ApplyTbl.Ќом—троки, Dimensions, ArrayOf(ApplyTbl. олќбщ, ApplyTbl.—ум¬х, ApplyTbl.—ум¬хЌƒ—, ApplyTbl.—умќтп,
+                              ApplyTbl.—умќтпЌƒ—, ApplyTbl.—умЌац, ApplyTbl.—ум¬ал¬х, ApplyTbl.—ум¬алќтп, ApplyTbl.—ум¬алЌац), Fields);
+      //----партии товаров------------------------------------------------
+      RestructureExistedConsg(Doc, AccsPartGood, amtOutcome, ApplyTbl, ' олќбщ');
+      //----остатки товара на сегодн€-------------------------------------
+      MakeGoodMotionCurrent(AccsGoodCurrent, Doc, ApplyTbl, midOutcome, ApplyTbl. олќбщ);
+      //  прибыль/расход
+      AccsInOutCome.ClearFieldBuffers();
+      Dimensions := ArrayOf(ApplyTbl.“овар,Doc.ќтветственный,Doc.—тать€,ApplyTbl.¬алюта“овара,Doc.–егион);
+      Resources  := ArrayOf(ApplyTbl.—ум¬алЌац,ApplyTbl. олќбщ,ApplyTbl.—ум¬алЌац*ApplyTbl. урс“овара);
+      Fields     := ArrayOf(ApplyTbl. урс“овара);
+      AccsInOutCome.IncomeDirect(Doc, Doc.ƒатаƒокумента, ApplyTbl.Ќом—троки, Dimensions, Resources, Fields);
+    end;
+  AccsPart.ClearFieldFilters();
+  AccsPart.AssignFields('ѕартнер;—умѕрих¬ал=—умма¬¬алюте;—умќбщ¬ал=—умма¬¬алюте;¬алюта', Doc);  
+  if VarAsBool(Doc.@јналитика¬заиморасчета.IsFocused) then
+    AccsPart.јналитика¬заиморасчета := Doc.@јналитика¬заиморасчета;
+  AccsPart.Income(Doc, Doc.GetDate(), 0);
+end;
+
+procedure GetChangeStateUpEP (Doc : ISDocuments); server;
+begin
+  ChangeStateUp(Doc)
+end;   
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+begin
+  case Doc.GetDocState of
+    1 :
+      ChangeStateUp(Doc);
+  end;
+end;
+
+end.

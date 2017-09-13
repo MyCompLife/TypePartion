@@ -1,0 +1,16 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+function GetAllSums(tbl : ISValueTable) : Decimal; server;
+begin
+  Result := 0;
+  tbl.Select;
+  while tbl.SelectNext() do
+    Result := Result + (1 + VarAsInt(tbl.Долг) * 2) * VarAsDec(tbl.Сумма);
+end;
+
+end.

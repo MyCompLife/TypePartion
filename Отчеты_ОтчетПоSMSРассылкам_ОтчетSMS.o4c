@@ -1,0 +1,104 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  TLF, ADR, RRR, MYF, Region : ICDictionary;
+  Tbl : ICValueTable;
+  DateFrom, DateTo : DateTime;
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin      
+  Tbl := PrintForm.GetParams[0];
+  DateFrom := PrintForm.GetParams[1];
+  DateTo := PrintForm.GetParams[2]; 
+  LabelTitle.Caption := 'Отчет по SMS с '+ DateToStr(DateFrom)+' по '+ DateToStr(DateTo);   
+  LabelCountSMS.Caption := DecToStr(Tbl.Total('КоличествоSMS'),0);
+  LabelSum.Caption := DecToStr(Tbl.Total('Сумма'),2);
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие'); 
+  Region := CreateObject('Справочники.Регионы');
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  Accept := False;
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := Tbl.SelectFirst()
+  else
+    Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Date'] := Tbl.Date;
+      Value['Partner'] := Tbl.ПолноеНазваниеПартнера;
+      Value['TelNumber'] := Tbl.НомерТелефона;
+      Value['StatusCode'] := Tbl.КодСтатусаСообщения;
+      Value['Status'] := Tbl.СтатусСообщения;
+      Value['CountSMS'] := Tbl.КоличествоSMS;
+      Value['Sum'] := Tbl.Сумма;
+    end;
+end;
+
+
+
+
+
+procedure Structure1_ROOT_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndROOT:TRBDetailBand
+imgLogo:TRBImage
+Label5:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label22:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+LabelTitle:TRBLabel
+bndDETHd:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+lPrice1:TRBLabel
+lUnName:TRBLabel
+lPrice3:TRBLabel
+lPrice2:TRBLabel
+lPrice4:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+DETPrice1:TRBLabel
+SysData1:TRBSysData
+DETPrice2:TRBLabel
+DETPrice3:TRBLabel
+DETPrice4:TRBLabel
+Label301:TRBLabel
+BandSum:TRBBand
+LabelCountSMS:TRBLabel
+LabelSum:TRBLabel
+Label1:TRBLabel
+Structure1:TRBStructure

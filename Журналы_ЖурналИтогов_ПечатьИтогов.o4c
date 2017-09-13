@@ -1,0 +1,74 @@
+interface
+
+uses
+  System, DispIntf;
+
+componentlist
+  Form : TO4PrintForm;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Doc : ICDocuments;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  MasterData := CreateObject('∆урналы.∆урнал»тогов');
+  Doc := CreateObject('ƒокументы.Ѕаланс');
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if Index=0 then begin
+    if Form.GetPrintKind = pkWindow then MasterData.AssignSelectParams(Form.GetMean);
+    MasterData.Select;
+  end;
+  Accept := MasterData.SelectNext;
+  if not Accept then Exit;
+  with Table do begin
+   Doc := MasterData.GetDoc;
+   Value['Date'] := Doc.Date;
+   Value['User'] := Doc.ѕользователь;
+   Value['AllSum'] := Doc.—умма;
+   Value['StoreSum'] := Doc.—клады—умма;
+   if VarAsBool(Doc.PriceType) then
+     begin
+       Value['RealSum'] := Doc.–еал—умма;
+       Value['RealSumOt'] := null;
+     end
+   else
+     begin
+       Value['RealSumOt'] := Doc.–еал—уммаќтп;
+       Value['RealSum'] := null;
+     end;
+   Value['ProdSum'] := Doc.ѕрод—умма;
+   Value['KassaSum'] := Doc. асса—умма;
+   Value['BankSum'] := Doc.–асч—чет—умма;
+   Value['DebSum'] := Doc.ƒеб—умма;
+   Value['KredSum'] := Doc.ѕасив—умма;
+  end;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label4:TRBLabel
+Band2:TRBBand
+hdUser:TRBLabel
+hdDate:TRBLabel
+Label5:TRBLabel
+Label7:TRBLabel
+Label11:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+DetailBand1:TRBDetailBand
+lbUser:TRBLabel
+lbDate:TRBLabel
+lbAllSum:TRBLabel
+Label15:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+Structure1:TRBStructure

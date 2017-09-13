@@ -1,0 +1,98 @@
+interface
+
+uses
+  System, DispIntf,Расчеты;
+
+implementation
+
+procedure SrvCalcFields(Dic : ISDictionary);
+Var
+  OwnerDic : IsDictionary;
+begin                     
+  OwnerDic := Dic._GetOwner;
+  if IsObjFocused(OwnerDic) then
+    Dic.Группа := OwnerDic.NameField; 
+  if VarAsBool(Dic.@Товар.IsFocused) then
+    Dic.ПометкаУдаление := VarAsBool(Dic.Товар.ПометкаУдаление);
+end;
+
+function SrvCalcFieldsEP : Variant; server;
+begin
+  Result := EntryPoint(SrvCalcFields);
+end;
+
+
+
+function GetEndPosition(OwnerDic : IsDictionary):Integer;server;
+var
+  TmpDic : ISDictionary;
+begin
+  TmpDic := CreateObject('Справочники.ВессовойТовар');
+  TmpDic.UseMaster(OwnerDic);
+  TmpDic.SortByField('-НомПозиции');
+  TmpDic.Select;
+  TmpDic.SelectNext;
+  Result:= TmpDic.НомПозиции;
+end;    
+ 
+procedure RenumberingDicAfterDelete(OwnerDic : Variant); server;
+var
+  TmpDic : IsDictionary;
+  PriorNumber : Integer;
+begin
+  PriorNumber := 0;
+  TmpDic := CreateObject('Справочники.ВессовойТовар');
+  TmpDic.UseMaster(OwnerDic);
+  TmpDic.SortByField('НомПозиции');
+  TmpDic.Select;
+  While TmpDic.SelectNext do
+    begin
+      if VarAsInt(TmpDic.НомПозиции)<>PriorNumber+1 then
+        begin
+          TmpDic.Edit;
+          TmpDic.НомПозиции := PriorNumber+1;
+          TmpDic.Post;
+          TmpDic.ApplyUpdates;
+        end;
+
+      inc(PriorNumber);
+    end;
+
+{
+  While TmpDic.SelectNext do
+    begin
+      if (PriorNumber>=0) and (VarAsInt(TmpDic.НомПозиции)<>PriorNumber+1) then
+        begin
+          TmpDic.Edit;
+          TmpDic.НомПозиции := PriorNumber+1;
+          TmpDic.Post;
+          TmpDic.ApplyUpdates;
+        end;
+
+      PriorNumber := VarAsInt(TmpDic.НомПозиции);
+    end;
+}
+end;
+
+
+function GetNextNumberForSort( DicMaster : ISDictionary) : Integer; server;
+var
+  DicCurrent : ISDictionary;
+begin
+
+  DicCurrent := CreateObject('Справочники.ВессовойТовар');
+  DicCurrent.SortByField('НомПозиции');
+  DicCurrent.UseMaster(DicMaster);
+  DicCurrent.Select;
+  if VarAsBool(DicCurrent.SelectPrior) then
+    begin
+      if not (IsNull(DicCurrent._Default['НомПозиции']) or (VarAsInt(DicCurrent._Default['НомПозиции']) <= 0)) then
+        Result := VarAsInt(DicCurrent._Default['НомПозиции']) + 1
+      else
+        Result :=  1;
+    end
+  else
+    Result := 1;
+end;
+
+end.

@@ -1,0 +1,51 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, ConstNames;
+
+implementation
+
+var
+  MasterData : ICOpers;
+  Pk : Integer;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  Pk := Form.GetPrintKind;
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    MasterData.Select;
+  Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := MasterData.НомерДок;
+      Value['Date'] := MasterData.Дата;
+      Value['Partner'] := MasterData.Комментарий;
+      Value['Summa'] := MasterData.Сумма;
+      Value['TypeDoc'] := MasterData.Документ;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band2:TRBBand
+hdTypeDoc:TRBLabel
+hdDate:TRBLabel
+hdSumma:TRBLabel
+hdNumber:TRBLabel
+hdPartner:TRBLabel
+DetailBand1:TRBDetailBand
+lbPartner:TRBLabel
+lbDate:TRBLabel
+lbSumma:TRBLabel
+lbNumber:TRBLabel
+lbTypeDoc:TRBLabel
+Band1:TRBBand
+Label4:TRBLabel
+Structure1:TRBStructure

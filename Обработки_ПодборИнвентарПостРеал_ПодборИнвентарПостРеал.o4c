@@ -1,0 +1,176 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, Интерфейс, Расчеты;
+
+implementation
+
+var
+  PostReal : ICDictionary;
+  DateDoc : DateTime;
+  TblGoods, TblPartGood, TblPartOneGood : ICValueTable;
+  ActGood : Variant;
+  LockCalc : Boolean;
+  CursorVis : TCursor;
+  UseConst : IC4VPAConst;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if IsNil(Params) then
+    exit;
+  if VarAsBool(Params.IsType('Документы')) then
+    begin
+      PostReal := Params.Партнер;
+      DateDoc := Params.ДатаДокумента;
+    end;
+  if VarAsBool(Params.IsType('Справочники')) then
+    begin
+      PostReal := Params;
+      DateDoc := CurrentDate;
+    end;
+  LockCalc := True;
+  CursorVis := WaitCursorStart;
+  try
+    UseConst := GetConstants;
+    eDate.Text := VarAsStr(RoundDate(DateDoc, rdDay, True));
+    server.InitSrvData(PostReal, DateDoc);
+    TblGoods := CreateObject('ТаблицаЗначений');
+    TblGoods.AddColumn('Код', vtcString, 20);
+    TblGoods.AddColumn('Товар', vtcLink, 0);
+    TblGoods.AddColumn('Партия', vtcFloat, 0);
+    TblGoods.AddColumn('ЕдИзм', vtcLink, 0);
+    TblGoods.AddColumn('Валюта', vtcLink, 0);
+    TblGoods.AddColumn('Комиссия', vtcInteger, 0);
+    AddFFtColumnsList(TblGoods, 'КолОбщ;ВхЦенаВал;ВхЦенаБезНДС');
+    TblGoods.AddColumn('ВсеПартии', vtcInteger, 0);
+    TblGoods.Open();
+    TblPartGood := CreateObject('ТаблицаЗначений');
+    TblPartGood.AddColumn('Код', vtcString, 20);
+    TblPartGood.AddColumn('Товар', vtcLink, 0);
+    TblPartGood.AddColumn('ЕдИзм', vtcLink, 0);
+    TblPartGood.AddColumn('Склад', vtcLink, 0);
+    TblPartGood.AddColumn('Партнер', vtcLink, 0);
+    TblPartGood.AddColumn('Партия', vtcFloat, 0);
+    TblPartGood.AddColumn('Валюта', vtcLink, 0);
+    TblPartGood.AddColumn('СтавкаНДС', vtcInteger, 0);
+    TblPartGood.AddColumn('Комиссия', vtcInteger, 0);
+    AddFFtColumnsList(TblPartGood, 'КолОбщ;ВхЦенаВал;ВхЦенаБезНДС');
+    TblPartGood.Open;
+    SetFormatStdColumnsList(TblPartGood, 'КолОбщ;ВхЦенаВал;ВхЦенаБезНДС');
+    TblPartGood.Tblname := 'tblSpPartGoods';
+    TblGoods.Tblname := 'tblGoods';
+    TblGoods.CopyDataToServer;
+    TblPartGood.CopyDataToServer;
+    server.LoadGoodsParams(TblGoods.SrvMean, TblPartGood.SrvMean);
+    TblGoods.CopyDataFromServer;                    
+    TblGoods.SrvMean.Clear;
+    SetFormatStdColumnsList(TblGoods, 'КолОбщ;ВхЦенаВал;ВхЦенаБезНДС');
+    TblGoods.Params['ПодчиненнаяТаблица'] := TblPartGood;
+    TblPartGood.CopyDataFromServer;
+    TblPartGood.SrvMean.Clear;
+    TblPartGood.SortBy('Товар');
+    TblPartGood.SetRange(TblGoods.@Товар, TblGoods.@Товар);
+    TblGoods.UseDataSource(CtrlToVar(TVSGoods));
+    TblPartGood.UseDataSource(CtrlToVar(TVSPartGood));
+  finally
+    SetCursor(CursorVis);
+    LockCalc := False;
+  end;
+end;
+
+procedure TVSGoods_VPATimedAfterScroll(Sender : TObject);
+begin
+  TblPartGood.SetRange(TblGoods.@Товар, TblGoods.@Товар);
+end;
+
+procedure bFindAllPart_Click(Sender : TObject);
+begin
+  if VarAsBool(TblGoods.ВсеПартии) then
+    exit;
+  CursorVis := WaitCursorStart;
+  try
+    if IsNil(TblPartOneGood) then
+      begin
+        TblPartOneGood := CreateObject('ТаблицаЗначений');
+        TblPartOneGood.AddColumn('Код', vtcString, 20);
+        TblPartOneGood.AddColumn('Товар', vtcLink, 0);
+        TblPartOneGood.AddColumn('ЕдИзм', vtcLink, 0);
+        TblPartOneGood.AddColumn('Партнер', vtcLink, 0);
+        TblPartOneGood.AddColumn('Партия', vtcFloat, 0);
+        TblPartOneGood.AddColumn('Валюта', vtcLink, 0);
+        TblPartOneGood.AddColumn('Комиссия', vtcInteger, 0);
+        AddFFtColumnsList(TblPartOneGood, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал');
+        TblPartOneGood.Open;
+      end
+    else
+      TblPartOneGood.Clear();
+    TblPartOneGood.CopyDataToServer;
+    server.FindAllPart(TblGoods.Товар, TblPartOneGood.SrvMean);
+    TblPartOneGood.CopyDataFromServer;
+    TblPartOneGood.SrvMean.Clear;
+    TblPartOneGood.AppendTo('Код;Партнер;Товар;ЕдИзм;Партия;КолОбщ;ВхЦенаБезНДС;Валюта;ВхЦенаВал;Комиссия', TblPartGood);
+    TblGoods.Edit();
+    TblGoods.ВсеПартии := -1;
+    TblGoods.Post();
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure TVSPartGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+end;
+
+procedure TVSGoods_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+  TVSGoods.AfterScrollLock := True;
+  CursorVis := WaitCursorStart;
+end;
+
+procedure TVSGoods_VPAAfterMove(Sender : TObject);
+begin
+  TVSGoods.AfterScrollLock := False;
+  SetCursor(CursorVis);
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  TblGoods.SortBy('Код;Товар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  TblGoods.SortBy('Товар;Код');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel5:TO4Panel
+Splitter5:TO4Splitter
+dbgGoods:TO4DBGrid
+Panel7:TO4Panel
+dbgPartGood:TO4DBGrid
+Panel4:TO4Panel
+Label1:TO4Label
+eDate:TO4Edit
+bFindAllPart:TO4Button
+TVSGoods:TO4TableValueSource
+TVSPartGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem

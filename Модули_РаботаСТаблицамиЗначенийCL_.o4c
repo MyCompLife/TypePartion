@@ -1,0 +1,95 @@
+interface
+
+uses
+  System, DispIntf, ConstNames;
+
+// создание таблицы значений из BLOB-поля
+function CreateTblFromBLOB(OldData : Variant): ICValueTable;
+function WritePropsToBlob(TblReadPropsNow : ICValueTable) : Variant;
+
+implementation
+
+function CreateTableForBLOB : ICValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Structure', vtcBlob, 0);
+  Result.AddColumn('Data', vtcBlob, 0);
+  Result.Open;
+end;
+
+function CreateTableForBLOBStructure : ICValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Name', vtcString, 100);
+  Result.AddColumn('Type', vtcInteger, 0);
+  Result.AddColumn('Size', vtcInteger, 0);
+  Result.AddColumn('ColFormat', vtcString, 20);
+  Result.Open;
+end;
+
+// создание таблицы значений из BLOB-поля
+function CreateTblFromBLOB(OldData : Variant): ICValueTable;
+var
+  TblOldProps, TblStructure, TblAll : ICValueTable;
+  CommonFields : string;
+  DoExit : Boolean;
+begin
+  TblAll := CreateTableForBLOB;
+  try
+    TblAll.PackedData := OldData;
+  except // данные полностью несовместимы
+    DoExit := true;
+  end;             
+  if DoExit then 
+    begin
+      Result := Null;
+      exit;
+    end;
+  if not TblAll.SelectFirst then
+    begin
+      Result := Null;
+      exit;
+    end;
+  //
+  TblStructure := CreateTableForBLOBStructure;
+  TblStructure.PackedData := TblAll.Structure;
+  //
+  TblOldProps := CreateObject('ValueTable');
+  TblStructure.Select;
+  while TblStructure.SelectNext do
+    TblOldProps.AddColumn(TblStructure.Name, TblStructure.Type, TblStructure.Size);
+  TblOldProps.Open;
+  TblStructure.Select;
+  while TblStructure.SelectNext do
+    TblOldProps.SetColumnFormat(TblStructure.Name, VarAsStr(TblStructure.ColFormat));
+  TblOldProps.PackedData := TblAll.Data;
+  Result := TblOldProps;
+end;
+            
+function WritePropsToBlob(TblReadPropsNow : ICValueTable) : Variant;
+var
+  TblStructure, TblAll : ICValueTable;
+  i : Integer;
+begin
+  TblAll := CreateTableForBLOB;
+  TblStructure := CreateTableForBLOBStructure;
+  //
+  for i := 0 to TblReadPropsNow.GetColumnCount - 1 do
+    begin
+      TblStructure.Append;
+      TblStructure.Name := TblReadPropsNow.GetColumnName(i);
+      TblStructure.Type := TblReadPropsNow.GetColumnDataType(i);
+      TblStructure.Size := TblReadPropsNow.GetColumnDataSize(i);
+      TblStructure.ColFormat := TblReadPropsNow.GetColumnFormat(i);
+      TblStructure.Post;
+    end;
+  //
+  TblAll.Append;
+  TblAll.Structure := TblStructure.PackedData;
+  TblAll.Data := TblReadPropsNow.PackedData;
+  TblAll.Post;
+  //
+  Result := TblAll.PackedData;
+end;
+
+end.

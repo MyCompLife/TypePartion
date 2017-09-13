@@ -1,0 +1,64 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+Var
+  V : IcProcessing;
+  Constants : IC4VPAConst;
+
+procedure rbInPrice_Click(Sender: TObject);
+begin
+  pOutPrices.Visible := rbOutPrice.Checked;
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  if rbInPrice.Checked then
+    V.Params['TypePrice'] := 1
+  else
+    begin
+      V.Params['TypePrice'] := 2;
+      case eTypePrice.Text of
+        '÷ена':
+                        V.Params['PriceName'] := '÷ена';
+        '÷ена ќпт':
+                        V.Params['PriceName'] := '÷енаќпт';
+        '÷ена  р. ќпт.':
+                        V.Params['PriceName'] := '÷ена рќпт';
+
+      end;
+    end;
+  Form.ModalResult := mrOk;
+  Form.Close;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := mean;
+  Constants := GetConstants;
+  eTypePrice.Items.Clear;
+  if VarAsBool(Constants.»спользовать÷ена) then
+    eTypePrice.Items.Add('÷ена');
+  if VarAsBool(Constants.»спользовать÷енаќпт) then
+    eTypePrice.Items.Add('÷ена ќпт');
+  if VarAsBool(Constants.»спользовать÷ена рќпт) then
+    eTypePrice.Items.Add('÷ена  р. ќпт.');
+  if eTypePrice.Items.Count=0 then
+    ShowMessage('¬ значени€х важных констант не выбрана ни одна цена!!!!!!')
+  else
+    eTypePrice.ItemIndex:=0;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+btOk:TO4Button
+Panel2:TO4Panel
+Label1:TO4Label
+rbInPrice:TO4RadioButton
+rbOutPrice:TO4RadioButton
+pOutPrices:TO4Panel
+Label2:TO4Label
+eTypePrice:TO4Edit

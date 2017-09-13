@@ -1,0 +1,73 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, УстановкаВажныхОбъектов,
+  ПечатьИВыводНаЭкран, Печать;
+
+implementation
+
+var
+  MasterData, TLF, ADR, PrintAdr : ICDictionary;
+  Pk : Integer;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := CreateObject('Справочники.Банки');
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  Pk := Form.GetPrintKind;
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    if Pk = 0 then
+      begin
+        MasterData := Form.GetMean;
+        MasterData.SelectBookmarks;
+        MasterData.SortByName;
+      end
+    else
+      begin
+        if Pk = pkWindow then
+          MasterData.AssignSelectParams(Form.GetMean);
+        MasterData.SortByName;
+        MasterData.Select;
+      end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  PrintAdr := GetActiveByMaster2(ADR, MasterData);
+  with Table do
+    begin
+      Value['Name'] := MasterData.ПолноеНазвание;
+      Value['MFO'] := MasterData.МФО;
+      if IsObjFocused(PrintAdr) then
+        if VarAsBool(PrintAdr.@Город.IsFocused) then
+          Value['Address'] := PrintAdr.ПочтИндекс + ', ' + PrintAdr.Город.Название + ', ' + PrintAdr.Адрес
+        else
+          Value['Address'] := PrintAdr.ПочтИндекс + ', ' + PrintAdr.Адрес;
+      Value['Phone'] := GetExtTLFNumber(MasterData, TLF);
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label4:TRBLabel
+DetailBand1:TRBDetailBand
+lbName:TRBLabel
+lbAddr:TRBLabel
+lbPhone:TRBLabel
+Label2:TRBLabel
+SysData1:TRBSysData
+Band2:TRBBand
+Label7:TRBLabel
+Label5:TRBLabel
+Label8:TRBLabel
+Label6:TRBLabel
+Label1:TRBLabel
+Structure1:TRBStructure

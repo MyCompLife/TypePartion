@@ -1,0 +1,438 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  GoodDict : ICDictionary;
+  V : ICReport;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  GoodsTbl, DocsTbl, DocsTypeTbl, PGoodsTbl, PDocsTbl : ICValueTable;
+  CursorVis : TCursor;
+  DateFrom, DateTo : DateTime;
+  IsPrinted, ChangeSort : Boolean;
+  GoodList : ICValueList;
+  One : Variant;
+
+procedure CreateAllGoodsTblsCols(GoodTbl : ICValueTable);
+begin
+  GoodTbl.Close();
+  GoodTbl.AddColumn('Товар', vtcLink, 0);
+  GoodTbl.AddColumn('Код', vtcString, 20);
+  GoodTbl.AddColumn('ЕдИзм', vtcLink, 0);
+  GoodTbl.Open();
+end;
+
+procedure CreatePDocsTblCols(PDocsTbl : ICValueTable);
+begin
+  PDocsTbl.Close();
+  PDocsTbl.AddColumn('Товар', vtcLink, 0);
+  PDocsTbl.AddColumn('Date', vtcDate, 0);
+  PDocsTbl.AddColumn('Document', vtcLink, 0);
+  PDocsTbl.AddColumn('КолОбщ', vtcFFt, 5);
+  PDocsTbl.AddColumn('DNames', vtcString, 70);
+  PDocsTbl.AddColumn('MotionSign', vtcInteger, 0);
+  AddFFtColumnsList(PDocsTbl, 'СумОтп;СумНац');
+  PDocsTbl.Open();
+end;
+
+procedure CreateDocsTypeTblCols(PDocsTbl : ICValueTable);
+begin
+  DocsTypeTbl.Close();
+  DocsTypeTbl.AddColumn('DNames', vtcString, 70);
+  DocsTypeTbl.AddColumn('КолОбщ', vtcFFt, 5);
+  AddFFtColumnsList(DocsTypeTbl, 'СумОтп;СумНац');
+  DocsTypeTbl.Open();
+end;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+
+  IsPrinted := False;
+
+  GoodDict := CreateObject('Справочники.Товары');
+  GoodsTbl := CreateObject('ValueTable');
+  PGoodsTbl := CreateObject('ValueTable');
+  //операции (общий список)
+  DocsTbl := CreateObject('ValueTable');
+  PDocsTbl := CreateObject('ValueTable');
+  //операции, сгруппированные по типам
+  DocsTypeTbl := CreateObject('ValueTable');
+
+  CreateAllGoodsTblsCols(GoodsTbl);
+  CreateAllGoodsTblsCols(PGoodsTbl);
+  CreateDocsTblCols(DocsTbl);
+  CreatePDocsTblCols(PDocsTbl);
+  CreateDocsTypeTblCols(DocsTypeTbl);
+  FormatDocsTbl(DocsTbl);
+  FormatDocsTbl(DocsTypeTbl);
+  GoodList := CreateObject('СписокЗначений');
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  CreateObjects;
+  server.CreateSrvObjects;
+  GoodDict.OpenFormInplace('КатегорииТоваров', CtrlToVar(pGoodsCtg));
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure TVSGoods_VPATimedAfterScroll(Sender : TObject);
+var
+  Balans, Profit : Decimal;
+begin
+  try
+    DocsTbl.UseDataSource(0);
+    //   DocsTbl.SortBy('');
+    DocsTbl.Clear();
+    DocsTbl.CopyDataToServer();
+    DocsTypeTbl.UseDataSource(0);
+    DocsTypeTbl.Clear();
+    DocsTypeTbl.CopyDataToServer();
+    Balans := 0;
+    Profit := 0;
+    V.RunThreadProcess(server.GetDocMotionsEP(DocsTbl.SrvMean,
+      DocsTypeTbl.SrvMean,
+      GoodsTbl.Товар),
+      DocsSelecting);
+    server.GetDocsTypeVars(Balans, Profit);
+    DocsTbl.CopyDataFromServer;
+    DocsTbl.UseDataSource(CtrlToVar(TVSDocument));
+    DocsTypeTbl.CopyDataFromServer;
+    DocsTypeTbl.UseDataSource(CtrlToVar(TVSTypeSums));
+    lBalans.Caption := FormatFloat(Constants.ФорматСумГРН, Balans);
+    lProfit.Caption := FormatFloat(Constants.ФорматСумГРН, Profit);
+  finally
+  end;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+begin
+  try
+    GoodsTbl.UseDataSource(0);
+    GoodsTbl.Clear();
+    GoodsTbl.CopyDataToServer();
+    GoodDict.AssignSelectParamsOnSrv(Null);
+    if IsPrinted then
+      IsPrinted := False;
+    if not VarAsBool(GoodDict.Params['UseLevel']) then
+      GoodDict.AssignSelectParamsOnSrv(Null)
+    else
+      begin
+        GoodDict.GetCheckLevelsAsValueList(GoodList);
+        if GoodDict.InteractiveUseLevels and (GoodList.Count = 0) then
+          begin
+            ShowMessage(CheckCtg);
+            exit;
+          end;
+      end;
+    GoodList.CopyDataToServer();
+    V.RunThreadProcess(server.GetRunReportEP(GoodsTbl.SrvMean,
+      GoodList.SrvMean, GoodDict.SrvMean,
+      VarAsBool(Options.GetServerPrm(ShowCodeUnitName)),
+      GoodDict.Params['UseLevel'], GoodDict.SrvMean,
+      DateFrom, DateTo),
+      ReportRunning);
+    GoodsTbl.CopyDataFromServer();
+    GoodsTbl.SortBy('Товар');
+    GoodsTbl.UseDataSource(CtrlToVar(TVSGoods));
+    TVSGoods_VPATimedAfterScroll(TVSGoods);
+  finally
+  end;
+  tbPrint.Enabled := True;
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  ChangeSort := True;
+  if GoodsTbl.IsFocused then
+    begin
+      GoodsTbl.SortBy('Код');
+      miSortByCode.Checked := True;
+      miSortByName.Checked := False;
+    end;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  ChangeSort := True;
+  if GoodsTbl.IsFocused then
+    begin
+      GoodsTbl.SortBy('Товар');
+      miSortByCode.Checked := False;
+      miSortByName.Checked := True;
+    end;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure miSortByDate_Click(Sender : TObject);
+begin
+  if DocsTbl.IsFocused then
+    begin
+      DocsTbl.SortBy('Date;Document');
+      miSortByDate.Checked := True;
+      miSortByDoc.Checked := False;
+      miSortBySum.Checked := False;
+      miSortByAdd.Checked := False;
+    end;
+end;
+
+procedure miSortByDoc_Click(Sender : TObject);
+begin
+  if DocsTbl.IsFocused then
+    begin
+      DocsTbl.SortBy('Document;Date');
+      miSortByDate.Checked := False;
+      miSortByDoc.Checked := True;
+      miSortBySum.Checked := False;
+      miSortByAdd.Checked := False;
+    end;
+end;
+
+procedure miSortBySum_Click(Sender : TObject);
+begin
+  if DocsTbl.IsFocused then
+    begin
+      DocsTbl.SortBy('СумОтп');
+      miSortByDate.Checked := False;
+      miSortByDoc.Checked := False;
+      miSortBySum.Checked := True;
+      miSortByAdd.Checked := False;
+    end;
+end;
+
+procedure miSortByAdd_Click(Sender : TObject);
+begin
+  if DocsTbl.IsFocused then
+    begin
+      DocsTbl.SortBy('СумНац');
+      miSortByDate.Checked := False;
+      miSortByDoc.Checked := False;
+      miSortBySum.Checked := False;
+      miSortByAdd.Checked := True;
+    end;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  try
+    PGoodsTbl.Clear();
+    PGoodsTbl.CopyDataToServer();
+    PDocsTbl.Clear();
+    PDocsTbl.CopyDataToServer();
+    if cbPrintOne.Checked then
+      One := GoodsTbl.Товар
+    else
+      One := Null;
+    GoodDict.AssignSelectParamsOnSrv(Null);
+    GoodDict.GetCheckLevelsAsValueList(GoodList);
+    GoodList.CopyDataToServer();
+    V.RunThreadProcess(server.GetPrintReportEP(PGoodsTbl.SrvMean,
+      PDocsTbl.SrvMean, GoodList.SrvMean,
+      GoodDict.SrvMean, One,
+      VarAsBool(Options.GetServerPrm(ShowCodeUnitName)),
+      DateFrom, DateTo),
+      ReportRunning);
+    ChangeSort := True;
+    PGoodsTbl.CopyDataFromServer();
+    //     PGoodsTbl.SortBy('Товар');
+    PDocsTbl.CopyDataFromServer();
+    PGoodsTbl.Params['PDocsTbl'] := PDocsTbl;
+    PGoodsTbl.Params['DateFrom'] := DateFrom;
+    PGoodsTbl.Params['DateTo'] := DateTo;
+  finally
+  end;
+
+  if ChangeSort then
+    begin
+      PGoodsTbl.SortBy(GoodsTbl.SortedColumns);
+      ChangeSort := False;
+    end;
+  V.PrintForm('ОборотТовараДет', not VarAsBool(Options.GetServerPrm(DirectPrint)), PGoodsTbl);
+end;
+
+function DetDoc(TrgRange : Variant; i : Integer) : Integer;
+var
+  j : Integer;
+  OneDoc : ICDocuments;
+begin
+  DocsTbl.UseDataSource(0);
+  DocsTbl.Select();
+  while DocsTbl.SelectNext do
+    begin
+      TrgRange.Cells(i, 1) := VarAsDate(DocsTbl.Date);
+      TrgRange.Cells(i, 2) := VarAsStr(DocsTbl.Document.GetName + ' ' + DocsTbl.Document.GetNumber);
+      TrgRange.Cells(i, 3) := VarAsDec(DocsTbl.КолОбщ);
+      TrgRange.Cells(i, 4) := VarAsDec(DocsTbl.СумОтп);
+      TrgRange.Cells(i, 5) := VarAsDec(DocsTbl.СумНац);
+      for j := 1 to 5 do
+        TrgRange.Cells(i, j).Borders.LineStyle := 1;
+      inc(i);
+    end;
+  Result := i + 1;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+var
+  DataDir : string;
+  i : Integer;
+  Excel, TrgRange : Variant;
+  SB : Boolean;
+begin
+  //перенос в Excel
+  Excel := CreateOleObject('Excel.Application');
+  SB := Excel.DisplayStatusBar;
+  Excel.Visible := True;
+  Excel.Interactive := False;
+  Excel.ScreenUpdating := False;
+  Excel.DisplayStatusBar := False;
+  try
+    DataDir := ExtractFilePath(RunPath);
+    Excel.WorkBooks.Open(DataDir + 'ExcelTemplates\Отчет.xls').WorkSheets(1).Copy;
+    TrgRange := Excel.WorkBooks(2).WorkSheets(1).Range('A1:N4');
+
+    TrgRange.Cells(1, 1) := 'Дата';
+    TrgRange.Cells(1, 2) := 'Документ';
+    TrgRange.Cells(1, 3) := 'К-сть';
+    TrgRange.Cells(1, 4) := 'Сума';
+    TrgRange.Cells(1, 5) := 'Націнка';
+
+    if not cbPrintOne.Checked then
+      begin
+        i := 2;
+        GoodsTbl.Select;
+        while GoodsTbl.SelectNext do
+          begin
+            TrgRange.Cells(i, 1) := GoodsTbl.Код;
+            TrgRange.Cells(i, 2) := GoodsTbl.DefValue['Товар'];
+            TrgRange.Cells(i, 3) := GoodsTbl.DefValue['ЕдИзм'];
+            TVSGoods_VPATimedAfterScroll(Sender);
+            i := DetDoc(TrgRange, i + 1);
+          end;
+      end
+    else
+      begin
+        i := 2;
+        TrgRange.Cells(i, 1) := GoodsTbl.Код;
+        TrgRange.Cells(i, 2) := GoodsTbl.DefValue['Товар'];
+        TrgRange.Cells(i, 3) := GoodsTbl.DefValue['ЕдИзм'];
+        DetDoc(TrgRange, 3);
+      end;
+  finally
+    Excel.Interactive := True;
+    Excel.ScreenUpdating := True;
+    Excel.DisplayStatusBar := SB;
+  end;
+  DocsTbl.UseDataSource(CtrlToVar(TVSDocument));
+  Excel.WorkBooks(1).Close;
+  TrgRange := Null;
+  Excel := Null;
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbParam:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+Panel5:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel1:TO4Panel
+cbPrintOne:TO4CheckBox
+Panel2:TO4Panel
+Splitter3:TO4Splitter
+pGoodsCtg:TO4Panel
+Label2:TO4Label
+Panel3:TO4Panel
+Label1:TO4Label
+dbgGoods:TO4DBGrid
+pDocuments:TO4Panel
+Splitter2:TO4Splitter
+Label4:TO4Label
+dbgDT:TO4DBGrid
+Panel4:TO4Panel
+Label5:TO4Label
+DBGrid1:TO4DBGrid
+Panel6:TO4Panel
+Panel7:TO4Panel
+Label3:TO4Label
+lBalans:TO4Label
+Label6:TO4Label
+lProfit:TO4Label
+TVSGoods:TO4TableValueSource
+pmSortGoods:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+pmDocSort:TO4PopupMenu
+miSortByDate:TO4MenuItem
+miSortByDoc:TO4MenuItem
+miSortBySum:TO4MenuItem
+miSortByAdd:TO4MenuItem
+TVSDocument:TO4TableValueSource
+TVSTypeSums:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

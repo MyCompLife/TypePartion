@@ -1,0 +1,104 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, ConstNames,Расчеты,
+  РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками;
+implementation
+
+var
+  AccKassa: ICAccs;
+  tblBank, tblBankForTotal, tblKassa, tblKassaBlack : ICValueTable;
+  Date : DateTime;
+  J : ICJournal;
+  PartAcc, Currency, Kassa, Users : ICDictionary;
+
+procedure SetRests;
+begin
+  Date := RoundDate(StrToDate(eDate.Text), rdDay, True);
+  AccKassa.ClearFieldBuffers();
+  tblKassa.Clear();
+  tblKassa.UseDataSource(0);
+  if IsNil(Users) then
+    Users := CreateObject('Справочники.Пользователи');
+  if Users.FindByField('UniID', GetUserID, False) then
+    if VarAsBool(Users.БлокировкаВыбораРегиона) and VarAsBool(Users.@Касса.IsFocused) then
+      begin
+        AccKassa.SetFieldFilter('Касса', Users.Касса);
+        edKassa.Text := Users.Касса.Название;
+      end;
+  AccKassa.AppendRestToValueTable(Date, 'Касса;Валюта;СумОбщ', tblKassa);
+  Currency.Select;
+  tblKassa.SortBy('Валюта');
+  while Currency.SelectNext do
+  begin
+    if not tblKassa.Find(Currency)  then
+    begin
+      tblKassa.Append;
+      tblKassa.Валюта := Currency;
+      tblKassa.СумОбщ := 0;
+      tblKassa.Post;
+    end;
+  end;
+  tblKassa.UseDataSource(CtrlToVar(TVSKassa));
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+ AccKassa := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+ tblKassa := CreateObject('ТаблицаЗначений');
+ Currency := CreateObject('Справочники.Валюты');
+
+ tblKassa.Close();
+ tblKassa.AddColumn('Валюта',lftLink,0);
+ tblKassa.AddColumn('Касса',lftLink,0);
+ tblKassa.AddColumn('СумОбщ',lftFFT,2);
+ tblKassa.Open();
+
+ Date := CurrentDate;
+ eDate.Text := DateToStr(Date);
+ SetRests;
+end;
+
+procedure Button1_Click(Sender : TObject);
+begin
+ SetRests;
+end;
+
+{$D-}
+procedure dbgBank_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : boolean);
+begin
+ if tblBank.IsFocused and (tblBank.Sort = 'Total') then
+   begin
+    BackColor := clSilver;
+    if Highlight then
+      DrawFont.Color := clWindow
+    else
+      DrawFont.Color := clBlack;
+   end;
+end;
+{$D+}
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Panel1:TO4Panel
+Label1:TO4Label
+Label4:TO4Label
+eDate:TO4Edit
+Button1:TO4Button
+edKassa:TO4Edit
+Edit1:TO4Edit
+PageControl1:TO4PageControl
+TabSheet2:TTabSheet
+dbgKassa:TO4DBGrid
+tbrData:TO4ToolBar
+tbParam:TO4ToolButton
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+TVSBank:TO4TableValueSource
+TVSKassa:TO4TableValueSource
+TVSKassaBlack:TO4TableValueSource

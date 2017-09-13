@@ -1,0 +1,100 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+Procedure GetExportData(TblGoods : IsValueTable; StoresLst, CategoryList : IsValueList; StrPrices : String; UseLevel : Boolean);Server;
+Var
+  AccsGood : ISAccs;
+  LinkStr, TempStr : String;
+  Count, Total, i : Integer;
+  DictGoods, Ctg : IsDictionary;
+
+begin
+  SysProgress(0, 0,0, 'Подготовка: ');
+  DictGoods := CreateObject('Справочники.Товары');
+  DictGoods.Select;
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGood.ClearFieldBuffers;
+  AccsGood.ClearFieldFilters;
+  AccsGood.SetFieldFilter('Склад', StoresLst);
+  if UseLevel then
+    AccsGood.SetCtgFieldFilter('Товар', CategoryList);
+
+  AccsGood.IncludeZeroRest := False;
+  AccsGood.AppendGroupRestToValueTable(RoundDate(CurrentDate,rdDay,True), 'Товар;КолОбщ', TblGoods);
+  AccsGood.ClearFieldFilters;
+  AccsGood.ClearFieldBuffers;
+  TempStr :=VarAsStr(GetConstants.ПутьККаталогуФото);
+
+  TblGoods.GroupBy('Товар','КолОбщ');
+
+
+  LinkStr := 'Код=Товар.Код;Название=Товар.НазвТовара;Группа=Товар.Группа; Валюта=Товар.Валюта';
+  for i:=1 to WordCount(StrPrices,';') do
+    LinkStr := LinkStr +';'+ExtractWord(i,StrPrices,';')+'=Товар.'+ExtractWord(i,StrPrices,';');
+
+//  TblGoods.DoGetLinks('Код=Товар.Код;Название=Товар.НазвТовара;Цена=Товар.Цена;ОптЦена=Товар.ОптЦена');
+  TblGoods.DoGetLinks(LinkStr);
+  TblGoods.DoCalculation('Фото',''''+TempStr+'''+Код+''.jpg''');
+
+
+  TblGoods.DoCalculation('Категория','''''');
+  Count := 1;
+  Total := TblGoods.LineCount;
+  TblGoods.Select;
+  TblGoods.SelectFirst;
+  while not TblGoods.EOF do
+    begin
+      SysProgress(0, Total, Count, 'Подготовка: '+IntToStr(VarAsInt(Count/Total*100)) + '%');
+      if VarAsDec(TblGoods.КолОбщ)<=0 then
+        TblGoods.Delete
+      else
+        begin
+          if not DictGoods.Find(TblGoods.@Товар) then
+            Begin
+              TblGoods.Delete;
+              continue;
+            end;
+//          DictGoods := TblGoods.Товар;
+          TblGoods.Edit;
+          if IsObjFocused(DictGoods.GetParent) then
+            begin
+              Ctg := DictGoods.GetParent;
+              TblGoods.Категория := Ctg.НазвТовара;
+              while  IsObjFocused(Ctg.GetParent) do
+                Ctg := Ctg.GetParent;
+              TblGoods.КатегорияГлн := Ctg.НазвТовара;
+            end
+          else
+            begin
+              TblGoods.Категория := 'Без категории';
+              TblGoods.КатегорияГлн := 'Без категории';
+            end;
+
+          TblGoods.Post;
+          TblGoods.SelectNext;
+        end;
+      inc(Count);
+    end;
+  SysProgress(0, 0, 0, '');
+
+end;
+  
+
+Procedure GetSendAddres (EmailList : IsValueList); server;
+var
+  EmailDic : IsDictionary;
+  EmailTbl : IsValueTable;
+begin 
+  EmailTbl := CreateObject('ValueTable');
+  EmailDic := CreateObject('Справочники.Email');
+  EmailDic.SetFieldFilter('ВклВРозсылку','=',True,'','',Null);
+  EmailDic.Select;
+  EmailDic.SaveToValueTable('',EmailTbl,0,EmailDic.RecordCount );
+  EmailTbl.GroupToList('SELF',EmailList);
+end;
+
+end.

@@ -1,0 +1,142 @@
+interface
+
+uses 
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками, УстановкаВажныхОбъектов,
+  ПечатьИВыводНаЭкран, Печать;
+
+implementation
+
+var
+  MasterData, TelOwner : ICDictionary;
+  CollectTbl : ICValueTable;
+  Collection : ICCollection;
+  Constants : IC4VPAConst;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  TelOwner := MasterData._GetOwner;
+  Constants := GetConstants;
+end;
+
+procedure ViewTown;
+begin
+  if VarAsBool(MasterData.@Город.IsFocused) then
+    lbTownCode.Caption := MasterData.Город.ТелКод
+  else
+    lbTownCode.Caption := '';
+end;
+
+procedure dbeOwner_Change(Sender : TObject);
+begin
+  if VarAsBool(TelOwner.IsFocused) then
+    lbTitle.Caption := GetPartName(TelOwner, 4)
+  else
+    lbTitle.Caption := dbeOwner.Text;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  dbeOwner_Change(Sender);
+  cbActive.Checked := MasterData.Активность;  
+  cbSMS.Checked := VarAsBool(MasterData.SMSРассылка);
+  ViewTown;
+  if VarAsBool(MasterData.Тип.IsFocused) then
+    edCollect.Text := MasterData.Тип.Value;
+  Collection := CreateObject('Коллекции.ТипТелефона');
+  CollectTbl := CreateObject('ТаблицаЗначений');
+  CreateCollectionTbl(CollectTbl, Collection);
+  while CollectTbl.SelectNext() do
+    edCollect.Items.Add(CollectTbl.Comment);
+end;
+
+procedure chbActive_Click(Sender : TObject);
+begin
+  MasterData.Активность := cbActive.Checked;
+end;
+
+procedure deTown_ActionExecute(Sender : TObject);
+begin
+  ViewTown;
+end;
+
+procedure MDS_Append(Sender : TObject);
+var
+  CopyFrom : ICDictionary;
+  v, TLZTown : Variant;
+begin
+  TelOwner := MasterData._GetOwner;
+  v := MasterData.Params['CopyFrom'];
+  if MasterData.HasParam('CopyFrom') and (not IsNull(v)) then
+    begin
+      CopyFrom := MasterData.Params['CopyFrom'];
+      MasterData.AssignFields('ВладелецТел;Город;КодГорода;Тип', CopyFrom);
+    end
+  else
+    begin
+      if (not IsNil(TelOwner)) and TelOwner.IsFocused then
+        begin
+          MasterData.Активность := not HasActive(MasterData);
+          MasterData.ВладелецТел := GetPartName(TelOwner, 1);
+        end;
+      TLZTown := Constants.АктивныйГород;
+      if IsObject(TLZTown) and VarAsBool(TLZTown.IsFocused) then
+        MasterData.Город := TLZTown;
+    end;
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  ResetActive(MasterData);
+end;
+
+procedure MDS_Validate(Sender : TObject);
+begin
+  ChangeCollectionField(Collection, MasterData, 'Тип', edCollect.Text);
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure cbSMS_Click(Sender: TObject);
+begin
+  MasterData.SMSРассылка := cbSMS.Checked;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label1:TO4Label
+Label8:TO4Label
+Label3:TO4Label
+Label2:TO4Label
+Label4:TO4Label
+deType:TO4DBEdit
+dbeNumber:TO4DBEdit
+dbeOwner:TO4DBEdit
+gbTown:TO4GroupBox
+Label5:TO4Label
+Label7:TO4Label
+lbTownCode:TO4Label
+dbeTown:TO4DBEdit
+cbActive:TO4CheckBox
+edCollect:TO4Edit
+dbeDescription:TO4DBEdit
+TitlePanel:TO4Panel
+lbTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+cbSMS:TO4CheckBox

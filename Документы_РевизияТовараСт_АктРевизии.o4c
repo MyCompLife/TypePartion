@@ -1,0 +1,120 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  CNV : ICWriNums;
+  Tbl, TblResp : ICValueTable;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+  TblResp := CreateObject('ТаблицаЗначений');
+  TblResp.AddColumn('Ответственный', lftLink, 0);
+  TblResp.Open;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        Value['PARTNAME'] := GetShortPartName(MasterData.Партнер);
+      Value['SumNT'] := MasterData.СуммаБезНДС;
+      Value['DOVEROSN'] := MasterData.Выводы;
+    end;
+  MasterData.SaveContents('', Tbl);
+  //  Tbl.GroupBy('Товар','Количество;ВхЦенаБезНДС');
+  //  Tbl.DoCalculation('СуммаСтроки','Количество*ВхЦенаБезНДС');
+  //для заполнения поля Код в таблице, с последующей сортировкой
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  //Tbl.SortBy('Код');
+  //для сортировки по названию товара
+  Tbl.SortBy('Товар');
+  lbSumInWord.Caption := CNV.MoneyToStr(ABSF(MasterData.СуммаБезНДС), 'ГРН', 1058); //C_GRN,C_KOP,True);
+  TblResp.PackedData := MasterData.Комиссия;
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := Tbl.SelectFirst()
+  else
+    Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['CountBegin'] := Tbl.КоличествоДо;
+      Value['CountEnd'] := Tbl.КоличествоПосле;
+      Value['Count'] := Tbl.Количество;
+      Value['PriceNT'] := Tbl.ВхЦенаБезНДС;
+    end;
+end;
+
+procedure Structure1_ROOT_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+procedure Structure1_ROOT_Respons_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := TblResp.SelectFirst()
+  else
+    Accept := TblResp.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    Value['Resp'] := TblResp.DefValue['Ответственный'];
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label31:TRBLabel
+Label32:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label39:TRBLabel
+Label40:TRBLabel
+SysData1:TRBSysData
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label79:TRBLabel
+bndFtDET:TRBBand
+Label47:TRBLabel
+lbSumInWord:TRBLabel
+Label49:TRBLabel
+Label44:TRBLabel
+Label46:TRBLabel
+bndROOT:TRBDetailBand
+Label5:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+DetailBand1:TRBDetailBand
+Label8:TRBLabel
+Structure1:TRBStructure

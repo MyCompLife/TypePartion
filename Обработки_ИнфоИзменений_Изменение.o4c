@@ -1,0 +1,49 @@
+interface
+
+uses
+  System, DispIntf, РаботаСТаблицамиЗначенийCL, Расчеты, Reports;
+
+implementation
+
+var
+  TblDetailDoc, TblDetail, TblData: ICValueTable;
+  MYF, ADR, TLF : ICDictionary;
+  DateFrom, DateTo : DateTime;
+  Data : Variant;
+  CNV : ICWriNums;
+  V: ICProcessing;
+  X: ICReport;       
+  UniqDic : ICDictionary;
+
+procedure Form_Open(Sender: TObject);
+var
+  i : integer;
+begin
+ Server.CreateObjects;
+ TblDetailDoc := CreateObject('ValueTable');  
+  UniqDic := CreateObject('Справочники.ИдентификаторДокумента');
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+  case StrLowerCase(ProcID) of
+    'docinfo':
+    if (not IsNull(InParams)) and (IsObjFocused(InParams)) and UniqDic.UseMasterAndSelect(InParams) then
+      begin
+        TblDetailDoc := CreateObject('ValueTable');
+        TblDetailDoc.Open;
+        TblDetailDoc.CopyDataToServer;
+        Server.FillTblDocS(InParams, TblDetailDoc.SrvMean);
+        TblDetailDoc.CopyDataFromServer2;
+        TblDetailDoc.SortBy('-date');
+        TblDetailDoc.UseDataSource(CtrlToVar(TVSDetailDoc));
+      end
+      else
+        TblDetailDoc.UseDataSource(NULL);     
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+dbgDetailDoc:TO4DBGrid
+TVSDetailDoc:TO4TableValueSource

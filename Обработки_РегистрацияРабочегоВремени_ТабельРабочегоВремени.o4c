@@ -1,0 +1,279 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, Пользователи;
+
+implementation
+
+var
+  Options : ICOptions;
+  Cursor : TCursor;
+  EmplList, RegionsList: ICValueList;
+  EmplDict, Regions, TabDic, RegDic, ActiveRegion: ICDictionary;
+  GoodsTbl : ICValueTable;
+  V : ICReport;
+  DateFrom, DateTo : DateTime;  
+  TabTbl, emplTbl, dateTbl: ICValueTable;
+
+procedure Form_Open(Sender: TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  //CreateObjects;
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+
+  TabDic := CreateObject('Справочники.ТабельРабочегоВремени');
+  RegDic := CreateObject('Справочники.РегистрРабочегоВремени');
+  RegDic.UseMaster(TabDic);
+
+  EmplList := CreateObject('СписокЗначений');
+  EmplDict := CreateObject('Справочники.Служащие');
+  
+  RegionsList := CreateObject('СписокЗначений');
+  Regions := CreateObject('Справочники.Регионы');
+  RegionsList.AddValue(Trans('Все регионы'), Null);
+  Regions.Select;
+  while Regions.SelectNext do
+    RegionsList.AddValue(Regions.Название, Regions); // или ('',S)
+  RegionsList.UseControl(CtrlToVar(eRegion));
+  RegionsList.CurIndex := 0;
+  eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+  ActiveRegion := GetUsersField('Регион');
+  if not IsNil(ActiveRegion) then
+    RegionsList.CurIndex := RegionsList.FindByValue(ActiveRegion);
+  
+  EmplList.Clear;
+  EmplList.AddValue(Trans('Все cлужащие'), Null);
+  if RegionsList.ValidIndex(RegionsList.CurIndex) and (RegionsList.CurIndex <> 0)  then
+    begin
+      ActiveRegion := RegionsList.GetValue(RegionsList.CurIndex);
+      EmplDict.SetFieldFilter('Регион', '=', ActiveRegion, '', '', Null);
+    end;
+  EmplDict.SetFieldFilter('ВестиТабель','=',true,'','',Null);
+  EmplDict.Select;
+  while EmplDict.SelectNext do
+    EmplList.AddValue(EmplDict.ПолноеНазвание, EmplDict);
+  EmplList.CurIndex := 0;
+  EmplList.UseControl(ctrlToVar(eEmploy)); 
+  
+  TabTbl := CreateObject('ValueTable');
+  TabTbl.AddColumn('Служащий',vtcLink,0);
+  TabTbl.AddColumn('Дата',vtcDate,0);
+  TabTbl.AddColumn('Время',vtcFFT,2);
+  TabTbl.AddColumn('Действие',vtcTime,0);
+  TabTbl.AddColumn('Артикул',vtcInteger,0); 
+  TabTbl.AddColumn('Событие',vtcString,1);
+  TabTbl.Open;
+  
+  emplTbl := CreateObject('ValueTable');
+  emplTbl.Open;
+  dateTbl := CreateObject('ValueTable');
+  dateTbl.Open;
+end;
+
+procedure tbXTools_Click(Sender: TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+begin
+  XGrid.Print('Табель рабочего времени', True);
+end;
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+procedure eDateTo_Change(Sender: TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure eDateFrom_Change(Sender: TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure tbSelectDates_Click(Sender: TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y);
+end;
+
+procedure eRegion_Change(Sender: TObject);
+begin
+  EmplList.Clear;
+  EmplList.AddValue(Trans('Все cлужащие'), Null);
+  if RegionsList.ValidIndex(RegionsList.CurIndex) and (RegionsList.CurIndex <> 0)  then
+    begin
+      ActiveRegion := RegionsList.GetValue(RegionsList.CurIndex);
+      EmplDict.SetFieldFilter('Регион', '=', ActiveRegion, '', '', Null);
+    end;
+  if RegionsList.CurIndex = 0 then
+    EmplDict.CancelFieldFilter('Регион');
+  EmplDict.SetFieldFilter('ВестиТабель','=',true,'','',Null);
+  EmplDict.Select;
+  while EmplDict.SelectNext do
+    EmplList.AddValue(EmplDict.ПолноеНазвание, EmplDict);
+  EmplList.CurIndex := 0;
+end;
+
+procedure tbRun_Click(Sender: TObject);
+begin
+  if RegionsList.ValidIndex(RegionsList.CurIndex) and (RegionsList.CurIndex <> 0)  then
+    begin
+      ActiveRegion := RegionsList.GetValue(RegionsList.CurIndex);
+      EmplDict.SetFieldFilter('Регион', '=', ActiveRegion, '', '', Null);
+    end
+  else
+    ActiveRegion := Null;
+  Cursor := WaitCursorStart;
+  TabTbl.Clear;
+  emplTbl.Clear;
+  dateTbl.Clear;
+  XGrid.ClearAll;
+  DateFrom := StrToDate(eDateFrom.Text);
+  DateTo := StrToDate(eDateTo.Text);
+  TabDic.CancelFieldFilter('Дата');
+  TabDic.CancelFieldFilter('Служащий');
+  TabDic.SetFieldFilter('Дата','>=',DateFrom,'and','<=',DateTo);
+  if EmplList.CurIndex <> 0 then
+    begin
+      if EmplDict.Find(EmplList.GetValue(EmplList.CurIndex)) then
+      TabDic.SetFieldFilter('Служащий','=',EmplDict,'','',Null);
+    end;
+  TabDic.Select;
+  while TabDic.SelectNext do
+    begin 
+      if not IsNil(ActiveRegion) and (ActiveRegion.GetUniID <> TabDic.Служащий.Регион.GetUniID) then
+        continue;
+      RegDic.SortByField('Артикул');
+      RegDic.Select;
+      while RegDic.SelectNext do
+        begin
+          TabTbl.Append;
+          TabTbl.Служащий := TabDic.Служащий;
+          TabTbl.Дата := TabDic.Дата;
+          TabTbl.Время := TabDic.Время;
+          TabTbl.Действие := RegDic.Время;
+          TabTbl.Артикул := RegDic.Артикул;
+          TabTbl.Событие := RegDic.Событие;
+          TabTbl.Post;
+        end;
+    end;
+
+  XGrid.AddSection('Head',true);
+
+  TabTbl.GroupToMaster('Служащий;Дата;Время','',dateTbl);
+  dateTbl.GroupToMaster('Служащий','Время',emplTbl);
+  TabTbl.SortBy('Артикул');
+  emplTbl.SortBy('Служащий');
+  emplTbl.Select;
+  while emplTbl.SelectNext do
+    begin
+      XGrid.AddSection('Empl',true);
+      dateTbl.SortBy('Дата');
+      dateTbl.Select;
+      while dateTbl.SelectNext do
+        begin
+          XGrid.AddSection('Date',true);
+          TabTbl.Select;
+          while TabTbl.SelectNext do
+            begin
+              if TabTbl.Событие = '0' then
+                XGrid.AddSection('DetOut',true)
+              else
+                XGrid.AddSection('DetIn',true)
+            end;
+        end;
+    end;
+  XGrid.Cell(1,1).Value := 'Табель рабочего времени за период с ' + dateToStr(DateFrom) +' по ' + dateToStr(DateTo);
+  WaitCursorFinish(Cursor);
+  tbPrint.Enabled := true;
+end;
+
+procedure XGrid_VPASetSectionVarValues(XGrid: TO4XGrid; HSect, VSect: String; Vars: Variant);
+begin
+  case HSect of
+    'Empl'   : begin
+        Vars.Empl := emplTbl.Служащий;
+        Vars.TotalTime := DecToStr(DecInt(emplTbl.Время),0) +':'+ DecToStr(DecFrac(emplTbl.Время)*60,0) + ' ч';
+      end;
+    'Date'   : begin
+        Vars.Date := dateTbl.Дата;
+        Vars.TotalTime := DecToStr(DecInt(dateTbl.Время),0) +':'+ DecToStr(DecFrac(dateTbl.Время)*60,0) + ' ч';
+      end;
+    'DetOut' : begin
+        Vars.Time := TabTbl.Действие;
+      end;
+    'DetIn'  : begin
+        Vars.Time := TabTbl.Действие;
+      end;
+  end;
+end;
+
+procedure miFirstHalfYear_Click(Sender: TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel4:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel1:TO4Panel
+GroupBox2:TO4GroupBox
+eEmploy:TO4Edit
+GroupBox1:TO4GroupBox
+eRegion:TO4Edit
+XGridTools:TXGridTools
+XGrid:TO4XGrid
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

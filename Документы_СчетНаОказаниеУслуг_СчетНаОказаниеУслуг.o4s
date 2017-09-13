@@ -1,0 +1,72 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  AccsGoods, AccsReserv : ISAccs;
+  Date : DateTime;
+  AppendLock : Boolean;
+
+procedure InitSrvData; server;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  AppendLock := False;
+  AccsGoods := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsReserv := CreateObject('Аккумуляторы.ТоварыВРезерве');
+end;
+
+procedure GetGoodCount(tmpCtx : ISValueTable; Date : DateTime); server;
+begin
+  if AppendLock or (not tmpCtx.Active) then
+    exit;
+  tmpCtx.Select;
+  while tmpCtx.SelectNext do
+    begin
+      AccsGoods.CalcGroupRestDirect(CurrentDate + 1, tmpCtx.@Товар);
+      AccsReserv.CalcGroupRestDirect(CurrentDate + 1, tmpCtx.@Товар);
+      tmpCtx.Edit;
+      tmpCtx.AssignFields('НаличиеТовара=КолОбщ', AccsGoods);
+      tmpCtx.AssignFields('Резерв=КолОбщ', AccsReserv);
+      tmpCtx.НаличиеРезерв := tmpCtx.НаличиеТовара - tmpCtx.Резерв;
+      tmpCtx.Post;
+    end;
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure СформироватьНакладнуюПоСчету(tmpCtx : ISValueTable; Order, Nakls : ISDocuments); server;
+var
+  Other : ISDocuments;
+begin
+  AppendLock := True;
+  tmpCtx.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Other := CreateObject('Документы.НакладнаяОтпуска');
+  Other := Nakls;
+  Other.UseMaster(Order);
+  if Other.Select then
+    while Other.SelectNext do
+      if (Other.GetDocState = 1) and Other.SelectLines then
+        while Other.SelectNextLine do
+          if tmpCtx.Locate('Товар', Other.@Товар) then
+            begin
+              tmpCtx.Edit;
+              tmpCtx.Количество := tmpCtx.Количество - Other.Количество;
+              tmpCtx.Post;
+              if tmpCtx.Количество <= 0 then
+                tmpCtx.Delete;
+            end;
+  AppendLock := False;
+end;
+
+end.

@@ -1,0 +1,410 @@
+interface
+
+uses
+ System, DispIntf, ConstNames, InitColors, Расчеты, РаботаСОбъектами, ДополнительныйФункционал;
+
+implementation
+var Sum,Cur:Decimal;  
+    Options : ICOptions;
+    CalcBankNotesStr: string;
+    User : ICDictionary;
+    PrintTbl : ICValueTable;
+    MasterData: ICProcessing;
+
+procedure CalcBankNotes;
+begin
+ PrintTbl.Clear;
+ PrintTbl.Select;
+
+ LabelResult.Caption := '0,00';
+ ErrorLabel.Caption := '';
+ Sum := 0;
+ Cur := StrToIntDef(Edit1.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption := 'Не правильно введено количество купюр номиналом 1';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '1 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur,2);
+     PrintTbl.НомСорт := 1;
+     PrintTbl.Post;
+   end;
+
+ Cur := StrToIntDef(Edit2.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption := 'Не правильно введено количество купюр номиналом 2';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*2;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '2 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*2,2);
+     PrintTbl.НомСорт := 2;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit5.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption := 'Не правильно введено количество купюр номиналом 5';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*5;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '5 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*5,2);
+     PrintTbl.НомСорт := 3;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit10.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption := 'Не правильно введено количество купюр номиналом 10';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*10;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '10 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*10,2);
+     PrintTbl.НомСорт := 4;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit20.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption :='Не правильно введено количество купюр номиналом 20';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*20;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '20 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*20,2);
+     PrintTbl.НомСорт := 5;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit50.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption :='Не правильно введено количество купюр номиналом 50';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*50;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '50 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*50,2);
+     PrintTbl.НомСорт := 6;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit100.Text,-1);
+ if Cur<0 then
+   begin 
+      ErrorLabel.Caption :='Не правильно введено количество купюр номиналом 100';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*100;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '100 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*100,2);
+     PrintTbl.НомСорт := 7;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit200.Text,-1);
+ if Cur<0 then
+   begin
+        ErrorLabel.Caption := 'Не правильно введено количество купюр номиналом 200';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*200;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '200 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*200,2);
+     PrintTbl.НомСорт := 8;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit500.Text,-1);
+ if Cur<0 then
+   begin
+      ErrorLabel.Caption := 'Не правильно введено количество купюр номиналом 500';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*500;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '500 грн.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*500,2);
+     PrintTbl.НомСорт := 9;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit001.Text,-1);
+ if Cur<0 then
+   begin
+      ErrorLabel.Caption := 'Не правильно введено количество копеек номиналом 0,01';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*0.01;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '1 коп.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*0.01,2);
+     PrintTbl.НомСорт := 10;
+     PrintTbl.Post;
+   end;
+ Cur := StrToIntDef(Edit002.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption :='Не правильно введено количество копеек номиналом 0,02';
+     exit;
+   end
+ else
+   Begin
+     Sum:= Sum + Cur*0.02;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '2 коп.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*0.02,2);
+     PrintTbl.НомСорт := 11;
+     PrintTbl.Post;
+   end;
+
+ Cur := StrToIntDef(Edit005.Text,-1);
+ if Cur<0 then
+   begin
+      ErrorLabel.Caption := 'Не правильно введено количество копеек номиналом 0,05';
+     exit;
+   end
+ else    
+   begin
+     Sum:= Sum + Cur*0.05;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '5 коп.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*0.05,2);
+     PrintTbl.НомСорт := 12;
+     PrintTbl.Post;
+   end;
+
+ Cur := StrToIntDef(Edit010.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption := 'Не правильно введено количество копеек номиналом 0,10';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*0.1;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '10 коп.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*0.1,2);
+     PrintTbl.НомСорт := 13;
+     PrintTbl.Post;
+   end;
+
+ Cur := StrToIntDef(Edit025.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption := 'Не правильно введено количество копеек номиналом 0,25';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*0.25;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '25 коп.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*0.25,2);
+     PrintTbl.НомСорт := 14;
+     PrintTbl.Post;
+   end;
+
+ Cur := StrToIntDef(Edit050.Text,-1);
+ if Cur<0 then
+   begin
+     ErrorLabel.Caption := 'Не правильно введено количество копеек номиналом 0,50';
+     exit;
+   end
+ else
+   begin
+     Sum:= Sum + Cur*0.5;
+     PrintTbl.Append;
+     PrintTbl.НазвКупюры := '50 коп.';
+     PrintTbl.Количество := Cur;
+     PrintTbl.Сумма := RoundDec(Cur*0.5,2);
+     PrintTbl.НомСорт := 15;
+     PrintTbl.Post;
+   end;
+
+ LabelResult.Caption := DecToStr(Sum,2);
+end;
+
+procedure bClear_Click(Sender: TObject);
+begin
+ Edit1.Text := '0';
+ Edit2.Text := '0';
+ Edit5.Text := '0';
+ Edit10.Text := '0';
+ Edit20.Text := '0';
+ Edit50.Text := '0';    
+ Edit100.Text := '0';
+ Edit200.Text := '0';
+ Edit500.Text := '0'; 
+ Edit001.Text := '0';
+ Edit002.Text := '0';
+ Edit005.Text := '0';
+ Edit010.Text := '0'; 
+ Edit025.Text := '0';
+ Edit050.Text := '0';
+ LabelResult.Caption := '0,00';
+end;
+
+
+
+procedure bCalc_Click(Sender: TObject);
+begin
+  CalcBankNotes;
+end;
+
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var i:integer;
+begin
+  MasterData := Mean;
+  User := Params;
+  PrintTbl := CreateObject('ValueTable');
+  PrintTbl.AddColumn('НазвКупюры', vtcString, 20);
+  PrintTbl.AddColumn('Количество', vtcInteger, 0);
+  PrintTbl.AddColumn('Сумма', vtcFFT, 2);
+  PrintTbl.AddColumn('НомСорт', vtcInteger, 0);
+  PrintTbl.Open;
+
+
+  Options := GetOptions;
+  CalcBankNotesStr := Options.GetServerPrm('CalcBankNotesCount');
+  if CalcBankNotesStr <>'' then
+    for i:=1 to Wordcount(CalcBankNotesStr,';') do
+     case i of
+      1:  Edit1.Text :=  ExtractWord(i,CalcBankNotesStr,';');  
+      2:  Edit2.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      3:  Edit5.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      4:  Edit10.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      5:  Edit20.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      6:  Edit50.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      7:  Edit100.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      8:  Edit200.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      9:  Edit500.Text :=  ExtractWord(i,CalcBankNotesStr,';');   
+      10:  Edit001.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      11:  Edit002.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      12:  Edit005.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      13:  Edit010.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      14:  Edit025.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+      15:  Edit050.Text :=  ExtractWord(i,CalcBankNotesStr,';');
+     end;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin      
+ CalcBankNotesStr := Edit1.Text + ';' + Edit2.Text+ ';' +
+                     Edit5.Text+';' + Edit10.Text+ ';' + Edit20.Text+ ';' +
+                     Edit50.Text+ ';' + Edit100.Text+ ';' + Edit200.Text+ ';' +
+                     Edit500.Text+ ';' + Edit001.Text+ ';' + Edit002.Text+ ';' +
+                     Edit005.Text+ ';' + Edit010.Text+ ';' + Edit025.Text+ ';' +
+                     Edit050.Text+ ';';
+ Options.SetServerPrm('CalcBankNotesCount', CalcBankNotesStr);
+end;
+
+procedure tbPrintParam_Click(Sender: TObject);
+Var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечатьЧека');
+  V.Execute('ВыборПринтераДляПечФормы', 'ПечатьРасчетаКупюр');
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+var
+    PrinterName : string;
+begin
+ PrinterName := GetPrintNameForCurPrintForm('ПечатьРасчетаКупюр');
+ if PrinterName<>'' then
+   SetActivePrinter(PrinterName);
+
+ if PrintTbl.LineCount>0 then 
+   begin
+     MasterData.PrintForm('ПечатьРасчетаКупюр', True, ArrayOf(PrintTbl, User));
+   end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ErrorLabel:TO4Label
+gpNotes:TO4GroupBox
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+Label5:TO4Label
+Label6:TO4Label
+Label7:TO4Label
+Label8:TO4Label
+Label9:TO4Label
+Edit500:TO4Edit
+Edit200:TO4Edit
+Edit50:TO4Edit
+Edit100:TO4Edit
+Edit2:TO4Edit
+Edit5:TO4Edit
+Edit10:TO4Edit
+Edit20:TO4Edit
+Edit1:TO4Edit
+gpSum:TO4GroupBox
+LabelResult:TO4Label
+gpCent:TO4GroupBox
+Label11:TO4Label
+Label12:TO4Label
+Label13:TO4Label
+Label14:TO4Label
+Label15:TO4Label
+Label16:TO4Label
+Edit002:TO4Edit
+Edit050:TO4Edit
+Edit025:TO4Edit
+Edit010:TO4Edit
+Edit005:TO4Edit
+Edit001:TO4Edit
+bClear:TO4Button
+bCalc:TO4Button
+ToolBar:TO4ToolBar
+tbPrintParam:TO4ToolButton
+tbPrint:TO4ToolButton

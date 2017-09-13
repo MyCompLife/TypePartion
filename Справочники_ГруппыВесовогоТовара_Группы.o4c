@@ -1,0 +1,214 @@
+interface
+
+uses
+  System, DispIntf, РаботаСКомпонентамиVCL, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation 
+var
+  MasterData,ChieldData, DetWeigtGoods : ICDictionary;
+  Options : ICOptions;
+
+procedure tbRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+  
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;  
+  Options := GetOptions;
+  MasterData.SortByField('НомПозиции'); 
+//  DetWeigtGoods := SetDetailDict(MasterData, 'ВессовойТовар', 'Товары', CtrlToVar(pGoods));
+  DetWeigtGoods := SetDetailDict(MasterData, 'ВессовойТовар', 'ТоварыВесовойТовар', CtrlToVar(nbMain.PageClass[1]));
+
+//  ChieldData := SetDetailDict(MasterData, 'ГруппыВесовогоТовара', 'Группы1', CtrlToVar(pGoods));
+  ChieldData := SetDetailDict(MasterData, 'ГруппыВесовогоТовара', 'Группы1', CtrlToVar(nbMain.PageClass[0]));
+  dbgData.Height := VarAsInt(Options.GetServerPrm('GroupGoodWeight_dbgData'),180);
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData', 'dbgData');
+  MasterData.Params['Type'] :=0;
+  MasterData.SetFieldFilter('Тип','=',0,'','',Null);
+  MasterData.Select;;
+end;
+
+procedure miRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure tbLevelUp_Click(Sender: TObject);
+Var
+  i: Integer;
+  TmpDic : ICDictionary;
+begin
+  TmpDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+  TmpDic.Select;
+  i:= MasterData.НомПозиции;
+  if i-1<>0 then
+    If  VarAsBool(TmpDic.FindByField('НомПозиции',i-1,false)) then
+      begin
+        MasterData.Edit;
+        MasterData.НомПозиции:=i-1;
+        MasterData.Post;
+        TmpDic.Edit;
+        TmpDic.НомПозиции:=i;
+        TmpDic.Post;
+        MasterData.ApplyUpdates;
+        TmpDic.ApplyUpdates;
+        MasterData.Refresh;
+      end
+    else
+      begin
+        MasterData.Edit;
+        MasterData.НомПозиции:=i-1;
+        MasterData.Post;
+        MasterData.ApplyUpdates;
+        MasterData.Refresh;
+      end;
+
+end;
+
+procedure tbLevelDown_Click(Sender: TObject);
+Var
+  i,j: Integer;
+  TmpDic : ICDictionary;
+begin
+  TmpDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+  TmpDic.Select;
+  j:= Server.GetEndPosition;
+  i:= MasterData.НомПозиции;
+  if i<>j then
+    If  VarAsBool(TmpDic.FindByField('НомПозиции',i+1,false)) then
+      begin
+        MasterData.Edit;
+        MasterData.НомПозиции:=i+1;
+        MasterData.Post;
+        TmpDic.Edit;
+        TmpDic.НомПозиции:=i;
+        TmpDic.Post;
+        MasterData.ApplyUpdates;
+        TmpDic.ApplyUpdates;
+        MasterData.Refresh;
+      end
+    else
+      begin
+        MasterData.Edit;
+        MasterData.НомПозиции:=i+1;
+        MasterData.Post;
+        MasterData.ApplyUpdates;
+        MasterData.Refresh;
+      end;
+end;
+
+procedure MDS_VPAAfterDelete(Sender: TObject);
+begin
+  MasterData.ApplyUpdates;
+  Server.RenumberingDicAfterDelete;
+  MasterData.Refresh;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender: TObject);
+begin
+  If VarAsBool(MasterData.НаличиеПодгрупы) then
+    nbMain.PageIndex :=0
+  else
+    nbMain.PageIndex :=1;
+end;
+
+procedure tbAddChildGroup_Click(Sender: TObject);
+Var
+  ChildGroupDic : IcDictionary;
+begin
+  If MasterData.IsFocused then
+    begin
+      MasterData.SetSrvToClientPos;
+      if Server.CheckGoodsInGroup(MasterData.SrvMean) then
+        Begin
+          ChildGroupDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+          ChildGroupDic.Select;
+          ChildGroupDic.Params['Type']:=1;
+          ChildGroupDic.Params['Owner']:=MasterData;
+          ChildGroupDic.EditInForm('ГруппаВесТовара',0);
+        end
+      else
+        Begin
+          if MessageDlg('В группе есть товары. Перенести их в подгруппу?', mtConfirmation, ArrayOf(mbYes, mbNo)) = mrYes then
+            begin
+              ChildGroupDic := CreateObject('Справочники.ГруппыВесовогоТовара');
+              ChildGroupDic.Select;
+              ChildGroupDic.Params['Type']:=1;
+              ChildGroupDic.Params['Owner']:=MasterData;
+              ChildGroupDic.Params['MoveGoods']:= True;
+              ChildGroupDic.EditInForm('ГруппаВесТовара',0);
+
+            end;
+        end;
+      MasterData.Refresh;
+      MDS_VPATimedAfterScroll(Sender);
+      ChieldData.Refresh;
+    end;
+end;
+
+procedure MDS_VPABeforeDelete(Source: Variant; IsGroup: boolean; var Accept: boolean);
+begin
+  If MasterData.IsFocused then
+    begin
+      MasterData.SetSrvToClientPos;
+      Accept :=Server.CheckChieldGroupsInGroup(MasterData.SrvMean);
+      if not Accept then
+        begin
+          ShowMessage('В данной группе есть подгруппы! Удаление невозможно!'+#13+'Сначала удалите их!');
+          exit;
+        end;
+      Accept :=Server.CheckGoodsInGroup(MasterData.SrvMean);
+      if not Accept then
+        ShowMessage('К данной группе привязан товар! Удаление невозможно!'+#13+'Сначала удалите его или переместите в другую группу');
+    end;
+
+end;
+
+procedure Form_Close(Sender: TObject);
+begin       
+ Options.SetServerPrm('GroupGoodWeight_dbgData',dbgData.Height);
+end;
+
+procedure miRenamberingGroups_Click(Sender: TObject);
+begin
+  Server.RenumberingDicAfterDelete;
+  MasterData.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel2:TO4Panel
+Splitter1:TO4Splitter
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbAddChildGroup:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbLevelUp:TO4ToolButton
+tbLevelDown:TO4ToolButton
+dbgData:TO4DBGrid
+pGoods:TO4Panel
+nbMain:TO4Notebook
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miAddChildGroup:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+MenuItem1:TO4MenuItem
+miRenamberingGroups:TO4MenuItem

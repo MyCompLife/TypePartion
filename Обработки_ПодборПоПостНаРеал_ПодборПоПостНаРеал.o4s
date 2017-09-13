@@ -1,0 +1,58 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsGood, AccsPartGood, AccPostRealGood : ISAccs;
+  Store : ISDictionary;
+  LstPart : ISValueList;
+  Partner : Variant;
+  Date : DateTime;
+
+procedure InitSrvData(PostReal : Variant); server;
+begin
+  Date := RoundDate(CurrentDate, rdDay, True);
+  Partner := PostReal;
+  LstPart := CreateObject('СписокЗначений');
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccPostRealGood := CreateObject('Аккумуляторы.ОстаткиТоваровНаПостРеал');
+  AccPostRealGood.SetFieldFilter('Партнер', Partner);
+end;
+
+procedure SetStoreParams(DT : DateTime; Stores : ISValueList; Index : Integer); server;
+begin
+  Date := RoundDate(DT, rdDay, True);
+  if Stores.ValidIndex(Index) and (Index <> 0) then
+    Store := Stores.GetValue(Index)
+  else
+    nil(Store);
+end;
+
+procedure LoadGoodsParams(TblGoods : ISValueTable); server;
+begin
+  AccPostRealGood.IncludeZeroRest := False;
+  AccPostRealGood.AppendGroupRestToValueTable(Date, 'Товар;Партия;КолОбщ=Количество', TblGoods);
+  TblGoods.GroupToList('Партия', LstPart);
+  TblGoods.GroupBy('Товар', 'Количество');
+  TblGoods.SortBy('Товар');
+  TblGoods.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+end;
+
+procedure GetStoreList(OneGood : Variant; TblStore, TblPartGood : ISValueTable); server;
+begin
+  AccsGood.ClearFieldFilters();
+  AccsGood.SetFieldFilter('Товар', OneGood);
+  if not IsNil(Store) and Store.IsFocused then
+    AccsGood.SetFieldFilter('Склад', Store);
+  AccsGood.SetFieldFilter('Партия', LstPart);
+  AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Склад;КолОбщ;Партия', TblPartGood);
+  // TblPartGood.GroupBy('Товар;Склад;Партия','КолОбщ');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ДатаПр;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', TblPartGood);
+  TblPartGood.GroupToMaster('Товар;Склад', 'КолОбщ', TblStore);
+end;
+
+end.

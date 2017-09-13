@@ -1,0 +1,33 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation 
+
+var
+  AccKassa : ISAccs;
+  Currency : ISDictionary;
+
+procedure OrderCalcFields(Order : ISJournal);
+begin
+  AccKassa.SelectRest2(RoundDate(Order.ДатаДокумента, rdDay, False),
+    RoundDate(Order.ДатаДокумента, rdDay, True));
+  if AccKassa.SelectRest2Next then //остатки по нац. валюте
+    begin
+      Order.Приход := AccKassa.InVal.СумОбщ;
+      Order.Расход := AccKassa.OutVal.СумОбщ;
+    end;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  AccKassa := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+  Currency := CreateObject('Справочники.Валюты');
+  Currency := GetNatCurrency(Currency);
+  AccKassa.SetFieldFilter('Валюта', Currency); //платежи только в нац. валюте!
+  nil(Currency);
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+end.

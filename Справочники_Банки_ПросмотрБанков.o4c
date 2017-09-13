@@ -1,0 +1,102 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+var
+  MasterData, DetAdr, DetPhone, DetBankAcc, DetRepresenter, DetEmail : ICDictionary;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itInPlaceForMain;
+  MakeStandartInterface(MasterData, Form, '', 'dbgData');
+  DetPhone := SetDetailDict(MasterData, 'Телефоны', 'ПросмотрТелефонов', CtrlToVar(ntbLists.PageClass[0]));
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure tstLists_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  case NewTab of
+    1 :
+      if IsNil(DetAdr) then
+        DetAdr := SetDetailDict(MasterData, 'Адреса', 'ПросмотрАдресов', CtrlToVar(ntbLists.PageClass[NewTab]));
+    2 :
+      if IsNil(DetBankAcc) then
+        DetBankAcc := SetDetailDict(MasterData, 'РасчСчета', 'ПросмотрРасчСчетов', CtrlToVar(ntbLists.PageClass[NewTab]));
+    3 :
+      if IsNil(DetRepresenter) then
+        DetRepresenter := SetDetailDict(MasterData, 'ФизЛица', 'ПросмотрПредставителей', CtrlToVar(ntbLists.PageClass[NewTab]));
+    4 :
+      if IsNil(DetEmail) then
+        DetEmail := SetDetailDict(MasterData, 'Email', 'ПросмотрEmail', CtrlToVar(ntbLists.PageClass[NewTab]));
+  end;
+  ntbLists.PageIndex := NewTab;
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure miPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('', False, 0, Null)
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+splCtg:TO4Splitter
+CtgPanel:TO4Panel
+dbtCtg:TO4DBTreeView
+tbrCtg:TO4ToolBar
+tbAddLevel:TO4ToolButton
+tbEditLevel:TO4ToolButton
+tbDelLevel:TO4ToolButton
+DataPanel:TO4Panel
+splLists:TO4Splitter
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+ListsPanel:TO4Panel
+tstLists:TO4TabSet
+ntbLists:TO4Notebook
+dmNotes:TO4DBMemo
+dbgData:TO4DBGrid
+pmAddLevels:TO4PopupMenu
+pmiAddBros:TO4MenuItem
+pmiAddChild:TO4MenuItem
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+pmiSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem

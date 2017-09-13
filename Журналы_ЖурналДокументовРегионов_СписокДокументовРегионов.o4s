@@ -1,0 +1,85 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты;     
+
+Var
+  PaysIn, PaysOut : ISJournal;
+
+implementation  
+var
+  FillDoc:ISDocuments;
+  FillTaxGroup : integer;  
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := Data.Total('Сумма');
+end;
+
+procedure OrderCalcFields(Order : ISJournal);
+begin
+  case Order.GetDocSign of
+    'Чек' :
+     begin
+      PaysOut.UseMaster(Order);
+      Order.ОплаченоВал := PaysOut.Total('СуммаВВалюте');
+      Order.ДолжныВал := Order.СуммаВВалюте - Order.ОплаченоВал;
+     end; 
+    'НакладнаяПрихода','ВозвратОтПокупателей' :
+     begin
+      PaysIn.UseMaster(Order);
+      Order.ОплаченоВал := PaysIn.Total('СуммаВВалюте');
+      Order.ДолжныВал := Order.СуммаВВалюте - Order.ОплаченоВал;
+     end;
+  end;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  PaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  PaysIn.SetDocMultiStateRange('1;2;');
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+procedure SetGoods(Dic : ISJournal; var Accept : Boolean);
+var Count, Total : integer;
+    ContentsTbl : ISValueTable;
+    GoodsDic : ISDictionary;
+begin
+  Accept := false;
+  GoodsDic := CreateObject('Справочники.Товары');
+  ContentsTbl := CreateObject('ТаблицаЗначений');
+  ContentsTbl.AddColumn('Товар',vtcLink,0);
+  ContentsTbl.Open;
+  FillDoc.AppendLinesTo('Товар',ContentsTbl);
+  ContentsTbl.GroupBy('Товар','');
+  ContentsTbl.Select;
+  Count := 0;
+  Total := ContentsTbl.LineCount;
+  While ContentsTbl.SelectNext do
+   if GoodsDic.Find(ContentsTbl.@Товар) then
+    begin
+      GoodsDic.Edit;
+      GoodsDic.НалоговаяГруппа := FillTaxGroup;
+      GoodsDic.Post;
+      GoodsDic.ApplyUpdates;
+      inc(Count);
+      if Count mod 10 = 0 then
+        begin
+          Dic.NotifyClient('Заполнение налоговой группы товаров',Count,Total);
+          if Dic.Terminated then exit;
+        end;
+    end;
+  Accept := not Dic.Terminated;
+end;
+
+function FillGoodTaxGroupEP(FillDocS:ISDocuments; FillTaxGroupS:integer) : Variant; server;
+begin
+  FillDoc := FillDocS;
+  FillTaxGroup := FillTaxGroupS;
+  Result := EntryPoint(SetGoods);
+end;
+
+end.

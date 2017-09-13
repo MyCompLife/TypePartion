@@ -1,0 +1,317 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, ДополнительныйФункционал, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+
+var
+  ChangeLock, HasOwner, ScrollLock, DropMode, LockCalc, isSave : Boolean;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MasterData : ICDocuments;
+  cvtICalc, GoodTbl : ICValueTable;
+  Stores, InputStores : ICValueList;
+  LinkDict, Units : ICDictionary;
+  PrcImportFromExcel : ICProcessing;
+  CursorVis : TCursor;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  GoodTbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  CreateObjects;
+  MasterData.SetSrvTableOnCalcFields(server.GetCalcParams);
+end;
+
+procedure btnBrowser_Click(Sender : TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.Товары', 'ПросмотрТоваров', Null);
+end;
+
+procedure TDS_StartDrop(Source : Variant; var Accept : Boolean);
+begin
+  if nbList.PageIndex = 0 then
+    begin
+      LockCalc := True;
+      MasterData.UpdateLine(True);
+      DropMode := True;
+      ScrollLock := True;
+      MasterData.TableAutoCalcFields := False;
+      CursorVis := WaitCursorStart;
+    end
+  else
+    begin
+      Accept := False;
+      SetCursor(CursorVis);
+    end;
+end;     
+
+procedure CalcCount(var Count : Decimal; s : string; var Accept : Boolean);
+begin
+  if VarAsBool(Options.GetServerPrm(CountAck)) and not StdInpDec(inpGoodCount + s, Count) then
+    Accept := MessageDlg(EnterAsk, mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo;
+end;
+
+procedure TDS_Drop(Source : Variant; var Accept : Boolean);
+var
+  Count : Decimal;
+  s, Size : string;
+  V: ICProcessing;  
+  SizeList: ICValueList;
+  SizesTbl: ICValueTable;
+  i: Integer;
+begin
+  Count := 1;
+  S := VarAsStr(Source.NameField);
+  SizeList := CreateObject('ValueList');
+  if MessageDlg('Добавить ростовку?',mtConfirmation,ArrayOf(mbYes,mbNo)) = mrNo then
+    begin    
+      V := CreateObject('Обработки.ПечатьШтрихКодовИЦенников');
+      V.Execute('ВыборРазмера',Source);
+      if not V.HasParam('size') then
+        begin
+          ShowMessage('Не выбран размер!');
+          exit;
+        end;   
+      Size := V.Params['size'];
+      SizeList.AddValue(Size,Size);
+    end
+  else 
+    begin 
+      SizesTbl := CreateTblFromBLOB(Source.Модель.РазмерныйРяд);
+      if IsNil(SizesTbl) then
+        begin
+          SizesTbl := CreateObject('ValueTable');
+          SizesTbl.AddColumn('НомПозиции',vtcInteger,0);
+          SizesTbl.AddColumn('Название',vtcString,200);
+          SizesTbl.Open;
+          SizesTbl.SortBy('НомПозиции');
+        end;
+      SizesTbl.GroupToList('Название',SizeList);
+    end;  
+  if SizeList.Count > 0 then
+    begin 
+      if not cbxCount.Checked then
+        begin
+          CalcCount(Count, S, Accept);
+          if not Accept then
+            exit;
+       end;
+    end;
+  for i := 0 to SizeList.Count-1 do
+    begin
+      if not MasterData.FindLineBy('Товар;Размер', ArrayOf(Source,SizeList.GetValue(i))) then
+        begin
+          MasterData.AppendLine;
+          MasterData.Товар := Source;
+          MasterData.AssignFields('Код;ЕдИзм', Source);
+          MasterData.Количество := Count;
+          //MasterData.Цена := Source.ОптЦена;
+          MasterData.Размер := SizeList.GetValue(i);
+          MasterData.PostLine;
+        end
+      else 
+        begin 
+          MasterData.EditLine;
+          MasterData.Количество := MasterData.Количество + Count;   
+          MasterData.PostLine;
+        end;
+    end;
+end;
+
+procedure TDS_EndDrop(Source : Variant);
+begin
+  LockCalc := False;
+  SetCursor(CursorVis);
+  MasterData.TableAutoCalcFields := True;
+  DropMode := False;
+  ScrollLock := False;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  cbxCount.Checked := VarAsBool(Options.GetServerPrm('ШтучныйОтпускТовара ' + MasterData.Getsign));   
+  miFocusedOnCode.ShortCut := GetShortCut;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+  LockCalc := True;
+  MasterData.Партнер := GetEmplByName(GetUserName, eRespons);
+  LockCalc := False;
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  GoodTbl.SortBy('Код;Товар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  GoodTbl.SortBy('Товар;Код');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure miLinkDict_Click(Sender : TObject);
+begin
+  miLinkDict.Checked := not miLinkDict.Checked;
+end;
+
+
+procedure miAddGroup_Click(Sender: TObject);
+var
+  CtgDic, GoodDic: ICDictionary;
+  defName: String;
+  Accs: ICAccs;
+begin
+  CtgDic := CreateObject('Справочники.Товары');
+  GoodDic := CreateObject('Справочники.Товары');
+  Accs :=  CreateObject('Аккумуляторы.ОстаткиТоваров');
+  CtgDic.IncludeOnlyLevels(true);
+  if CtgDic.SelectInForm('ВыборКатегории', defName, Null) then
+    begin 
+      LockCalc := True;
+      MasterData.UpdateLine(True);
+      DropMode := True;
+      ScrollLock := True;
+      MasterData.TableAutoCalcFields := False;
+      CursorVis := WaitCursorStart;
+
+      GoodDic.UseParent(CtgDic);
+      GoodDic.Select;
+      while GoodDic.SelectNext do
+        begin
+          Accs.CalcGroupRestDirect(RoundDate(MasterData.GetDate,rdDay,true),GoodDic);
+          if Accs.КолОбщ > 0 then
+            begin
+              MasterData.AppendLine;
+              MasterData.Товар := GoodDic;
+              MasterData.AssignFields('Код;ЕдИзм', GoodDic);
+              MasterData.Количество := 1;
+              MasterData.Цена := GoodDic.ОптЦена;
+              MasterData.PostLine;
+            end;
+        end; 
+      LockCalc := False;
+      SetCursor(CursorVis);
+      MasterData.TableAutoCalcFields := True;
+      DropMode := False;
+      ScrollLock := False;
+    end;
+end;
+
+procedure miCode_Click(Sender: TObject);
+var
+  Count : Decimal;
+  s : string; 
+  Dic : ICDictionary;   
+  Accept : Boolean;
+begin
+  Count := 1;
+  Accept := true;
+  Dic := CreateObject('Справочники.Товары'); 
+  if Dic.FindByCode(eCode.Text,false) then
+    begin
+      S := VarAsStr(Dic.NameField);
+      if not MasterData.FindLineBy('Товар', Dic) then
+        begin
+          if not cbxCount.Checked then
+            begin
+              CalcCount(Count, S, Accept);
+              if not Accept then
+                exit;
+           end;
+          MasterData.AppendLine;
+          MasterData.Товар := Dic;
+          MasterData.AssignFields('Код;ЕдИзм', Dic);
+          MasterData.Количество := Count;
+          MasterData.Цена := Dic.ОптЦена;
+          MasterData.PostLine;
+        end;
+  end; 
+  eCode.Text := '';
+end;
+
+procedure cbxCount_Click(Sender: TObject);
+begin
+  SaveUserActiveCountOne('ШтучныйОтпускТовара ' + MasterData.Getsign, cbxCount.Checked);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+nbList:TO4Notebook
+dbgListData:TO4DBGrid
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+Panel7:TO4Panel
+ToolBar1:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbParam:TO4ToolButton
+Panel3:TO4Panel
+MainPanel:TO4Panel
+Label17:TO4Label
+CodePanel:TO4Panel
+eCode:TO4Edit
+cbxCount:TO4CheckBox
+pnImportFromExcel:TO4Panel
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel4:TO4Panel
+nbHeader:TO4Notebook
+Label1:TO4Label
+Label2:TO4Label
+Label26:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+pmList:TO4PopupMenu
+miLinkDict:TO4MenuItem
+miDelRec:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+miAddGroup:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem
+pmCode:TO4PopupMenu
+miCode:TO4MenuItem
+miFocusedOnCode:TO4MenuItem

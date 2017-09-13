@@ -1,0 +1,770 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, Расчеты, РаботаСОбъектами, РаботаСДокументамиВЖурналах, Пользователи, ДополнительныйФункционал,
+  РаботаС_ICS_EP_09, РаботаСФП_Unisystem, РаботаСФРЭкселлио, РаботаСWebApi, РаботаФП_MG_N707TS;
+
+implementation
+
+var
+  ChildPaysOut, ChildNaklsReturn, MasterData : ICJournal;
+  Constants :IC4VPAConst;
+  Doc : ICDocuments;
+  Options : ICOptions;
+  PrintList : ICValueList;
+  Users, FiscalPrinerDic: ICDictionary;
+  PaysTbl: ICValueTable;
+  PreView : Boolean;
+  PrintForm: String;
+  PrintFormsTbl: ICValueTable;
+  LastDateFrom, LastDateTo : DateTime;
+  IsDateRange : boolean;
+  LastDoc : ICDocuments;
+
+const
+  VisibleHappy = 'VisibleHappy';
+
+procedure GetTotalSums;
+var
+  V : Variant;
+begin
+ MasterData.SrvAssignClientSelectParams;
+ lSum.Caption := FormatFloat('0.00', 0);
+ V := server.GetTotalSumsSrv(MasterData.SrvMean);
+ lSum.Caption := FormatFloat('0.00', V[0]); 
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+  Options := GetOptions;
+  ChildPaysOut := CreateObject('Журналы.ЖурналПодчПлатежейОтп');
+  ChildPaysOut.UseMaster(MasterData);
+  ChildNaklsReturn := CreateObject('Журналы.ЖурналПодчВозвратовОтПокупателя');
+  ChildNaklsReturn.UseMaster(MasterData);
+
+  MasterData.DefineSelectParams(true);
+  PaysTbl := CreateObject('ValueTable');
+  PaysTbl.AddColumn('Документ',vtcLink,0);
+  PaysTbl.AddColumn('Дата',vtcDateTime,0);
+  PaysTbl.AddColumn('СуммаДок',vtcFFT,2);
+  PaysTbl.AddColumn('Сумма',vtcFFT,2);
+  PaysTbl.AddColumn('Calc',vtcInteger,0);
+  PaysTbl.Open;
+  PaysTbl.SetColumnFormat('СуммаДок','0.00');
+  PaysTbl.SetColumnFormat('Сумма','0.00');
+  server.InitSrvDate;
+end;
+
+procedure TabSet1_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  MasterData.SetDocStateRange(NewTab-1);
+  MasterData.Select;  
+  GetTotalSums;
+end;
+
+/////// XGrid
+procedure OpenImportantDates;
+Var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ЗнаменательныеДаты');
+  V.OpenFormInplace('Список',CtrlToVar(plHappy));
+end;
+
+procedure Form_Open(Sender: TObject);
+var
+  Nobody : TO4Toolbar;
+  i : integer;
+  ItemMenu : TO4MenuItem;
+begin
+  Constants := GetConstants;
+  tbOnlyCurrentAgent.Visible := VarAsBool(Constants.ИспПолеПосредникВЧеках);
+  MakeInterface(tbr, Nobody, dbGridData);   
+  miDocMove.Visible := GetUDASet('viewdocmove');   
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  for i := 0 to MasterData.StateCount - 1 do
+    TabSet1.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.CancelRangeByField;
+  GetPrintersList(PrintList, edPrinters, MasterData.GetSign);
+  Users := GetDictUser;
+//  if Users.IsFocused then
+  if IsObjFocused(Users) then
+    begin
+      if VarAsBool(Users.@Регион.IsFocused) and VarAsBool(Users.ОтборПоРегиону) then
+        MasterData.SetFieldFilter('Регион','=',Users.@Регион,'','',Null);
+      if VarAsBool(Users.ОтборПоПользователю) then
+        MasterData.SetFieldFilter('Ответственный','=',Users.@Служащий,'','',Null);
+      pPays.Enabled := not(Users.БлокировкаПлатежей); 
+
+      if VarAsBool(Users.@ФискальныйРегистратор.IsFocused) then
+        begin
+         FiscalPrinerDic := CreateObject('Справочники.ФискальныеРегистраторы');
+         tbFiscalPrint.Visible := FiscalPrinerDic.Find(Users.@ФискальныйРегистратор);
+         if tbFiscalPrint.Visible then
+           begin
+             miRepOnItem.Visible := (VarAsStr(FiscalPrinerDic.Тип)='ICS') or (VarAsStr(FiscalPrinerDic.Тип)='Excellio') or (VarAsStr(FiscalPrinerDic.Тип)='MG-N707');
+             miPeriodReport.Visible :=  (VarAsStr(FiscalPrinerDic.Тип)='ICS') or (VarAsStr(FiscalPrinerDic.Тип)='Excellio');
+             miCancelReceipt .Visible := not (VarAsStr(FiscalPrinerDic.Тип)='MG-N707');  
+             miStatusFP.Visible := (VarAsStr(FiscalPrinerDic.Тип)='Unisystem') or (VarAsStr(FiscalPrinerDic.Тип)='MG-N707');
+           end;
+        end;
+
+    end;
+  MakeUserInterface(MasterData.GetSign, pPrintPrm, PreView, PrintFormsTbl);
+  if not isNil(PrintFormsTbl) then
+    begin
+      btnPrint.Style := tbsDropDown;
+      btnPrint.DropdownMenu := pmPrintForms;
+//      if not(MasterData.IsFocused) or (PrintFormsTbl.LineCount = 0) then
+      if PrintFormsTbl.LineCount = 0 then
+        btnPrint.Enabled := false; //если не указана печ.форма или не спозиционирован документ, тогда блокируется кнопка печати
+      PrintFormsTbl.DoNumbering('НомСтроки',1,1);
+      PrintFormsTbl.Select;
+      while PrintFormsTbl.SelectNext do
+        begin
+          ItemMenu := form.FindComponent('miPrinForm' + VarAsStr(PrintFormsTbl.НомСтроки)) as TO4MenuItem;
+          ItemMenu.Caption := PrintFormsTbl.ПечФорма;
+          ItemMenu.Visible := true;
+          ItemMenu.Tag := PrintFormsTbl.НомСтроки;
+          if PrintFormsTbl.НомСтроки = 1 then
+            ItemMenu.Default := true;
+        end;
+    end;
+//  MasterData.DefineSelectParams(True);
+  TabSet1.TabIndex := MasterData.GetDocStateRange+1;
+  ChildPaysOut.OpenFormInplace('СписокПодчиненныхПлатежей', CtrlToVar(pPaysOut));
+  ChildNaklsReturn.OpenFormInplace('СписокВозвратов', CtrlToVar(pReturn));
+  GetTotalSums;
+  if VarAsBool(Options.GetServerPrm(GetUserLogin+VarAsStr(CurrentDate))) = false then
+    begin
+      tbHappy.Down := true;
+      plHappy.Visible := tbHappy.Down;
+      Options.SetServerPrm(GetUserLogin+VarAsStr(CurrentDate), true);
+      OpenImportantDates;
+    end
+  else
+    plHappy.Visible := tbHappy.Down;
+end;
+
+procedure btnRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+  GetTotalSums;
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  GetTotalSums;
+end;
+
+procedure ToolButton3_Click(Sender: TObject);
+var V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ОбработкаОбъектов');
+  V.OpenForm('Главная');
+end;
+
+procedure cbPaySum_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+  GetTotalSums;
+end;
+
+{$D-}
+procedure dbGridData_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if (MasterData.ОплаченоВал > 0) then
+        begin
+          if MasterData.ОплаченоВал < MasterData.СуммаВал then
+            Index1 := 8
+          else
+          if MasterData.ОплаченоВал > MasterData.СуммаВал then
+            Index1 := 7
+          else
+          if MasterData.ОплаченоВал = MasterData.СуммаВал then
+            Index1 := 6;  
+        end;
+      if MasterData.GetDocState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9;
+    end;
+end;
+
+procedure dbGridData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if MasterData.IsFocused and (MasterData.Импорт > 0) then
+    if Highlight then
+      DrawFont.Color := clWhite
+    else
+      DrawFont.Color := clBlue;
+end;
+{$D+}
+
+
+procedure miPayCash_Click(Sender: TObject);
+var
+  PayDoc: ICDocuments;
+  OptUser : Variant;
+begin
+  PayDoc := CreateObject('Документы.ПриходВКассу');
+  PayDoc.Params['AddPay'] := true;
+  PayDoc.Params['OwnerDoc'] := MasterData.GetDoc;
+  PayDoc.Params['PaySum'] := MasterData.ДолжныВал;
+  PayDoc.EditInForm('ПриходВКассуПоЧеку',null);
+  if PayDoc.HasParam('mrOk') then
+  begin
+    try
+      OptUser := Options.GetServerPrm(FixAck);
+      Options.SetServerPrm(FixAck, false);
+      PayDoc.StateUp;
+    finally
+      Options.SetServerPrm(FixAck, OptUser);
+    end
+  end;
+  MasterData.Refresh;
+  ChildPaysOut.Refresh;
+end;
+
+procedure miPayBank_Click(Sender: TObject);
+var
+  PayDoc: ICDocuments;
+  OptUser : Variant;
+begin
+  PayDoc := CreateObject('Документы.ПриходНаРасчСчет');
+  PayDoc.Params['AddPay'] := true;
+  PayDoc.Params['OwnerDoc'] := MasterData.GetDoc;
+  PayDoc.Params['PaySum'] := MasterData.ДолжныВал;
+  PayDoc.EditInForm('ПриходНаРасчСчетПоЧеку',null);
+  if PayDoc.HasParam('mrOk') then
+  begin
+    try
+      OptUser := Options.GetServerPrm(FixAck);
+      Options.SetServerPrm(FixAck, false);
+      PayDoc.StateUp;
+    finally
+      Options.SetServerPrm(FixAck, OptUser);
+    end
+  end;
+  MasterData.Refresh;
+  ChildPaysOut.Refresh;
+end;
+
+procedure miCopyInNaklIn_Click(Sender: TObject);
+Var
+  DocNew: ICDocuments;
+begin
+  DocNew := CreateObject('Документы.НакладнаяПрихода');
+  DocNew.Params['CheckDoc'] := MasterData.GetDoc;
+  DocNew.EditInForm('НакладнаяПрихода', 0);
+end;
+
+procedure btnPrint_Click(Sender: TObject);
+var
+  PrinterName: String;
+  ObjTag : Integer;
+begin
+  if Sender.ClassName = 'TO4ToolButton' then
+    ObjTag := (Sender as TO4ToolButton).Tag;
+  if Sender.ClassName = 'TO4MenuItem' then
+    ObjTag := (Sender as TO4MenuItem).Tag;
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+//  if MasterData.GetDocState = 0 then
+//    PrintOnUserDevice('Обработки.ПечатьЧека', 'ЧекКол58мм', PrinterName, MasterData.GetDoc, PreView)
+//  else
+    begin
+      PrintFormsTbl.SortBy('НомСтроки');
+      if PrintFormsTbl.Find(ObjTag) then
+        PrintOnUserDevice('Обработки.ПечатьЧека', PrintFormsTbl.ПечФорма, PrinterName, MasterData.GetDoc, PreView);
+    end;
+end;
+
+procedure MenuItem13_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintOnUserDevice('Обработки.ПечУнивЖурнала', 'ПечУнивЖурналаЧеков', PrinterName, MasterData, PreView)
+end;
+
+procedure miPrintBarCode_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  if pPrintPrm.Visible then
+    PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+  PrintOnUserDevice('Обработки.ПечатьЧека', 'ПечатьШтрихКодовДляКлиента', PrinterName, MasterData, PreView)
+end;
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  SaveUserActivePrinter(PrinterName, MasterData.GetSign);
+end;
+
+procedure DBComment_Exit(Sender: TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData, 'Заметки');
+end;
+
+procedure miConfirmDoc_Click(Sender: TObject);
+var
+  V: ICProcessing;
+  Doc: ICDocuments;
+begin
+  if MasterData.ПодтверждениеНаличия = 1 then
+    if MessageDlg('Документ уже подтвержден!'+#13+'Продолжить подтверждение?', mtConfirmation, ArrayOf(mbYes,mbNo)) = mrNo then
+      exit;
+  Doc := MasterData.GetDoc;
+  V := CreateObject('Обработки.ПодтверждениеНаличияТовара');
+  V.Execute('Подтверждение',Doc);
+  if V.HasParam('OK') and VarAsBool(V.Params['OK']) then
+    begin
+      ShowMessage('Документ подтвержден!');
+      MasterData.Refresh;
+    end;
+end;
+
+procedure miFindDoc_Click(Sender: TObject);
+begin
+  form.ActiveControl := eFindDoc
+end;
+
+procedure eFindDoc_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if Key = 13 then
+    begin
+      if MasterData.FindByField('NumID', VarAsInt(eFindDoc.Text), false) then
+        miConfirmDoc_Click(Sender)
+      else
+        ShowMessage('В текущей выборке журнала, документ c внутренним №' + eFindDoc.Text + ', не найден.');
+      eFindDoc.Text := '';
+    end;
+end;
+
+procedure pcLists_Change(Sender: TObject);
+Var
+  V: ICProcessing;
+begin
+  case pcLists.ActivePage.PageIndex of
+    1 : begin
+          if not(MasterData.IsFocused) then
+            exit;
+          V := CreateObject('Обработки.ПараметрыНастройкиКассы');
+          V.Params['Part'] := MasterData.Партнер;
+          V.OpenFormInplace('ПросмотрВзаиморасчетаСПартнером',CtrlToVar(pPartBalance))
+        end;
+  end;
+end;
+
+procedure MDS_VPAAfterScroll(Sender: TObject);
+begin
+  pcLists.ActivePage  := TabSheet1;
+end;
+
+procedure tbHappy_Click(Sender: TObject);
+begin
+  if VarAsBool(Options.GetServerPrm(VisibleHappy)) = true then
+    Options.SetServerPrm(VisibleHappy, false)
+  else
+    Options.SetServerPrm(VisibleHappy, true);
+  tbHappy.Down := VarAsBool(Options.GetServerPrm(VisibleHappy));
+  if tbHappy.Down = true then
+    begin
+      plHappy.Visible := true;
+      OpenImportantDates;
+    end
+  else
+    begin
+      plHappy.Visible := false;
+    end;
+end;
+
+procedure tbPartBalance_Click(Sender: TObject);
+Var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ПараметрыНастройкиКассы');
+  V.Params['Part'] := MasterData.Партнер;
+  V.Execute('ИнформацияПоПартнеру',MasterData.Партнер);
+end;
+
+procedure miLoadFromFtpFile_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ЭкспортИмпортССайтом');
+    V.Params['MaskFile'] := '.dbf';
+    if V.Execute('ИмпортИзФайлаСFtp','') <> mrOk then
+      begin
+//        DLog.Add('Выбор файла отменен, процесс импорта прерван.');
+//        Accept := false;
+      end;
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miXReport_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить X-отчет?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   case VarAsStr(FiscalPrinerDic.Тип) of
+     'ICS' : XReportFP_ICS_EP_09(FiscalPrinerDic);
+     'Unisystem' : XReportMiniFP(FiscalPrinerDic);
+     'Excellio' : XReportFPExellio(FiscalPrinerDic);
+     'MG-N707' :  PrintFiscalReportMGN707(FiscalPrinerDic, '10')
+    else
+      ShowMessage('Неизвестный тип фискального регистратора!');
+   end;
+end;
+
+procedure miZReport_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and (MessageDlg('Выполнить Z-отчет?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+   case VarAsStr(FiscalPrinerDic.Тип) of
+     'ICS' : ZReportFP_ICS_EP_09(FiscalPrinerDic);
+     'Unisystem' : ZReportMiniFP(FiscalPrinerDic);
+     'Excellio' : ZReportFPExellio(FiscalPrinerDic);
+     'MG-N707' :  PrintFiscalReportMGN707(FiscalPrinerDic, '0')
+    else
+      ShowMessage('Неизвестный тип фискального регистратора!');
+   end;
+end;
+
+procedure miRepOnItem_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) and
+   (MessageDlg('Выполнить отчет по товарам?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes) then
+     case VarAsStr(FiscalPrinerDic.Тип) of
+      'ICS' : ReportOnItemsFP_ICS_EP_09(FiscalPrinerDic);
+      'Excellio' : ReportOnItemsFPExellio(FiscalPrinerDic);
+      'MG-N707' :  PrintFiscalReportMGN707(FiscalPrinerDic, '20')
+      else
+        ShowMessage('Неизвестный тип фискального регистратора!');
+     end;
+end;
+
+
+procedure miCashInOut_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму внесения денег:',Sum) then
+   begin
+     if Sum>0 then
+       case VarAsStr(FiscalPrinerDic.Тип) of
+        'ICS' :  CashInFP_ICS_EP_09(FiscalPrinerDic,Sum);
+        'Unisystem' : CashInMiniFP(FiscalPrinerDic,Sum);
+        'Excellio' : CashInOutFPExellio(FiscalPrinerDic,Sum);
+        'MG-N707' :  InputOutputCashMGN707(FiscalPrinerDic, Sum)
+        else
+          ShowMessage('Неизвестный тип фискального регистратора!');
+       end
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+procedure miCashOut_Click(Sender: TObject);
+var Sum : Decimal;
+begin
+ if IsObjFocused(FiscalPrinerDic) and StdInpDec('Введите сумму выдачи денег:',Sum) then
+   begin
+     if Sum>0 then
+       case VarAsStr(FiscalPrinerDic.Тип) of
+        'ICS' :  CashOutFP_ICS_EP_09(FiscalPrinerDic,Sum);
+        'Unisystem' : CashOutMiniFP(FiscalPrinerDic,Sum);
+        'Excellio' : CashInOutFPExellio(FiscalPrinerDic,-Sum);
+        'MG-N707' :  InputOutputCashMGN707(FiscalPrinerDic, -Sum)
+        else
+          ShowMessage('Неизвестный тип фискального регистратора!');
+       end
+     else
+       ShowMessage('Сумма должна быть >0!');
+   end;
+end;
+
+
+procedure miPrintZeroReceipt_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   case VarAsStr(FiscalPrinerDic.Тип) of
+    'ICS' :  PrintZeroReceiptFP_ICS_EP_09(FiscalPrinerDic);
+    'Unisystem' : PrintZeroReceiptMiniFP(FiscalPrinerDic);
+    'Excellio' :  PrintZeroReceiptFPExellio(FiscalPrinerDic);
+    'MG-N707' :  PrintZeroReceiptMGN707(FiscalPrinerDic)
+    else
+      ShowMessage('Неизвестный тип фискального регистратора!');
+   end;
+end;
+
+procedure miPeriodReport_Click(Sender: TObject);
+var BegDate,EndDate:DateTime;
+    P:ICProcessing;
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+   begin
+     P := CreateObject('Обработки.Диалоги');
+     if P.Execute('ВыборПериодаДат',Null)=mrOK then
+        case VarAsStr(FiscalPrinerDic.Тип) of
+         'ICS' :       PeriodicReportFP_ICS_EP_09(FiscalPrinerDic,VarAsDate(P.Params['BegDate']),VarAsDate(P.Params['EndDate']));
+         'Excellio' :  PeriodicReportFPExellio(FiscalPrinerDic,VarAsDate(P.Params['BegDate']),VarAsDate(P.Params['EndDate']))
+        else
+          ShowMessage('Неизвестный тип фискального регистратора!');
+       end;
+   end;
+end;
+
+procedure tbFiscalPrint_Click(Sender: TObject);
+var Doc : ICDocuments;
+begin
+ if MasterData.IsFocused and IsObjFocused(FiscalPrinerDic) then
+   begin
+     Doc := MasterData.GetDoc;
+     if MessageDlg('Печатать '+VarAsStr(Doc.GetName)+' №'+VarAsStr(Doc.GetNumber)+' от '+DateToStr(Doc.GetDate)+' на фискальный принтер?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrYes then
+       begin
+         case VarAsStr(FiscalPrinerDic.Тип) of
+          'ICS'       : PrintDocFP_ICS_EP_09(FiscalPrinerDic, Doc);
+          'Unisystem' : PrintDocMiniFP(FiscalPrinerDic, Doc, '0');
+          'Excellio'  : PrintFiscalDocFPExellio(FiscalPrinerDic, Doc);
+          'MG-N707' :  PrintFiscalDocMGN707(FiscalPrinerDic, Doc);
+          else
+            ShowMessage('Неизвестный тип фискального регистратора!');
+         end;
+       end;
+
+   end;
+end;
+
+procedure miCancelReceipt_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+  case VarAsStr(FiscalPrinerDic.Тип) of
+   'ICS' :  if AnnulReceiptFP_ICS_EP_09(FiscalPrinerDic) then
+             ShowMessage('Текущий чек отменен!');
+   'Unisystem' :
+     begin
+       if CancelReceiptMiniFP(FiscalPrinerDic) then
+        ShowMessage('Текущий чек отменен!');
+     end;
+   'Excellio' :
+     CancelLastDocFPExellio(FiscalPrinerDic)
+   else
+     ShowMessage('Неизвестный тип фискального регистратора!');
+  end;
+end;
+
+procedure tbOnlyCurrentPartner_Click(Sender: TObject);
+begin
+ if tbOnlyCurrentPartner.Down then
+   begin
+     if MasterData.IsFocused and VarAsBool(MasterData.@Партнер.IsFocused) then
+       begin
+          tbOnlyCurrentAgent.Enabled := false;
+          IsDateRange := MasterData.GetDateRange(LastDateFrom, LastDateTo);
+          if IsDateRange then
+            MasterData.CancelDateRange;
+          MasterData.SetFieldFilter('Партнер','=',MasterData.@Партнер,'','',Null);
+          Nil(LastDoc);
+          LastDoc := CreateObject('Документы.'+MasterData.GetDoc.GetSign);
+          LastDoc.Select;
+          LastDoc.Find(MasterData.GetDoc);
+          MasterData.Refresh;
+       end
+     else
+      tbOnlyCurrentPartner.Down := false;
+   end
+ else
+   begin
+     tbOnlyCurrentAgent.Enabled := true;
+     if IsDateRange and (LastDateFrom>0) and (LastDateTo>0) then
+        MasterData.SetDateRange(LastDateFrom,LastDateTo);
+     MasterData.CancelFieldFilter('Партнер');
+     MasterData.Refresh;
+     if IsObjFocused(LastDoc) then
+       MasterData.FindDoc(LastDoc);
+     Nil(LastDoc);
+   end;
+end;
+
+procedure tbOnlyCurrentAgent_Click(Sender: TObject);
+begin
+ if tbOnlyCurrentAgent.Down then
+   begin
+     if MasterData.IsFocused and VarAsBool(MasterData.@Посредник.IsFocused) then
+       begin
+          tbOnlyCurrentPartner.Enabled := false;
+          IsDateRange := MasterData.GetDateRange(LastDateFrom, LastDateTo);
+          if IsDateRange then
+            MasterData.CancelDateRange;
+          MasterData.SetFieldFilter('Посредник','=',MasterData.@Посредник,'','',Null);
+          Nil(LastDoc);
+          LastDoc := CreateObject('Документы.'+MasterData.GetDoc.GetSign);
+          LastDoc.Select;
+          LastDoc.Find(MasterData.GetDoc);
+          MasterData.Refresh;
+       end
+     else 
+       begin
+         tbOnlyCurrentAgent.Down := false;
+          if MasterData.IsFocused then
+            ShowMessage('Поле посредник не заполнено!');
+       end;
+   end
+ else
+   begin    
+     tbOnlyCurrentPartner.Enabled := true;
+     if IsDateRange and (LastDateFrom>0) and (LastDateTo>0) then
+        MasterData.SetDateRange(LastDateFrom,LastDateTo);
+     MasterData.CancelFieldFilter('Посредник');
+     MasterData.Refresh;
+     if IsObjFocused(LastDoc) then
+       MasterData.FindDoc(LastDoc);
+     Nil(LastDoc);
+   end;
+end;
+
+procedure miStatusFP_Click(Sender: TObject);
+begin
+ if IsObjFocused(FiscalPrinerDic) then
+  case VarAsStr(FiscalPrinerDic.Тип) of
+   'Unisystem' :  ShowMessage(GetStatusStrMiniFP(FiscalPrinerDic));
+   'MG-N707' : ShowMessage(GetFiscalPrinterStateMGN707(FiscalPrinerDic));
+  end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel2:TO4Panel
+Tbr:TO4ToolBar
+btnAdd:TO4ToolButton
+btnEdit:TO4ToolButton
+btnStateUp:TO4ToolButton
+btnStateDown:TO4ToolButton
+btnDel:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbSelect:TO4ToolButton
+btnPrintVal:TO4ToolButton
+btnPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+btnRefresh:TO4ToolButton
+tbParams:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbHappy:TO4ToolButton
+tbPartBalance:TO4ToolButton
+tbFiscalPrint:TO4ToolButton
+tbOnlyCurrentPartner:TO4ToolButton
+tbOnlyCurrentAgent:TO4ToolButton
+Panel10:TO4Panel
+Splitter1:TO4Splitter
+Panel9:TO4Panel
+pPrintPrm:TO4Panel
+Label4:TO4Label
+edPrinters:TO4Edit
+eFindDoc:TO4Edit
+btSaveActivPrinter:TO4Button
+Panel1:TO4Panel
+lSum:TO4Label
+Label1:TO4Label
+TabSet1:TO4TabSet
+dbGridData:TO4DBGrid
+plHappy:TO4Panel
+Panel4:TO4Panel
+Label15:TO4Label
+Panel3:TO4Panel
+Splitter3:TO4Splitter
+Panel5:TO4Panel
+Label5:TO4Label
+dbComment:TO4DBMemo
+pcLists:TO4PageControl
+TabSheet1:TTabSheet
+pPays:TO4Panel
+Label2:TO4Label
+nbPays:TO4Notebook
+pPaysIn:TO4Panel
+pPaysOut:TO4Panel
+pNakls:TO4Panel
+Label7:TO4Label
+pReturn:TO4Panel
+TabSheet2:TTabSheet
+pPartBalance:TO4Panel
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+MenuItem4:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem15:TO4MenuItem
+miPayCash:TO4MenuItem
+miPayBank:TO4MenuItem
+MenuItem6:TO4MenuItem
+MenuItem7:TO4MenuItem
+MenuItem12:TO4MenuItem
+miPrintBarCode:TO4MenuItem
+MenuItem14:TO4MenuItem
+MenuItem13:TO4MenuItem
+MenuItem8:TO4MenuItem
+MenuItem9:TO4MenuItem
+MenuItem16:TO4MenuItem
+miCopyInNaklIn:TO4MenuItem
+MenuItem10:TO4MenuItem
+miConfirmDoc:TO4MenuItem
+miFindDoc:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem
+TVSPays:TO4TableValueSource
+pmPrintForms:TO4PopupMenu
+miPrinForm1:TO4MenuItem
+miPrinForm2:TO4MenuItem
+miPrinForm3:TO4MenuItem
+miPrinForm4:TO4MenuItem
+miPrinForm5:TO4MenuItem
+miPrinForm6:TO4MenuItem
+miPrinForm7:TO4MenuItem
+miPrinForm8:TO4MenuItem
+miPrinForm9:TO4MenuItem
+miPrinForm10:TO4MenuItem
+pmAddDoc:TO4PopupMenu
+miCheck:TO4MenuItem
+miLoadFromFtpFile:TO4MenuItem
+pmFiscalPrinter:TO4PopupMenu
+miFiscalPrintDoc:TO4MenuItem
+MenuItem17:TO4MenuItem
+miXReport:TO4MenuItem
+miZReport:TO4MenuItem
+miRepOnItem:TO4MenuItem
+miPeriodReport:TO4MenuItem
+MenuItem11:TO4MenuItem
+miCashIn:TO4MenuItem
+miCashOut:TO4MenuItem
+miPrintZeroReceipt:TO4MenuItem
+miCancelReceipt:TO4MenuItem
+miStatusFP:TO4MenuItem

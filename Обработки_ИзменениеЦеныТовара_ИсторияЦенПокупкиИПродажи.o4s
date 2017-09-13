@@ -1,0 +1,155 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation
+
+var SortField : string;
+
+function GetPeriod(TypeSet:integer;DocDate:DateTime) : string;
+Var
+  StrRes : string;
+  DateRes : DateTime;
+begin
+  SortField := '';
+  if TypeSet = 0 then
+    begin
+      case GetMonth(DocDate) of
+       1 : StrRes := 'январь';
+       2 : StrRes := 'февраль';
+       3 : StrRes := 'март';
+       4 : StrRes := 'апрель';
+       5 : StrRes := 'май';
+       6 : StrRes := 'июнь';
+       7 : StrRes := 'июль';
+       8 : StrRes := 'август';
+       9 : StrRes := 'сентябрь';
+       10 : StrRes := 'октябрь';
+       11 : StrRes := 'ноябрь';
+       12 : StrRes := 'декабрь';
+      end;
+      Result := StrRes + ' ' + VarAsStr(GetYear(DocDate)); 
+      SortField := VarAsStr(GetYear(DocDate));
+      if StrLength(SortField) = 1 then
+        SortField := '0'+SortField;
+    end
+  else
+  if TypeSet = 1 then
+    begin
+      case GetMonth(DocDate) of
+        1,2,3 :
+          begin
+            Result := 'I-квартал ' + VarAsStr(GetYear(DocDate));
+            SortField := '01';
+          end;
+         4, 5, 6 :
+          begin
+            Result := 'II-квартал ' + VarAsStr(GetYear(DocDate));
+            SortField := '02';
+          end;
+        7,8,9 :
+          begin
+            Result := 'III-квартал ' + VarAsStr(GetYear(DocDate));
+            SortField := '03';
+          end;
+        10,11,12 :
+          begin
+            Result := 'IV-квартал ' + VarAsStr(GetYear(DocDate));
+            SortField := '04';
+          end;
+      end;
+    end
+  else
+  if TypeSet = 2 then
+    begin
+      DateRes := RoundDate(DocDate,5,True);
+      if GetMonth(DocDate) < 7 then
+        begin
+          StrRes := 'I-е полугодие';
+          SortField := '01';
+        end
+      else
+        if GetMonth(DocDate) <= 12 then
+          begin
+            StrRes := 'IІ-е полугодие';
+            SortField := '02';
+          end;
+      Result := StrRes + ' ' + VarAsStr(GetYear(DocDate));
+    end
+  else
+  if TypeSet = 3 then Result := VarAsStr(GetYear(DocDate));
+end;
+
+procedure GetReportData(PartionTbl, PartOut: ISValueTable; Good: Variant; TypeSet : integer; DateFrom, DateTo: DateTime); server;
+var
+  Count, TotalCount : Integer;
+  AccsEditPriceGood, AccsGood: ISAccs;
+begin
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsGood.ClearFieldBuffers;
+  AccsGood.ClearFieldFilters;
+  AccsGood.IncludeZeroRest := true;
+  AccsGood.SetFieldFilter('Товар',Good);
+  AccsGood.SetFieldFilter('Тип', midOutcome);
+  AccsGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+                                                  'Date;Document;Товар;Валюта;СумОтп;КолОбщ', -1, PartionTbl);
+  PartionTbl.DoGetLinks('Партнер=Document.Партнер.ПолноеНазвание');
+  PartionTbl.DoCalculation('Цена','СумОтп/КолОбщ');
+
+  PartionTbl.Select;
+  while PartionTbl.SelectNext do
+    begin
+      PartionTbl.Edit;
+      PartionTbl.Основание := PartionTbl.Document.GetName + ' №' + PartionTbl.Document.НомерДокумента;
+      if VarAsBool(PartionTbl.Document.@Партнер.IsFocused) then
+        PartionTbl.Партнер := PartionTbl.Document.Партнер.ПолноеНазвание;
+      PartionTbl.ПартнерПериод := GetPeriod(TypeSet,PartionTbl.Date);
+      PartionTbl.Сортировка := VarAsStr(GetYear(PartionTbl.Date)) + SortField;
+      if TypeSet = 4 then
+        PartionTbl.ПартнерПериод := PartionTbl.Партнер;
+      PartionTbl.Post;
+    end;
+  PartionTbl.GroupTo('ПартнерПериод;Сортировка','',PartOut);
+  PartionTbl.GroupBy('Date;Партнер;Товар;Валюта;Цена;Основание;ПартнерПериод','');
+end;
+
+procedure GetReportInData(PartionInTbl, Part : ISValueTable; Good: Variant; TypeSet : integer; DateFrom, DateTo: DateTime); server;
+var
+  Count, TotalCount : Integer;
+  AccsPartGood: ISAccs;
+begin
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsPartGood.ClearFieldBuffers;
+  AccsPartGood.ClearFieldFilters;
+  AccsPartGood.IncludeZeroRest := true;
+  AccsPartGood.SetFieldFilter('Товар',Good);
+  AccsPartGood.AppendGroupMotionToValueTable(DateFrom, DateTo + 0.99999, amtIncome,
+                                                  'Date;Document;Товар;Валюта;ВхЦенаБезНДС=Цена;СтавкаНДС', -1, PartionInTbl);
+//  PartionInTbl.DoCalculation('Цена','Цена*1+(СтавкаНДС/100)');
+  PartionInTbl.DoCalculation('Цена','Цена*(1+(СтавкаНДС/100))');
+  PartionInTbl.Select;
+  while PartionInTbl.SelectNext do
+    begin
+      PartionInTbl.Edit;  
+
+      PartionInTbl.Основание := PartionInTbl.Document.GetName + ' №' + PartionInTbl.Document.НомерДокумента;
+      if PartionInTbl.Document.GetSign = 'НакладнаяВнутрПеремещ' then
+        begin
+          if VarAsBool(PartionInTbl.Document.Ответственный.IsFocused) then
+            PartionInTbl.Партнер := PartionInTbl.Document.Ответственный.ПолноеНазвание;
+        end
+      else
+        if VarAsBool(PartionInTbl.Document.@Партнер.IsFocused) then
+          PartionInTbl.Партнер := PartionInTbl.Document.Партнер.ПолноеНазвание;
+      PartionInTbl.ПартнерПериод := GetPeriod(TypeSet,PartionInTbl.Date);
+      PartionInTbl.Сортировка := VarAsStr(GetYear(PartionInTbl.Date)) + SortField;
+      if TypeSet = 4 then
+        PartionInTbl.ПартнерПериод := PartionInTbl.Партнер;
+      PartionInTbl.Post;
+    end;
+  PartionInTbl.GroupTo('ПартнерПериод;Сортировка','',Part);
+end;
+
+end.
+

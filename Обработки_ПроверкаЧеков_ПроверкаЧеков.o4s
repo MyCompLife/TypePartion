@@ -1,0 +1,28 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Journ: ISJournal;
+
+procedure Check(Tbl: ISValueTAble);server;
+begin
+  Journ := CreateObject('Журналы.ЖурналЧеков');
+  Journ.SetRangeByField('ЗакрытЧек',False);
+  Journ.Select;
+  While Journ.SelectNext do
+    begin
+      Tbl.Append;
+      Tbl.ДатаДокумента := Journ.ДатаДокумента;
+      Tbl.НомерДокумента := Journ.GetDoc.GetNumber;
+      Tbl.Кассир := Journ.Кассир;
+      Tbl.Партнер := Journ.Партнер;
+      Tbl.Сумма := Journ.Сумма;
+      Tbl.Post;
+    end
+end;
+
+end.

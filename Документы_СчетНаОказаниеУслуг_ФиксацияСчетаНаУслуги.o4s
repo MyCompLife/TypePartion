@@ -1,0 +1,79 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация;
+
+implementation
+
+var
+  AccGood, AccsGoodByInv : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  Count, Total : Integer;
+begin
+  DocDate := Doc.GetDate;
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  while Doc.SelectNextLine do
+    if VarAsBool(Doc.@Товар.IsFocused) then
+      if VarAsBool(Doc.Товар.Услуга) then
+        begin
+          AccsGoodByInv.ClearFieldBuffers();
+          AccsGoodByInv.Счет := Doc;
+          AccsGoodByInv.Товар := Doc.@Товар;
+          AccsGoodByInv.Тип := midIncome;
+          AccsGoodByInv.КолОбщ := Doc.Количество;
+          AccsGoodByInv.СумОбщ := Doc.Количество * Doc.ЦенаБезНДС;
+          AccsGoodByInv.СумОбщОтп := Doc.Количество * Doc.Цена;
+          AccsGoodByInv.Income(Doc, Doc.GetDate(), Doc.НомСтроки);
+        end
+      else
+        if VarAsBool(Constants.UseReserv) then
+          begin
+            AccGood.ClearFieldBuffers();
+            AccGood.Товар := Doc.@Товар;
+            AccGood.ВРезерв := Doc.Количество;
+            AccGood.КолОбщ := Doc.Количество;
+            AccGood.Дата := Doc.ОкончаниеРезерва;
+            AccGood.Счет := Doc;
+            AccGood.Income(Doc, DocDate, Doc.НомСтроки);
+            // отправка сообщения клиенту
+            if Count mod 10 = 0 then
+              Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+            if Doc.Terminated then
+              break;
+            inc(Count);
+          end;
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccGood := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  AccsGoodByInv := CreateObject('Аккумуляторы.ОстаткиТоваровТМЦпоСчетам');
+  Constants := GetConstants;
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccGood := CreateObject('Аккумуляторы.ТоварыВРезерве');
+        AccsGoodByInv := CreateObject('Аккумуляторы.ОстаткиТоваровТМЦпоСчетам');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.

@@ -1,0 +1,26 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты,
+  РаботаСДокументамиВЖурналах, ПодключениеДопИнтерфейса;
+
+implementation
+
+var
+  PaysIn, PaysOut : ISJournal;
+
+procedure OrderCalcFields(Order : ISJournal);
+var
+  v : Variant;
+begin
+  Order.ДолжныВал := Order.ОплаченоВал - Order.ОплаченоВал;
+end;
+
+function GetCalcEP(Order : ISJournal) : Variant; server;
+begin
+  PaysIn := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+  Order.SetCalcFieldInDBServer(ArrayOf(PaysIn), ArrayOf('ОплаченоВал', 'СуммаВВалюте'), ArrayOf('1;2'));
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+end.

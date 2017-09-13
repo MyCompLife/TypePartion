@@ -1,0 +1,68 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  Pk : Integer;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  Pk := Form.GetPrintKind;
+end;
+
+procedure Form_EndPrint(PrintForm : TO4PrintForm);
+begin
+  nil(MasterData)
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    if Pk = 0 then
+      MasterData.SelectBookmarks
+    else
+      begin
+        if Pk = pkWindow then
+          MasterData.AssignSelectParams(Form.GetMean);
+        MasterData.Select;
+      end;
+  if Pk = 0 then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := MasterData.CodeField;
+      Value['Name'] := MasterData.NameField;
+      if VarAsBool(MasterData.≈д»зм.IsFocused) then
+        Value['UnitName'] := MasterData.≈д»зм.Value;
+      Value['InPrice'] := MasterData.¬х÷ена;
+      Value['OutPrice'] := MasterData.÷ена;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label11:TRBLabel
+SysData1:TRBSysData
+Label18:TRBLabel
+Band1:TRBBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Structure1:TRBStructure

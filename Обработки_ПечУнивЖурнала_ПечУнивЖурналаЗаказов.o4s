@@ -1,0 +1,60 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+procedure GetTable(Tbl : ISValueTable; MasterData : ISJournal; var s1, s2 : Decimal); server;
+var
+  OutCome, HasOutCome : Boolean;
+  MasterDoc : ISDocuments;
+  LinkToPart : ISDictionary;
+begin
+  s1 := 0;
+  Tbl.Close();
+  Tbl.AddColumn('НомерДокумента', lftString, 20);
+  Tbl.AddColumn('Документ', lftString, 50);
+  Tbl.AddColumn('ДатаДокумента', lftDateTime, 0);
+  Tbl.AddColumn('Название', lftString, 200);
+  Tbl.AddColumn('Сумма', lftFFt, 4);
+  Tbl.AddColumn('ПроцСкидки', lftFFt, 4);
+  Tbl.AddColumn('СуммаСкидки', lftFFt, 4);
+  Tbl.AddColumn('Валюта', lftString, 3);
+
+  Tbl.Open();
+  HasOutCome := MasterData.HasField('Отпуск');
+  OutCome := False;
+  MasterData.Select();
+  while MasterData.SelectNext() do
+    begin
+      Tbl.Append();
+      MasterDoc := MasterData.GetDoc();
+      s1 := s1 + MasterDoc.СуммаВВалюте;
+      Tbl.Сумма := MasterDoc.СуммаВВалюте;
+      Tbl.ДатаДокумента := MasterData.ДатаДокумента;
+      Tbl.НомерДокумента := MasterData.НомерДокумента;
+      Tbl.ПроцСкидки := MasterDoc.ПроцСкидки;
+      Tbl.СуммаСкидки := RoundDec(Tbl.Сумма/(1 + Tbl.ПроцСкидки/100),2) - Tbl.Сумма;
+      s2 := s2 + Tbl.СуммаСкидки;
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        begin
+          LinkToPart := MasterData.Партнер;
+          case LinkToPart.GetSign of
+            'Реализаторы', 'ПостНаРеализацию', 'КонтрактИмпорт', 'ДоговПоставки' :
+                Tbl.Название := LinkToPart.Партнер;
+            'Календарь' :
+                Tbl.Название := LinkToPart.Месяц;
+            'РасчСчета' :
+                Tbl.Название := LinkToPart.НомерСчета;
+            else
+              Tbl.Название := LinkToPart.ПолноеНазвание;
+          end;
+        end;
+      if VarAsBool(MasterData.Валюта.IsFocused) then
+        Tbl.Валюта := MasterData.Валюта.Код;
+      Tbl.Post();
+    end;
+end;
+
+end.

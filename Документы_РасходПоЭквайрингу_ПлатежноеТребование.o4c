@@ -1,0 +1,179 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  FulSum : Variant;
+  Partner, TmpAcc, TmpBank : ICDictionary;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      FulSum := MasterData.Сумма;
+      Value['SumNT'] := MasterData.СуммаБезНДС;
+      Value['Tax'] := MasterData.СуммаНДС;
+      Value['PARTZKPO'] := '';
+      Partner := GetPartner(MasterData.Партнер);
+      if (not IsNil(Partner)) and (VarAsBool(Partner.IsFocused)) then
+        begin
+          case Partner.GetSign of
+            'ЮрПартнеры', 'Банки' :
+              begin
+                Value['PARTNAME'] := GetPartName(MasterData.Партнер);
+                Value['PARTZKPO'] := Partner.ЗКПО;
+              end;
+            'ФизЛица' :
+              begin
+                Value['PartName'] := Partner.ПолноеНазвание;
+                Value['PARTZKPO'] := Partner.ИдентНомер;
+              end;
+            'Служащие' :
+              begin
+                Value['PartName'] := Partner.ПолноеНазвание;
+                Value['PARTZKPO'] := Partner.НалогНом;
+              end;
+          end;
+        end;
+      if VarAsBool(MasterData.@СчетПартнера.IsFocused) then
+        begin
+          TmpAcc := MasterData.СчетПартнера;
+          if VarAsBool(TmpAcc.@Банк.IsFocused) then
+            begin
+              TmpBank := TmpAcc.Банк;
+              Value['BankName'] := TmpBank.ПолноеНазвание;
+              Value['BANKTOWN'] := GetActiv(ADR, 'Город.Название', TmpBank);
+              Value['BANKMFO'] := TmpBank.МФО;
+            end;
+          Value['BANKACC'] := TmpAcc.НомерСчета;
+        end;
+      if VarAsBool(MasterData.@СчетПредприятия.IsFocused) then
+        begin  
+          TmpAcc := MasterData.СчетПредприятия;
+          if VarAsBool(TmpAcc.@Банк.IsFocused) then
+            begin 
+              TmpBank := TmpAcc.Банк;
+              Value['S_BankName'] := TmpBank.ПолноеНазвание;
+              Value['S_BANKTOWN'] := GetActiv(ADR, 'Город.Название', TmpBank);
+              Value['S_BANKMFO'] := TmpBank.МФО;
+              if TmpBank.СтоимУслуг <> 0 then
+                begin
+                  Value['BankSum'] := TmpBank.СтоимУслуг;
+                  Value['BankHave'] := TmpBank.РасчСчет;
+                  Value['RealSum'] := VarAsStr(MasterData.Сумма);
+                end
+              else
+                begin
+                  Value['BankSum'] := '';
+                  Value['RealSum'] := '';
+                  Value['BankHave'] := '';
+                end;
+            end;
+          Value['S_BANKACC'] := TmpAcc.НомерСчета;
+        end;
+      Value['Descript'] := VarAsStr(MasterData.Комментарий) + '. ' + 'В т.ч. ПДВ ' + FormatFloat('00', Int(MasterData.СуммаНДС)) + ' грн. ' +
+        FormatFloat('00', Frac(MasterData.СуммаНДС) * 100) + ' коп.'; //MasterData.Комментарий;
+      Value['Summa'] := FulSum;
+    end;
+  lbSumInWord.Caption := CNV.MoneyToStr(FulSum, 'ГРН', 1058); //C_GRN,C_KOP,True);
+  lbDate.Caption := StrLowerCase(CNV.FormatDateTime('dd mmmm yyyy р.', MasterData.ДатаДокумента, 1, 1058));
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  Accept := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndROOT:TRBDetailBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+lbDate:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+lbPayer:TRBLabel
+Label11:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+lbSumma:TRBLabel
+Label25:TRBLabel
+Label28:TRBLabel
+lbPartZKPO:TRBLabel
+Label31:TRBLabel
+Label33:TRBLabel
+Label34:TRBLabel
+Label35:TRBLabel
+lbPart:TRBLabel
+Label38:TRBLabel
+Label39:TRBLabel
+Label41:TRBLabel
+lbBankSumAcc:TRBLabel
+Label43:TRBLabel
+lbBankSum:TRBLabel
+Label46:TRBLabel
+lbRestSum:TRBLabel
+Label44:TRBLabel
+Label50:TRBLabel
+lbSumInWord:TRBLabel
+lbComment:TRBLabel
+Label51:TRBLabel
+Label53:TRBLabel
+Label54:TRBLabel
+Label55:TRBLabel
+Label40:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Label147:TRBLabel
+Label150:TRBLabel
+Label151:TRBLabel
+Label152:TRBLabel
+Label5:TRBLabel
+Label104:TRBLabel
+Label4:TRBLabel
+Label12:TRBLabel
+Label20:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label32:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label42:TRBLabel
+Label45:TRBLabel
+Label47:TRBLabel
+Label142:TRBLabel
+Label143:TRBLabel
+Structure1:TRBStructure

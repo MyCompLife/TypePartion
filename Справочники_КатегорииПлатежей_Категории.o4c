@@ -1,0 +1,116 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL;
+
+implementation
+
+var
+  DicPaymentCtgs : ICDictionary;
+  LstCurrentLevels : ICValueList;
+  JrnPayments : ICJournal;
+  UseLevels : Boolean;
+  Opt : ICOptions;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  DicPaymentCtgs := MDS.GetMean;
+  JrnPayments := DicPaymentCtgs.Params['ChildJournal'];
+  if IsNil(JrnPayments) then //в отчетах
+    begin
+      SetPropertyForComponentList(ptVisible, Form, 'tbrCtg;miAddLevel;miAddSubLevel;miEditLevel;' +
+                                  'miDelLevel;miDelimiter1', False);
+      SetPropertyForComponentList(ptShortCut, Form, 'miDelLevel;miEditLevel;miAddSubLevel;' +
+                                  'miAddLevel', False);
+      DicPaymentCtgs.Params[prmInterfaceType] := itCategoryReport;
+    end
+  else
+    begin
+      LstCurrentLevels := CreateObject('СписокЗначений');
+      if IsNil(Opt) then
+        Opt := CreateObject('ОпцииКлиента');
+      UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + DicPaymentCtgs.GetSign));
+      DicPaymentCtgs.Params[prmInterfaceType] := itCategoryMain;
+    end;
+  MakeStandartInterface(DicPaymentCtgs, Form, 'tbrCtg', '');
+  DicPaymentCtgs.Params['UseLevel'] := True;
+end;
+
+procedure MDS_LevelChanged(Sender : TObject);
+var
+  OutPrm : Variant;
+begin
+  if not IsNil(JrnPayments) then
+    try
+      DicPaymentCtgs.GetCheckLevelsAsValueList(LstCurrentLevels);
+      JrnPayments.ExecProc(DicPaymentCtgs, 'levelchanged', LstCurrentLevels, OutPrm);
+    finally
+      LstCurrentLevels.Clear;
+    end;
+end;
+
+procedure miDontUseLevel_VPABeforeActionClick(Sender : TObject);
+var
+  OutPrm : Variant;
+begin
+  if not IsNil(JrnPayments) then
+    JrnPayments.ExecProc(DicPaymentCtgs, 'dontuselevel', Null, OutPrm);
+  UseLevels := False;
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  DicPaymentCtgs.InteractiveUseLevels := UseLevels;
+end;
+
+procedure miUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  if not IsNil(JrnPayments) then
+    Opt.SetServerPrm(GetUserID + DicPaymentCtgs.GetSign, UseLevels);
+end;
+
+procedure miUseNoLevel_VPABeforeActionClick(Sender : TObject);
+var
+  OutPrm : Variant;
+begin
+  if not IsNil(JrnPayments) then
+    JrnPayments.ExecProc(DicPaymentCtgs, 'usenolevel', Null, OutPrm);
+  UseLevels := False;
+end;
+
+procedure miUseLevel_Click(Sender : TObject);
+begin
+  DicPaymentCtgs.Params['UseLevel'] := True;
+end;
+
+procedure miUseNoLevel_Click(Sender : TObject);
+begin
+  DicPaymentCtgs.Params['UseLevel'] := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+tbrCtg:TO4ToolBar
+tbAddLevel:TO4ToolButton
+tbEditLevel:TO4ToolButton
+tbDelLevel:TO4ToolButton
+dbtCtg:TO4DBTreeView
+MDS:TO4DataSource
+pmCtg:TO4PopupMenu
+miAddLevel:TO4MenuItem
+miAddSubLevel:TO4MenuItem
+miEditLevel:TO4MenuItem
+miDelLevel:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miUseLevel:TO4MenuItem
+miDontUseLevel:TO4MenuItem
+miUseNoLevel:TO4MenuItem
+pmAddLevels:TO4PopupMenu
+miAddBros:TO4MenuItem
+miAddChild:TO4MenuItem

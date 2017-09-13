@@ -1,0 +1,56 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICValueTable;
+  UseConst : IC4VPAConst;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin
+      UseConst := GetConstants;
+      MasterData := Params;
+      MasterData.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+      MasterData.SortBy('Товар;Код;Склад');
+      MasterData.SetColumnFormat('ВхЦенаВал', UseConst.ФорматЦеныВал);
+      MasterData.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+      MasterData.UseDataSource(CtrlToVar(TVSGood));
+    end;
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  MasterData.SortBy('Код;Товар;Склад');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  MasterData.SortBy('Товар;Код;Склад');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+DBGrid1:TO4DBGrid
+Panel1:TO4Panel
+Panel2:TO4Panel
+Label3:TO4Label
+Panel5:TO4Panel
+btCancel:TO4Button
+Panel3:TO4Panel
+Label2:TO4Label
+Panel4:TO4Panel
+Button1:TO4Button
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem

@@ -1,0 +1,49 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var Tbl : ICValueTable;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+ if not isNil(Params) then
+  begin
+   Tbl := Params;
+   if Tbl.IsFocused then
+    begin
+     CostNameEdit.Text := VarAsStr(Tbl.CostName,'');
+     CostValueEdit.Text:= VarAsStr(Tbl.CostValue,'');
+    end;
+  end;
+end;
+
+procedure btOK_Click(Sender: TObject);
+begin
+ if StrToFloatDef(CostValueEdit.Text,0) <= 0 then
+  begin
+   showmessage('¬ведите правильно сумму затрат');
+   exit;
+  end;
+ if CostNameEdit.Text = '' then 
+  begin
+   showmessage('¬ведите название затрат затрат');
+   exit;
+  end;
+ Tbl.CostName := CostNameEdit.Text;
+ Tbl.CostValue := StrToFloatDef(CostValueEdit.Text,0);
+ Form.ModalResult := mrOK;
+ Form.Close;
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label1:TO4Label
+Label2:TO4Label
+CostNameEdit:TO4Edit
+CostValueEdit:TO4Edit
+btOK:TO4Button
+btCancel:TO4Button

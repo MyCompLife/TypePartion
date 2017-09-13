@@ -1,0 +1,60 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICJournal;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := CreateObject('Журналы.ЖурналРезерваТоваров');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    begin
+      if Form.GetPrintKind = pkWindow then
+        MasterData.AssignSelectParams(Form.GetMean);
+      //    MasterData.SortByName;
+      MasterData.Select;
+    end;
+  Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        Value['Partner'] := MasterData.Партнер.ПолноеНазвание
+      else
+        Value['Partner'] := '';
+      if VarAsBool(MasterData.@Ответственный.IsFocused) then
+        Value['RespName'] := MasterData.Ответственный.ПолноеНазвание
+      else
+        Value['RespName'] := '';
+      Value['DocName'] := MasterData.Документ;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand2:TRBDetailBand
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label18:TRBLabel
+Label10:TRBLabel
+Band1:TRBBand
+Label1:TRBLabel
+Band3:TRBBand
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label9:TRBLabel
+Structure1:TRBStructure

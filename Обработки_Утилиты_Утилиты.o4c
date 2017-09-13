@@ -1,0 +1,349 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€;
+
+implementation
+
+var
+  MasterData : ICProcessing;
+  DataDir : string;
+  Cursor : TCursor;
+  RunningMan : Variant;
+  Constants : IC4VPAConst;
+
+//дл€ перехода от старых авансовых отчетов к новым - добавлена аналитика
+procedure btAvans_Click(Sender : TObject);
+var
+  AccTbl, AccTblNew : ICValueTable;
+  JAvans : ICJournal;
+  OldDoc : ICDocuments;
+begin
+  AccTbl := CreateObject('“аблица«начений');
+  AccTbl.Close();
+  AccTbl.AddColumn('—чет', lftLink, 0);
+  AccTbl.AddColumn('—умма', lftFFT, 2);
+  AccTbl.Open();
+  AccTblNew := CreateObject('“аблица«начений');
+  AccTblNew.Close();
+  AccTblNew.AddColumn('—чет', lftLink, 0);
+  AccTblNew.AddColumn('—умма', lftFFT, 2);
+  AccTblNew.AddColumn('јналитика', lftLink, 0);
+  AccTblNew.Open();
+  JAvans := CreateObject('∆урналы.∆урналјвансовыйќтчет');
+  JAvans.Select;
+  while JAvans.SelectNext do
+    begin
+      OldDoc := JAvans.GetDoc();
+      OldDoc.Edit;
+      AccTbl.PackedData := OldDoc.ѕо—четам;
+      AccTbl.AppendTo('', AccTblNew);
+      OldDoc.ѕо—четам := AccTblNew.PackedData;
+      OldDoc.Post;
+    end;
+end;
+
+procedure Button1_Click(Sender : TObject);
+var
+  JNakl : ICJournal;
+  OldDoc : ICDocuments;
+  i : Integer;
+  state : Integer;
+  fixup : Boolean;
+begin
+  JNakl := CreateObject('∆урналы.∆урналЌакладных');
+  JNakl.CancelRangeByField;
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.SetDocTypeRange('ƒокументы.Ќакладна€ќтпускаѕо—чету');
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('Ќаклќтпѕо—чету ' + floatToStr(i))
+    end;
+  nil(JNakl);
+  JNakl := CreateObject('∆урналы.∆урналЌакладных');
+  JNakl.CancelRangeByField;
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.SetDocTypeRange('ƒокументы.Ќакладна€ќтпуска');
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('Ќакладна€ќтпуска ' + floatToStr(i))
+    end;
+  nil(JNakl);
+  JNakl := CreateObject('∆урналы.∆урналЌакладных');
+  JNakl.CancelRangeByField;
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.SetDocTypeRange('ƒокументы.Ќакладна€ќтпускаЌа–еализацию');
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('ЌаклќтпЌа–еал ' + floatToStr(i))
+    end;
+  nil(JNakl);
+  JNakl := CreateObject('∆урналы.∆урналќтпускаЌа–еализацию');
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.SetDocTypeRange('ƒокументы.¬водќстЌа–еал');
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('¬водќстЌа–еал ' + floatToStr(i))
+    end;
+  nil(JNakl);
+  JNakl := CreateObject('∆урналы.∆урнал—писаний“оваров');
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('—писание“овара ' + floatToStr(i))
+    end;
+  nil(JNakl);
+
+  JNakl := CreateObject('∆урналы.∆урналѕеремещени€“овара');
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('Ќакл¬нутрѕеремещ ' + floatToStr(i))
+    end;
+  nil(JNakl);
+
+  JNakl := CreateObject('∆урналы.∆урналѕереоценки');
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('ƒокум»зм÷ен ' + floatToStr(i))
+    end;
+  nil(JNakl);
+  JNakl := CreateObject('∆урналы.∆урналЌаклќтп“ћ÷');
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  //  JNakl.SetDocTypeRange('¬водќст“ћ÷ѕо—чету');
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      if (JNakl.GetDocSign = '¬водќст“ћ÷ѕо—чету') or (JNakl.GetDocSign = 'Ќаклќтпуска“ћ÷ѕо—чету') then
+        begin
+          OldDoc := JNakl.GetDoc();
+          state := OldDoc.GetDocState;
+          fixup := False;
+          if state > 0 then
+            begin
+              fixup := True;
+              while state <> 0 do
+                begin
+                  OldDoc.StateDown;
+                  state := OldDoc.GetDocState;
+                end;
+            end;
+          if fixup then
+            OldDoc.StateUp;
+          inc(i);
+          StatusText('Ќакл“ћ÷ѕо—чету ' + floatToStr(i));
+        end;
+    end;
+  nil(JNakl);
+  JNakl := CreateObject('∆урналы.∆урнал¬озвратовѕоставщикам');
+  JNakl.CancelRangeByField;
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.SetDocTypeRange('ƒокументы.¬озвратѕоставщикам');
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('¬озвратѕоставщикам ' + floatToStr(i))
+    end;
+  nil(JNakl);
+  JNakl := CreateObject('∆урналы.∆урнал¬озвратовѕоставщикам');
+  JNakl.CancelRangeByField;
+  JNakl.SetDateRange(RoundDate(StrToDate('01.01.2003'), rdDay, False), currentdate + 2);
+  JNakl.SetDocTypeRange('ƒокументы.¬озвратѕостЌа–еал');
+  JNakl.Select;
+  i := 0;
+  while JNakl.SelectNext do
+    begin
+      OldDoc := JNakl.GetDoc();
+      state := OldDoc.GetDocState;
+      fixup := False;
+      if state > 0 then
+        begin
+          fixup := True;
+          while state <> 0 do
+            begin
+              OldDoc.StateDown;
+              state := OldDoc.GetDocState;
+            end;
+        end;
+      if fixup then
+        OldDoc.StateUp;
+      inc(i);
+      StatusText('¬озвратѕостЌа–еал ' + floatToStr(i))
+    end;
+  nil(JNakl);
+  StatusText('ќбработка завершена');
+end;
+
+procedure Button2_Click(Sender : TObject);
+var
+  RunningMan : Variant;
+begin
+  with MasterData do
+    begin
+      //    Server.fix(MasterData)
+      if IsObject(RunningMan) then
+        RunningMan.Start
+      else
+        RunningMan := CreateBusyIndicator;
+      if RunThreadProcess(server.fix(MasterData),
+        DateTimeToStr(CurrentDateTime) + Trans(' -  онвертаци€')) then
+        MessageDlg(DateTimeToStr(CurrentDateTime) + Trans(' -  онвертаци€ успешно завершена !'), mtInformation, mbOk)
+      else
+        MessageDlg(DateTimeToStr(CurrentDateTime) + Trans(' -  онвертаци€ была прервана или возникали ошибки !'), mtWarning, mbCancel);
+      RunningMan.Stop;
+    end
+
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  MasterData := Mean;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  StatusText('');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+btAvans:TO4Button
+Button1:TO4Button
+Button2:TO4Button

@@ -1,0 +1,51 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+procedure LoadPartToTbl(GoodsTbl, SelGoodsTbl : ISValueTable; StrRange: String); Server;
+Var
+  GoodsDic: ISDictionary;
+  TempTbl, TmpTbl: ISValueTable;
+begin
+  GoodsTbl.Clear;
+  GoodsDic := CreateObject('Справочники.Товары');
+  TempTbl := CreateObject('ТаблицаЗначений');
+  TempTbl.Open;
+
+  TmpTbl := CreateObject('ТаблицаЗначений');
+  TmpTbl.Open;
+  GoodsTbl.CopyColumnsTo(TmpTbl);
+  GoodsDic.SetFieldFilter('ВесовойТовар', '=', True, '', '', null);
+
+
+  if StrRange <> '' then
+    GoodsDic.SetFieldFilter('НазвТовара', 'Like', '%' + StrRange + '%', '', '', null);
+  GoodsDic.Select;
+  GoodsDic.SaveToValueTable('', TempTbl, 1 , GoodsDic.RecordCount);
+  TempTbl.AppendTo('Self=Товар', TmpTbl);
+  TmpTbl.DoCalculation('RangeField','0');
+  TmpTbl.AppendTo('',GoodsTbl);
+  TmpTbl.Clear;
+
+  GoodsDic := CreateObject('Справочники.ВессовойТовар');
+  if StrRange <> '' then
+    GoodsDic.SetFieldFilter('Название', 'Like', '%' + StrRange + '%', '', '', null);
+  GoodsDic.Select;
+  GoodsDic.SaveToValueTable('', TempTbl, 1 , GoodsDic.RecordCount);
+  TempTbl.AppendTo('Товар', TmpTbl);
+  TmpTbl.DoCalculation('RangeField','1');
+  TmpTbl.AppendTo('',GoodsTbl);
+  TmpTbl.Clear;
+  GoodsTbl.select;
+  
+  SelGoodsTbl.Select;
+  SelGoodsTbl.AppendTo('Товар;RangeField',GoodsTbl);
+  GoodsTbl.UpdateObjNames;
+  GoodsTbl.GroupBy('Товар','RangeField');
+  GoodsTbl.DoGetLinks('Код=Товар.Код;Название=Товар.НазвТовара');
+end;
+
+end.

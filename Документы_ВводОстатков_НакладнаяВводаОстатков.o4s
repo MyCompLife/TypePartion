@@ -1,0 +1,34 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure ChangeTbl(TblContents: ISValueTable; MasterData : Variant); server;
+begin
+  TblContents.Select;
+  While VarAsBool(TblContents.SelectNext) do
+  begin
+    if (TblContents.ВалютаТовара.Код = MasterData.Валюта.Код) then
+      begin
+        TblContents.Edit;
+        TblContents.КурсТовара := MasterData.Курс;
+        TblContents.Post;
+      end;
+  end;
+  TblContents.DoCalculation('Цена','КурсТовара*ЦенаВВалюте');
+  TblContents.DoCalculation('ЦенаБезНДС','КурсТовара*ЦенаВВалюте');
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+end.

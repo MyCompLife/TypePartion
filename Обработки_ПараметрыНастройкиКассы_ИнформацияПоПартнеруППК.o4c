@@ -1,0 +1,111 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений, ДополнительныйФункционал;
+Var
+  Part, DiscDic, PartDic : ICDictionary;
+  V: ICProcessing;
+  Constants : IC4VPAConst;
+
+implementation
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  Constants := GetConstants;
+  V := Mean;
+  PartDic := CreateObject('Справочники.ЮрПартнеры');
+  DiscDic := CreateObject('Справочники.ДисконтныеКарты');
+  if V.HasParam('Part') then
+    Part := V.Params['Part'];
+  if Part.IsFocused then
+    begin
+      ePart.text := Part.ПолноеНазвание; 
+      eCode.text := Part.Код;
+    end;
+  V.OpenFormInplace('ПросмотрВзаиморасчетаСПартнером', CtrlToVar(pInfo));
+  miFocusedOnCode.ShortCut := GetShortCut;
+end;
+
+procedure ePart_ActionExecute(Sender: TObject);
+Var
+  G: Variant;
+  PartName : string;
+begin
+  PartName := ePart.Text;
+  if PartDic.SelectInForm('ВыборПартнера',PartName,Null) then
+    begin
+      ePart.text := PartDic.ПолноеНазвание;
+      V.Params['Part'] := PartDic;
+      V.OpenFormInplace('ПросмотрВзаиморасчетаСПартнером', CtrlToVar(pInfo));
+    end;
+end;
+
+procedure eCode_KeyDown(Sender: TObject; var Key: Integer);
+var
+  BarCode : String;
+begin
+  if Key = 13 then
+    begin
+      BarCode := eCode.Text;
+      if StrLength(BarCode) = Constants.ШтрихКодПартнераКолСимв then
+        begin
+          if DiscDic.FindByCode(BarCode, false) then
+            begin   
+              PartDic := DiscDic._GetOwner;
+              ePart.text := PartDic.ПолноеНазвание;
+              V.Params['Part'] := PartDic;
+              V.OpenFormInplace('ПросмотрВзаиморасчетаСПартнером', CtrlToVar(pInfo));
+            end
+          else
+            ShowMessage('Партнер не найден')
+        end
+      else
+        if PartDic.FindByField('Код',BarCode, false) then
+          begin
+            ePart.text := PartDic.ПолноеНазвание;
+            V.Params['Part'] := PartDic;
+            V.OpenFormInplace('ПросмотрВзаиморасчетаСПартнером', CtrlToVar(pInfo));
+          end
+        else
+          ShowMessage('Партнер не найден')
+    end;
+end;
+
+procedure miFocusedOnCode_Click(Sender: TObject);
+begin
+  form.ActiveControl := eCode;
+end;
+
+procedure tbPartFind_Click(Sender: TObject);
+Var
+  Partner : ICDictionary;
+  PartName : String;
+  Proc: ICProcessing;
+begin
+  Proc := CreateObject('Обработки.РаботаСДокументами');
+  if IsNil(PartDic) then
+    PartDic := CreateObject('Справочники.ЮрПартнеры');
+  if (Proc.Execute('СписокПартнеров', PartDic) = mrOk) and Proc.HasParam('Partner') then
+    begin
+      Partner := Proc.Params['Partner'];
+      ePart.text := Partner.ПолноеНазвание;
+      V.Params['Part'] := Partner;
+      V.OpenFormInplace('ПросмотрВзаиморасчетаСПартнером', CtrlToVar(pInfo));
+    end;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+pFooter:TO4Panel
+btCancel:TO4Button
+pInfo:TO4Panel
+pPart:TO4Panel
+ePart:TO4Edit
+eCode:TO4Edit
+ToolBar3:TO4ToolBar
+tbPartFind:TO4ToolButton
+TableValueSource1:TO4TableValueSource
+pMain:TO4PopupMenu
+miFocusedOnCode:TO4MenuItem

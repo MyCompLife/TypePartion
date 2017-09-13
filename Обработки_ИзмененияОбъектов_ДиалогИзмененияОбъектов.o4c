@@ -1,0 +1,20 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+var MasterProc, ObjProc : ICProcessing;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean;
+  lbObjName.Caption :=  VarAsStr(Params.CodeField)+' '+VarAsStr(Params.NameField);
+  MasterProc.Params['MasterData'] := Params;
+  MasterProc.OpenFormInplace('ИзмененияОбъектов',CtrlToVar(pnObj));
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbObjName:TO4Label
+pnObj:TO4Panel

@@ -1,0 +1,259 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, Интерфейс, Reports, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  MasterData: ICDocuments;
+  Options: ICOptions;
+  Employ, TimeSch, MyFirm, LinkDict, linkDictMan : ICDictionary;
+  Month, Year, k, DayCount: Integer;
+  Date: DateTime;
+  IndexRange: String;
+  PartTbl, BonusTbl : ICValueTable;
+  DateFrom, DateTo : DateTime; 
+  LockCalc, isSave : boolean;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+  PartTbl := CreateObject('ValueTable');
+  PartTbl.AddColumn('Партнер',vtcLink,0);
+  PartTbl.AddColumn('Document',vtcLink,0);
+  PartTbl.AddColumn('DocName',vtcString,100);
+  PartTbl.AddColumn('СуммаЧек',vtcFFT,2);
+  PartTbl.AddColumn('СуммаВозврат',vtcFFT,2);
+  PartTbl.AddColumn('Сумма',vtcFFT,2);
+  PartTbl.AddColumn('Процент',vtcFFT,2);
+  PartTbl.AddColumn('СумВознаграждения',vtcFFT,2);
+  PartTbl.AddColumn('Валюта',vtcLink,0);
+  PartTbl.AddColumn('Курс',vtcFFT,2);
+  PartTbl.AddColumn('СумВалВознаграждения',vtcFFT,2);
+  PartTbl.Open;
+  PartTbl.SetColumnFormat('СуммаЧек','0.00');
+  PartTbl.SetColumnFormat('СуммаВозврат','0.00');
+  PartTbl.SetColumnFormat('Сумма','0.00');  
+  PartTbl.SetColumnFormat('Процент','0.00');
+  PartTbl.SetColumnFormat('СумВознаграждения','0.00');
+  PartTbl.SetColumnFormat('СумВалВознаграждения','0.00');
+  MyFirm := CreateObject('Справочники.ВашеПредприятие');
+  MyFirm.Select;
+  BonusTbl := CreateTblFromBLOB(MyFirm.Диапазон);
+  if IsNil(BonusTbl) then
+    begin
+      BonusTbl := CreateObject('ТаблицаЗначений');
+      BonusTbl.AddColumn('СуммаС',vtcFloat,2);
+      BonusTbl.AddColumn('СуммаПо',vtcFloat,2);
+      BonusTbl.AddColumn('Процент',vtcFloat,2);
+      BonusTbl.Open;
+    end;
+end; 
+
+procedure CalcFields(Doc : ICDocuments);
+begin
+  if MasterData.Сумма <> 0 then
+        MasterData.Процент := (MasterData.СумВознаграждения/MasterData.Сумма)*100;
+ // GetCalcValSumma(Doc); //находится в модуле Расчёты
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  isSave := false;
+  LockCalc := false;
+  MasterData := MDS.GetMean;
+  CreateObjects;
+//  MasterData.SetOnCalcFields(EntryPoint(CalcFields));
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+//  MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  MasterData.НачалоПериода := DateFrom;
+  MasterData.КонецПериода := DateTo;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+  if FieldName = '' then
+    begin
+//      MasterData.ClearContents;
+    end;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  if MasterData.GetDocState >0 then
+    SetReadOnlyForm(Form);
+  DateFrom := MasterData.НачалоПериода;
+  DateTo := MasterData.КонецПериода;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+procedure ToolButton1_Click(Sender: TObject);
+begin
+  MasterData.SaveContents('',PartTbl);
+  PartTbl.CopyDataToServer;
+  BonusTbl.CopyDataToServer;
+  server.CalcTblDoc(PartTbl.SrvMean,BonusTbl.SrvMean,DateFrom,DateTo);
+  PartTbl.CopyDataFromServer;
+  BonusTbl.CopyDataFromServer;
+  MasterData.ClearContents;
+  MasterData.LoadContents('',PartTbl);
+  MasterData.НачалоПериода := DateFrom;
+  MasterData.КонецПериода := DateTo;
+end;
+
+procedure eDateTo_Change(Sender: TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure miFirstHalfYear_Click(Sender: TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo, eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+//  MasterData.Период := (Sender as TO4MenuItem).Caption;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+ // MasterData.НачалоПериода := DateFrom;
+ // MasterData.КонецПериода := DateTo;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+ // if LockCalc then
+ //   exit;
+  if FieldName = 'СумВознаграждения' then
+    begin
+      if MasterData.Сумма <> 0 then
+        MasterData.Процент := (MasterData.СумВознаграждения/MasterData.Сумма)*100;
+      if MasterData.Курс <> 0 then
+        MasterData.СумВалВознаграждения := MasterData.СумВознаграждения/MasterData.Курс;
+      MasterData.Тип := 1;
+      LockCalc := true;
+    end;
+  if FieldName = 'Курс' then
+    begin
+      if MasterData.Курс <> 0 then
+        MasterData.СумВалВознаграждения := MasterData.СумВознаграждения/MasterData.Курс;
+      LockCalc := true;
+    end;
+ { if FieldName = 'Процент' then
+    begin
+      MasterData.СумВознаграждения := MasterData.Сумма * (MasterData.Процент/100);
+      MasterData.Тип := 1;
+      LockCalc := true;
+    end;
+    }
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.LinesCount() > 0 then
+    if MasterData.Тип = 1 then
+      Index1 := 207
+    else
+      Index1 := -1;
+end;  
+{$D+}
+
+procedure MenuItem4_Click(Sender : TObject);
+begin
+  LinkDict := MasterData.OpenDropSource('Справочники.ЮрПартнеры', 'ПодборПартнеров', Null);
+end;
+
+procedure MenuItem5_Click(Sender : TObject);
+begin
+  LinkDictMan := MasterData.OpenDropSource('Справочники.ФизЛица', 'ПодборФизЛиц', Null);
+end;
+
+procedure MenuItem7_Click(Sender : TObject);
+begin
+  LinkDictMan := MasterData.OpenDropSource('Справочники.Служащие', 'ПросмотрСлужащих', Null);
+end;
+
+procedure MenuItem8_Click(Sender : TObject);
+begin
+  LinkDictMan := MasterData.OpenDropSource('Справочники.Банки', 'ПросмотрБанков', Null);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+eRespons:TO4DBEdit
+Panel2:TO4Panel
+mbOk:TO4Button
+mbCancel:TO4Button
+Panel3:TO4Panel
+dbgData:TO4DBGrid
+Panel4:TO4Panel
+Panel5:TO4Panel
+ToolBar1:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbDel:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+ToolBar3:TO4ToolBar
+Panel6:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem4:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem5:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+pmDrop:TO4PopupMenu
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem7:TO4MenuItem
+MenuItem8:TO4MenuItem

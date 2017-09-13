@@ -1,0 +1,170 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, ПодключениеДопИнтерфейса, РаботаСТаблицамиЗначений, РаботаСОбъектами;
+
+implementation
+
+var
+  Currency, DiscountLimitDic, GoodsDic : ISDictionary;
+  AccsPart : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure СформироватьЧекПоЗаказу(tmpCtx : ISValueTable; Order, Nakls : ISDocuments); server;
+begin
+  tmpCtx.SortBy('Товар;Цена');
+  tmpCtx.DoCalculation('ОбщКол', 'Количество');
+  Nakls.UseMaster(Order);
+  if Nakls.Select then
+    while Nakls.SelectNext do
+      if (Nakls.GetDocState > 0) and Nakls.SelectLines then
+        while Nakls.SelectNextLine do
+          begin
+            tmpCtx.SetRange(ArrayOf(Nakls.@Товар, Nakls.Цена), ArrayOf(Nakls.@Товар, Nakls.Цена));
+            tmpCtx.Select;
+            if tmpCtx.SelectNext then
+              begin
+                tmpCtx.Edit;
+                tmpCtx.ОбщКол := tmpCtx.ОбщКол - Nakls.Количество;
+                tmpCtx.Post;
+              end;
+            tmpCtx.CancelRange;
+         end;
+  tmpCtx.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+end;
+
+procedure InitSrvData; Server;
+begin
+  DiscountLimitDic := CreateObject('Справочники.ОграничениеСкидок');
+  GoodsDic := CreateObject('Справочники.Товары');
+  Currency := CreateObject('Справочники.Валюты');
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  Constants := GetConstants;
+end;
+
+function GetPartSumBalance(Part: Variant): Decimal; Server;
+var
+  Proc : Decimal;
+begin
+  result := 0;
+  if not IsObjFocused(Part) then
+    exit;
+  AccsPart.CalcGroupRestDirect(RoundDate(CurrentDate, rdDay, True), Part);
+  result := AccsPart.СумОбщВал
+end;
+
+procedure ChangeTbl(TblContents, ActionTbl: ISValueTable; Percent, CourseDoc : Decimal;
+                    TypePrice, CurrencyCodeDoc, DefCommentDiscount: String; DateDoc: DateTime); server;
+var
+  Course, PercentLine: Decimal;
+  CommentDiscount : string;
+  ActionDoc : IsDocuments;
+begin
+  TblContents.Select;
+  While TblContents.SelectNext do
+    if GoodsDic.Find(TblContents.@Товар) and Currency.Find(GoodsDic._Default['Валюта'+TypePrice]) then
+      begin
+        if (Currency.Код = CurrencyCodeDoc) then
+          Course := CourseDoc
+        else
+          Course := Currency.GetTimedValue(GetConstants.UsedCurs, DateDoc); //переделать на дату документа
+        if not VarAsBool(TblContents.РучнаяКорректировка) and // Если  не ручная коректировка цены, то пересчитываем цену
+           not VarAsBool(TblContents.ЦенаИзШтрихКода) then
+         begin
+           TblContents.Edit;
+           PercentLine := Percent;
+           CommentDiscount := DefCommentDiscount;
+           if (ActionTbl.LineCount>0) then
+             begin
+               if ActionTbl.Locate('ИспКатегории',0) and ((VarAsDec(ActionTbl.Скидка)/100)<PercentLine) then
+                 begin
+                   CommentDiscount := 'Акция';
+                   PercentLine := VarAsDec(ActionTbl.Скидка)/100;
+                   if VarAsBool(ActionTbl.@Document.IsFocused) then
+                     begin
+                       ActionDoc := ActionTbl.Document;
+                       CommentDiscount := CommentDiscount + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+                     end;
+                 end
+               else
+               if ActionTbl.Locate('Категория', GoodsDic.GetParent) and ((VarAsDec(ActionTbl.Скидка)/100)<PercentLine) then
+                 begin
+                   PercentLine := VarAsDec(ActionTbl.Скидка)/100;
+                   CommentDiscount := 'Акция по категориям';
+                   if VarAsBool(ActionTbl.@Document.IsFocused) then
+                      begin
+                        ActionDoc := ActionTbl.Document;
+                        CommentDiscount := CommentDiscount + ' №'+ActionDoc.GetNumber+' от '+DateToStr(ActionDoc.GetDate);
+                      end;
+                 end;
+             end;
+
+
+
+           if TypePrice <> '' then
+             TblContents.ЦенаБезСкидкиНадбавки := GoodsDic._Default[TypePrice]*Course;
+           DiscountLimitDic.SetFieldFilter('Товар','=',GoodsDic,'','',Null);
+           DiscountLimitDic.SetFieldFilter('ТипЦены','=',TypePrice,'','',Null);
+           if DiscountLimitDic.Select then
+             begin
+               DiscountLimitDic.SelectNext;
+               if (VarAsDec(DiscountLimitDic.Скидка)/100) > PercentLine then // если ограничение скидки менше скидки партнера, то ставим ограничение
+                begin
+                  CommentDiscount := 'Скидка ограничения на товар';
+                  PercentLine := VarAsDec(DiscountLimitDic.Скидка/100);
+                end;
+             end;
+           TblContents.Цена := TblContents.ЦенаБезСкидкиНадбавки*(1 + PercentLine);
+           if VarAsBool(Constants.ОкруглятьЦеныГрн) then
+             begin    
+               if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+                 begin
+                   TblContents.Цена := RoundTo5Cop(TblContents.Цена);
+                   TblContents.ЦенаБезСкидкиНадбавки := RoundTo5Cop(TblContents.ЦенаБезСкидкиНадбавки);
+                 end
+               else
+                 begin
+                   TblContents.Цена := RoundDec(TblContents.Цена, VarAsInt(Constants.ОкруглениеЦенГрн));
+                   TblContents.ЦенаБезСкидкиНадбавки := RoundDec(TblContents.ЦенаБезСкидкиНадбавки, VarAsInt(Constants.ОкруглениеЦенГрн));
+                 end;
+             end;
+
+           TblContents.КомментарийСкидкиНадбавки := CommentDiscount;
+           TblContents.ПроцентСкидкиНадбавки := PercentLine*100;
+           TblContents.Post;
+         end;
+
+      end;
+end;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure GetGoodCount(Store : ISDictionary; tmpCtx : ISValueTable; Date : DateTime; AccsGoods : ISAccs); server;
+var
+  IsStore: boolean;
+begin
+  if (not tmpCtx.Active) then
+    exit;
+  IsStore := VarAsBool(Store.IsFocused);
+  tmpCtx.Select;
+  while tmpCtx.SelectNext do
+    begin
+      if IsStore then
+        AccsGoods.CalcGroupRestDirect(Date, ArrayOf(tmpCtx.@Товар, Store))
+      else
+        AccsGoods.CalcGroupRestDirect(Date, tmpCtx.@Товар);
+      tmpCtx.Edit;
+      tmpCtx.AssignFields('НаличиеТовара=КолОбщ', AccsGoods);
+      tmpCtx.Post;
+    end;
+end;
+
+end.

@@ -1,0 +1,124 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты,  РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками;
+
+implementation
+
+
+function AddCtgByTbl(CtgTbl:ISValueTable; LogList,LogErrorList:ISValueList; TypeLink:integer):integer; server;
+var CtgDic, CtgParentDic : ISDictionary;
+    Count,Total : integer; 
+    tmpCtgTbl : ISValueTable;
+begin
+ Result := 0;
+ CtgDic := CreateObject('Справочники.Товары');
+ CtgDic.IncludeOnlyLevels(true);
+ CtgParentDic := CreateObject('Справочники.Товары');
+ CtgParentDic.IncludeOnlyLevels(true);
+ Count := 1;
+ Total := CtgTbl.LineCount*2+1;
+ CtgTbl.Select;
+ While CtgTbl.SelectNext do      
+   begin
+      if (VarAsStr(CtgTbl.Название)<>'') then
+       begin
+         if CtgDic.FindByName(VarAsStr(CtgTbl.Название),false) then
+           LogErrorList.AddValue('строка №'+IntToStr(Count)+' !!! Категоря "'+VarAsStr(CtgTbl.Название)+'" уже есть!',0)
+         else
+           begin
+             CtgDic.AppendLevel;
+             CtgDic.NameField := VarAsStr(CtgTbl.Название);
+             CtgDic.Артикул := GetNextNumberForField('Справочники.Товары','Артикул',true);
+             CtgDic.Код := IntToStr(CtgDic.Артикул);
+             case StrLength(CtgDic.Код) of
+               1: CtgDic.Код := '0' + CtgDic.Код;
+             end;
+             CtgDic.Post;
+             CtgDic.ApplyUpdates;
+             if IsObjFocused(CtgDic) then
+               begin
+                 inc(Result);
+                 LogList.AddValue('строка №'+IntToStr(Count)+' Добавлена категория "'+VarAsStr(CtgTbl.Название)+'"',0);
+               end
+             else
+               begin
+                 LogErrorList.AddValue('строка №'+IntToStr(Count)+' Ошибка добавления категории "'+VarAsStr(CtgTbl.Название)+'"',0);
+                 continue;
+               end;
+           end;
+         CtgTbl.Edit;
+         CtgTbl.Категория := CtgDic;
+         CtgTbl.Post;
+       end;
+     inc(Count);
+     SysProgress(0,Total,Count,'Добавление категорий');
+   end;      
+ case TypeLink of
+  0 :  // Привязка по названию
+    begin
+      CtgTbl.Select;
+      While CtgTbl.SelectNext do
+        begin
+          if (VarAsStr(CtgTbl.НазваниеParent)<>'') then
+            begin
+              if not CtgParentDic.FindByName(VarAsStr(CtgTbl.НазваниеParent),false) then
+                begin
+                  CtgParentDic.AppendLevel;
+                  CtgParentDic.NameField := VarAsStr(CtgTbl.НазваниеParent);
+                  CtgParentDic.Артикул := GetNextNumberForField('Справочники.Товары','Артикул',true);
+                  CtgParentDic.Код := IntToStr(CtgParentDic.Артикул);
+                  case StrLength(CtgParentDic.Код) of
+                    1: CtgParentDic.Код := '0' + CtgParentDic.Код;
+                  end;
+                  CtgParentDic.Post;
+                  CtgParentDic.ApplyUpdates;  
+                  if IsObjFocused(CtgParentDic) then
+                    begin
+                      inc(Result);
+                      LogList.AddValue('строка №'+IntToStr(Count)+' Добавлена категория "'+VarAsStr(CtgTbl.НазваниеParent)+'"',0);
+                    end
+                  else
+                    begin
+                      LogErrorList.AddValue('строка №'+IntToStr(Count)+' Ошибка добавления категории "'+VarAsStr(CtgTbl.НазваниеParent)+'"',0);
+                      continue;
+                    end;
+                end;
+              if IsObjFocused(CtgParentDic) and CtgDic.Find(CtgTbl.@Категория) then
+                begin
+                  CtgDic.Edit;
+                  CtgDic.SetParent(CtgParentDic);
+                  CtgDic.Post;
+                  CtgDic.ApplyUpdates;
+                end;
+            end;
+          inc(Count);
+          SysProgress(0,Total,Count,'Добавление категорий');
+        end;
+    end;
+  1 :   // Привязка по коду
+    begin
+      tmpCtgTbl := CreateObject('ТаблицаЗначений');
+      CtgTbl.CopyTo('',tmpCtgTbl);  
+      tmpCtgTbl.SortBy('Код');
+      CtgTbl.Select;
+      While CtgTbl.SelectNext do
+        begin 
+          if (VarAsStr(CtgTbl.КодParent)<>'') and tmpCtgTbl.Find(VarAsStr(CtgTbl.КодParent)) and
+              CtgParentDic.Find(tmpCtgTbl.@Категория) and CtgDic.Find(CtgTbl.@Категория) then
+            begin
+              CtgDic.Edit;
+              CtgDic.SetParent(CtgParentDic);
+              CtgDic.Post;
+              CtgDic.ApplyUpdates;
+            end;
+          inc(Count);
+          SysProgress(0,Total,Count,'Добавление категорий');
+        end;
+    end;
+ end;
+ SysProgress(0,0,0,'');
+end;
+
+end.

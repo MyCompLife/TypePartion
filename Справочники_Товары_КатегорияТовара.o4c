@@ -1,0 +1,136 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты,
+  РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками, РаботаССайтом;
+
+implementation
+
+var
+  DetPack, MasterData, GroupDict: ICDictionary;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  CollectTbl, CollGroupTbl : ICValueTable;
+  Collection, CollGroup : ICCollection;
+  UseGroups : Boolean;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  Options := GetOptions;
+end;
+
+procedure Form_Open(Sender: TObject);
+var CtgDic: ICDictionary;
+begin
+  //DetPack := SetDetailDict(MasterData, 'ГруппыТоваров', 'Группы', CtrlToVar(pnGroups));
+  {
+  try
+  CtgDic := MasterData.GetParent;
+  finally
+    if not IsNil(CtgDic) then
+      raise('Нельзя добавлять подкатегории!');
+  end;
+  }
+  try
+    GroupDict := SetDetailDict(MasterData, 'ГруппыТАДляКатегорий', 'ПросмотрГруппыТАДляКатегорий',
+      CtrlToVar(pnGroups));
+//      CtrlToVar(pnCommercialAgentsGroups));
+    GroupDict.Params['ParentObjName'] := MasterData.GetSign;
+    UseGroups := True;
+  except
+    UseGroups := False;
+//    deCtgCode.Visible := False;
+//    lbCode.Visible := False;
+  end;
+
+  GetLocalization(MasterData, Form);
+  deCnt.Visible := Constants.ИнтеграцияССайтом;
+  lCnt.Visible := Constants.ИнтеграцияССайтом;  
+  cbUseCtg.Checked := MasterData.ИспРабМесто;  
+  cbUseImg.Checked := MasterData.ИспИзображенияРабМесто;
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+  MasterData.Артикул := GetNextNumberForField('Справочники.Товары','Артикул',true);
+  MasterData.Код := IntToStr(MasterData.Артикул);
+  case StrLength(MasterData.Код) of
+    1: MasterData.Код := '0' + MasterData.Код;
+//    2: MasterData.Код := '0' + MasterData.Код;
+  end;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  SetLocalization(MasterData, Form);
+  if VarAsInt(MasterData.Артикул)=0 Then
+    MasterData.Артикул := StrToInt(MasterData.Код);
+end;
+
+procedure tcLocal_Change(Sender: TObject);
+begin
+  ChangeLocalization(Form);
+end;
+
+procedure cbUseCtg_Click(Sender: TObject);
+begin
+  MasterData.ИспРабМесто := cbUseCtg.Checked;
+end;
+
+procedure cbUseImg_Click(Sender: TObject);
+begin  
+  MasterData.ИспИзображенияРабМесто := cbUseImg.Checked;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  if UseGroups then
+    GroupDict.Params['ParentObjName'] := null;
+
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label2:TO4Label
+dbeCtgProc:TO4DBEdit
+PageControl1:TO4PageControl
+tsData:TTabSheet
+Label5:TO4Label
+Label1:TO4Label
+lCnt:TO4Label
+deCtgName:TO4DBEdit
+deCtgCode:TO4DBEdit
+deCnt:TO4DBEdit
+cbUseCtg:TO4CheckBox
+cbUseImg:TO4CheckBox
+GroupBox1:TO4GroupBox
+Label3:TO4Label
+Label4:TO4Label
+Label6:TO4Label
+dbePrecent1:TO4DBEdit
+dbePrecent2:TO4DBEdit
+dbePrecent3:TO4DBEdit
+pnGroups:TO4Panel
+tsSite:TTabSheet
+tcLocal:TO4TabControl
+Label12:TO4Label
+Label13:TO4Label
+eDescrLang:TO4Memo
+eTitleLang:TO4Edit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem

@@ -1,0 +1,226 @@
+object Form: TO4Form
+  Left = 0
+  Top = 0
+  Width = 360
+  Height = 244
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = ()
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    1
+    'Отмена'
+    'btCancel.Hint'
+    1
+    ''
+    'btOK.Caption'
+    1
+    'ОК'
+    'btOK.Hint'
+    1
+    ''
+    'ColorSel.BtnCaption'
+    1
+    '...'
+    'ColorSel.Caption'
+    1
+    ' '
+    'ColorSel.Hint'
+    1
+    ''
+    'DBGrid1.Hint'
+    1
+    ''
+    'Label1.Caption'
+    1
+    'Цвет:'
+    'Label1.Hint'
+    1
+    ''
+    'Panel1.Caption'
+    1
+    'Panel1'
+    'Panel1.Hint'
+    1
+    ''
+    'Panel2.Caption'
+    1
+    'Panel2'
+    'Panel2.Hint'
+    1
+    ''
+    'tbAdd.Caption'
+    1
+    'Добавить'
+    'tbAdd.Hint'
+    1
+    ''
+    'tbDel.Caption'
+    1
+    'Удалить'
+    'tbDel.Hint'
+    1
+    ''
+    'tbEdit.Caption'
+    1
+    'Изменить'
+    'tbEdit.Hint'
+    1
+    ''
+    'ToolBar1.Caption'
+    1
+    'ToolBar1'
+    'ToolBar1.Hint'
+    1
+    '')
+  Translat.LangDict.Cols = ()
+  Translat.LangDict.Words = ()
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnExecute.EventName = 'Form_Execute'
+  object Panel1: TO4Panel
+    Left = 1
+    Top = 1
+    Width = 358
+    Height = 27
+    Align = alTop
+    BorderSides = []
+    Caption = 'Panel1'
+    ParentCtl3D = False
+    TabOrder = 1
+    Transparent = False
+    object Label1: TO4Label
+      Left = 248
+      Top = 8
+      Width = 28
+      Height = 13
+      Caption = 'Цвет:'
+    end
+    object ColorSel: TO4ColorSelector
+      Left = 281
+      Top = 4
+      Width = 66
+      Height = 21
+      BorderSides = []
+      BevelOuter = bvLowered
+      Caption = ' '
+      ParentCtl3D = False
+      TabOrder = 0
+      BtnWidth = 21
+      BtnCaption = '...'
+      BtnFlat = True
+      VPAOnChange.EventName = 'ColorSel_Change'
+    end
+    object ToolBar1: TO4ToolBar
+      Left = 1
+      Top = 1
+      Width = 234
+      Height = 25
+      Align = alLeft
+      AutoSize = True
+      ButtonWidth = 78
+      Caption = 'ToolBar1'
+      Flat = True
+      Images = ImagesHolder.Bmp16x16
+      List = True
+      ShowCaptions = True
+      TabOrder = 1
+      object tbAdd: TO4ToolButton
+        Left = 0
+        Top = 0
+        Caption = 'Добавить'
+        ImageIndex = 60
+        O4Action = actNone
+        VPAOnClick.EventName = 'tbAdd_Click'
+      end
+      object tbEdit: TO4ToolButton
+        Left = 78
+        Top = 0
+        Caption = 'Изменить'
+        ImageIndex = 1
+        O4Action = actNone
+        VPAOnClick.EventName = 'tbEdit_Click'
+      end
+      object tbDel: TO4ToolButton
+        Left = 156
+        Top = 0
+        Caption = 'Удалить'
+        ImageIndex = 111
+        O4Action = actNone
+        VPAOnClick.EventName = 'tbDel_Click'
+      end
+    end
+  end
+  object Panel2: TO4Panel
+    Left = 1
+    Top = 202
+    Width = 358
+    Height = 41
+    Align = alBottom
+    BorderSides = []
+    Caption = 'Panel2'
+    ParentCtl3D = False
+    TabOrder = 2
+    Transparent = False
+    object btOK: TO4Button
+      Left = 90
+      Top = 8
+      Width = 75
+      Height = 25
+      Caption = 'ОК'
+      TabOrder = 0
+      WordWrap = False
+      O4Action = actNone
+      VPAOnClick.EventName = 'btOK_Click'
+    end
+    object btCancel: TO4Button
+      Left = 186
+      Top = 8
+      Width = 75
+      Height = 25
+      Caption = 'Отмена'
+      ModalResult = 2
+      TabOrder = 1
+      WordWrap = False
+      O4Action = actNone
+    end
+  end
+  object DBGridColor: TO4DBGrid
+    Left = 1
+    Top = 28
+    Width = 358
+    Height = 174
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    DragDisabled = False
+    O4MDSource = TVSColorParam
+    ReadOnly = True
+    TabOrder = 0
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    VPAOnGetRowParams.EventName = 'DBGridColor_GetRowParams'
+    VPAOnDblClick.EventName = 'tbEdit_Click'
+    PosColumns = <
+      item
+        Alignment = taRightJustify
+        O4FieldName = 'КолДней'
+        Title.Caption = 'Количество дней просрочки после'
+        Width = 335
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '29.03.2012'
+      end>
+  end
+  object TVSColorParam: TO4TableValueSource
+    AfterScrollLock = False
+    VPATimedAfterScroll.EventName = 'TVSColorParam_VPATimedAfterScroll'
+    AfterScrollInterval = 200
+    Left = 140
+    Top = 126
+  end
+end

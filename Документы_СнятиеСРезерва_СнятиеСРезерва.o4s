@@ -1,0 +1,36 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  DocsTbl : ISValueTable;
+
+procedure GetCodeUnitname(Doc : ISDocuments);
+begin
+  SetCodeUnitname(Doc); //находится в модуле Расчёты
+end;
+
+function GetCalcParams : Variant; server;
+begin
+  Result := EntryPoint(GetCodeUnitname);
+end;
+
+procedure CreateSrvObject; server;
+begin
+  DocsTbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure CreateDocsTbl(DocsTblS : ISValueTable; Date : DateTime); server;
+var
+  AccsGoodRes : ISAccs;
+begin
+  DocsTbl := DocsTblS;
+  AccsGoodRes := CreateObject('Аккумуляторы.ТоварыВРезерве');
+  AccsGoodRes.IncludeZeroRest := False;
+  AccsGoodRes.AppendGroupRestToValueTable(Date, 'Товар;Счет;Дата;КолОбщ', DocsTbl);
+end;
+
+end.

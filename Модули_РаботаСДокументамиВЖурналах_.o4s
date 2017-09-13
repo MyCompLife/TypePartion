@@ -1,0 +1,25 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными;
+
+implementation
+
+procedure DeleteAllDocs(DocsTable : ISValueTable); server;
+begin
+  DocsTable.SortBy('DocNumber');
+  DocsTable.Select;
+  while DocsTable.SelectPrior do
+    DocsTable.Doc.Delete;
+end;
+
+procedure StateDownAllDocs(DocsTable : ISValueTable); server;
+begin
+  DocsTable.SortBy('DocNumber');
+  DocsTable.Select;
+  while DocsTable.SelectNext do
+    while DocsTable.Doc.GetDocState > 0 do
+      DocsTable.Doc.StateDown;
+end;
+
+end.

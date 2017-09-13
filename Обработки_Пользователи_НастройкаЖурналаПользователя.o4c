@@ -1,0 +1,242 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, InitColors, –асчеты, –абота—ƒокументами¬∆урналах;
+
+implementation
+
+var
+  Tbl, MaskFormTbl, FormTbl, UserFormTbl : ICValueTable;
+  V : Variant;
+  FormsStr, JournalsStr: String;
+  JournalList: ICValueList;
+  JournalNameChangeLock : boolean;
+
+procedure  GetJournalsName(Tbl: ICValueTable);
+begin
+  JournalsStr := '∆урнал„еков;∆урналЌакладныхѕрихода;∆урнал¬озвратовќтѕокупател€;∆урнал¬озвратовѕоставщикам;' +
+                 '∆урналѕеремещени€“овара;∆урнал—писаний“оваров;∆урнал–евизий“овара;∆урнал¬водовќстатков;∆урналѕечатиЎтрих одов;∆урналѕечатиЎтрих одов»÷ен;'+
+                 '∆урнал«аказовЌаѕродажу';
+  Tbl.Select;
+  while Tbl.SelectNext do
+    if StrPos(Tbl.Ќазв∆урнала, JournalsStr) > 0 then
+      StrDelete(JournalsStr, StrPos(Tbl.Ќазв∆урнала, JournalsStr), StrLength(Tbl.Ќазв∆урнала) + 1);
+  MaskFormTbl := CreateObject('“аблица«начений');
+  MaskFormTbl.AddColumn('∆урнал',vtcString,200);
+  MaskFormTbl.AddColumn('ѕеч‘ормы',vtcString,200);
+  MaskFormTbl.Open;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урнал„еков';
+  MaskFormTbl.ѕеч‘ормы := '„ек58мм;„ек80мм;„ек80мм“аблица;„екј4√–Ќ;Ќакладна€ќтпуска2 опии';
+  MaskFormTbl.Post; 
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урнал«аказовЌаѕродажу';
+  MaskFormTbl.ѕеч‘ормы := '«аказј4';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урналЌакладныхѕрихода';
+  MaskFormTbl.ѕеч‘ормы := 'ѕеч”нивЌакладна€ќтпуска;ѕеч”нивЌаклќтпускаЅезЎапки';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урнал¬озвратовќтѕокупател€';
+  MaskFormTbl.ѕеч‘ормы := 'ѕеч”нивЌаклќтпускаЅезЎапки';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урнал¬озвратовѕоставщикам';
+  MaskFormTbl.ѕеч‘ормы := 'ѕеч”нивЌаклќтпускаЅезЎапки;ѕеч”нивЌакл¬озвратѕоставщикам';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урналѕеремещени€“овара';
+  MaskFormTbl.ѕеч‘ормы := 'ѕеч¬нутрѕеремещ;ѕеч¬нутрѕеремещ—групѕоћолел€м';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урнал—писаний“оваров';
+  MaskFormTbl.ѕеч‘ормы := 'ѕеч”нивЌаклќтпускаЅезЎапки';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урнал–евизий“овара';
+  MaskFormTbl.ѕеч‘ормы := '–евизи€јкт;–евизи€Ѕланк;–евизи€јктЌесоответствие;јкт–евизииЅланкѕо атегори€м';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урнал¬водовќстатков';
+  MaskFormTbl.ѕеч‘ормы := '¬водќстатков';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урналјктов';
+  MaskFormTbl.ѕеч‘ормы := 'Ќачисление';
+  MaskFormTbl.Post;
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урналѕечатиЎтрих одов';
+  MaskFormTbl.ѕеч‘ормы := 'ѕечатьЎтрих одов;ѕечатьЎтрих одов35x20;ѕечатьЁтикетки30х20;ѕечатьЁтикетки40х25;ѕечатьЁтикетки58х30;÷енники;÷енникиј5';
+  MaskFormTbl.Post;   
+  MaskFormTbl.Append;
+  MaskFormTbl.∆урнал := '∆урналѕечатиЎтрих одов»÷ен';
+  MaskFormTbl.ѕеч‘ормы := 'ѕечЎтрих ода—÷еной40х25;ѕечЎтрих ода—÷еной56x40;ѕечЎтрих ода—÷еной30x20';
+  MaskFormTbl.Post;
+end;
+
+procedure LoadUserForms(UserFormsStr: String);
+var
+  i, FormsCnt : Integer;
+begin
+  FormTbl := CreateObject('“аблица«начений');
+  FormTbl.AddColumn('Ќом—троки',vtcInteger,0);
+  FormTbl.AddColumn('ѕеч‘орма',vtcString,200);
+  FormTbl.Open;
+  UserFormTbl := CreateObject('“аблица«начений');
+  FormTbl.CopyColumnsTo(UserFormTbl);
+  UserFormTbl.Open;
+  for i := 1 to WordCount(UserFormsStr,#13) do
+    begin
+      if ExtractWord(i,UserFormsStr,#13) = '' then
+        continue;
+      UserFormTbl.Append;
+      UserFormTbl.ѕеч‘орма := ExtractWord(i,UserFormsStr,#13);
+      UserFormTbl.Post;
+    end;
+  MaskFormTbl.SortBy('∆урнал');
+  if not MaskFormTbl.Find(eJournalName.Text) then
+    exit;
+  FormsStr := MaskFormTbl.ѕеч‘ормы;
+  FormsCnt := WordCount(FormsStr, ';');
+  if FormsCnt = 0 then
+    exit;
+  for i := 1 to FormsCnt do
+    begin
+      if StrPos(ExtractWord(i, FormsStr, ';'),UserFormsStr) = 0 then
+        begin
+          FormTbl.Append;
+          FormTbl.ѕеч‘орма := ExtractWord(i,FormsStr,';');
+          FormTbl.Post;
+        end;
+    end;
+  UserFormTbl.UseDataSource(CtrlToVar(TVSUserForms));
+  FormTbl.UseDataSource(CtrlToVar(TVSForms));
+end;  
+
+procedure eJournalName_Change(Sender: TObject);
+begin
+ if not JournalNameChangeLock then
+   LoadUserForms('');
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  i: integer;
+  TypeDlg: String;
+begin
+  JournalNameChangeLock := true;
+  V := Mean;
+  Tbl := Params;
+  eJournalName.Text    := VarAsStr(Tbl.Params['Field1']);
+  GetJournalsName(Tbl);
+  LoadUserForms(VarAsStr(Tbl.Params['Field2']));
+  cbPrintView.Checked  := VarAsBool(Tbl.Params['Field3']);
+  cbPrintPanel.Checked := VarAsBool(Tbl.Params['Field4']);
+  TypeDlg := VarAsStr(Tbl.Params['TypeDlg']);
+  if TypeDlg = 'Edit' then
+    begin
+      eJournalName.Enabled := false;
+    end
+  else
+    begin
+      JournalList := CreateObject('—писок«начений');
+      for i:= 1 to WordCount(JournalsStr,';') do
+        JournalList.AddValue(ExtractWord(i,JournalsStr,';'),'');
+      JournalList.UseControl(CtrlToVar(eJournalName));
+      JournalList.CurIndex := JournalList.FindByStr(VarAsStr(Tbl.Params['Field1']));
+      JournalNameChangeLock := false; 
+      eJournalName_Change(Form);
+    end;
+end;
+
+procedure btOk_Click(Sender: TObject);
+var
+  UserFormsStr: String;
+  Accept: boolean;
+begin
+  Tbl.Params['Field1'] := eJournalName.Text;
+  UserFormTbl.Select;
+  while UserFormTbl.SelectNext do
+    begin
+      if UserFormsStr = '' then
+        UserFormsStr := UserFormTbl.ѕеч‘орма
+      else
+        UserFormsStr := UserFormsStr + #13 + UserFormTbl.ѕеч‘орма;
+    end;
+  Tbl.Params['Field2'] := UserFormsStr;
+  Tbl.Params['Field3'] := cbPrintView.Checked;
+  Tbl.Params['Field4'] := cbPrintPanel.Checked;
+end;
+
+procedure tbMove_Click(Sender: TObject);
+begin
+  Case (Sender as TO4ToolButton).tag of
+    1 : begin
+          if not FormTbl.IsFocused then
+            exit;
+          UserFormTbl.Append;
+          UserFormTbl.ѕеч‘орма := FormTbl.ѕеч‘орма;
+          UserFormTbl.Post;
+          UserFormTbl.SelectFirst;
+          FormTbl.Delete;
+          if not FormTbl.SelectNext then
+            FormTbl.SelectFirst;
+        end;
+    2 : begin
+          FormTbl.AppendTo('',UserFormTbl);
+          FormTbl.Clear;
+          FormTbl.Select;
+        end;
+    3 : begin
+          if not UserFormTbl.IsFocused then
+            exit;
+          FormTbl.Append;
+          FormTbl.ѕеч‘орма := UserFormTbl.ѕеч‘орма;
+          FormTbl.Post;
+          FormTbl.SelectFirst;
+          UserFormTbl.Delete;
+          if not UserFormTbl.SelectNext then
+            UserFormTbl.SelectFirst;
+        end;
+    4 : begin
+          UserFormTbl.AppendTo('',FormTbl);
+          UserFormTbl.Clear;
+          UserFormTbl.Select;
+        end;
+  end;
+end;
+
+procedure TVSUserForms_VPATimedAfterScroll(Sender: TObject);
+begin
+ //
+end;
+
+procedure TVSForms_VPATimedAfterScroll(Sender: TObject);
+begin
+ //
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+eJournalName:TO4Edit
+cbPrintView:TO4CheckBox
+cbPrintPanel:TO4CheckBox
+DBGrid1:TO4DBGrid
+DBGrid2:TO4DBGrid
+Panel3:TO4Panel
+ToolBar1:TO4ToolBar
+ToolButton4:TO4ToolButton
+ToolButton3:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton2:TO4ToolButton
+TVSUserForms:TO4TableValueSource
+TVSForms:TO4TableValueSource

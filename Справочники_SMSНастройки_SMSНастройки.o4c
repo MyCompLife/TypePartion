@@ -1,0 +1,160 @@
+interface
+
+uses
+  System, DispIntf, Расчеты,  РаботаСSMS;
+
+
+implementation
+var MasterData : ICDictionary;
+
+procedure rgTypeAutorisation_Click(Sender: TObject);
+begin
+ case rgTypeAutorisation.ItemIndex of
+  0: begin
+      MasterData.ТипАвторизацииКлюч := false; 
+      eKey.Enabled := false;
+      ePass.Enabled := true;
+     end;
+  1: begin
+      MasterData.ТипАвторизацииКлюч := true; 
+      eKey.Enabled := true;
+      ePass.Enabled := false;
+     end;
+ end;
+end;    
+
+procedure edTypeService_Change(Sender: TObject);
+begin
+  case edTypeService.ItemIndex of
+   0: 
+     begin
+       rgTypeAutorisation.Visible := true;
+       eKey.Visible := true;
+       lbKey.Visible := true;
+     end;
+   1,2,3:
+     begin
+       rgTypeAutorisation.ItemIndex := 0;
+       rgTypeAutorisation.Visible := false;
+       eKey.Visible := false;
+       lbKey.Visible := false;
+     end;
+  end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+ MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+ if VarAsBool(MasterData.ТипАвторизацииКлюч,false) then
+  rgTypeAutorisation.ItemIndex := 1
+ else
+  rgTypeAutorisation.ItemIndex := 0;     
+ cbActive.Checked := MasterData.Активность; 
+ edTypeService.ItemIndex := VarAsInt(MasterData.ТипСервиса,0);
+ edTypeService_Change(Form);
+ rgTypeAutorisation_Click(Form);
+end;
+
+procedure MDS_Validate(Sender: TObject);
+var s : string;
+begin
+ MasterData.Активность := cbActive.Checked;
+ MasterData.ТипСервиса := edTypeService.ItemIndex;
+ s := VarAsStr(MasterData.АдресСервиса,'');
+ if StrCopy(s,1,5)='http:' then
+  raise('"http:" в адресе писать не надо!');
+ if s[strLength(s)]='/' then
+  raise('"/"в конце адреса писать не надо');
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+var tmpDic : ICDictionary;
+begin
+  if VarAsBool(MasterData.Активность) then
+    begin
+      tmpDic := CreateObject('Справочники.SMSНастройки'); 
+      tmpDic.Select;
+      While tmpDic.SelectNext do
+        if VarAsBool(tmpDic.Активность) and not IsObjEQ(tmpDic,MasterData,false) then
+          begin
+            tmpDic.Edit;
+            tmpDic.Активность := false;
+            tmpDic.Post;
+            tmpDic.ApplyUpdates;
+          end; 
+      MasterData.Refresh;
+    end;
+end;
+
+procedure btPrice_Click(Sender: TObject);
+var ServerAnswer : string;
+begin
+ if UpdatePriceByDic(MasterData, ServerAnswer, true) then
+  showmessage('Цена обновлена! Ответ сервера:'+ServerAnswer)
+ else
+  showmessage('Цена не обновлена! Ответ сервера:'+ServerAnswer);
+
+end;
+
+procedure btBalanse_Click(Sender: TObject);
+var tmpStr : string;
+begin
+  if CreateSMSManager(MasterData) then
+   begin
+     tmpStr := GetSMSBalans(MasterData);
+     showmessage('Ответ сервера: "'+tmpStr+'"');
+   end;
+end;
+
+procedure btTest_Click(Sender: TObject);
+var tmpStr, tmpTel, tmpTextMessage : string;
+begin
+  if CreateSMSManager(MasterData) then
+   begin       
+     tmpTel := VarAsStr(MasterData.Login,'38');
+     tmpTextMessage := 'Test';
+     if (StdInpStr('Введите номер телефона:',tmpTel)) then
+      begin
+        if SendSMS(MasterData,MasterData.Отправитель,tmpTel,tmpTextMessage, tmpStr) then
+          ShowMessage('Сообщение отправлено! Ответ сервера: "'+tmpStr+'"')
+        else
+          showmessage('Ошибка сервера: "'+tmpStr+'"');
+      end;
+   end
+  else
+   showmessage('Не удалось инициализировать OLE-объект для работы с SMS');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+lbName:TO4Label
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+lbKey:TO4Label
+Label5:TO4Label
+Label6:TO4Label
+Label7:TO4Label
+eLogin:TO4DBEdit
+eAdress:TO4DBEdit
+ePass:TO4DBEdit
+eName:TO4DBEdit
+eKey:TO4DBEdit
+rgTypeAutorisation:TO4RadioGroup
+dbSender:TO4DBEdit
+ePrice:TO4DBEdit
+cbActive:TO4CheckBox
+edTypeService:TO4Edit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+btTest:TO4Button
+btBalanse:TO4Button
+btPrice:TO4Button
+MDS:TO4DataSource

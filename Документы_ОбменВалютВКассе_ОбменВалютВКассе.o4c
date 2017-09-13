@@ -1,0 +1,199 @@
+interface
+
+uses
+ System, DispIntf, ConstNames, Расчеты, Интерфейс, Пользователи, НумерацияДокументов, РаботаСТаблицамиЗначенийCL,
+ РаботаСДокументамиCL, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+ PartAcc, MyFirm, Currency : ICDictionary;
+ MasterData : ICDocuments;
+ Constants : IC4VPAConst;
+ ChangeLock, isSave : Boolean;
+ Options : ICOptions;
+ AddDoc : Boolean;
+
+procedure CreateObjects;
+begin 
+ Options := GetOptions;
+ Constants := GetConstants;
+ PartAcc := CreateObject('Справочники.РасчСчета');
+ MyFirm := CreateObject('Справочники.ВашеПредприятие');
+ Currency := CreateObject('Справочники.Валюты');
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+ MasterData := MDS.GetMean;
+ CreateObjects;
+end;
+
+procedure eSumNT_Change(Sender : TObject);
+begin
+ if ChangeLock then
+   exit;
+ MasterData.UpdateRecord(true);
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+var
+ SumNatCurrency : Decimal;
+begin
+  isSave := true;
+ if ChangeLock then exit;
+ try
+   ChangeLock := true;
+   case StrLowerCase(FieldName) of
+     'курсрасхода', 'сумвалрасхода' :
+       begin
+         SumNatCurrency := MasterData.СумВалРасхода * MasterData.КурсРасхода;
+         if MasterData.КурсПрихода <> 0 then
+           MasterData.СумВалПрихода := SumNatCurrency / MasterData.КурсПрихода;
+       end;
+     'курсприхода', 'сумвалприхода' :
+       begin
+         SumNatCurrency := MasterData.СумВалПрихода * MasterData.КурсПрихода;
+         if MasterData.КурсРасхода <> 0 then
+           MasterData.СумВалРасхода := SumNatCurrency / MasterData.КурсРасхода;
+       end;
+   end;
+ finally
+   ChangeLock := false;
+ end;
+end;
+
+procedure MDS_Append(Sender : TObject);
+var
+  OldDoc : ICDocuments;
+  TmpLHead : ICValueTable;
+  Number : String;
+  Users: ICDictionary;
+begin 
+  AddDoc := true;
+  if IsNil(Users) then Users := CreateObject('Справочники.Пользователи');
+  if MasterData.HasParam('OldDoc') then
+    begin
+      Number :=  MasterData.НомерДокумента;
+      OldDoc := MasterData.Params['OldDoc'];
+      TmpLHead := CreateObject('ValueTable');
+      OldDoc.SaveHead ('', TmpLHead);
+      MasterData.LoadHead ('', TmpLHead);
+      MasterData.ДатаДокумента := CurrentDateTime;
+      MasterData.НомерДокумента := Number;
+      MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+    end
+  else
+    begin
+      Currency := GetNatCurrency(Currency);
+      if Currency.IsFocused then
+        begin
+          MasterData.ВалютаРасхода := Currency;
+          MasterData.ВалютаПрихода := Currency;
+          MasterData.КурсРасхода := Currency.GetTimedValue(Constants.UsedCurs,CurrentdateTime);
+          MasterData.КурсПрихода := Currency.GetTimedValue(Constants.UsedCurs,CurrentdateTime);
+        end;
+      MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+      SetDocDefRegonStore(MasterData);
+      //MasterData.Касса := GetUsersField('Касса');
+      MasterData.BaseID := VarAsInt(Constants.КодИБ);
+      if MasterData.BaseID = 0 then
+        raise('Заполните код информационной базы в значениях важных констант');
+    end;
+end;
+
+procedure tsPay_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ nbPay.PageIndex := NewTab;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  eRespons.Enabled := GetUDASet('changeresp');
+  eDate.Enabled := GetUDASet('ChangeDate');
+  eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+  eCash.Enabled := not GetUsersBlockedField('БлокировкаВыбораКассы');
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form);
+end;
+
+procedure eCurrencyOut_ActionExecute(Sender : TObject);
+begin
+  MasterData.КурсРасхода := MasterData.ВалютаРасхода.GetTimedValue(Constants.UsedCurs,CurrentdateTime);
+end;
+
+procedure eCurrencyIn_ActionExecute(Sender : TObject);
+begin
+ MasterData.КурсПрихода := MasterData.ВалютаПрихода.GetTimedValue(Constants.UsedCurs,CurrentdateTime);
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if MasterData.NumID = 0 then
+    MasterData.NumID := УстановитьНомерДокумента(MasterData, '');
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+LinkImage1:TO4LinkImage
+Panel1:TO4Panel
+nbPay:TO4Notebook
+Label7:TO4Label
+Panel4:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+eDate:TO4DBEdit
+eNumber:TO4DBEdit
+GroupBox2:TO4GroupBox
+Label6:TO4Label
+Label8:TO4Label
+Label5:TO4Label
+eCurSumOut:TO4DBEdit
+eCurrencyOut:TO4DBEdit
+eCourseOut:TO4DBEdit
+Panel5:TO4Panel
+Label4:TO4Label
+eRespons:TO4DBEdit
+eCtg:TO4DBEdit
+GroupBox3:TO4GroupBox
+Label3:TO4Label
+Label9:TO4Label
+Label10:TO4Label
+eCurSumIn:TO4DBEdit
+eCurrencyIn:TO4DBEdit
+eCourseIn:TO4DBEdit
+Panel6:TO4Panel
+Label12:TO4Label
+DBMemo1:TO4DBMemo
+Panel7:TO4Panel
+Label11:TO4Label
+Label13:TO4Label
+eCash:TO4DBEdit
+eRegion:TO4DBEdit
+tsPay:TO4TabSet
+Panel2:TO4Panel
+Panel3:TO4Panel
+btnOK:TO4Button
+btnCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem

@@ -1,0 +1,307 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  РаботаСТаблицамиЗначений, РаботаСКоллекциями, РаботаСоСправочниками, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  MasterData, DetAdr, DetPhone, DetBankAcc, DetEmail, DetEmploy, DetRegNumbers : ICDictionary;
+  CollectTbl, BonusTbl : ICValueTable;
+  Collection : ICCollection;
+  Constants : IC4VPAConst;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+end;
+
+procedure pgcLists_Change(Sender : TObject);
+begin
+  case pgcLists.ActivePage.Name of
+    'tsPhones' :
+      if IsNil(DetPhone) then
+        DetPhone := SetDetailDict(MasterData, 'Телефоны', 'ПросмотрТелефонов', CtrlToVar(pgcLists.ActivePage));
+    'tsAdresses' :
+      if IsNil(DetAdr) then
+        DetAdr := SetDetailDict(MasterData, 'Адреса', 'ПросмотрАдресов', CtrlToVar(pgcLists.ActivePage));
+    'tsRaxs' :
+      if IsNil(DetBankAcc) then
+        DetBankAcc := SetDetailDict(MasterData, 'РасчСчета', 'ПросмотрРасчСчетов', CtrlToVar(pgcLists.ActivePage));
+    'tsEMail' :
+      if IsNil(DetEmail) then
+        DetEmail := SetDetailDict(MasterData, 'Email', 'ПросмотрEmail', CtrlToVar(pgcLists.ActivePage));
+    'tsResponses' :
+      if IsNil(DetEmploy) then
+        DetEmploy := SetDetailDict(MasterData, 'Служащие', 'ПросмотрСлужащих', CtrlToVar(pgcLists.ActivePage));
+    'tsRegNumbers' :
+      if IsNil(DetRegNumbers) then
+        DetRegNumbers := SetDetailDict(MasterData, 'РегНомера', 'ПросмотрРегНомеров', CtrlToVar(pgcLists.ActivePage));
+  end
+end;
+
+procedure cbTax_Click(Sender : TObject);
+begin
+  Constants := CreateObject('Константы');
+  Constants.НДСплат := cbTax.Checked;
+  MasterData.НДСплат := cbTax.Checked;
+  SetPropertyForComponentList(ptVisible, Form, 'lbTaxNumber;dbeTaxNumber;lbTaxDocNum;dbeTaxDocNum', cbTax.Checked)
+end;
+
+procedure miLoadFromFile_Click(Sender : TObject);
+begin
+  case (Sender as TO4MenuItem).tag of
+    0 :
+      if opDlg.Execute then
+        iLogoType.LoadFromFile(opDlg.FileName);
+    1 :
+      if spDlg.Execute then
+        iLogoType.SaveToFile(spDlg.FileName);
+    2 :
+      MasterData.Логотип := Null;
+  end;
+end;
+
+procedure Stavka;
+begin
+  if (MasterData.Система = 'загальна') or (MasterData.Система = 'общая') then
+    eSystem.ItemIndex := 0
+  else
+    eSystem.ItemIndex := 1;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  cbTax.Checked := MasterData.НДСПлат;
+  if VarAsBool(MasterData.ОПФ.IsFocused) then
+    edCollect.Text := MasterData.ОПФ.Value;
+  Collection := CreateObject('Коллекции.ОПФ');
+  CollectTbl := CreateObject('ТаблицаЗначений');
+  CreateCollectionTbl(CollectTbl, Collection); //расчеты
+  while CollectTbl.SelectNext() do
+    edCollect.Items.Add(CollectTbl.Comment);
+  eSystem.Items.Add(trans('общая'));
+  eSystem.Items.Add(trans('на едином налоге'));
+  Stavka;
+  lbTitle.Caption := SetTitleCaption(ArrayOf(edCollect.Text, dbeName.Text), ' ');   
+  BonusTbl := CreateTblFromBLOB(MasterData.Диапазон);
+  if IsNil(BonusTbl) then
+    begin
+      BonusTbl := CreateObject('ТаблицаЗначений');
+      BonusTbl.AddColumn('Сумма',vtcFloat,2);
+      BonusTbl.AddColumn('Процент',vtcFloat,2);
+      BonusTbl.Open;
+    end;
+  if BonusTbl.LineCount = 0 then
+    dbgReward.Enabled := false;
+  BonusTbl.UseDataSource(CtrlToVar(TVSReward));
+end;
+
+procedure MDS_Validate(Sender : TObject);
+var
+  TmpPath : string;
+begin
+  ChangeCollectionField(Collection, MasterData, 'ОПФ', edCollect.Text);
+  MasterData.Система := trans(eSystem.Text);
+  TmpPath := MasterData.ПутьКПрограмме;
+  if (StrLength(TmpPath) > 0) and (TmpPath[StrLength(TmpPath)] = '\') then
+    StrDelete(TmpPath, StrLength(TmpPath), 1);
+  MasterData.ПутьКПрограмме := TmpPath; 
+
+  MasterData.Диапазон := WritePropsToBlob(BonusTbl);
+end;
+
+procedure eSystem_ComboClick(Sender : TObject);
+begin
+  MasterData.Система := trans(eSystem.Text);
+  Stavka;
+end;
+
+procedure tsTax_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbTax.PageIndex := NewTab;
+end;
+
+procedure btTaxReportPath_Click(Sender : TObject);
+begin
+  with OpenDialog do
+    begin
+      Filter := 'Файл MAIN.HTA|MAIN.HTA';
+      FileName := 'MAIN.HTA';
+      Title := Trans('Определите путь к программе "Налоговая отчетность"');
+      if Execute then
+        MasterData.ПутьКПрограмме := ExtractFilePath(FileName)
+    end;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(edCollect.Text, dbeName.Text), ' ');
+end;
+
+procedure btPensFondReportTax_Click(Sender : TObject);
+begin
+  with OpenDialog do
+    begin
+      Filter := 'Файл ZForever.exe|ZForever.exe';
+      FileName := 'ZForever.exe';
+      Title := Trans('Определите путь к программе "Бест-Звит"');
+      if Execute then
+        MasterData.ПутьКПрограммеБестЗвит := ExtractFilePath(FileName)
+    end;
+end;
+
+procedure dbeBestZvitPath_Exit(Sender: TObject);
+begin
+  if VarAsStr(MasterData.ПутьКПрограммеБестЗвит)[StrLength(VarAsStr(MasterData.ПутьКПрограммеБестЗвит))] <> '\' then
+    MasterData.ПутьКПрограммеБестЗвит := MasterData.ПутьКПрограммеБестЗвит + '\';
+end;
+
+procedure tbAdd_Click(Sender: TObject);
+begin
+  BonusTbl.Append;
+  BonusTbl.Post;
+  dbgReward.Enabled := true;
+end;
+
+procedure tbDelColor_Click(Sender: TObject);
+begin           
+  if BonusTbl.LineCount <> 0 then
+    BonusTbl.Delete;
+  if BonusTbl.LineCount = 0 then
+    dbgReward.Enabled := false;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  MasterData.ApplyUpdates;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+Panel3:TO4Panel
+LinkImage1:TO4LinkImage
+pgcLists:TO4PageControl
+tsMain:TTabSheet
+Label3:TO4Label
+Label5:TO4Label
+Label4:TO4Label
+lbTaxNumber:TO4Label
+lbTaxDocNum:TO4Label
+Label26:TO4Label
+dbeName:TO4DBEdit
+dbeOPF:TO4DBEdit
+dbeZKPO:TO4DBEdit
+dbeTaxNumber:TO4DBEdit
+dbeTaxDocNum:TO4DBEdit
+cbTax:TO4CheckBox
+edCollect:TO4Edit
+dbeSite:TO4DBEdit
+tsPhones:TTabSheet
+tsAdresses:TTabSheet
+tsRaxs:TTabSheet
+tsEMail:TTabSheet
+tsResponses:TTabSheet
+tsDirBuh:TTabSheet
+Label1:TO4Label
+Label2:TO4Label
+deChief:TO4DBEdit
+deFinansist:TO4DBEdit
+tsLogoType:TTabSheet
+iLogoType:TO4DBImage
+tsForTax:TTabSheet
+tsTax:TO4TabSet
+nbTax:TO4Notebook
+Label8:TO4Label
+Label7:TO4Label
+Label11:TO4Label
+Label12:TO4Label
+Label14:TO4Label
+Label15:TO4Label
+lbProcStavka:TO4Label
+Label17:TO4Label
+lbComPercentSym:TO4Label
+lbComPercent:TO4Label
+DBEdit3:TO4DBEdit
+DBEdit2:TO4DBEdit
+DBEdit6:TO4DBEdit
+DBEdit7:TO4DBEdit
+DBEdit9:TO4DBEdit
+eSystem:TO4Edit
+eStavka:TO4DBEdit
+DBEdit10:TO4DBEdit
+GroupBox2:TO4GroupBox
+Label19:TO4Label
+Label18:TO4Label
+DBEdit13:TO4DBEdit
+deMasterOrg:TO4DBEdit
+dbeComPercent:TO4DBEdit
+GroupBox3:TO4GroupBox
+DBEdit12:TO4DBEdit
+btTaxReportPath:TO4Button
+GroupBox4:TO4GroupBox
+Label23:TO4Label
+Label24:TO4Label
+DBEdit14:TO4DBEdit
+DBEdit15:TO4DBEdit
+GroupBox5:TO4GroupBox
+Label21:TO4Label
+DBEdit16:TO4DBEdit
+GroupBox6:TO4GroupBox
+dbeBestZvitPath:TO4DBEdit
+btPensFondReportTax:TO4Button
+Label22:TO4Label
+Label25:TO4Label
+DBEdit1:TO4DBEdit
+DBEdit17:TO4DBEdit
+tsForTax2:TTabSheet
+Label6:TO4Label
+GroupBox1:TO4GroupBox
+Label9:TO4Label
+Label10:TO4Label
+Label13:TO4Label
+Label16:TO4Label
+DBEdit4:TO4DBEdit
+DBEdit5:TO4DBEdit
+DBEdit8:TO4DBEdit
+DBEdit11:TO4DBEdit
+deDPA:TO4DBEdit
+tsRegNumbers:TTabSheet
+Panel2:TO4Panel
+Label20:TO4Label
+deDPA1:TO4DBEdit
+TabSheet1:TTabSheet
+ToolBar3:TO4ToolBar
+tbAdd:TO4ToolButton
+tbDelColor:TO4ToolButton
+dbgReward:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+TitlePanel:TO4Panel
+lbTitle:TO4Label
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+opDlg:TO4OpenPictureDialog
+spDlg:TO4SavePictureDialog
+pmLogoType:TO4PopupMenu
+miLoadFromFile:TO4MenuItem
+miSaveToFile:TO4MenuItem
+miClear:TO4MenuItem
+OpenDialog:TO4OpenDialog
+TVSReward:TO4TableValueSource
+Label27:TO4Label
+dbeRegion:TO4DBEdit

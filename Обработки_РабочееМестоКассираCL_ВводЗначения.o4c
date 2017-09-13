@@ -1,0 +1,64 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation  
+
+var
+  V: ICProcessing;
+
+
+procedure btnClick(Sender: TObject);
+Var
+  TOper : Integer;
+begin  
+  PlaySound('Ding');
+  TOper := (Sender as TO4Button).Tag;
+  case TOper of
+    10: edCount.Text := edCount.Text + ',';
+    11: edCount.Text := '';
+    12: edCount.Text := StrCopy(edCount.Text, 0, StrLength(edCount.Text) - 1);
+    else
+      edCount.Text := edCount.Text + VarAsStr(TOper);
+  end;
+  btOk.SetFocus;
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  PlaySound('Ding');
+  V.Params['Value'] := edCount.Text;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+  edCount.Text :=  VarAsStr(Params,'0');  
+if V.HasParam('CurrencyName') then
+  pnInfoCnt.Caption := 'Введите  сумму '+ VarAsStr(V.Params['CurrencyName']);
+end;
+
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+bt7:TO4Button
+bt8:TO4Button
+bt9:TO4Button
+btMin:TO4Button
+btOk:TO4Button
+bt6:TO4Button
+bt5:TO4Button
+bt4:TO4Button
+bt1:TO4Button
+bt2:TO4Button
+bt3:TO4Button
+bt0:TO4Button
+btPoint:TO4Button
+btBack:TO4Button
+Panel1:TO4Panel
+pnInfoCnt:TO4Panel
+edCount:TO4Edit

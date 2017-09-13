@@ -1,0 +1,559 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСПеременными, РаботаСОбъектами, ДополнительныйФункционал;
+
+implementation
+Var
+  MasterProc, ThisForm : IcProcessing;
+  Options: ICOptions;
+  NameHeight, PictureHeight, GoodPriceHeight : Integer;
+  ChangeGroup, ChangeGood, ChangeColor, ChangeWeightUser, OpenChangeLock : Boolean;
+  UserDic, Vesy : ICDictionary;
+  PrintFormsLSt, PrintList : IcValueList;
+
+procedure ShowPhotoGroup;
+begin
+  if cbUsePhoto.Checked then
+    begin
+      lbGroupName.Align := alBottom;
+      Image.Visible := True;
+      Splitter.Visible := true;
+      lbGroupName.Height := NameHeight;
+    end
+  else
+    begin
+      NameHeight := lbGroupName.Height;
+      lbGroupName.Align := alClient;
+      Image.Visible := False;
+      Splitter.Visible := False;
+    end;
+end;
+
+procedure ShowPhotoGood;
+begin
+  if cbUsePhotoGood.Checked then
+    begin
+      ImageGood.Visible := True;
+      Splitter1.Visible := true;
+      ImageGood.Height := PictureHeight;
+    end
+  else
+    begin
+      PictureHeight := ImageGood.Height;
+      ImageGood.Visible := False;
+      Splitter1.Visible := False;
+    end;
+end;
+
+procedure ShowPriceGood;
+begin
+  if cbUsePrice.Checked then
+    begin
+      pnGoodPrice.Visible := True;
+      Splitter2.Visible := true;
+      pnGoodPrice.Height := GoodPriceHeight;
+    end
+  else
+    begin
+      GoodPriceHeight := pnGoodPrice.Height;
+      pnGoodPrice.Visible := False;
+      Splitter2.Visible := False;
+    end;
+end;
+
+
+procedure tsGoodButSet_Change(Sender: TObject);
+begin
+  Case pcTypeSett.ActivePage.Hint of
+    'Основные': Notebook.PageIndex := 0;
+    'Группы': Notebook.PageIndex := 1;
+    'Товары': Notebook.PageIndex := 2;
+  end;
+end;
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+Var
+  FontCharsetName, FontColorName, FontSizeName, FontStyleName : Integer;
+  FontNameName : String;
+  FontCharsetPrice, FontColorPrice, FontSizePrice, FontStylePrice : Integer;
+  FontNamePrice : String;
+  PrintForms, OneForm, Prints, Print, PrinterName  : String;
+  i, PCnt : Integer;
+begin
+  Options := GetOptions;
+  ThisForm := Mean;
+  MasterProc := Params[0];
+  Notebook.PageIndex := 0;
+  pcTypeSett.ActivePage := tsDefault;
+  OpenChangeLock := True;
+
+// Настройки принтера
+  PrintForms:= MasterProc.GetPrintForms;
+  PrintFormsLSt := CreateObject('ValueList');
+  PrintFormsLSt.AddValue('','');
+  for i:=1 to WordCount(PrintForms,';')-1 do
+    Begin
+      OneForm := ExtractWord(i,PrintForms,';');
+      PrintFormsLSt.AddValue(ExtractWord(2,OneForm,'|'),ExtractWord(1,OneForm,'|'));
+    end;
+  PrintFormsLSt.UseControl(CtrlToVar(edPrintForm));
+  If VarAsStr(Options.GetLocalPrm('WorkPlacePrintForm'))<>'' then
+    edPrintForm.ItemIndex := PrintFormsLSt.FindByValue(VarAsStr(Options.GetLocalPrm('WorkPlacePrintForm')))
+  else
+    edPrintForm.ItemIndex :=0;
+
+  edLeftMargin.Text := VarAsStr(Options.GetLocalPrm('WorkPlacePrintFormLeftMargin'), '0');
+  if edLeftMargin.Text='' then
+    edLeftMargin.Text :='0';
+  edTopMargin.Text := VarAsStr(Options.GetLocalPrm('WorkPlacePrintFormTopMargin'), '0');
+  if edTopMargin.Text='' then
+    edTopMargin.Text :='0';
+
+  GetPrintersList(PrintList, edPrinters, 'WeightWorkPlace');
+  cbPreviewPrintForm.Checked := VarAsBool(Options.GetLocalPrm('WorkPlacePreviewPrintForm'));
+
+
+// Основные настройки
+  UserDic := CreateObject('Справочники.Пользователи');
+  ChangeWeightUser := False;
+  if UserDic.FindByCode(GetUserLogin,false) then
+    begin
+      if IsObjFocused(UserDic.Весы) then
+        begin
+          Vesy := CreateObject('Справочники.Весы');
+          Vesy.Select;
+          Vesy.Find(UserDic.Весы);
+          eVesy.Text := VarAsStr(Vesy.Название);
+        end
+      else
+        begin
+          Nil(Vesy);
+          eVesy.Text := '';
+        end;
+    end;
+
+  csFonColor.Color := VarAsInt(Options.GetLocalPrm('WorkPlaceScreenColor'));
+  ChangeColor := False;
+// Настройки кнопок Групп
+  eCountGor.Text := IntToStr(VarAsInt(Options.GetLocalPrm('WorkPlaceCountGroupsButtonGor')));
+  eCountVert.Text := IntToStr(VarAsInt(Options.GetLocalPrm('WorkPlaceCountGroupsButtonVert')));
+
+  eHeightButton.Text := IntToStr(VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonHeight')));
+  eWidthButton.Text := IntToStr(VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonWidth')));
+
+  cbUsePhoto.Checked := VarAsBool(Options.GetLocalPrm('WorkPlaceGroupsButtonShowPicture'));
+
+  pnGroup.Height := StrToInt(eHeightButton.Text);
+  pnGroup.Width := StrToInt(eWidthButton.Text);
+  lbGroupName.Height := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameHeight'));
+  NameHeight := lbGroupName.Height;
+
+  lbGroupName.Font.Charset := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontCharset'));
+  lbGroupName.Font.Color := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontColor'));
+  lbGroupName.Font.Size := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontSize'));
+  lbGroupName.Font.Style := VarAsInt(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontStyle'));
+  lbGroupName.Font.Name := VarAsStr(Options.GetLocalPrm('WorkPlaceGroupsButtonNameFontName'));
+
+  pnGroup.Left:= (pShowSettings.Width div 2)-(pnGroup.Width div 2);
+  ShowPhotoGroup;
+  ChangeGroup := False;
+//  Настройки кнопок Товаров
+  eCountGorGood.Text := IntToStr(VarAsInt(Options.GetLocalPrm('WorkPlaceCountGoodsButtonGor')));
+  eCountVertGood.Text := IntToStr(VarAsInt(Options.GetLocalPrm('WorkPlaceCountGoodsButtonVert')));
+  eHeightButtonGood.Text := IntToStr(VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonHeight')));
+  eWidthButtonGood.Text := IntToStr(VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonWidth')));
+
+  cbUsePhotoGood.Checked := VarAsBool(Options.GetLocalPrm('WorkPlaceGoodsButtonShowPicture'));
+
+  cbUsePrice.Checked :=  VarAsBool(Options.GetLocalPrm('WorkPlaceGoodsButtonShowPrice'));
+
+  pnGood.Height := StrToInt(eHeightButtonGood.Text);
+  pnGood.Width := StrToInt(eWidthButtonGood.Text);
+  ImageGood.Height := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPictureHeight'));
+  PictureHeight := ImageGood.Height;
+
+  pnGoodPrice.Height := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceHeight'));
+  GoodPriceHeight := pnGoodPrice.Height;
+
+
+  pnGoodName.Font.Charset := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontCharset'));
+  pnGoodName.Font.Color := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontColor'));
+  pnGoodName.Font.Size := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontSize'));
+  pnGoodName.Font.Style := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontStyle'));
+  pnGoodName.Font.Name := VarAsStr(Options.GetLocalPrm('WorkPlaceGoodsButtonNameFontName'));
+
+
+  pnGoodPrice.Font.Charset := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontCharset'));
+  pnGoodPrice.Font.Color := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontColor'));
+  pnGoodPrice.Font.Size := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontSize'));
+  pnGoodPrice.Font.Style := VarAsInt(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontStyle'));
+  pnGoodPrice.Font.Name := VarAsStr(Options.GetLocalPrm('WorkPlaceGoodsButtonPriceFontName'));
+
+  pnGood.Left:= (pShowSettings.Width div 2)-(pnGood.Width div 2);
+  ShowPhotoGood;
+  ShowPriceGood;
+
+  OpenChangeLock := False;
+end;
+
+procedure tbHeightChange_Click(Sender: TObject);
+begin
+  eHeightButton.Text := IntToStr(StrToInt(eHeightButton.Text) + (Sender as TO4ToolButton).Tag);
+    pnGroup.Height := StrToInt(eHeightButton.Text);
+end;
+
+procedure tbHeightGoodChange_Click(Sender: TObject);
+begin
+  eHeightButtonGood.Text := IntToStr(StrToInt(eHeightButtonGood.Text) + (Sender as TO4ToolButton).Tag);
+    pnGood.Height := StrToInt(eHeightButtonGood.Text);
+end;
+
+procedure tbWidthChange_Click(Sender: TObject);
+begin
+  eWidthButton.Text := IntToStr(StrToInt(eWidthButton.Text) + (Sender as TO4ToolButton).Tag);
+  pnGroup.Width := StrToInt(eWidthButton.Text);
+  pnGroup.Left:= (pShowSettings.Width div 2)-(pnGroup.Width div 2);
+end;
+
+procedure tbWidthGoodChange_Click(Sender: TObject);
+begin
+  eWidthButtonGood.Text := IntToStr(StrToInt(eWidthButtonGood.Text) + (Sender as TO4ToolButton).Tag);
+  pnGood.Width := StrToInt(eWidthButtonGood.Text);
+  pnGood.Left:= (pShowSettingsGood.Width div 2)-(pnGood.Width div 2);
+end;
+
+
+procedure eHeightButton_Exit(Sender: TObject);
+begin
+  if StrToIntDef(eHeightButton.Text,-1)>0 then
+    pnGroup.Height := StrToInt(eHeightButton.Text)
+  else
+    ShowMessage('Введено не верное значение!');
+end;
+
+procedure eHeightButtonGood_Exit(Sender: TObject);
+begin
+  if StrToIntDef(eHeightButtonGood.Text,-1)>0 then
+    pnGood.Height := StrToInt(eHeightButtonGood.Text)
+  else
+    ShowMessage('Введено не верное значение!');
+end;
+
+procedure eWidthButton_Exit(Sender: TObject);
+begin
+  if StrToIntDef(eWidthButton.Text,-1)>0 then
+    begin
+      pnGroup.Width := StrToInt(eWidthButton.Text);
+      pnGroup.Left:= (pShowSettings.Width div 2)-(pnGroup.Width div 2);
+    end
+  else
+    ShowMessage('Введено не верное значение!');
+end;
+
+procedure eWidthButtonGood_Exit(Sender: TObject);
+begin
+  if StrToIntDef(eWidthButtonGood.Text,-1)>0 then
+    begin
+      pnGood.Width := StrToInt(eWidthButtonGood.Text);
+      pnGood.Left:= (pShowSettingsGood.Width div 2)-(pnGood.Width div 2);
+    end
+  else
+    ShowMessage('Введено не верное значение!');
+end;
+
+
+procedure btApplly_Click(Sender: TObject);
+Var
+  OutParams : Variant; 
+  PrintName : String;
+begin
+  if StrToIntDef(eCountGor.Text,-1)<=0 then
+    Begin
+      ShowMessage('Введено не верное значение количества кнопок по горизонтали!');
+      exit;
+    end;
+  if StrToIntDef(eCountVert.Text,-1)<=0 then
+    Begin
+      ShowMessage('Введено не верное значение количества кнопок по вертикали!');
+      exit;
+    end;
+  If (VarAsInt(eCountGor.Text)*VarAsInt(eCountVert.Text)>30) then
+    begin
+      ShowMessage('Количество кнопок "Групп товаров" не может прывышать 30 шт.');
+      exit;
+    end;
+
+  If (VarAsInt(eCountGorGood.Text)*VarAsInt(eCountVertGood.Text)>40) then
+    begin
+      ShowMessage('Количество кнопок "Товаров" не может прывышать 40 шт.');
+      exit;
+    end;
+
+  if ChangeColor then
+    begin
+      Options.SetLocalPrm('WorkPlaceScreenColor',csFonColor.Color);
+      MasterProc.ExecProc(ThisForm,'setvlcscreencolor',Null,OutParams);
+    end;
+  If ChangeWeightUser then
+    begin
+      if IsObjFocused(Vesy) then
+        begin
+          UserDic.Edit;
+          UserDic.Весы := Vesy;
+          UserDic.Post;
+          UserDic.ApplyUpdates;
+          MasterProc.ExecProc(ThisForm,'changeuservesy',Null,OutParams);
+        end
+      else
+        begin
+          ShowMessage('Поле "Весы" не заполнено!');
+          exit;
+        end;
+    end;
+ 
+  if edPrintForm.ItemIndex<>0 then
+    Options.SetLocalPrm('WorkPlacePrintForm',PrintFormsLSt.GetValue(edPrintForm.ItemIndex))
+  else
+    begin
+      ShowMessage('Не выбрана печатная форма!');
+      exit;
+    end;
+
+  Options.SetLocalPrm('WorkPlacePrintFormLeftMargin',StrToIntDef(edLeftMargin.Text,0));
+  Options.SetLocalPrm('WorkPlacePrintFormTopMargin',StrToIntDef(edTopMargin.Text,0));
+
+  if PrintList.CurIndex <> -1 then
+    PrintName := PrintList.GetStr(PrintList.CurIndex);
+  SetPrintNameForCurPrintForm('WeightWorkPlace', PrintName);
+  Options.SetLocalPrm('WorkPlacePreviewPrintForm',cbPreviewPrintForm.Checked);
+
+
+//  Сохранение настроек Групп
+      Options.SetLocalPrm('WorkPlaceGroupsButtonShowPicture',cbUsePhoto.Checked);
+      if cbUsePhoto.Checked then
+        Options.SetLocalPrm('WorkPlaceGroupsButtonNameHeight',lbGroupName.Height);
+      Options.SetLocalPrm('WorkPlaceCountGroupsButtonGor',StrToInt(eCountGor.Text));
+      Options.SetLocalPrm('WorkPlaceCountGroupsButtonVert',StrToInt(eCountVert.Text));
+      Options.SetLocalPrm('WorkPlaceGroupsButtonHeight',StrToInt(eHeightButton.Text));
+      Options.SetLocalPrm('WorkPlaceGroupsButtonWidth',StrToInt(eWidthButton.Text));
+
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontCharset',lbGroupName.Font.Charset);
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontColor',lbGroupName.Font.Color);
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontName',lbGroupName.Font.Name);
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontSize',lbGroupName.Font.Size);
+      Options.SetLocalPrm('WorkPlaceGroupsButtonNameFontStyle',lbGroupName.Font.Style);
+
+      MasterProc.ExecProc(ThisForm,'setvlcGroups',Null,OutParams);
+
+// Сохранение настроек Товаров
+      Options.SetLocalPrm('WorkPlaceGoodsButtonShowPicture',cbUsePhotoGood.Checked);
+      if cbUsePhotoGood.Checked then
+        Options.SetLocalPrm('WorkPlaceGoodsButtonPictureHeight',ImageGood.Height);
+
+
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontCharset',pnGoodName.Font.Charset);
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontColor',pnGoodName.Font.Color);
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontName',pnGoodName.Font.Name);
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontSize',pnGoodName.Font.Size);
+      Options.SetLocalPrm('WorkPlaceGoodsButtonNameFontStyle',pnGoodName.Font.Style);
+
+
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontCharset',pnGoodPrice.Font.Charset);
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontColor',pnGoodPrice.Font.Color);
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontName',pnGoodPrice.Font.Name);
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontSize',pnGoodPrice.Font.Size);
+      Options.SetLocalPrm('WorkPlaceGoodsButtonPriceFontStyle',pnGoodPrice.Font.Style);
+
+      Options.SetLocalPrm('WorkPlaceGoodsButtonShowPrice',cbUsePrice.Checked);
+      if cbUsePrice.Checked then
+        Options.SetLocalPrm('WorkPlaceGoodsButtonPriceHeight',pnGoodPrice.Height);
+
+      Options.SetLocalPrm('WorkPlaceCountGoodsButtonGor',StrToInt(eCountGorGood.Text));
+      Options.SetLocalPrm('WorkPlaceCountGoodsButtonVert',StrToInt(eCountVertGood.Text));
+      Options.SetLocalPrm('WorkPlaceGoodsButtonHeight',StrToInt(eHeightButtonGood.Text));
+      Options.SetLocalPrm('WorkPlaceGoodsButtonWidth',StrToInt(eWidthButtonGood.Text));
+      MasterProc.ExecProc(ThisForm,'setvlcGoods',Null,OutParams);
+
+  if (Sender as TO4Button).Tag =1 then
+    begin
+      Form.ModalResult := mrOk;
+      Form.Close;
+    end;
+end;
+
+procedure cbUsePhoto_Click(Sender: TObject);
+begin
+  ShowPhotoGroup;
+end;
+procedure cbUsePhotoGood_Click(Sender: TObject);
+begin
+  ShowPhotoGood;
+end;
+
+procedure cbUsePrice_Click(Sender: TObject);
+begin
+  ShowPriceGood;
+end;
+
+procedure btChangeNameFont_Click(Sender: TObject);
+begin
+ FontDialog.Font := lbGroupName.Font;
+ if FontDialog.Execute then
+   begin
+     lbGroupName.Font := FontDialog.Font;
+     lbGroupName.Refresh;
+   end;
+end;
+
+procedure btChangeNameFontGood_Click(Sender: TObject);
+begin
+ FontDialog.Font := pnGoodName.Font;
+ if FontDialog.Execute then
+   begin
+     pnGoodName.Font := FontDialog.Font;
+     pnGoodName.Refresh;
+   end;
+end;
+
+
+procedure btChangePriceFont_Click(Sender: TObject);
+begin
+ FontDialog.Font := pnGoodPrice.Font;
+ if FontDialog.Execute then
+   begin
+     pnGoodPrice.Font := FontDialog.Font;
+     pnGoodPrice.Refresh;
+   end;
+
+end;
+
+
+procedure GroupCntBtn_Change(Sender: TObject);
+begin
+  ChangeGroup := True;
+end;
+
+procedure csFonColor_Change(Sender: TObject);
+begin
+  If not OpenChangeLock then
+    ChangeColor := True;
+end;
+
+procedure eVesy_ActionClear(Sender: TObject);
+begin
+  ChangeWeightUser := True;
+  Nil(Vesy);
+  eVesy.Text := '';
+end;
+
+procedure eVesy_ActionExecute(Sender: TObject);
+Var
+  TmpVesy : IcDictionary;
+  DefName : String;
+begin
+  TmpVesy := CreateObject('Справочники.Весы');
+  if TmpVesy.SelectInForm('', DefName, Null) then
+    begin
+      if isNil(Vesy) or isNull(Vesy) then
+        begin
+          Vesy := CreateObject('Справочники.Весы');
+          Vesy.Select;
+        end;
+      Vesy.Find(TmpVesy);
+      eVesy.Text := DefName;
+      ChangeWeightUser := True;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+btApplly:TO4Button
+pcTypeSett:TO4PageControl
+tsDefault:TTabSheet
+tsGoupButSet:TTabSheet
+tsGoodsButSet:TTabSheet
+Notebook:TO4Notebook
+Label9:TO4Label
+Label10:TO4Label
+csFonColor:TO4ColorSelector
+eVesy:TO4Edit
+gbPrintSett:TO4GroupBox
+Label11:TO4Label
+Label12:TO4Label
+Label13:TO4Label
+Label14:TO4Label
+edPrintForm:TO4Edit
+edPrinters:TO4Edit
+edLeftMargin:TO4Edit
+edTopMargin:TO4Edit
+cbPreviewPrintForm:TO4CheckBox
+pSettings:TO4Panel
+GroupBox1:TO4GroupBox
+Label1:TO4Label
+Label2:TO4Label
+eCountGor:TO4Edit
+eCountVert:TO4Edit
+GroupBox2:TO4GroupBox
+Label3:TO4Label
+Label4:TO4Label
+eHeightButton:TO4Edit
+eWidthButton:TO4Edit
+ToolBar1:TO4ToolBar
+tbHeightDown:TO4ToolButton
+ToolBar2:TO4ToolBar
+tbWidthDown:TO4ToolButton
+ToolBar3:TO4ToolBar
+tbHeightUp:TO4ToolButton
+ToolBar4:TO4ToolBar
+tbWidthUp:TO4ToolButton
+cbUsePhoto:TO4CheckBox
+btChangeNameFont:TO4Button
+pShowSettings:TO4Panel
+pnGroup:TO4Panel
+lbGroupName:TO4Label
+Image:TO4Image
+Splitter:TO4Splitter
+pSettingsGood:TO4Panel
+GroupBox3:TO4GroupBox
+Label5:TO4Label
+Label6:TO4Label
+eCountGorGood:TO4Edit
+eCountVertGood:TO4Edit
+GroupBox4:TO4GroupBox
+Label7:TO4Label
+Label8:TO4Label
+eHeightButtonGood:TO4Edit
+eWidthButtonGood:TO4Edit
+ToolBar5:TO4ToolBar
+tbHeightDownGood:TO4ToolButton
+ToolBar6:TO4ToolBar
+tbWidthDownGood:TO4ToolButton
+ToolBar7:TO4ToolBar
+tbHeightUpGood:TO4ToolButton
+ToolBar8:TO4ToolBar
+tbWidthUpGood:TO4ToolButton
+cbUsePhotoGood:TO4CheckBox
+btChangeNameFontGood:TO4Button
+cbUsePrice:TO4CheckBox
+btChangePriceFont:TO4Button
+pShowSettingsGood:TO4Panel
+pnGood:TO4Panel
+ImageGood:TO4Image
+Splitter1:TO4Splitter
+Splitter2:TO4Splitter
+pnGoodName:TO4Panel
+pnGoodPrice:TO4Panel
+pmHeight:TO4PopupMenu
+MenuItem1:TO4MenuItem
+pmWidth:TO4PopupMenu
+MenuItem2:TO4MenuItem
+FontDialog:TO4FontDialog
+pmHeightGood:TO4PopupMenu
+MenuItem3:TO4MenuItem
+pmWidthGood:TO4PopupMenu
+MenuItem4:TO4MenuItem

@@ -1,0 +1,65 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+Var
+  UrPart, PostDic, PostDicTmp : IsDictionary;
+
+procedure SetGoods(Doc : ISDictionary; var Accept : Boolean);
+var
+  Count, Total,Count1, Total1 : Integer;
+  ЗначенияПрихода, ЗначенияОтпуска : string;
+begin
+ UrPart.Select;
+ Count :=1;
+ Total := UrPart.RecordCount;
+ while UrPart.SelectNext do
+   begin
+     Doc.NotifyClientEx(1,'Просмотр партнеров: '+IntTostr(Count)+'/'+IntToStr(Total), Count, Total);
+     if Doc.Terminated then
+       exit;
+     PostDic.SetFieldFilter('Партнер','=',UrPart,'','',Null );
+     PostDic.Select;
+     Count1 :=1;
+     Total1 := PostDic.RecordCount;
+     while PostDic.SelectNext do
+       begin
+         Doc.NotifyClientEx(2,'Просмотр партнеров: '+IntTostr(Count1)+'/'+IntToStr(Total1), Count1, Total1);
+         if Doc.Terminated then
+           exit;
+         inc(Count1);
+         PostDicTmp.SetFieldFilter('Партнер','=',UrPart,'','',Null );
+         PostDicTmp.SetFieldFilter('КодПоставщика','=',PostDic.КодПоставщика,'','',Null );
+         PostDicTmp.Select;
+         if PostDicTmp.RecordCount>1 then
+           begin
+             while PostDicTmp.SelectNext do
+               begin
+                 PostDicTmp.Delete;
+                 PostDicTmp.SelectPrior;
+               end;
+           end;
+       end;
+     inc(Count);
+   end;
+
+
+
+ Accept := True;
+end;
+
+function GetRunReportEP : Variant; server;
+begin
+  UrPart := CreateObject('Справочники.ЮрПартнеры');
+  PostDic := CreateObject('Справочники.ПоставщикиТоваров');
+  PostDicTmp := CreateObject('Справочники.ПоставщикиТоваров');
+
+  Result := EntryPoint(SetGoods);
+end;
+
+
+
+
+end.

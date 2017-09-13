@@ -1,0 +1,106 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData, MDS : ICJournal;
+  Tbl, Ctg : ICValueTable;
+  s1, s2, s3 : Decimal;
+  UseConst : IC4VPAConst;
+  OutCome : Boolean;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MDS := Form.GetParams; //Form.GetMean;
+  if VarAsBool(MDS.IsFocused) then
+    MasterData := CreateObject('Журналы.' + MDS.GetSign())
+  else
+    MasterData := CreateObject('Журналы.ЖурналНакладных');
+  MasterData.AssignSelectParams(MDS);
+  //  if Form.GetPrintKind = pkWindow then
+  MasterData.SrvAssignClientSelectParams(); //AssignSelectParams(MDS);
+  Tbl := CreateObject('ТаблицаЗначений');
+  Ctg := CreateObject('ТаблицаЗначений');
+  server.GetTable(Tbl.SrvMean, MasterData.SrvMean, s1, s2, s3);
+  Tbl.CopyDataFromServer;
+  Tbl.SrvMean.Clear;
+  Tbl.GroupTo('Категория', 'Сумма;СуммаБезНДС;СуммаНДС', Ctg);
+  Tbl.SortBy('Категория;ДатаДокумента');
+  UseConst := GetConstants;
+end;
+
+procedure Structure1_Tbl1_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := Tbl.SelectFirst()
+  else
+    Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := Tbl.НомерДокумента;
+      Value['Date'] := Tbl.ДатаДокумента;
+      Value['Partner'] := Tbl.Название;
+      Value['Summa'] := Tbl.Сумма;
+      Value['SumNT'] := Tbl.СуммаБезНДС;
+      Value['Tax'] := Tbl.СуммаНДС;
+    end;
+end;
+
+procedure Band3_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  lbAllSumNT.Caption := FormatFloat(UseConst.ФорматСумГРН, s1);
+  lbAllTax.Caption := FormatFloat(UseConst.ФорматСумГРН, s2);
+  lbAllSumma.Caption := FormatFloat(UseConst.ФорматСумГРН, s3);
+end;
+
+procedure Structure1_Ctg_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := Ctg.SelectFirst()
+  else
+    Accept := Ctg.SelectNext();
+  if not Accept then
+    exit;
+  Tbl.SetRange(Ctg.Категория, Ctg.Категория);
+  with Table do
+    begin
+      Value['CtgName'] := Ctg.Категория;
+      Value['Summa'] := Ctg.Сумма;
+      Value['SumNT'] := Ctg.СуммаБезНДС;
+      Value['Tax'] := Ctg.СуммаНДС;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band2:TRBBand
+hdPartner:TRBLabel
+hdTax:TRBLabel
+hdSumNT:TRBLabel
+hdDate:TRBLabel
+hdSumma:TRBLabel
+hdNumber:TRBLabel
+Band1:TRBBand
+Label4:TRBLabel
+DetailBand1:TRBDetailBand
+lbPartner:TRBLabel
+lbTax:TRBLabel
+lbSumNT:TRBLabel
+lbDate:TRBLabel
+lbSumma:TRBLabel
+lbNumber:TRBLabel
+Band3:TRBBand
+lbAllSumma:TRBLabel
+lbAllTax:TRBLabel
+lbAllSumNT:TRBLabel
+DetailBand2:TRBDetailBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label5:TRBLabel
+Structure1:TRBStructure

@@ -1,0 +1,35 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  MasterData : ICDictionary;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Constants := GetConstants;
+  edPRD.DateFrom := Constants.StartTaxDate;
+  edPRD.DateTo := Constants.EndTaxDate;
+  MasterData := Params;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  MasterData.Params['Курс'] := ArrayOf(rgCourse.ItemIndex, edPRD.DateFrom, edPRD.DateTo, 
+                               rgCourse.Items.Strings[rgCourse.ItemIndex]);
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+LinkImage1:TO4LinkImage
+Panel4:TO4Panel
+rgCourse:TO4RadioGroup
+edPRD:TO4DatePeriod
+Panel2:TO4Panel
+Panel3:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button

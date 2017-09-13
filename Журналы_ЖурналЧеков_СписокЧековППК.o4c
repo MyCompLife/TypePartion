@@ -1,0 +1,378 @@
+interface
+
+uses
+  System, DispIntf, »нтерфейс, –абота—ќбъектами;
+
+implementation
+
+var
+  ChildPaysOut, MasterData : ICJournal;
+  Constants :IC4VPAConst;
+  Doc : ICDocuments;
+  Options : ICOptions;
+  Docs: ICDocuments;
+
+procedure GetTotalSums;
+var
+  V : Variant;
+begin
+  MasterData.SrvAssignClientSelectParams;
+  V := server.GetTotalSumsSrv(MasterData.SrvMean);
+  lSum.Caption := FormatFloat('0.00', V);
+end;  
+
+{
+procedure InitSrvDate;server;
+begin
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Currency := CreateObject('—правочники.¬алюты');
+  if not Currency.FindByField('јктивность', VarAsInt(true), false) then
+    begin
+      Currency.Select;
+      Currency.SelectNext;
+    end;
+end;
+}
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Options := GetOptions;
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+  ChildPaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  ChildPaysOut.UseMaster(MasterData);
+end;
+
+procedure TabSet1_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+   MasterData.SetDocStateRange(NewTab-1);
+   MasterData.Select;
+end;
+  
+
+procedure AdjustToolBar(CliParams : ICOptions; tbr1, tbr2 : TO4ToolBar);
+begin
+  if not IsNil(tbr1) then
+    begin
+      tbr1.Flat := VarAsBool(CliParams.GetServerPrm(Flat));
+//      tbr1.ShowCaptions := VarAsBool(CliParams.GetServerPrm(ShowCaptions));
+//      tbr1.List := VarAsBool(CliParams.GetServerPrm(CaptionsList));
+//      tbr1.Transparent := VarAsBool(CliParams.GetServerPrm(Transparent));
+      if not tbr1.Transparent then
+        begin
+          tbr1.EdgeInner := esRaised;
+          tbr1.EdgeOuter := esNone;
+          tbr1.EdgeBorders := Bits(ebLeft, ebTop, ebRight);
+        end
+      else
+        tbr1.EdgeBorders := 0;
+      //tbr1.AutoSize := tbr1.ShowCaptions or (not tbr1.Transparent);
+      if not IsNil(tbr2) then
+        begin
+          tbr2.Flat := tbr1.Flat;
+//          tbr2.ShowCaptions := tbr1.ShowCaptions;
+//          tbr2.List := tbr1.List;
+//          tbr2.Transparent := tbr1.Transparent;
+//          tbr2.EdgeBorders := tbr1.EdgeBorders;
+          tbr2.EdgeInner := tbr1.EdgeInner;
+          tbr2.EdgeOuter := tbr1.EdgeOuter;
+          //tbr2.AutoSize := tbr1.AutoSize;
+        end;
+    end;
+end;
+ 
+procedure SetGridEditable(CliParams : ICOptions; Grid : TO4DBGrid);
+begin
+  if VarAsBool(CliParams.GetServerPrm(GridReadOnly)) then
+    begin
+      Grid.Options := Grid.Options and not Bits(dgEditing, dgAlwaysShowEditor);
+      Grid.ReadOnly := True
+    end
+end;
+
+procedure MakeInterface(tbr1, tbr2 : TO4ToolBar; Grid : TO4DBGrid);
+var
+  CliParams : ICOptions;
+begin
+  CliParams := CreateObject('ќпции лиента');
+  AdjustToolBar(CliParams, tbr1, tbr2);
+  if not IsNil(Grid) then
+    SetGridEditable(CliParams, Grid);
+end;
+
+procedure Form_Open(Sender: TObject);
+var
+  Nobody : TO4Toolbar;
+  i : integer;
+  Users: ICDictionary;
+begin
+  Constants := GetConstants;
+  MakeInterface(tbr, Nobody, dbGridData);
+  for i := 0 to MasterData.StateCount - 1 do
+    TabSet1.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.CancelRangeByField;
+  if IsNil(Users) then
+    Users := CreateObject('—правочники.ѕользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    if VarAsBool(Users.ќтборѕоѕользователю) then
+      MasterData.SetFieldFilter('ќтветственный','=',Users.—лужащий,'','',Null);
+  MasterData.DefineSelectParams(True);
+  TabSet1.TabIndex := MasterData.GetDocStateRange + 1;
+  ChildPaysOut.OpenFormInplace('—писокѕодчиненныхѕлатежей', CtrlToVar(pPaysOut));
+  GetTotalSums;
+end;
+
+procedure btnRefresh_Click(Sender : TObject);
+begin
+   MasterData.Refresh;
+   GetTotalSums;
+end;
+
+{$D-}
+procedure dbGridData_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if (MasterData.ќплачено¬ал > 0) and (MasterData.ќплачено¬ал < MasterData.—умма¬ал) then
+        Index1 := 8
+      else
+        if (MasterData.ќплачено¬ал > 0) and (MasterData.ќплачено¬ал > MasterData.—умма¬ал) then
+          Index1 := 7
+        else
+          if (MasterData.ќплачено¬ал > 0) and (MasterData.ќплачено¬ал = MasterData.—умма¬ал) then
+            Index1 := 6;
+      if MasterData.GetDocState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9;
+    end;
+end;
+{$D+}
+
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+ MasterData.DefineSelectParams(False);
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  GetTotalSums;
+end;
+
+procedure ToolButton3_Click(Sender: TObject);
+var V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.ќбработкаќбъектов');
+  V.OpenForm('√лавна€');
+end;
+
+procedure MenuItem10_Click(Sender: TObject);
+Var
+  Currency : ICDictionary;   
+  Doc : ICDocuments;
+begin
+  Currency := CreateObject('—правочники.¬алюты');
+  if Currency.FindByCode('грн',false) then
+    begin
+      Doc := MasterData.GetDoc;
+      Doc.Edit;
+      Doc.¬алюта := Currency;
+      Doc. урс := 1;
+      Doc.Post;
+      Doc.ApplyUpdates;
+    end;
+end;
+
+procedure MenuItem11_Click(Sender: TObject);
+Var
+  JournalOut : ICJournal;
+begin
+  JournalOut := CreateObject('∆урналы.∆урналѕродаж');
+  MasterData.Select;
+  While MasterData.SelectNext Do
+    Begin
+      JournalOut.AddDoc(MasterData.GetDoc);
+    End;
+end;
+
+procedure MenuItem13_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('ќбработки.ѕеч”нив∆урнала'); //ѕеч”нив∆урнала— оличеством
+  V.PrintForm('ѕеч”нив∆урнала„еков', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+end;
+
+procedure tbCursorGo_Click(Sender: TObject);
+begin
+//  Docs := CreateObject('ƒокументы.„ек');
+  MasterData.FindDoc(server.FindDoc);
+{  if MasterData.IsFocused then
+  begin
+    Docs.Find(MasterData.GetDoc);
+    Case (Sender as TO4ToolButton).Tag of
+      0:  Docs.SelectNext;
+      1:  Docs.SelectNext;
+    end;
+    MasterData.FindDoc(Docs);
+  end;
+}
+end;
+
+procedure bnPrint1_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+     //if  MasterData.GetDocState > 0 then
+        begin
+          V := CreateObject('ќбработки.ѕечать„ека');
+          V.PrintForm('„екј4√–Ќ', false, MasterData.GetDoc);
+        end
+      //else
+        //MessageDlg('Ќельз€ печатать неутвержденный чек!',mtWarning,mbOk);
+    end;
+end;
+
+procedure bnPrint2_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      if  MasterData.GetDocState > 0 then
+        begin
+          V := CreateObject('ќбработки.ѕечать„ека');
+          V.PrintForm('„екј4¬¬ал', false, MasterData.GetDoc);
+        end
+      else
+        MessageDlg('Ќельз€ печатать неутвержденный чек!',mtWarning,mbOk);
+    end;
+end;
+
+
+procedure btnEdit_Click(Sender: TObject);
+Var
+ Doc : ICDocuments;
+begin
+  If MasterData.IsFocused then
+    begin
+      Doc := MasterData.GetDoc;
+      Doc.EditInForm('„екѕѕ ',1);
+    end;
+  MasterData.Refresh;
+end;
+
+
+procedure dbGridData_DblClick(Sender: TObject);
+Var
+ Doc : ICDocuments;
+begin
+  If MasterData.IsFocused then
+    begin
+      Doc := MasterData.GetDoc;
+      Doc.EditInForm('„екѕѕ ',1);
+    end;
+  MasterData.Refresh;
+end;
+
+procedure btnAdd_Click(Sender: TObject);
+Var
+  DocCheck : ICDocuments;
+begin
+  DocCheck := CreateObject('ƒокументы.„ек');
+  DocCheck.EditInForm('„екѕѕ ',null);
+  MasterData.Refresh;
+end;
+
+procedure btExit_Click(Sender: TObject);
+begin
+  TerminateClient;
+end;
+
+procedure miPayCheck_Click(Sender: TObject);
+var
+  PayDoc: ICDocuments;
+  OptUser : Variant;
+begin
+  PayDoc := CreateObject('ƒокументы.ѕриход¬ ассу');
+  PayDoc.Params['AddPay'] := true;
+  PayDoc.Params['OwnerDoc'] := MasterData.GetDoc;
+  PayDoc.EditInForm('ѕриход¬ ассуѕо„еку',null);
+  if PayDoc.HasParam('mrOk') then
+  begin
+    try
+      OptUser := Options.GetServerPrm(FixAck);
+      Options.SetServerPrm(FixAck, false);
+      PayDoc.StateUp;
+    finally
+      Options.SetServerPrm(FixAck, OptUser);
+    end
+  end;
+  MasterData.Refresh;
+  ChildPaysOut.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel2:TO4Panel
+dbGridData:TO4DBGrid
+TabSet1:TO4TabSet
+Panel1:TO4Panel
+Label1:TO4Label
+lSum:TO4Label
+Panel4:TO4Panel
+Panel5:TO4Panel
+Tbr:TO4ToolBar
+btnAdd1:TO4ToolButton
+btnEdit1:TO4ToolButton
+btnStateUp:TO4ToolButton
+btnStateDown:TO4ToolButton
+btnDel:TO4ToolButton
+tbSelect:TO4ToolButton
+btnPrint1:TO4ToolButton
+ToolButton4:TO4ToolButton
+btnRefresh:TO4ToolButton
+tbParams:TO4ToolButton
+ToolButton3:TO4ToolButton
+Panel6:TO4Panel
+ToolBar1:TO4ToolBar
+btnAdd:TO4ToolButton
+Panel7:TO4Panel
+ToolBar2:TO4ToolBar
+btnEdit:TO4ToolButton
+Panel8:TO4Panel
+ToolBar3:TO4ToolBar
+ToolButton5:TO4ToolButton
+Panel9:TO4Panel
+ToolBar4:TO4ToolBar
+btnPrint2:TO4ToolButton
+Panel10:TO4Panel
+ToolBar5:TO4ToolBar
+ToolButton1:TO4ToolButton
+Panel11:TO4Panel
+ToolBar6:TO4ToolBar
+bnPrint1:TO4ToolButton
+Panel12:TO4Panel
+ToolBar7:TO4ToolBar
+tbPay:TO4ToolButton
+Panel13:TO4Panel
+btExit:TO4Button
+Panel14:TO4Panel
+ToolBar9:TO4ToolBar
+bnPrint2:TO4ToolButton
+Panel3:TO4Panel
+Splitter3:TO4Splitter
+pPays:TO4Panel
+Label2:TO4Label
+nbPays:TO4Notebook
+pPaysIn:TO4Panel
+pPaysOut:TO4Panel
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miPayCheck:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem7:TO4MenuItem
+MenuItem8:TO4MenuItem
+MenuItem9:TO4MenuItem

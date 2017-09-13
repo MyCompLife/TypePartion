@@ -1,0 +1,173 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, Reports;
+
+implementation
+
+
+var
+  TblGoods, DocListTbl : ICValueTable;
+  GoodDict, S, Store : ICDictionary;
+  PPartionTbl, PDocListTbl, PTable : ICValueTable;
+  Constants : IC4VPAConst;
+  CursorVis : TCursor;
+  CursorsRefCount : Integer;
+
+procedure TVSGoods_VPATimedAfterScroll(Sender: TObject);
+begin
+  if not TblGoods.IsFocused then
+    exit;
+  DocListTbl.UseDataSource(0);
+  CursorsRefCount := UnuseCursor(CursorVis, CursorsRefCount);
+  try
+    DocListTbl.CancelRange;
+    if not VarAsBool(miPartnerSort.Checked) then
+      DocListTbl.SortBy('Партия;Date')
+    else
+      DocListTbl.SortBy('Партия;Партнер;Date');
+    DocListTbl.SetRange(TblGoods.Партия,TblGoods.Партия)
+  finally
+    DocListTbl.UseDataSource(CtrlToVar(TVSDoc));
+    CursorsRefCount := UseCursor(CursorVis, CursorsRefCount);
+  end;
+end;
+
+procedure tbRun_Click(Sender: TObject);
+begin
+  TblGoods.Clear;
+  DocListTbl.Clear;
+  TblGoods.CopyDataToServer;
+  DocListTbl.CopyDataToServer;
+  server.CreateSrvObjects(TblGoods.SrvMean,DocListTbl.SrvMean);
+  server.GetReportData(edAcum.ItemIndex);
+  server.SetScrollParams(edAcum.ItemIndex);
+
+  if edAcum.ItemIndex = 0 then
+    begin
+      (dbgGood.PosColumns.Items[0] as TO4GridColumn).O4FieldName := 'Склад';
+      (dbgGood.PosColumns.Items[0] as TO4GridColumn).Title.Caption := 'Склад';
+    end
+  else
+    begin
+      (dbgGood.PosColumns.Items[0] as TO4GridColumn).O4FieldName := 'Партнер';
+      (dbgGood.PosColumns.Items[0] as TO4GridColumn).Title.Caption := 'Партнер';
+    end;
+
+  TblGoods.CopyDataFromServer;
+  TblGoods.SortBy('Товар');
+  TblGoods.UseDataSource(CtrlToVar(TVSGoods));
+  DocListTbl.CopyDataFromServer;
+  TVSGoods_VPATimedAfterScroll(Sender);
+end;
+
+procedure View_Click(Sender : TObject);
+begin
+  if VarAsBool(DocListTbl.IsFocused) then
+    Case (Sender as TO4ToolButton).Tag of
+      1 :  DocListTbl.Document.EditInForm(DocListTbl.Document.GetSign, 3);
+      2 :  DocListTbl.Document.StateUp;
+      3 :  DocListTbl.Document.StateDown;
+    end;
+  TVSGoods_VPATimedAfterScroll(Sender);
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  Constants := GetConstants;
+  //товары
+  TblGoods := CreateObject('ТаблицаЗначений');
+  TblGoods.AddColumn('Код',vtcString,10);
+  TblGoods.AddColumn('Товар',vtcLink,0);
+  TblGoods.AddColumn('Партия',vtcFloat,0);
+  TblGoods.AddColumn('КолОбщ',lftFFT,5);
+  TblGoods.AddColumn('Партнер',vtcLink,0); 
+  TblGoods.AddColumn('Склад',vtcLink,0);
+  TblGoods.Open;
+  //документы
+  DocListTbl := CreateObject('ТаблицаЗначений');
+  CreateDocsTblCols(DocListTbl, False);
+  DocListTbl.AddColumn('Партнер', vtcLink, 0);
+  DocListTbl.AddColumn('НазваниеПартнера', vtcString, 70);
+  DocListTbl.AddColumn('НомерДокумента', vtcString, 20);
+  DocListTbl.AddColumn('Цена', vtcFFt, 4);
+  DocListTbl.AddColumn('Товар', vtcLink, 0);
+  DocListTbl.AddColumn('Склад', vtcLink, 0);
+  DocListTbl.AddColumn('Партия', vtcFloat, 0);
+  DocListTbl.AddColumn('Отпуск', vtcInteger, 0);
+  SetFormatStdColumnsList(DocListTbl, 'КолОбщ', '0.####');
+  SetFormatStdColumnsList(DocListTbl, 'СумВх;СумВхНДС;СумОтпНДС;СумОтп;СумНакоп;СумНац;СумОбщ;Цена', '0.00##');
+  DocListTbl.Open;
+//  DocListTbl.SortBy('Склад;Date;Document;Партнер');
+  tbRun_Click(sender);
+end;
+
+{$D-}
+procedure dbgDoc_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+ if DocListTbl.Document.GetDocState = 0 then
+   Index1 := 92
+ else
+   Index1 := 86;
+//--------------------------------------------
+ if DocListTbl.КолОбщ > 0 then
+   Index2 := 82
+ else
+   Index2 := 83;
+end;
+{$D+}
+
+procedure dbgDoc_DblClick(Sender: TObject);
+begin
+  DocListTbl.Document.EditInForm(DocListTbl.Document.GetSign, 3);
+end;
+
+procedure miDateSort_Click(Sender: TObject);
+var
+  i: Integer;
+  miItem: TO4MenuItem;
+begin
+  DocListTbl.UseDataSource(0);
+  i := (Sender as TO4MenuItem).Tag;
+  Case i of
+    0: begin
+      DocListTbl.SortBy('Партия;Date');
+      DocListTbl.SetRange(ArrayOf(TblGoods.Партия),ArrayOf(TblGoods.Партия));
+      (Sender as TO4MenuItem).Checked := true;
+      miPartnerSort.Checked := false;
+    end;
+    1: begin
+      DocListTbl.SortBy('Партия;Партнер;Date;Document');
+      DocListTbl.SetRange(TblGoods.Партия,TblGoods.Партия);
+      (Sender as TO4MenuItem).Checked := true;
+      miDateSort.Checked := false;
+    end;
+  end;
+  DocListTbl.UseDataSource(CtrlToVar(TVSDoc));
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+BottomPanel:TO4Panel
+Label1:TO4Label
+ToolBar1:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbRun:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+edAcum:TO4Edit
+Panel1:TO4Panel
+ToolBar2:TO4ToolBar
+tbView:TO4ToolButton
+ToolButton7:TO4ToolButton
+tbPrintDoc:TO4ToolButton
+tbFixUp:TO4ToolButton
+tbFixDown:TO4ToolButton
+tbParam:TO4ToolButton
+dbgDoc:TO4DBGrid
+Panel2:TO4Panel
+dbgGood:TO4DBGrid
+TVSGoods:TO4TableValueSource
+TVSDoc:TO4TableValueSource
+pmSort:TO4PopupMenu
+miDateSort:TO4MenuItem
+miPartnerSort:TO4MenuItem

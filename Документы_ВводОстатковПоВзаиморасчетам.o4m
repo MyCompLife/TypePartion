@@ -1,0 +1,482 @@
+object TDocsMeanClass
+  Sign = 'ВводОстатковПоВзаиморасчетам'
+  Comment = 'Остатки по взаиморасчетам с партнерами'
+  Description = #0
+  StringID = '0054C96BBD6B6240'
+  Fields = <
+    item
+      DSID = 'DATE'
+      Name = 'ДатаДокумента'
+      Description = 'Дата документа'
+      DataType = lftDateTime
+      Kind = lfkSystem
+      Size = 0
+      Prec = 0
+      Required = True
+      Order = 0
+      Timed = False
+      Sortable = True
+      Plus = False
+      DisplayFormat = 'dd.mm.yyyy'
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'NUMBER'
+      Name = 'НомерДокумента'
+      Description = 'Номер документа'
+      DataType = lftString
+      Kind = lfkSystem
+      Size = 20
+      Prec = 0
+      Required = False
+      Order = 1
+      Timed = False
+      Sortable = False
+      Plus = False
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F1'
+      Name = 'Ответственный'
+      Description = 'Ответственный'
+      DataType = lftLink
+      Kind = lfkStandard
+      Size = 0
+      Prec = 0
+      Required = True
+      Order = 2
+      Timed = False
+      LinkMTP = '{5725CD43-75B2-11D3-9B43-0090272D5A2F}'
+      LinkMID = '50B77DBD5FD8E140'
+      Sortable = False
+      Plus = False
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F4'
+      Name = 'ВалютаДок'
+      Description = 'Валюта документа'
+      DataType = lftLink
+      Kind = lfkStandard
+      Size = 0
+      Prec = 0
+      Required = False
+      Order = 3
+      Timed = False
+      LinkMTP = '{5725CD43-75B2-11D3-9B43-0090272D5A2F}'
+      LinkMID = 'F5785D3FD9D7E140'
+      Sortable = False
+      Plus = False
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F5'
+      Name = 'КурсДок'
+      Description = 'Курс валюты'
+      DataType = lftFFT
+      Kind = lfkStandard
+      Size = 0
+      Prec = 6
+      Required = False
+      Order = 4
+      Timed = False
+      Sortable = False
+      Plus = False
+      DisplayFormat = '0.00####'
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F6'
+      Name = 'СуммаДок'
+      Description = 'Сумма документа'
+      DataType = lftFFT
+      Kind = lfkStandard
+      Size = 0
+      Prec = 2
+      Required = False
+      Order = 5
+      Timed = False
+      Sortable = False
+      Plus = False
+      DisplayFormat = '0.00'
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F7'
+      Name = 'СуммаДокВал'
+      Description = 'Сумма документа в валюте'
+      DataType = lftFFT
+      Kind = lfkStandard
+      Size = 0
+      Prec = 2
+      Required = False
+      Order = 6
+      Timed = False
+      Sortable = False
+      Plus = False
+      DisplayFormat = '0.00'
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end>
+  ListFields = <
+    item
+      DSID = 'ORDNUM'
+      Name = 'НомСтроки'
+      Description = 'Номер строки'
+      DataType = lftInteger
+      Kind = lfkSystem
+      Size = 0
+      Prec = 0
+      Required = False
+      Order = 0
+      Timed = False
+      Sortable = True
+      Plus = False
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F1'
+      Name = 'Партнер'
+      Description = 'Партнер'
+      DataType = lftLink
+      Kind = lfkStandard
+      Size = 0
+      Prec = 0
+      Required = False
+      Order = 1
+      Timed = False
+      LinkList.Strings = (
+        '{5725CD43-75B2-11D3-9B43-0090272D5A2F}|474CD925B8CEE140'
+        '{5725CD43-75B2-11D3-9B43-0090272D5A2F}|6DCFAB3240D7E140'
+        '{5725CD43-75B2-11D3-9B43-0090272D5A2F}|00F6CE0429445B40'
+        '{5725CD43-75B2-11D3-9B43-0090272D5A2F}|009C1ED983FF4D40'
+        '{5725CD43-75B2-11D3-9B43-0090272D5A2F}|50B77DBD5FD8E140'
+        '{5725CD43-75B2-11D3-9B43-0090272D5A2F}|C9C853DF39D7E140')
+      LinkMTP = '{5725CD43-75B2-11D3-9B43-0090272D5A2F}'
+      Sortable = True
+      Plus = False
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      DefaultValue = Null
+      Visible = True
+    end
+    item
+      DSID = 'F2'
+      Name = 'Сумма'
+      Description = 'Сумма в национальной валюте'
+      DataType = lftFFT
+      Kind = lfkStandard
+      Size = 0
+      Prec = 2
+      Required = False
+      Order = 2
+      Timed = False
+      Sortable = False
+      Plus = False
+      DisplayFormat = '0.00'
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F3'
+      Name = 'СуммаВВалюте'
+      Description = 'Сумма в валюте'
+      DataType = lftFFT
+      Kind = lfkStandard
+      Size = 0
+      Prec = 2
+      Required = False
+      Order = 3
+      Timed = False
+      Sortable = False
+      Plus = False
+      DisplayFormat = '0.00'
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F4'
+      Name = 'Долг'
+      Description = 'Нам должны (мы должны)'
+      DataType = lftInteger
+      Kind = lfkStandard
+      Size = 0
+      Prec = 0
+      Required = False
+      Order = 4
+      Timed = False
+      Sortable = False
+      Plus = False
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F5'
+      Name = 'Валюта'
+      Description = 'Валюта'
+      DataType = lftLink
+      Kind = lfkStandard
+      Size = 0
+      Prec = 0
+      Required = False
+      Order = 5
+      Timed = False
+      LinkMTP = '{5725CD43-75B2-11D3-9B43-0090272D5A2F}'
+      LinkMID = 'F5785D3FD9D7E140'
+      Sortable = False
+      Plus = False
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F6'
+      Name = 'Курс'
+      Description = 'Курс'
+      DataType = lftFFT
+      Kind = lfkStandard
+      Size = 0
+      Prec = 7
+      Required = False
+      Order = 6
+      Timed = False
+      Sortable = False
+      Plus = False
+      DisplayFormat = '0.00#####'
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F7'
+      Name = 'ДатаРасчетов'
+      Description = 'Дата взаиморасчетов с партнерами'
+      DataType = lftDateTime
+      Kind = lfkStandard
+      Size = 0
+      Prec = 0
+      Required = False
+      Order = 7
+      Timed = False
+      Sortable = False
+      Plus = False
+      DisplayFormat = 'dd.mm.yyyy'
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      Visible = True
+    end
+    item
+      DSID = 'F8'
+      Name = 'АналитикаВзаиморасчета'
+      Description = 'АналитикаВзаиморасчета'
+      DataType = lftLink
+      Kind = lfkStandard
+      Size = 0
+      Prec = 0
+      Required = False
+      Order = 8
+      Timed = False
+      LinkMTP = '{5725CD43-75B2-11D3-9B43-0090272D5A2F}'
+      LinkMID = 'C8ADACFAA50CB940'
+      Sortable = False
+      Plus = False
+      LinkAsSimpleList = False
+      Calculated = False
+      CalcSide = csdServer
+      UnionEdit = False
+      UnionAdd = False
+      LinkAccum = False
+      DefaultValue = Null
+      Visible = True
+    end>
+  Forms = <
+    item
+      Name = 'ОстПоВзаиморасч'
+      ID = '0030212B2D596240'
+      FormType = 'Dialogs'
+      Comment = 'Остатки по взаиморасчетам с партнерами'
+      ForTree = False
+      ForSelect = False
+      DefForm = False
+    end
+    item
+      Name = 'ФиксацияОстВзаиморасч'
+      ID = '00EFDA93FA716240'
+      FormType = 'Move'
+      Comment = 'Фиксация ввода остатков по взаиморасчетам с партнерами'
+      ForTree = False
+      ForSelect = False
+      DefForm = True
+    end
+    item
+      Name = 'ВводОстатковПоВзаиморасчетам'
+      ID = '000C311B4B5F7540'
+      FormType = 'Prints'
+      Comment = 'Остатки по взаиморасчетам с партнерами'
+      ForTree = False
+      ForSelect = False
+      DefForm = False
+    end>
+  FieldProcs = <
+    item
+      DSID = 'F1'
+      FieldDSID = 'F1'
+      Name = 'Ответственный'
+      Description = 'Ответственный'
+      ProcType = fptField
+      Order = 0
+      DataType = lftLink
+      IsCount = False
+    end
+    item
+      DSID = 'F2'
+      FieldDSID = 'F6'
+      Name = 'СуммаДокумента'
+      Description = 'Сумма документа'
+      ProcType = fptField
+      Order = 1
+      DataType = lftFFT
+      IsCount = False
+    end>
+  ListFieldProcs = <
+    item
+      DSID = 'F3'
+      FieldDSID = 'F1'
+      Name = 'Партнер'
+      Description = 'Партнер'
+      ProcType = fptField
+      Order = 0
+      DataType = lftLink
+      IsCount = False
+    end
+    item
+      DSID = 'F4'
+      FieldDSID = 'F2'
+      Name = 'Сумма'
+      Description = 'Сумма в ГРН'
+      ProcType = fptField
+      Order = 1
+      DataType = lftFFT
+      IsCount = False
+    end
+    item
+      DSID = 'F5'
+      Name = 'Кредитор'
+      Description = 'Кредитор'
+      ProcType = fprProc
+      Order = 2
+      DataType = lftBoolean
+      IsCount = False
+    end
+    item
+      DSID = 'F6'
+      FieldDSID = 'F3'
+      Name = 'СуммаВВалюте'
+      Description = 'Сумма в валюте'
+      ProcType = fptField
+      Order = 3
+      DataType = lftFFT
+      IsCount = False
+    end
+    item
+      DSID = 'F7'
+      FieldDSID = 'F5'
+      Name = 'Валюта'
+      Description = 'Валюта'
+      ProcType = fptField
+      Order = 4
+      DataType = lftLink
+      IsCount = False
+    end>
+  UniNumber = False
+  StateNames.Strings = (
+    'Оформляемые'
+    'Завершенные'
+    'В архив')
+  AutoNumDSID = 'F50'
+  DisplayName = 'Остатки взаиморасч. с партнерами'
+  JournID = #0
+  BuhApplicable = True
+  TaxApplicable = False
+  Union = False
+  UWrite = False
+  URead = False
+end

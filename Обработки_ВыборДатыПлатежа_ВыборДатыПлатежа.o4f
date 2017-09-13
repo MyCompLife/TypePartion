@@ -1,0 +1,193 @@
+object Form: TO4Form
+  Left = 0
+  Top = 1
+  Width = 368
+  Height = 197
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    213
+    196
+    282)
+  Translat.ScanedProps.Props = (
+    'btCancel.Caption'
+    0
+    #1'-1'#1'Отмена'
+    'cbUsePayDate.Caption'
+    1
+    'создать налоговую по платежу'
+    'cbUsePayDate.Hint'
+    1
+    ''
+    'DBGrid1.Hint'
+    1
+    ''
+    'DBGrid1.PosColumns[  0].Period.StrStartDate'
+    1
+    '20.09.2005'
+    'DBGrid1.PosColumns[  0].Period.Text'
+    1
+    ''
+    'DBGrid1.PosColumns[  0].Title.Caption'
+    1
+    'Дата'
+    'DBGrid1.PosColumns[  1].Period.StrStartDate'
+    1
+    '20.09.2005'
+    'DBGrid1.PosColumns[  1].Period.Text'
+    1
+    ''
+    'DBGrid1.PosColumns[  1].Title.Caption'
+    1
+    'Номер'
+    'DBGrid1.PosColumns[  2].Period.StrStartDate'
+    1
+    '20.09.2005'
+    'DBGrid1.PosColumns[  2].Period.Text'
+    1
+    ''
+    'DBGrid1.PosColumns[  2].Title.Caption'
+    1
+    'Сумма'
+    'Label1.Caption'
+    0
+    #1'-1'#1'Взаиморасчеты с партнером '
+    'Label2.Caption'
+    0
+    #1'-1'#1'Информация о партнере отсутствует'
+    'lbDocType.Caption'
+    1
+    'lbDocType'
+    'lbDocType.Hint'
+    1
+    ''
+    'rgProc.Caption'
+    0
+    #1'-1'#1' Предоставленный процент '
+    'rgProc.Items[  0]'
+    0
+    #1'-1'#1'скидки'
+    'rgSum.Caption'
+    0
+    #1'-1'#1' Что изменить '
+    'rgSum.Items[  0]'
+    0
+    #1'-1'#1'цену'
+    'rgSum.Items[  1]'
+    0
+    #1'-1'#1'сумму')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnExecute.EventName = 'Form_Execute'
+  object Panel2: TO4Panel
+    Left = 0
+    Top = 167
+    Width = 368
+    Height = 30
+    Align = alBottom
+    BorderSides = []
+    TabOrder = 1
+    Transparent = False
+    object Panel3: TO4Panel
+      Left = 212
+      Top = 1
+      Width = 155
+      Height = 28
+      Align = alRight
+      BorderSides = []
+      BevelOuter = bvNone
+      TabOrder = 0
+      Transparent = False
+      object btOK: TO4Button
+        Left = 0
+        Top = 2
+        Width = 75
+        Height = 25
+        Caption = 'OK'
+        Default = True
+        ModalResult = 1
+        TabOrder = 0
+        O4Action = actNone
+        VPAOnClick.EventName = 'btOK_Click'
+      end
+      object btCancel: TO4Button
+        Left = 77
+        Top = 2
+        Width = 75
+        Height = 25
+        Cancel = True
+        Caption = 'Отмена'
+        ModalResult = 2
+        TabOrder = 1
+        O4Action = actNone
+      end
+    end
+    object cbUsePayDate: TO4CheckBox
+      Left = 8
+      Top = 6
+      Width = 180
+      Height = 17
+      Caption = 'создать налоговую по платежу'
+      TabOrder = 1
+      Visible = False
+    end
+  end
+  object DBGrid1: TO4DBGrid
+    Left = 0
+    Top = 0
+    Width = 368
+    Height = 167
+    AutoAlign = True
+    Align = alClient
+    DragDisabled = False
+    Options = [dgTitles, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgRowSelect, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = tvsPays
+    ReadOnly = True
+    TabOrder = 0
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'Дата'
+        Title.Caption = 'Дата'
+        Width = 121
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '20.09.2005'
+      end
+      item
+        O4FieldName = 'Номер'
+        Title.Caption = 'Номер'
+        Width = 121
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '20.09.2005'
+      end
+      item
+        O4FieldName = 'Сумма'
+        Title.Caption = 'Сумма'
+        Width = 119
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '20.09.2005'
+      end>
+  end
+  object tvsPays: TO4TableValueSource
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 76
+    Top = 62
+  end
+end

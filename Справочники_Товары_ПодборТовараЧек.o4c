@@ -1,0 +1,462 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, РаботаСПеременными, РаботаСОбъектами, 
+  РаботаСКомпонентамиVCL, РаботаСоСправочникамиCL, Пользователи;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  UseLevels, LockPost : Boolean;
+  Opt : ICOptions;
+  Constants : IC4VPAConst;
+  S : ICDictionary;
+  Stores : ICValueList;
+  AccsGoodCurrent: ICAccs;
+  FieldName: String; 
+  ManufacturerTbl, GroupTbl: ICValueTable;
+  tsGoodOrServiceTabIndex : integer;
+
+//*****************************************************
+procedure GoodsFilter(FieldName: String; Tbl: ICValueTable);
+begin
+  MasterData.DisableControls;
+  if VarAsBool(Tbl._Default[FieldName + 'Товара'].IsFocused) then
+    begin
+      MasterData.SetFieldFilter(FieldName,'=',Tbl._Default[FieldName + 'Товара'],'','',Null);
+      MasterData.Select;
+    end
+  else
+    begin
+      MasterData.CancelFieldFilter(FieldName);
+      MasterData.Select;
+    end;
+  MasterData.EnableControls;
+end;
+
+procedure TVS_VPAAfterScroll(Sender: TObject);
+var
+  FieldName: String;
+begin
+  case (Sender as TO4TableValueSource).Name of
+    'TVSManufacturer': GoodsFilter('Производитель', ManufacturerTbl);
+    'TVSGroup': GoodsFilter('Группа', GroupTbl);
+  end;
+end;
+
+{$D-}
+procedure dbgManufacturer_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if ManufacturerTbl.Order = 0 then
+    begin
+      if not Highlight then
+        BackColor := 10942461
+      else
+        begin
+          BackColor := 703486;
+          DrawFont.Color := clBlack;
+        end;
+    end;
+end;
+
+procedure dbgGroup_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if GroupTbl.Order = 0 then
+    begin
+      if not Highlight then
+        BackColor := 10942461
+      else
+        begin
+          BackColor := 703486;
+          DrawFont.Color := clBlack;
+        end;
+    end;
+end;
+{$D+}
+//*****************************************************
+
+procedure TVS_VPATimedAfterScroll(Sender: TObject);
+begin
+  if VarAsBool(GroupTbl.@ГруппаТовара.IsFocused) then
+    begin
+      MasterData.SetFieldFilter('Производитель','=',GroupTbl.ГруппаТовара,'','',Null);
+      MasterData.Select;
+    end
+  else
+    begin
+      MasterData.CancelFieldFilter('Производитель');
+      MasterData.Select;
+    end;
+end;
+
+{$D-}
+procedure dbgGrouop_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if not VarAsBool(GroupTbl.@ГруппаТовара.IsFocused) then
+    begin
+      if not Highlight then
+        BackColor := 10942461
+      else
+        begin
+          BackColor := 703486;
+          DrawFont.Color := clBlack;
+        end;
+    end;
+end;
+{$D+}
+//*****************************************************
+
+procedure SetCalcField;
+var
+  Cond : string;
+begin
+  MasterData.ClearCalcFieldInDBServer;
+  if Stores.ValidIndex(Stores.CurIndex) and (Stores.CurIndex <> 0) then
+    S := Stores.GetValue(Stores.CurIndex)
+  else
+    nil(S);
+  Cond := '';
+  if miFilterNoZero.Checked and (not tsGoodOrService.Visible or (tsGoodOrServiceTabIndex<>2)) then
+    Cond := '<>0';
+  MasterData.SetCalcFieldInDBServer('КоличествоНаСкладах', AccsGoodCurrent,
+    RoundDate(CurrentDate, rdDay, True), ArrayOf('Товар',S), 'КолОбщ', amtBoth, Cond);
+end;
+
+procedure MDS_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Masterdata.SetFieldFilter('ПометкаУдаление','<>',-1,'','',Null);
+  MasterData.SetFieldFilter('ТипКарточки','=',0,'','',Null);
+  eDate.text :=DateToStr(CurrentDate);
+  Constants := GetConstants;
+  Opt := GetOptions;
+  SetColors(Constants);
+  Stores := CreateObject('СписокЗначений');
+  S := CreateObject('Справочники.Склады');
+  Stores.AddValue(Trans('Все склады'), Null);
+  S.Select;
+  if S.FindByField('Активность', True, False) then
+    Stores.AddValue(S.Название, S);
+  S.Select;
+  while S.SelectNext do
+    if not S.Активность = True then
+      Stores.AddValue(S.Название, S); // или ('',S)
+  Stores.UseControl(CtrlToVar(eStores));
+  Stores.CurIndex := 0;
+
+  miFilterNoZero.Checked := VarAsBool(Opt.GetServerPrm('FilterNoZero'+Form.Caption));
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));
+  AccsGoodCurrent := CreateObject('Аккумуляторы.ОстаткиТоваровНаСегодня');
+  if VarAsBool(Constants.ПоказыватьЦеныГрн) then
+    MasterData.SetSrvOnCalcFields(server.SrvCalcFieldsEP);
+end;
+
+procedure pmiAdd_VPABeforeActionClick(Sender : TObject);
+begin
+  MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure miCopy_VPABeforeActionClick(Sender : TObject);
+var
+  CopyFrom : ICDictionary;
+begin
+  CopyFrom := CreateObject('Справочники.Товары');
+  if CopyFrom.Find(MasterData) then
+    begin
+      MasterData.Params['CopyFrom'] := CopyFrom
+    end
+  else
+    MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure MDS_VPAAfterScroll(Sender : TObject);
+begin
+  MasterData.InteractiveUseLevels := UseLevels;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Close(Sender : TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+  Opt.SetServerPrm('FilterNoZero'+Form.Caption, miFilterNoZero.Checked);
+  if FieldName <> '' then
+    MasterData.CancelFieldFilter(FieldName);
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'dbgmanufacturer', dbgManufacturer.Height);
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'dbggroup', dbgGroup.Height);
+end;
+
+procedure miProperty_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      dialog := CreateObject('Обработки.СвойстваТовара');
+      dialog.Execute('СвойстваТовара', MasterData);
+    end;
+end;
+
+procedure tbAdd_VPABeforeActionClick(Sender : TObject);
+begin
+  MasterData.Params['CopyFrom'] := Null;
+end;
+
+procedure Form_ExecProc(Self, Caller: Variant; ProcID: string; InParams: Variant; var OutParams: Variant);
+begin
+//
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  tsFilter.Down := GetFilterPanel(MasterData.GetSign);
+  pFilter.Visible := tsFilter.Down;
+  MakeCnfgInterfaceSpl(MasterData, Form, ManufacturerTbl, GroupTbl);
+  dbgManufacturer.Height := VarAsInt(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'dbgmanufacturer'),140);
+  dbgGroup.Height := VarAsInt(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption+'dbggroup'),140);
+  tsGoodOrService.Visible :=  GetUsersBlockedField('ИспПереклТоварУслуга');
+end;
+
+procedure miFilterNoZero_Click(Sender : TObject);
+begin
+  miFilterNoZero.Checked := not miFilterNoZero.Checked;
+  SetCalcField;
+  RefreshDataWithoutCtg(MDS, dbtCtg, MasterData);
+end;
+
+{$D-}
+procedure dbgData_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+  if MasterData.IsFocused and (MasterData.КоличествоНаСкладах <= 0)  and not VarAsBool(MasterData.Услуга) then
+    if Highlight then
+      begin
+        BackColor := BlZeroSel;
+        DrawFont.Color := BlFZeroSel;
+      end
+    else
+      begin
+        BackColor := BlZero;
+        DrawFont.Color := BlFZero;
+      end;
+end;
+{$D+}
+
+procedure miFocusOnFilter_Click(Sender: TObject);
+begin
+  form.ActiveControl := eGoodsFilter;
+end;
+
+procedure tsFilter_Click(Sender: TObject);
+begin
+  pFilter.Visible := tsFilter.Down;
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+  SetFilterPanel(MasterData.GetSign, tsFilter.Down);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  try
+    if IsObject(Params) and VarAsBool(Params.IsFocused) then
+      begin
+        S := Params;
+        Stores.CurIndex := Stores.FindByValue(S);
+      end;
+  finally
+    SetCalcField;
+  end;
+end;
+
+procedure FilterMean;
+begin
+  Case eFieldFilter.Text of
+    'Название' : FieldName := 'НазвТовара';
+  else
+    FieldName := eFieldFilter.Text;
+  end;
+  MasterData.SetFieldFilter(FieldName,'Like', '%' + eGoodsFilter.Text + '%','','',Null);
+  MasterData.Refresh;
+  form.ActiveControl := dbgData;
+end;
+
+procedure eGoodsFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if key=13 then
+    FilterMean
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  FilterMean
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+  FieldName := '';
+end;
+
+procedure miAllGoods_Click(Sender: TObject);
+begin
+ (Sender as TO4MenuItem).Checked := true;
+ case (Sender as TO4MenuItem).Tag of
+  0: MasterData.CancelFieldFilter('ПометкаУдаление');
+  1: Masterdata.SetFieldFilter('ПометкаУдаление','=',-1,'','',Null);
+  2: Masterdata.SetFieldFilter('ПометкаУдаление','<>',-1,'','',Null);
+ end;
+ Masterdata.Refresh;
+end;
+
+procedure tbFilter_Click(Sender: TObject);
+var x,y : integer;
+begin
+ tbFilter.GetScreenPos(x,y);
+ pmOptions.Popup(x,y+tbFilter.Height);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if VarAsBool(MasterData.ПометкаУдаление) then
+       Index1 := 51;
+    end;
+end;
+{$D+}
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+Var
+  CatDic : ICDictionary;
+begin
+ if LockPost then exit;
+ CatDic := CreateObject('Справочники.Товары');
+ CatDic.IncludeLevels(true);
+ CatDic.IncludeOnlyLevels(true);
+ if CatDic.Find(MasterData.@Категория) and not IsObjEQ(MasterData.GetParent,CatDic)  then
+   begin
+     LockPost := true;
+     MasterData.Edit;
+     MasterData.Категория := MasterData.GetParent;
+     MasterData.POst;
+     MasterData.ApplyUpdates;
+     LockPost := False;
+   end;
+
+
+end;
+
+procedure miGoods0_Click(Sender: TObject);
+begin
+ MasterData.SetFieldFilter('ТипКарточки','=',(Sender as TO4MenuItem).Tag,'','',Null);
+ MasterData.Refresh;
+ (Sender as TO4MenuItem).Checked := true;
+end;
+
+procedure tbTypeGoods_Click(Sender: TObject);
+var x,y : integer;
+begin
+ tbTypeGoods.GetScreenPos(x,y);
+ pmTypeGoods.Popup(x,y+tbTypeGoods.Height);
+end;
+
+procedure tsGoodOrService_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+ tsGoodOrServiceTabIndex := NewTab;
+ case NewTab of
+  0 : MasterData.CancelFieldFilter('Услуга');
+  1 :
+    begin
+      MasterData.SetFieldFilter('Услуга','<>',-1,'','',Null);
+      SetCalcField;
+    end;
+  2 :
+    begin
+      MasterData.SetFieldFilter('Услуга','=',-1,'','',Null);
+      SetCalcField;
+    end;
+ end;
+ RefreshDataWithoutCtg(MDS, dbtCtg, MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel4:TO4Panel
+SpManufacturer:TO4Splitter
+SpGroup:TO4Splitter
+dbtCtg:TO4DBTreeView
+dbgManufacturer:TO4DBGrid
+dbgGroup:TO4DBGrid
+Panel2:TO4Panel
+dbgData:TO4DBGrid
+Panel3:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+eDate:TO4Edit
+eStores:TO4Edit
+tbrData:TO4ToolBar
+tbTypeGoods:TO4ToolButton
+tbFilter:TO4ToolButton
+tbSettings:TO4ToolButton
+tsFilter:TO4ToolButton
+pFilter:TO4Panel
+CodePanel:TO4Panel
+eGoodsFilter:TO4Edit
+eFieldFilter:TO4Edit
+ToolBar1:TO4ToolBar
+tbGoodsFilterClear:TO4ToolButton
+ToolBar2:TO4ToolBar
+tbFilterApply:TO4ToolButton
+tsGoodOrService:TO4TabSet
+MDS:TO4DataSource
+pmCtg:TO4PopupMenu
+pmiAddLevel:TO4MenuItem
+pmiAddSubLevel:TO4MenuItem
+pmiEditLevel:TO4MenuItem
+pmiDelLevel:TO4MenuItem
+MenuItem4:TO4MenuItem
+pmiUseLevel:TO4MenuItem
+pmiDontUseLevel:TO4MenuItem
+pmiUseNoLevel:TO4MenuItem
+pmData:TO4PopupMenu
+MenuItem3:TO4MenuItem
+MenuItem5:TO4MenuItem
+MenuItem6:TO4MenuItem
+MenuItem8:TO4MenuItem
+MenuItem9:TO4MenuItem
+pmiSort:TO4MenuItem
+tbParams:TO4MenuItem
+miFocusOnFilter:TO4MenuItem
+pmOptions:TO4PopupMenu
+miAllGoods:TO4MenuItem
+miGoodsToDel:TO4MenuItem
+miWithoutGoodsToDel:TO4MenuItem
+TVSManufacturer:TO4TableValueSource
+TVSGroup:TO4TableValueSource
+pmTypeGoods:TO4PopupMenu
+miFilterNoZero:TO4MenuItem
+MenuItem7:TO4MenuItem
+miGoods0:TO4MenuItem
+miGoods1:TO4MenuItem
+miGoods2:TO4MenuItem

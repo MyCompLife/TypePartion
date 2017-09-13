@@ -1,0 +1,258 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  Plus, Minus, bgDaySum, endDaySum : Decimal;
+  CntPlus, CntMinus, PrintKind : Byte;
+  CNV : ICWriNums;
+  Date : DateTime;
+  AccKassa : ICAccs;
+  TblKassa : ICValueTable;
+  Currency : ICDictionary;
+  MasterData : ICJournal;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  CNV := CreateObject('ЧислаПрописью');
+  PrintKind := Form.GetPrintKind;
+  case PrintKind of
+    pkAll :
+      begin
+        MasterData := CreateObject('Журналы.КассоваяКнига');
+        MasterData.Select;
+      end;
+    pkSelections :
+      begin
+        MasterData := Form.GetMean;
+        MasterData.SelectBookmarks;
+      end;
+    pkWindow :
+      begin
+        MasterData := Form.GetMean;
+        MasterData.Select;
+      end;
+  end;
+  //
+  AccKassa := CreateObject('Аккумуляторы.ОстаткиПоКассе');
+  Currency := CreateObject('Справочники.Валюты');
+  Currency := GetNatCurrency(Currency);
+  AccKassa.SetFieldFilter('Валюта', Currency); //платежи только в нац. валюте!
+  TblKassa := CreateObject('ТаблицаЗначений');
+  TblKassa.Close();
+  TblKassa.AddColumn('Document', vtcLink, 0);
+  TblKassa.AddColumn('MotionSign', vtcInteger, 0);
+  TblKassa.AddColumn('СумОбщ', vtcFFT, 2);
+  TblKassa.AddColumn('Партнер', vtcLink, 0);
+  TblKassa.AddColumn('Счет', vtcString, 8);
+  TblKassa.AddColumn('НомерДокумента', vtcString, 20);
+  TblKassa.Open();
+end;
+
+procedure Structure1_Root_GetData(Table : TRBTable; Index, Count : Integer;
+  var Accept : Boolean);
+begin
+  if PrintKind = pkSelections then
+    Accept := MasterData.SelectNextBookmark
+  else
+    Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := IntToStr(StrToInt(MasterData.НомерДокумента));
+      Value['ZPRest'] := MasterData.ОстатокЗарплата;
+    end;
+  Date := MasterData.ДатаДокумента;
+  if GetDay(Date) < 10 then
+    lDate1.Caption := '0' + IntToStr(GetDay(Date))
+  else
+    lDate1.Caption := IntToStr(GetDay(Date));
+  lDate2.Caption := lDate1.Caption;
+  lMonth1.Caption := CNV.MonthToStr(GetMonth(Date), 1, 1058);
+  lMonth2.Caption := lMonth1.Caption;
+  lYear1.Caption := IntToStr(GetYear(Date));
+  lYear2.Caption := lYear1.Caption;
+  //
+  AccKassa.Валюта := Currency;
+  AccKassa.CalcRest(RoundDate(Date, rdDay, False));
+  bgDaySum := AccKassa.СумОбщ;
+  AccKassa.Валюта := Currency;
+  AccKassa.CalcRest(RoundDate(Date, rdDay, True));
+  endDaySum := AccKassa.СумОбщ;
+  //
+  TblKassa.Clear;
+  AccKassa.AppendMotionToValueTable(RoundDate(Date, rdDay, False),
+    RoundDate(Date, rdDay, True), amtBoth,
+    'Document;СумОбщ;MotionSign', -1, TblKassa);
+  TblKassa.DoGetLinks('Партнер=Document.Партнер;Счет=Document.Счет;НомерДокумента=Document.НомерДокумента');
+  TblKassa.SortBy('Document');
+  TblKassa.Select;
+  Plus := 0;
+  Minus := 0;
+  CntPlus := 0;
+  CntMinus := 0;
+end;
+
+procedure Structure1_Root_Det_GetData(Table : TRBTable; Index, Count : Integer;
+  var Accept : Boolean);
+begin
+  Accept := TblKassa.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := TblKassa.НомерДокумента;
+      Value['CorAcc'] := TblKassa.Счет;
+      Value['Partner'] := TblKassa.DefValue['Партнер'];
+      case VarAsInt(TblKassa.MotionSign) of
+        amtIncome :
+          begin
+            Value['SumPlus'] := TblKassa.СумОбщ;
+            Plus := Plus + TblKassa.СумОбщ;
+            inc(CntPlus);
+          end;
+        amtOutcome :
+          begin
+            Value['SumMinus'] := TblKassa.СумОбщ;
+            Minus := Minus + TblKassa.СумОбщ;
+            inc(CntMinus);
+          end;
+      end;
+    end;
+end;
+
+procedure Structure1_Root_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := TblKassa.LineCount;
+end;
+
+procedure bndFtDET_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  lPlus1.Caption := DecToStr(Plus, 2);
+  lPlus2.Caption := DecToStr(Plus, 2);
+  lMinus1.Caption := DecToStr(Minus, 2);
+  lMinus2.Caption := DecToStr(Minus, 2);
+  lCntPlus1.Caption := CNV.DigitToStr(CntPlus, 1058);
+  lCntPlus2.Caption := CNV.DigitToStr(CntPlus, 1058);
+  lCntMinus1.Caption := CNV.DigitToStr(CntMinus, 1058);
+  lCntMinus2.Caption := CNV.DigitToStr(CntMinus, 1058);
+  lEndRest1.Caption := DecToStr(endDaySum, 2);
+  lEndRest2.Caption := DecToStr(endDaySum, 2);
+  Accept := True;
+end;
+
+procedure bndHdDet_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  lBegRest1.Caption := DecToStr(bgDaySum, 2);
+  lBegRest2.Caption := DecToStr(bgDaySum, 2);
+  Accept := True;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label1:TRBLabel
+lDate1:TRBLabel
+Label25:TRBLabel
+lMonth1:TRBLabel
+lYear1:TRBLabel
+Label61:TRBLabel
+lblPageNo1:TRBLabel
+Label51:TRBLabel
+lDate2:TRBLabel
+Label58:TRBLabel
+lMonth2:TRBLabel
+lYear2:TRBLabel
+Label3:TRBLabel
+lblPageNo2:TRBLabel
+Shape1:TRBShape
+bndHdDet:TRBBand
+Label26:TRBLabel
+Label27:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label31:TRBLabel
+Label2:TRBLabel
+Label4:TRBLabel
+Label5:TRBLabel
+Label7:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+Label9:TRBLabel
+Label6:TRBLabel
+lBegRest1:TRBLabel
+Label8:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label28:TRBLabel
+lBegRest2:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label32:TRBLabel
+Label33:TRBLabel
+Label39:TRBLabel
+Label40:TRBLabel
+Label41:TRBLabel
+bndFtDET:TRBBand
+Label48:TRBLabel
+Label62:TRBLabel
+lPlus1:TRBLabel
+lMinus1:TRBLabel
+Label42:TRBLabel
+lEndRest1:TRBLabel
+Label43:TRBLabel
+Label44:TRBLabel
+lPlus2:TRBLabel
+lMinus2:TRBLabel
+Label50:TRBLabel
+lEndRest2:TRBLabel
+Label54:TRBLabel
+Label45:TRBLabel
+Label46:TRBLabel
+Label52:TRBLabel
+Label59:TRBLabel
+lblZP2:TRBLabel
+Label64:TRBLabel
+Label65:TRBLabel
+lblZP1:TRBLabel
+Label69:TRBLabel
+Label47:TRBLabel
+lCntPlus1:TRBLabel
+Label10:TRBLabel
+lCntMinus1:TRBLabel
+Label11:TRBLabel
+Label49:TRBLabel
+Label53:TRBLabel
+lCntPlus2:TRBLabel
+Label55:TRBLabel
+lCntMinus2:TRBLabel
+Label56:TRBLabel
+Label57:TRBLabel
+Label60:TRBLabel
+Label63:TRBLabel
+Label66:TRBLabel
+Label67:TRBLabel
+Label68:TRBLabel
+Label70:TRBLabel
+Label71:TRBLabel
+Label72:TRBLabel
+Label73:TRBLabel
+Label74:TRBLabel
+Structure1:TRBStructure

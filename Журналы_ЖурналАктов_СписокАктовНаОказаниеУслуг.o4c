@@ -1,0 +1,418 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, InitColors, –асчеты, –абота—ѕеременными,
+  –абота—ƒокументами¬∆урналах, –абота—ќбъектами, –абота— омпонентамиVCL,
+  ”становка¬ажныхќбъектов, ѕечать»¬ыводЌаЁкран, ѕечать, ѕользователи, ƒополнительный‘ункционал;
+
+implementation
+
+var
+  MasterData, ChildPaysOut, ChildPaysIn, ChildNakls, ChildNaklsIn : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MyDocHasOwner, LockCh, PreView : Boolean;
+  Currency : ICDictionary;
+  AccsPart: ICAccs; 
+  PrintList : ICValueList;     
+  PrintFormsTbl: ICValueTable;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  SetColors(Constants);
+  Options := GetOptions;
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+  ChildPaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  ChildPaysOut.UseMaster(MasterData);
+  Currency := CreateObject('—правочники.¬алюты');
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+end;
+
+procedure ReceiveEvent(Sender : ICDocuments; SessionID : Integer; CenterName, FromUserID, FromUserName : string;
+  Param : Variant);
+begin
+  // if MasterData.BrowseMode then bFresh_Click(tbRefresh);
+  if GetSessionID() <> SessionID then
+    MasterData.Refresh();
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i, FormHeight : Integer;
+begin
+  MakeInterface(tbrData, Nobody, dbgData);
+  miDocMove.Visible := GetUDASet('viewdocmove');  
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+  if IsNil(Users) then
+    Users := CreateObject('—правочники.ѕользователи');
+  if Users.FindByField('UniID',GetUserID, False) then
+    begin
+      if VarAsBool(Users.@–егион.IsFocused) and VarAsBool(Users.ќтборѕо–егиону) then
+        MasterData.SetFieldFilter('–егион','=',Users.–егион,'','',Null);
+      if VarAsBool(Users.ќтборѕоѕользователю) then
+        MasterData.SetFieldFilter('ќтветственный','=',Users.—лужащий,'','',Null);
+      pPays.Enabled := not(Users.Ѕлокировкаѕлатежей);
+    end;
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+// ChildPaysIn.OpenFormInplace('—писокѕодчиненныхѕлатежей', CtrlToVar(pPaysIn));
+  ChildPaysOut.OpenFormInplace('—писокѕодчиненныхѕлатежей', CtrlToVar(pPaysOut));
+  if VarAsBool(Options.GetServerPrm(RefreshOpt)) then
+    MasterData.RegEventReceiver(evNakladn, EntryPoint(ReceiveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  sgPaysData.Cells[0,0] := 'ѕартнер';
+  sgPaysData.Cells[1,0] := '—умма';
+  LockCh := True;
+  MasterData.SetFieldFilter('ќтпуск','=',1,'','',Null);
+  MasterData.Refresh; 
+  GetPrintersList(PrintList, edPrinters, MasterData.GetSign);
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  if LockCh then
+    begin
+      MasterData.SetDocStateRange(Newtab - 1);
+      MasterData.Select;
+    end;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+var
+  V : ICProcessing;
+  PrinterName: String;
+begin
+  V := CreateObject('ќбработки.ѕеч”нив∆урнала');
+  V.PrintForm('ѕеч”нив∆урнала—“ипом»¬алютой', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData)
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      V := CreateObject('ќбработки.ѕеч”нивјкт');
+      V.PrintForm('ѕеч”нивјкт', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc())
+    end;
+end;     
+
+procedure btnPrint_Click(Sender: TObject);
+var
+  PrinterName: String;
+  ObjTag : Integer;
+begin
+  if MasterData.IsFocused then
+    begin
+      if MasterData.GetDocSign = 'Ќачисление«арплаты' then
+        begin
+          if Sender.ClassName = 'TO4ToolButton' then
+            ObjTag := (Sender as TO4ToolButton).Tag;
+          if Sender.ClassName = 'TO4MenuItem' then
+            ObjTag := (Sender as TO4MenuItem).Tag;
+          if pPrintPrm.Visible then
+            PrinterName := PrintList.GetStr(edPrinters.ItemIndex);
+          PrintFormsTbl.SortBy('Ќом—троки');
+          if PrintFormsTbl.Find(ObjTag) then      
+            MasterData.GetDoc.PrintForm(PrintFormsTbl.ѕеч‘орма,PreView, Null);
+      //      PrintOnUserDevice('ќбработки.ѕеч”нивЌакладна€ќтпуска', PrintFormsTbl.ѕеч‘орма, PrinterName, MasterData.GetDoc, PreView);
+        end
+      else
+        ShowMessage('ƒл€ этого документа печать не предусмотрена.');  
+   end;
+end;
+
+
+//печать с выбором фирмы, дл€ одновременной работы у других печ. форм нужно добавл€ть MasterData := Form.GetParams[0]
+
+procedure pmiPrintOne1_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+begin
+  dialog := CreateObject('ќбработки.¬ыбор‘ирмы');
+  dialog.Execute('¬ыбор‘ирмы', MasterData.GetDoc());
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if (MasterData.ќплачено¬ал > 0) and (MasterData.ќплачено¬ал < MasterData.—умма¬ал) then
+        Index1 := 8
+      else
+        if (MasterData.ќплачено¬ал > 0) and (MasterData.ќплачено¬ал > MasterData.—умма¬ал) then
+          Index1 := 7
+        else
+          if (MasterData.ќплачено¬ал > 0) and (MasterData.ќплачено¬ал = MasterData.—умма¬ал) then
+            Index1 := 6;
+      if MasterData.GetDocState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9;
+    end;
+end;
+
+
+procedure sgOrder_GetCellProps(Sender : TObject; aCol, aRow : Integer; aFont : TFont;
+  var Background : TColor; var CellAlignment : TAlignment;
+  var Layout : TTextLayout;
+  var WrapText : Boolean; Selected, Fixed, Highlight : Boolean);
+begin
+  if (aCol > 0) and (aRow > 0) then
+    CellAlignment := taRightJustify;
+  case aRow of
+    0 :
+      CellAlignment := taCenter;
+    1 :
+      aFont.Color := clBlue;
+    2 :
+      aFont.Color := clGreen;
+    3 :
+      aFont.Color := clRed;
+  end;
+end;
+
+procedure dbgData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+//
+end;
+
+procedure sgPaysData_GetCellProps(Sender: TObject; ACol, ARow: integer; AFont: TFont;var Background: TColor; var CellAlignment: TAlignment; var Layout: TTextLayout; var WrapText: boolean;Selected, Fixed, Highlight: boolean);
+begin
+  if (aCol > 0) and (aRow > 0) then
+    CellAlignment := taRightJustify;
+  case aRow of
+    0 :
+      CellAlignment := taCenter;
+    else
+      if StrToDec(sgPaysData.Cells[1,aRow]) >= 0 then
+        aFont.Color := clGreen
+      else
+        aFont.Color := clRed;
+  end;
+end;
+
+{$D+}
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure GetPaysData(Doc: ICDocuments);
+var
+  i: Integer;
+begin
+  AccsPart.ClearFieldBuffers;
+  AccsPart.ClearFieldFilters;
+  sgPaysData.RowCount := 2;
+  if Doc.GetSign = 'Ќачисление«ѕ' then
+    begin
+      i := Doc.LinesCount;
+      sgPaysData.RowCount := i + 1;
+      Doc.SelectLines;
+      i := 1;
+      while Doc.SelectNextLine do
+        begin
+          AccsPart.CalcGroupRestDirect(RoundDate(CurrentDate,rdDay,true)-0.0001,Doc.@—лужащий);
+          sgPaysData.Cells[1,i] := DecToStr(AccsPart.—умќбщ¬ал,2);
+          sgPaysData.Cells[0,i] := Doc.—лужащий.ѕолноеЌазвание;
+          Inc(i);
+        end;
+    end
+  else
+    begin
+      i := 1;
+      AccsPart.CalcGroupRestDirect(RoundDate(CurrentDate,rdDay,true),Doc.@ѕартнер);
+      sgPaysData.Cells[1,i] := DecToStr(AccsPart.—умќбщ¬ал,2);
+      sgPaysData.Cells[0,i] := Doc.ѕартнер.ѕолноеЌазвание;
+    end;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+var
+  MyDocName : string;
+begin
+  if MasterData.IsFocused then
+    begin
+      MyDocHasOwner := False;
+      MyDocName := Trans(server.OrderAfterScroll(MasterData)); //,MyDocHasOwner 
+      tsState.SecondSelect := MasterData.GetDocState + 1;
+      GetPaysData(MasterData.GetDoc);
+    end
+  else
+    tsState.SecondSelect := -1;
+  ReturnFocusToGridForWindowsVista(dbgData);
+end;
+
+procedure pmiPrintStore_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      V := CreateObject('ќбработки.ѕеч”нивјкт');
+      V.PrintForm('', not VarAsBool(Options.GetServerPrm(DirectPrint)), MasterData.GetDoc())
+    end;
+end;
+
+procedure miCopyDoc_Click(Sender : TObject);
+var
+  OldDoc, NewDoc : ICDocuments;
+begin
+  if (not MasterData.IsFocused) then
+    exit;
+  OldDoc := MasterData.GetDoc();
+  NewDoc := CreateObject('ƒокументы.' + OldDoc.GetSign);
+  NewDoc.Params['OldDoc'] := OldDoc;
+  case OldDoc.GetSign of
+    'јктЌаќказание”слуг' :
+       NewDoc.EditInForm('јктЌаќказание”слуг', 0);
+    'јктЌаѕолучение”слуг' :
+       NewDoc.EditInForm('јктЌаѕолуч”слуг', 0);
+  end;
+  MasterData.Refresh;
+  MasterData.FindDoc(NewDoc);
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  LockCh := False;
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  LockCh := True;
+end;
+
+procedure DBMemo1_Exit(Sender : TObject);
+begin
+  MasterData.GetDoc.Edit;
+  MasterData.GetDoc.«аметки := MasterData.«аметки;
+  MasterData.GetDoc.Post;
+end;
+
+procedure pmiExportExcel_Click(Sender : TObject);
+begin
+  ExportGoodsDocToExcel(MasterData.GetDoc, dtAct);
+end;
+
+procedure miAddActs_Click(Sender : TObject);
+begin
+  AddDocsToJournal('јктЌаќказание”слуг;јктЌаѕолучение”слуг', MasterData, Null);
+end;
+
+procedure ToolButton1_Click(Sender: TObject);
+begin
+  ChildPaysOut.Refresh;
+end;
+
+procedure tbAdd_Click(Sender: TObject);
+begin
+  MasterData.UserTypesToAdd := 'јктЌаќказание”слуг'
+end;
+
+
+procedure btSaveActivPrinter_Click(Sender: TObject);
+var
+  PrinterName: String;
+begin
+  PrinterName := PrintList.GetStr(PrintList.CurIndex);
+  SaveUserActivePrinter(PrinterName, MasterData.GetSign);
+//  Options.SetServerPrm('јктивныйѕринтер' + MasterData.GetSign + Form.Caption, PrinterName);
+end;
+
+procedure DBComment_Exit(Sender: TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData, '«аметки');
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('ќбработки.ƒвижениеѕоƒокументу');
+      P.Execute('ƒвижениеѕоƒокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('ќбработки.»нфо»зменений');
+  V.Execute('»нфо»зменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+btnPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tsState:TO4TabSet
+pPrintPrm:TO4Panel
+Label4:TO4Label
+btSaveActivPrinter:TO4Button
+edPrinters:TO4Edit
+Panel2:TO4Panel
+pPays:TO4Panel
+Label2:TO4Label
+nbPays:TO4Notebook
+pPaysIn:TO4Panel
+pPaysOut:TO4Panel
+Panel3:TO4Panel
+Label1:TO4Label
+sgPaysData:TO4StringGrid
+Panel5:TO4Panel
+Label5:TO4Label
+dbComment:TO4DBMemo
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+miCopyDoc:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrint:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem
+pmPrintForms:TO4PopupMenu
+miPrinForm1:TO4MenuItem
+miPrinForm2:TO4MenuItem
+miPrinForm3:TO4MenuItem
+miPrinForm4:TO4MenuItem
+miPrinForm5:TO4MenuItem
+miPrinForm6:TO4MenuItem
+miPrinForm7:TO4MenuItem
+miPrinForm8:TO4MenuItem
+miPrinForm9:TO4MenuItem
+miPrinForm10:TO4MenuItem

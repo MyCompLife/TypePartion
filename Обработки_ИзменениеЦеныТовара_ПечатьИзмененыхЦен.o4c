@@ -1,0 +1,126 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, –абота—ѕеременными, ƒополнительный‘ункционал;
+
+implementation 
+Var MasterProc : ICProcessing;
+    ContentsTbl : ICValueTable;
+    GoodDic : ICDictionary;
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  MasterProc := Mean; 
+  GoodDic := CreateObject('—правочники.“овары');
+  ContentsTbl := CreateObject('“аблица«начений');
+  ContentsTbl.AddColumn('Ќом—троки', vtcInteger, 0);
+  ContentsTbl.AddColumn(' од', vtcInteger, 0);
+  ContentsTbl.AddColumn('“овар', vtcLink, 0);
+  ContentsTbl.AddColumn('≈д»зм', vtcLink, 0);
+  ContentsTbl.AddColumn('¬х÷ена', vtcFFT, 7);
+  ContentsTbl.AddColumn('÷ена', vtcFFT, 7);
+  ContentsTbl.AddColumn('ќпт÷ена', vtcFFT, 7);
+  ContentsTbl.AddColumn(' рќпт÷ена', vtcFFT, 7);
+  ContentsTbl.oPEN;
+  ContentsTbl.SetColumnFormat('¬х÷ена;÷ена;ќпт÷ена; рќпт÷ена','0.00#####');
+
+  Params.Select;
+  while VarAsBool(Params.selectNext) do
+    begin
+      ContentsTbl.Append;
+      ContentsTbl.AssignFields('“овар;¬х÷ена',Params);
+      ContentsTbl._Default[VArAsStr(Params.“ип÷ены)] := Params.÷ена—пр;
+      ContentsTbl.Post;
+    end;
+  ContentsTbl.GroupBy('“овар;¬х÷ена','÷ена;ќпт÷ена; рќпт÷ена');
+  ContentsTbl.DoGetLinks(' од=“овар. од;≈д»зм=“овар.≈д»зм');
+  ContentsTbl.SortBy('“овар');
+  ContentsTbl.DoNumbering('Ќом—троки',1,1);
+  ContentsTbl.Select;
+  ContentsTbl.UseDataSource(CtrlToVar(TVS));
+  ContentsTbl.selectFirst;
+end;
+
+
+function BarCodeExist(Good:ICDictionary; var BarCode:string; Quit:boolean=false):boolean;
+Var
+  UseMultiBarCode : Boolean;
+  BarCodeDic : ICDictionary;
+
+begin
+ BarCode := '';
+ UseMultiBarCode := VarAsBool(GetConstants.»спльзоватьћультиЎтрих одыƒл€“оваров);
+ BarCodeDic := CreateObject('—правочники.Ўтрих оды“оваров');
+
+ if UseMultiBarCode then
+   begin
+     if BarCodeDic.UseMasterAndSelect(Good) and BarCodeDic.FindByField('јктивность', true, false) then
+       BarCode := BarCodeDic.CodeField
+     else
+       BarCode := Good.Ўтрих од;
+   end
+ else
+   BarCode := Good.Ўтрих од;
+ Result := BarCode<>'';
+ if not (Result or Quit) then
+   ShowMessage('” товара "'+Good.NameField+'" нет штрих-кода');
+end;
+
+
+procedure tbChangeInPrice_Click(Sender: TObject);
+var
+    i:integer;
+    PrinterName, BarCode : string;
+    V: ICProcessing;
+begin
+ if ContentsTbl.IsFocused then
+   begin
+      PrinterName := GetPrintNameForCurPrintForm('ѕечать÷енника–ћ');
+      if PrinterName<>'' then
+        SetActivePrinter(PrinterName);
+      V:= CreateObject('ќбработки.ѕечатьЎтрих одов»÷енников');
+
+      if BarCodeExist(ContentsTbl.“овар,BarCode) then
+        V.PrintForm('ѕечать÷енника–ћ58мм',true,ArrayOf(ContentsTbl.“овар,BarCode));
+   end
+end;
+
+procedure tbChangeAllInPrice_Click(Sender: TObject);
+var
+    i:integer;
+    PrinterName, BarCode : string;
+    V: ICProcessing;
+    RecId : Double;
+begin
+ if ContentsTbl.LineCount<>0 then
+   begin
+      PrinterName := GetPrintNameForCurPrintForm('ѕечать÷енника–ћ');
+      if PrinterName<>'' then
+        SetActivePrinter(PrinterName);
+      V:= CreateObject('ќбработки.ѕечатьЎтрих одов»÷енников');
+      RecID := ContentsTbl.RecID;
+
+      ContentsTbl.UseDataSource(Null);
+      ContentsTbl.Select;
+      While ContentsTbl.SelectNext do
+        if (BarCodeExist(ContentsTbl.“овар,BarCode)) then
+          V.PrintForm('ѕечать÷енника–ћ58мм',true,ArrayOf(ContentsTbl.“овар,BarCode));
+      ContentsTbl.Select;
+      ContentsTbl.UseDataSource(CtrlToVar(TVS));
+      ContentsTbl.FindByRecID(RecID);
+   end
+
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ToolBar1:TO4ToolBar
+tbChangeInPrice:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbChangeAllInPrice:TO4ToolButton
+dbgData:TO4DBGrid
+TVS:TO4TableValueSource
+pmData:TO4PopupMenu
+miChangeInPrice:TO4MenuItem
+miChangeAllInPrice:TO4MenuItem

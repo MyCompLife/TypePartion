@@ -1,0 +1,224 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, РаботаСДокументамиВЖурналах, Пользователи;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  ICtg, OwnerPartner : ICDictionary;
+  DocRange : string;
+  Partner : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  ICtg := CreateObject('Справочники.КатегорииПлатежей');
+  ICtg.Params['ChildJournal'] := MasterData;
+  ICtg.IncludeOnlyLevels(True);
+  ICtg.OpenFormInplace('Категории', CtrlToVar(pnlCtg));
+end;
+
+procedure GetTotalSums;
+var
+  V : Variant;
+begin
+  MasterData.SrvAssignClientSelectParams;
+  V := server.GetTotalSumsSrv(MasterData.SrvMean);
+  lSum.Caption := FormatFloat('0.00', V);
+  if V < 0 then
+    lSum.Font.Color := clRed
+  else
+    lSum.Font.Color := clNavy;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  i : Integer;
+  Partner : Variant;
+begin
+  miDocMove.Visible := GetUDASet('viewdocmove');
+  MasterData.SetDocTypeRange(DocRange);
+  MasterData.Select;
+  GetTotalSums;
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure tbPrint_Click(Sender : TObject);
+begin
+  MasterData.PrintForm('ПечУнивЖурналаСТипом', False, 0, Null)
+end;
+
+procedure pmiPrintOne_Click(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    MasterData.GetDoc.PrintForm('', False, Null)
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  case StrLowerCase(MasterData.GetDocSign) of
+    'приходнарасчсчет' :
+      Index1 := 13;
+    'расходсрасчсчета' :
+      Index1 := 14;
+    'трансферсрасчсчета' :
+      Index1 := 17;
+    'трансфернарасчсчет' :
+      Index1 := 18;
+  end;
+  if MasterData.GetDocState > 0 then
+    Index2 := 10
+  else
+    Index2 := 9;
+end;
+
+procedure dbgData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if MasterData.IsFocused and (MasterData.Сумма < 0) then
+    DrawFont.Color := clRed;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  case StrLowerCase(ProcID) of
+    'dontuselevel' :
+      begin
+        MasterData.CancelFieldFilter('Категория');
+        MasterData.Refresh;
+      end;
+    'levelchanged', 'usenolevel' :
+      begin
+        MasterData.SetFieldFilter('Категория', '=', InParams, '', Null, '');
+        MasterData.Refresh;
+      end
+  end;
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  GetTotalSums;
+end;
+
+procedure MDS_Select(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  OwnerMean : Variant;
+begin
+  if VarAsBool(Params.IsType('Документы')) then
+    case VarAsStr(Params.GetSign) of
+      'НовАвансовыйОтчет' :
+        begin
+          DocRange := '';
+          MasterData.UseMaster(Params);
+          if VarAsBool(Params.@Партнер.IsFocused) then
+            MasterData.SetRangeByField('Партнер', Params.@Партнер);
+        end
+      else
+        if VarAsBool(Params.HasParam('OwnerMean')) then
+          begin
+            OwnerMean := Params.Params['OwnerMean'];
+            DocRange := 'Документы.' + Params.GetSign;
+            if VarAsBool(OwnerMean.HasField('Партнер')) and VarAsBool(OwnerMean.@Партнер.IsFocused) then
+              MasterData.SetRangeByField('Партнер', OwnerMean.Партнер)
+            else
+              begin
+                Params := Params.Owner;
+                if VarAsBool(Params.IsFocused) then
+                  MasterData.SetRangeByField('Партнер', Params);
+              end;
+          end;
+    end;
+end;
+
+procedure miCopyDoc_Click(Sender : TObject);
+begin
+  AddDocByTemplate(MasterData);
+end;
+
+procedure dmNotes_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData, 'Комментарий');
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+pnlCtg:TO4Panel
+Panel1:TO4Panel
+Splitter2:TO4Splitter
+Panel4:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tsState:TO4TabSet
+Panel5:TO4Panel
+dmNotes:TO4DBMemo
+Panel2:TO4Panel
+Panel3:TO4Panel
+Label1:TO4Label
+lSum:TO4Label
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+miCopyDoc:TO4MenuItem
+pmiEdit:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+MenuItem2:TO4MenuItem
+miSort:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem4:TO4MenuItem
+miRefresh:TO4MenuItem
+MDS:TO4DataSource
+miDocMove:TO4MenuItem

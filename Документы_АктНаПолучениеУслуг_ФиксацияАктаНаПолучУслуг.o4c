@@ -1,0 +1,117 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, ФиксацияCL, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, Пользователи, НумерацияДокументов, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  FullName : string;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, '', UniFix, FixAck);
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments); 
+var 
+  PayDoc: ICDocuments;  
+  Currency: ICDictionary;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+begin
+  case Doc.GetDocState of
+    1 :
+      begin
+        if not Doc.RunThreadProcess(server.GetChangeStateUpEP, UniFixProgress + FullName) then
+          raise(emsgFixFail); 
+        ChangeDoc(clmtStateUp, Doc);
+        if MessageDlg('Создать документ проплаты автоматически?',mtConfirmation,ArrayOf(mbYes,mbNo))= mrYes then
+          begin
+            PayDoc := CreateObject('Документы.РасходИзКассы');
+            PayDoc.Select;
+            PayDoc.Append;
+                
+            Constants := GetConstants;
+            Options := GetOptions;
+            Currency := CreateObject('Справочники.Валюты');
+
+            if not Currency.FindByField('Активность', VarAsInt(True), True) then
+              Currency := GetNatCurrency(Currency);
+            if Currency.IsFocused then
+              begin
+                PayDoc.Курс := Currency.GetTimedValue(Constants.UsedCurs, PayDoc.ДатаДокумента);
+                PayDoc.Валюта := Currency;
+              end;
+            PayDoc.Ответственный := GetEmplByName(GetUserName);
+            PayDoc.Взаиморасчет := VarAsInt(True);
+            PayDoc.ЕстьНДС := VarAsInt(True);
+            PayDoc.СтавкаНДС := Constants.ProcentPDV;
+
+            //Для обработки в бух.учете
+            PayDoc.AppendLine();
+            PayDoc.PostLine();
+
+            PayDoc.SetMaster(Doc);
+            PayDoc.Курс := Doc.Курс;
+            PayDoc.Валюта := Doc.Валюта;
+            PayDoc.СуммаВВалюте := server.СформироватьПлатежПоДокументу(Doc);
+            PayDoc.Сумма := PayDoc.Курс*PayDoc.СуммаВВалюте;
+            SetSums('Сумма', PayDoc.Сумма, PayDoc, Constants.ProcentPDV); //расчеты
+            PayDoc.Комментарий := 'Оплата згідно акта №' + Doc.НомерДокумента + ' від ' + DateToStr(Doc.ДатаДокумента);
+            PayDoc.Партнер := Doc.Партнер;
+            PayDoc.Регион := GetUsersField('Регион');
+            PayDoc.Касса := GetUsersField('Касса');
+            PayDoc.BaseID := VarAsInt(Constants.КодИБ);
+            if PayDoc.BaseID = 0 then
+               raise('Заполните код информационной базы в значениях важных констант');
+            PayDoc.NumID := УстановитьНомерДокумента(PayDoc, '');
+            PayDoc.Post;
+            PayDoc.ApplyUpdates;
+            PayDoc.StateUp;
+          end;
+      end;
+    2 :
+      ;
+  end;
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, '', UniUnFix, FixAck);
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin
+ ChangeDoc(clmtStateDown, Doc);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin    
+  FullName := CanFixDel(Doc, Accept, '', UniDel, DelAck, CheckChildPayDoc);  
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure CanChangeBuhStateUp(Doc : ICDocuments; var Accept : Boolean);
+begin
+  if (not Doc.ISGroupAction) or (Doc.FirstInGroupAction) then
+    begin
+      Doc.BuhWizard := CreateObject('БухУчет.БухУчет').CreateWizard();
+      Accept := Doc.BuhWizard.OpenAskForm(Doc);
+    end
+  else
+    Accept := Doc.BuhWizard.AsceptUp;
+end;
+
+procedure DoChangeBuhStateUp(Doc : ICDocuments);
+begin
+  //первое событие
+//  CreateSrvBuhObjects(Doc);
+  //первое событие
+//  Doc.BuhWizard.DocStateUp(Doc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

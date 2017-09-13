@@ -1,0 +1,24 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  PaysOut : ISJournal;
+
+procedure OrderCalcFields(Order : ISJournal);
+begin
+  Order.ƒолжны := Order.—умма¬ал - Order.ќплачено;
+  Order.ƒолжны¬ал := Order.—умма¬ал - Order.ќплачено¬ал;
+end;
+
+function GetCalcEP(Order : ISJournal) : Variant; server;
+begin
+  PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  Order.SetCalcFieldInDBServer(ArrayOf(PaysOut), ArrayOf('ќплачено', '—умма¬¬алюте'), ArrayOf('1;2'));
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+end.

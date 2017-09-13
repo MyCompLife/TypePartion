@@ -1,0 +1,61 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, ФиксацияПрибылиИЗатрат,
+  РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+implementation
+
+var
+  AccPart, AccsGoodByInv, AccSt : ISAccs;
+  Constants : IS4VPAConst;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+begin
+  //взаиморасчеты с партнерами
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  while Doc.SelectNextLine do
+    begin
+      AccPart.ClearFieldBuffers();
+      AccPart.Партнер := Doc.@Служащий;
+      AccPart.Валюта := Doc.@Валюта;
+      AccPart.СумРасхВал := Doc.СуммаСтрокиВал;
+      AccPart.СумОбщВал := Doc.СуммаСтрокиВал;
+      AccPart.Outcome(Doc, Doc.GetDate(), Doc.НомСтроки);
+     // отправка сообщения клиенту
+     if Count mod 10 = 0 then
+       Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+     if Doc.Terminated then
+       break;
+     inc(Count);
+    end;
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.

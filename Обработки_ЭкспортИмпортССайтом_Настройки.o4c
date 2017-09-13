@@ -1,0 +1,129 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, УстановкаКонстант, Расчеты, РаботаСОбъектами, РаботаСТаблицамиЗначений, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  TblLang: ICValueTable;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var i: Integer;
+begin
+  Constants := CreateObject('Константы');
+  cbIntegrate.Checked := Constants.ИнтеграцияССайтом;
+  TblLang := CreateObject('ValueTable');
+  TblLang.AddColumn('Код',vtcString,3);
+  TblLang.AddColumn('Название',vtcString, 25);
+  TblLang.AddColumn('Активность',vtcInteger,0);
+  TblLang.Open;
+  TblLang.SortBy('-Активность;Название');
+  if StrLength(Constants.ТаблицаЯзыков) > 0 then
+    for i := 1 to WordCount(Constants.ТаблицаЯзыков,'|') do
+      begin
+        TblLang.Append;
+        TblLang.Код := ExtractWord(1,ExtractWord(i,Constants.ТаблицаЯзыков,'|'),';');
+        TblLang.Название := ExtractWord(2,ExtractWord(i,Constants.ТаблицаЯзыков,'|'),';');
+        TblLang.Активность := VarAsInt(ExtractWord(3,ExtractWord(i,Constants.ТаблицаЯзыков,'|'),';'),0);
+        TblLang.Post;
+      end;
+  TblLang.UseDataSource(ctrlToVar(TVS));
+end;
+
+procedure btnOK_Click(Sender : TObject);   
+var LangStr: String;
+begin             
+  if cbIntegrate.Checked and (TblLang.LineCount = 0) then
+    raise('Добавьте активный язык!');
+  if cbIntegrate.Checked and (TblLang.LineCount > 0) and not TblLang.Find(1) then
+    raise('Не выбран активный язык!');
+  Constants.ИнтеграцияССайтом := cbIntegrate.Checked;
+  TblLang.Select;
+  while TblLang.SelectNext do
+    LangStr := LangStr + TblLang.Код + ';' + TblLang.Название + ';' + IntToStr(TblLang.Активность) + '|';
+  StrDelete(LangStr,StrLength(LangStr),1);
+  Constants.ТаблицаЯзыков := LangStr;
+  ShowMessage(AboutConst);
+  Form.ModalResult := mrOk;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if TblLang.IsFocused and (TblLang.Активность = 1) then
+    Index1 := 36;
+end;
+{$D+}
+
+procedure tbAdd_Click(Sender: TObject);   
+var V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ЭкспортИмпортССайтом');
+  V.Execute('ВыборЯзыка',null);
+  if V.HasParam('lang') then
+    begin
+      TblLang.DisableControls;
+      TblLang.SortBy('Код');
+      if not TblLang.Find(ExtractWord(1,V.Params['lang'],'|')) then
+        begin
+          TblLang.Append;
+          TblLang.Код := ExtractWord(1,V.Params['lang'],'|');
+          TblLang.Название := ExtractWord(2,V.Params['lang'],'|');
+          TblLang.Post;
+        end;
+      TblLang.EnableControls;
+    end;
+  TblLang.SortBy('-Активность;Название');
+  TblLang.SelectFirst;
+end;
+
+procedure tbDel_Click(Sender: TObject);
+begin
+  if TblLang.IsFocused then
+    TblLang.Delete;
+end;
+
+procedure miActive_Click(Sender: TObject);
+var code: String;
+begin
+  TblLang.DisableControls;
+  if TblLang.IsFocused then
+    begin
+      code := TblLang.Код;
+      TblLang.Select;
+      while TblLang.SelectNext do
+        begin
+          TblLang.Edit;
+          if TblLang.Код <> code then
+            TblLang.Активность := 0
+          else
+            TblLang.Активность := 1;
+          TblLang.Post;
+        end;
+    end;
+  TblLang.EnableControls;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label1:TO4Label
+cbIntegrate:TO4CheckBox
+dbgData:TO4DBGrid
+tbrCtg:TO4ToolBar
+tbAdd:TO4ToolButton
+tbDel:TO4ToolButton
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+TVS:TO4TableValueSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miDel:TO4MenuItem
+MenuItem3:TO4MenuItem
+miActive:TO4MenuItem

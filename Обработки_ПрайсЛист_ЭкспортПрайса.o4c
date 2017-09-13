@@ -1,0 +1,1030 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+Var
+  V : IcProcessing;
+  SLst, ELst : ICValueList;
+  GoodCtg : IcDictionary;
+  Opt : ICOptions;
+  StrPrices : String;
+  CategoryList : IcValueList;
+  UseConst : IC4VPAConst;
+  LogoTbl : IcValueTable;
+  MyFirm : IcDictionary;
+ 
+procedure Form_Show(Sender: TObject);
+begin
+  PageControl.ActivePage := tsTitle;
+  PageControl.ActivePage := tsShape;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+Var
+  strFilter, CtgsStr : String;
+  i : integer;
+  OutPrm : Variant;
+  StoresDic, EmailDic, MasterDic : IcDictionary; 
+  EmailTbl : IcValueTable;
+begin
+  V := Mean;
+  Opt := GetOptions;
+  UseConst := GetConstants;
+  LogoTbl := CreateObject('ValueTable');
+  MyFirm := CreateObject('Справочники.ВашеПредприятие');
+  MyFirm.Select;
+  MyFirm.SelectNext;
+  LogoTbl.AddColumn('Логотип', vtcBlob,0);
+  LogoTbl.Open;
+  LogoTbl.Append;
+  LogoTbl.Логотип := MyFirm.Логотип;
+  LogoTbl.Post;
+  LogoTbl.Select;
+  LogoTbl.UseDataSource(CtrlToVar(TVSLogotip));
+  LogoTbl.SelectFirst;
+  eTitle.Text := VarAsStr(UseConst.ЗаголовокДляПрайса);
+  mAdress.Text := UseConst.АдресДляПрайса;
+  mGrafik.Text := UseConst.ГрафикДляПрайса;
+  mContacts.Text := UseConst.КонтактыДляПрайса;
+
+  cbSendEmail.Checked := VarAsBool(Opt.GetServerPrm('SendEmailOnPriceList'));
+  cbShowCount.Checked := VarAsBool(Opt.GetServerPrm('ShowCountOnPriceList'));
+  cbLoadPhoto.Checked := VarAsBool(Opt.GetServerPrm('ShowPictureGoodOnPriceList'));
+
+
+
+
+  strFilter := Opt.GetServerPrm('StoresFilterOnPriceList');
+  SLst := CreateObject('СписокЗначений');
+  StoresDic := CreateObject('Справочники.Склады');
+  StoresDic.Select;
+  while StoresDic.SelectNext do
+    begin
+     
+      SLst.AddValue(StoresDic.NameField, StoresDic);
+      i := cbStores.Items.Add(StoresDic.CodeField + ' ' + StoresDic.NameField);
+      if StrPos(StoresDic.CodeField + ' ' + StoresDic.NameField, strFilter) > 0 then
+        cbStores.Checked[i] := true;
+    end;
+
+  ELst := CreateObject('СписокЗначений');
+  EmailDic := CreateObject('Справочники.Email');
+  EmailDic.SetFieldFilter('ВклВРозсылку','=',True,'','',Null);
+  EmailDic.Select; 
+  while EmailDic.SelectNext do
+    begin
+      ELst.AddValue(EmailDic.CodeField, EmailDic);
+      i := clbEmails.Items.Add(VarAsStr(EmailDic.Описание)+' - '+ EmailDic.CodeField);
+      clbEmails.Checked[i] := true;
+    end;
+
+{
+  while EmailDic.SelectNext do
+    begin
+      if IsObjFocused(EmailDic._GetOwner) then
+        begin
+//          MasterDic := EmailDic._GetOwner;
+          ELst.AddValue(EmailDic.CodeField, EmailDic);
+//          i := clbEmails.Items.Add(VarAsStr(MasterDic.ПолноеНазвание)+' - '+ EmailDic.CodeField);
+          i := clbEmails.Items.Add(VarAsStr(EmailDic.Описание)+' - '+ EmailDic.CodeField);
+        end
+      else
+        begin
+          ELst.AddValue(EmailDic.CodeField, EmailDic);
+//          i := clbEmails.Items.Add(VarAsStr(MasterDic.ПолноеНазвание)+' - '+ EmailDic.CodeField);
+          i := clbEmails.Items.Add(VarAsStr(EmailDic.Описание)+' - '+ EmailDic.CodeField);
+        end;
+      clbEmails.Checked[i] := true;
+    end;
+}
+
+  cbPrice1.Checked := False;
+  cbPrice2.Checked := False;
+  cbPrice3.Checked := False;
+  StrPrices := Opt.GetServerPrm('PricesFilterOnPriceList');
+  for i:=1 to WordCount(StrPrices,';') do
+    case ExtractWord(i,StrPrices,';') of
+      'Цена': cbPrice1.Checked := True;
+      'ОптЦена': cbPrice2.Checked := True;
+      'КрОптЦена': cbPrice3.Checked := True;
+    end;
+
+  CtgsStr := Opt.GetServerPrm('CategoryFilterOnPriceList');
+  GoodCtg := CreateObject('Справочники.Товары');
+  GoodCtg.IncludeOnlyLevels(true);
+  GoodCtg.InteractiveUseLevels := true;
+  GoodCtg.Params['CtgListID'] := CtgsStr;
+//  GoodCtg.Params['UseLevel'] := VarAsBool(Opt.GetServerPrm('CategoryFilterOnPriceList'));
+  GoodCtg.Params['UseLevel'] := true;
+
+  GoodCtg.OpenFormInplace('КатегорииТоваров',CtrlToVar(pGoodsCtg));
+  GoodCtg.Params['UseLevel'] := true;
+  GoodCtg.ExecProc(Null, '', Null, OutPrm);
+  GoodCtg.InteractiveUseLevels := true;
+
+  CategoryList := CreateObject('СписокЗначений');
+
+  eMailName.Text := VarAsStr(Opt.GetServerPrm('MailNameOnPriceList'));
+  eFolderSaves.Text := VarAsStr(Opt.GetServerPrm('FolderSavesOnPriceList'));
+
+end;
+
+procedure Form_Close(Sender: TObject);
+var 
+  i:integer;
+  strFilter, CtgsStr : String;
+  Category : IcDictionary;
+begin
+  strFilter := '';
+  for i := 0 to cbStores.Items.Count - 1 do
+    begin
+      if cbStores.Checked[i] then
+        strFilter := strFilter + cbStores.Items.Strings[i] + #13;
+    end;
+  Opt.SetServerPrm('StoresFilterOnPriceList', strFilter);
+  StrPrices := '';
+  if cbPrice1.Checked then
+    StrPrices := StrPrices+ 'Цена;';
+  if cbPrice2.Checked then
+    StrPrices := StrPrices+ 'ОптЦена;';
+  if cbPrice3.Checked then
+    StrPrices := StrPrices+ 'КрОптЦена;';
+  if StrPrices<>'' then
+    StrDelete(StrPrices,StrLength(StrPrices),1);
+  Opt.SetServerPrm('PricesFilterOnPriceList', StrPrices);
+
+  Opt.SetServerPrm('SendEmailOnPriceList', cbSendEmail.Checked);
+  Opt.SetServerPrm('ShowCountOnPriceList', cbShowCount.Checked);
+  Opt.SetServerPrm('ShowPictureGoodOnPriceList', cbLoadPhoto.Checked);
+
+
+  CtgsStr := '';
+  GoodCtg.GetCheckLevelsAsValueList(CategoryList);
+  Category := CreateObject('Справочники.Товары');
+  Category.IncludeOnlyLevels(true);
+  for i := 0 to CategoryList.Count - 1 do
+//    if Category.Find(CategoryList.GetValue(i)) then
+    if Category.FindByName(CategoryList.GetStr(i),false) then
+      CtgsStr := CtgsStr + FloatToHexStr(Category.GetUniID) + '|';
+
+  Opt.SetServerPrm('CategoryFilterOnPriceList',CtgsStr);
+  Opt.SetServerPrm('CategoryUseLevelFilterOnPriceList',VarAsBool(GoodCtg.Params['UseLevel']));
+
+  Opt.SetServerPrm('MailNameOnPriceList',eMailName.Text);
+  Opt.SetServerPrm('FolderSavesOnPriceList',eFolderSaves.Text);
+  if FileExists('C:\SendMailText.MSG') then
+    DeleteFile('C:\SendMailText.MSG');
+  LogoTbl.Select;
+  LogoTbl.SelectFirst;
+
+  MyFirm.Edit;
+  MyFirm.Логотип := LogoTbl.Логотип;
+  MyFirm.Post;
+  MyFirm.ApplyUpdates;
+  
+  UseConst.ЗаголовокДляПрайса := eTitle.Text;
+  UseConst.АдресДляПрайса := mAdress.Text;
+  UseConst.ГрафикДляПрайса := mGrafik.Text;
+  UseConst.КонтактыДляПрайса := mContacts.Text;
+
+end;
+ 
+procedure btLoadLogotip_Click(Sender: TObject);
+begin
+  LogoTbl.Edit;
+  if opDlg.Execute then
+    dbiLogotip.LoadFromFile(opDlg.FileName);
+  LogoTbl.Post;
+end;
+
+Function GetFileName:String;
+var
+  TempStr : String;
+Begin
+  Result := 'PriceList';
+  TempStr := DateToStr(CurrentDate);
+  While StrPos('.',TempStr)<>0 do
+    StrDelete(TempStr,StrPos('.',TempStr),1);
+  Result := Result+TempStr;
+  TempStr := TimeToStr(CurrentTime);
+  While StrPos(':',TempStr)<>0 do
+    StrDelete(TempStr,StrPos(':',TempStr),1);
+  Result := Result+TempStr+'.xls';
+end;
+
+procedure btnBrowse_Click(Sender: TObject);
+begin
+  with SAVEDIALOG do begin
+//    Filter := '*.jpg|*.jpg';
+//    FileName := '*.jpg';
+    Title := Trans('Определите путь');
+    if Execute then begin
+      eFolderSaves.Text := ExtractFilePath(FileName);
+    end;
+  end;
+end;
+
+procedure btCheckAllPart_Click(Sender: TObject);
+Var
+  i : Integer;
+begin
+  for i:= 0 to clbEmails.Items.Count-1 do
+    clbEmails.Checked[i] := VarAsBool((Sender as TO4Button).Tag);
+end;
+          
+Procedure AddPictureToExel(PicRange : Variant; PicPath : String);
+//     ==========  функция получает в качестве параметров:  ====================
+//   PicRange - прямоугольный диапазон ячеек, поверх которого будет расположено изображение
+//    PicPath - полный путь к файлу картинки (файл в формате JPG, BMP, PNG, и т.д.)
+// Вставка коректно працюэ на 2007 Excel і нижче. На вищих версіях кидає ссилку на картінку і при видалені даної картінки
+// чи перенесені файла на інший компютер картінки відображатись не будуть
+Var
+  ph : Variant;
+Begin
+   if FileExists(PicPath) then
+   begin
+//     ph := PicRange.Parent.Pictures.Insert(PicPath);
+     ph := PicRange.Parent.Shapes.AddPicture(PicPath,false,true,PicRange.Top + 5,PicRange.Left + 5,PicRange.Width - 10,PicRange.Height - 10);
+
+     ph.Top := PicRange.Top + 5;
+     ph.Left := PicRange.Left + 5;
+     ph.Width := PicRange.Width - 10;
+     ph.Height := PicRange.Height - 10;
+     ph.Placement := 1;
+
+   end;
+end;
+
+
+
+procedure btSendPriceList_Click(Sender: TObject);
+Var
+  StoreLst : IcValueList;
+  i : Integer;
+  TblGoods, TblCtg, TblCtgG : IcValueTable;
+  Course : Decimal;
+  Currency, CurrencyTmp : IcDictionary;
+  Excel, WorkBook, WorkSheet, TrgRange, TrgRange1, TrgRange2, Target, AddModule, RangeGroup, ph, PicRange: Variant;
+  Total, Count, GoodCount, Line, j : Integer;
+  PriceCount : Integer;
+  DataDir, FileName, Comanda : String;
+  MemoStr, MacroList : TStringList;
+  EmailList : ICValueList;
+   
+  Wsh :OleVariant;  
+  
+  GGroupCatNumb, GroupCatNumb, HeadLines, ZacazLine : Integer;
+begin
+  If eMailName.Text='' then
+    begin
+      ShowMessage('Укажите название почтового ящика!');
+      exit;
+    end;
+  If eFolderSaves.Text='' then
+    begin
+      ShowMessage('Укажите папку для сохранения прайс листов!');
+      exit;
+    end;
+
+
+
+  StrPrices := '';
+  if cbPrice1.Checked then
+    StrPrices := StrPrices+ 'Цена;';
+  if cbPrice2.Checked then
+    StrPrices := StrPrices+ 'ОптЦена;';
+  if cbPrice3.Checked then
+    StrPrices := StrPrices+ 'КрОптЦена;';
+  if StrPrices<>'' then
+    StrDelete(StrPrices,StrLength(StrPrices),1)
+  else
+    begin
+      showMessage('Не выбран ни один тип цены!');
+      Exit;
+    end;
+
+  StoreLst := CreateObject('ValueList');
+  for i := 0 to cbStores.Items.Count - 1 do
+    begin
+      if cbStores.Checked[i] then
+        StoreLst.AddValue(SLst.GetStr(i),SLst.GetValue(i));
+    end;
+  if StoreLst.Count=0 then
+    begin
+      ShowMessage('Не выбран ни один склад!');
+      exit;
+    end;
+
+
+  EmailList := CreateObject('ValueList');
+  for i := 0 to clbEmails.Items.Count - 1 do
+    begin
+      if clbEmails.Checked[i] then
+        EmailList.AddValue(ELst.GetStr(i),ELst.GetValue(i));
+    end;
+  if EmailList.Count=0 then
+    begin
+      ShowMessage('Не выбран ни один адрес для отправки!');
+      exit;
+    end;
+
+  if VarAsBool(GoodCtg.Params['UseLevel']) then
+      begin
+        GoodCtg.GetCheckLevelsAsValueList(CategoryList);
+        if GoodCtg.InteractiveUseLevels and (CategoryList.Count = 0) then
+           begin
+             ShowMessage('У вас выбран режим Просмотр с учетом категорий.' + #13#10 + 'Отметьте категории для экспорта.');
+             exit;
+           end;
+      end;
+    CategoryList.CopyDataToServer();
+
+  TblCtg := CreateObject('ValueTable');
+  TblCtgG := CreateObject('ValueTable');
+  TblGoods := CreateObject('ValueTable');
+  TblGoods.AddColumn('Товар',vtcLink,0);
+  TblGoods.AddColumn('Код',vtcString,20);
+  TblGoods.AddColumn('Название',vtcString,150);
+  TblGoods.AddColumn('КолОбщ',vtcFFt,5);
+  TblGoods.AddColumn('Категория',vtcString,255);
+  TblGoods.AddColumn('КатегорияГлн',vtcString,150);
+  TblGoods.AddColumn('Группа',vtcLink,0);
+  TblGoods.AddColumn('Валюта',vtcLink,0);
+
+  for i:=1 to WordCount(StrPrices,';') do
+    TblGoods.AddColumn(ExtractWord(i,StrPrices,';'),vtcFFt,2);
+  TblGoods.AddColumn('Фото',vtcString,150);
+  TblGoods.Open;
+
+  CurrencyTmp := CreateObject('Справочники.Валюты');
+  CurrencyTmp.Select;
+  CurrencyTmp := GetNatCurrency(CurrencyTmp);
+
+  Currency := CreateObject('Справочники.Валюты');
+  Currency.Select;
+  while Currency.SelectNext do
+    if not IsObjEQ(CurrencyTmp,Currency,false) then
+      begin
+        Course := Currency.GetTimedValue(UseConst.UsedCurs, CurrentDateTime);
+        break;
+      end;
+
+  TblGoods.CopyDataToServer;
+  StoreLst.CopyDataToServer;
+  CategoryList.CopyDataToServer;
+  server.GetExportData(TblGoods.SrvMean, StoreLst.SrvMean, CategoryList.SrvMean, StrPrices, GoodCtg.Params['UseLevel']);
+  TblGoods.CopyDataFromServer;
+  TblGoods.SrvMean.Clear;
+  if TblGoods.LineCount=0 then
+    begin
+      ShowMessage('По даной выборке товаров нет!');
+      Exit;
+    end;
+  TblGoods.GroupTo('КатегорияГлн', '', TblCtgG);
+  TblGoods.GroupTo('КатегорияГлн;Категория', '', TblCtg);
+  TblGoods.SortBy('Категория;Название');
+  TblCtgG.SortBy('КатегорияГлн');
+  TblCtg.SortBy('КатегорияГлн;Категория');
+
+  Excel := CreateOleObject('Excel.Application');
+  try
+
+
+
+    Excel.Application.SheetsInNewWorkbook := 2;
+    Excel.Application.WorkBooks.Add;
+    Excel.Interactive := False;
+    Excel.ScreenUpdating := False;
+    Excel.Visible := True;
+
+    Excel.ActiveSheet.Outline.SummaryRow := 0;
+    Excel.Application.WorkSheets[2].Name := 'Заказ';
+    Excel.Application.WorkSheets[2].Cells.Font.Size := 12;
+    Excel.Application.WorkSheets[2].Cells.Font.Name := 'Times New Roman';
+    Excel.Application.WorkSheets[2].Outline.SummaryRow := 0;
+    Excel.Application.WorkSheets[2].Columns(1).ColumnWidth := 4.14;
+    Excel.Application.WorkSheets[2].Columns(2).ColumnWidth := 13;
+    Excel.Application.WorkSheets[2].Columns(3).ColumnWidth := 50.57;
+    Excel.Application.WorkSheets[2].Columns(4).ColumnWidth := 7.43;
+    Excel.Application.WorkSheets[2].Columns(5).ColumnWidth := 12.29;
+    Excel.Application.WorkSheets[2].Columns(6).ColumnWidth := 12.29;
+    Excel.Application.WorkSheets[2].Columns(9).ColumnWidth := 0;
+
+
+    Excel.Application.WorkSheets[2].Rows(1).RowHeight := 7.5;
+    TrgRange := Excel.Application.WorkSheets[2].Range('A1:A1');
+    Line :=9;
+    if VarAsStr(LogoTbl.Логотип)<>'' then
+      begin
+        dbiLogotip.SaveToFile('C:\PriceLogo.jpg');
+        if FileExists('C:\PriceLogo.jpg') then
+          begin
+            PicRange := TrgRange.Range(TrgRange.Cells(2, 2), TrgRange.Cells(8, 3));
+            ph := PicRange.Parent.Pictures.Insert('C:\PriceLogo.jpg');
+            ph.Top := PicRange.Top + 5;
+            ph.Left := PicRange.Left + 10;
+            ph.Width := PicRange.Width - 30;
+            ph.Height := PicRange.Height - 10;
+//            ph.Placement := 1;
+            DeleteFile('C:\PriceLogo.jpg');
+          end;
+
+      end;
+    if eTitle.Text<>'' then
+      begin
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 3)).MergeCells := True;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).NumberFormat := '@';
+        TrgRange.Cells(Line, 1).Value := eTitle.Text;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Name := 'Tahoma';
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Size := 16;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Bold := 1;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).VerticalAlignment  := 2;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).HorizontalAlignment  := 3;
+        inc(Line);
+      end;
+    if mAdress.Text<>'' then
+      For i := 0 to mAdress.Lines.Count-1 do
+        begin
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 3)).MergeCells := True;
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).NumberFormat := '@';
+          TrgRange.Cells(Line, 1).Value := mAdress.Lines.Strings[i];
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Name := 'Tahoma';
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Size := 10;
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Bold := 1;
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).VerticalAlignment  := 2;
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).HorizontalAlignment  := 3;
+          inc(Line);
+        end;
+    HeadLines := Line;
+    Line := 2;
+    if mGrafik.Text<>'' then
+      begin
+        For i := 0 to mGrafik.Lines.Count-1 do
+          begin
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).MergeCells := True;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).NumberFormat := '@';
+            TrgRange.Cells(Line, 4).Value := mGrafik.Lines.Strings[i];
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Name := 'Tahoma';
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Size := 10;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Bold := 1;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).VerticalAlignment  := 2;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).HorizontalAlignment  := 3;
+            inc(Line);
+          end;
+        TrgRange.Range(TrgRange.Cells(2, 4), TrgRange.Cells(Line-1, 6)).Borders.LineStyle  := 1;
+        TrgRange.Range(TrgRange.Cells(2, 4), TrgRange.Cells(Line-1, 6)).Borders.Weight := 2;
+        TrgRange.Range(TrgRange.Cells(2, 4), TrgRange.Cells(Line-1, 6)).Borders[11].LineStyle  := 0;
+        TrgRange.Range(TrgRange.Cells(2, 4), TrgRange.Cells(Line-1, 6)).Borders[12].LineStyle  := 0;
+      end;
+    if mContacts.Text<>'' then
+      begin
+        if Line<>2 then
+          inc(Line);
+        GroupCatNumb := Line;
+        For i := 0 to mContacts.Lines.Count-1 do
+          begin
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).MergeCells := True;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).NumberFormat := '@';
+            TrgRange.Cells(Line, 4).Value := mContacts.Lines.Strings[i];
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Name := 'Tahoma';
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Size := 10;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Bold := 1;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).VerticalAlignment  := 2;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).HorizontalAlignment  := 3;
+            inc(Line);
+          end;
+        TrgRange.Range(TrgRange.Cells(GroupCatNumb, 4), TrgRange.Cells(Line-1, 6)).Borders.LineStyle  := 1;
+        TrgRange.Range(TrgRange.Cells(GroupCatNumb, 4), TrgRange.Cells(Line-1, 6)).Borders.Weight := 2;
+        TrgRange.Range(TrgRange.Cells(GroupCatNumb, 4), TrgRange.Cells(Line-1, 6)).Borders[11].LineStyle  := 0;
+        TrgRange.Range(TrgRange.Cells(GroupCatNumb, 4), TrgRange.Cells(Line-1, 6)).Borders[12].LineStyle  := 0;
+      end;
+    if HeadLines>Line then
+      Line := HeadLines;
+
+
+
+    TrgRange.Cells(Line, 1).Value := '№';
+    TrgRange.Cells(Line, 2).Value := 'Код';
+    TrgRange.Cells(Line, 3).Value := 'Название';
+
+{    if cbShowCount.Checked then
+      TrgRange.Cells(Line, 4).Value := 'К-во'
+    else
+      TrgRange.Cells(Line, 4).Value := 'Наличие';
+}
+    TrgRange.Cells(Line, 4).Value := 'К-во';
+
+    TrgRange.Cells(Line, 5).Value := 'Цена';
+    TrgRange.Cells(Line, 6).Value := 'Сумма';
+
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 6)).Font.Size := 14;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 6)).Font.Bold := 1;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 6)).VerticalAlignment := 2;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 6)).HorizontalAlignment := 3;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 6)).Borders.LineStyle  := 1;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 6)).Borders.Weight := 2;
+//    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 6)).Interior.Color := HexToInt('C3D9DD');;
+    ZacazLine := Line+1;
+    TrgRange.Cells(Line+2, 5).Value :='Всього:';
+    TrgRange.Cells(Line+2, 6).Formula := '=SUM(F'+IntToStr(ZacazLine-1)+':F'+IntToStr(ZacazLine)+')';
+    TrgRange.Range(TrgRange.Cells(Line+2, 6), TrgRange.Cells(Line+2, 6)).Borders.LineStyle  := 1;
+    TrgRange.Range(TrgRange.Cells(Line+2, 6), TrgRange.Cells(Line+2, 6)).Borders.Weight := 2;
+    TrgRange.Range(TrgRange.Cells(Line+2, 5), TrgRange.Cells(Line+2, 6)).VerticalAlignment := 2;
+    TrgRange.Range(TrgRange.Cells(Line+2, 5), TrgRange.Cells(Line+2, 6)).HorizontalAlignment := 4;
+
+
+
+    Excel.ActiveSheet.Outline.SummaryRow := 0;
+    Excel.Application.WorkSheets[1].Name := 'ПрайсЛист';
+    Excel.Application.WorkSheets[1].Cells.Font.Size := 12;
+    Excel.Application.WorkSheets[1].Cells.Font.Name := 'Times New Roman';
+    Excel.Application.WorkSheets[1].Outline.SummaryRow := 0;
+
+    Excel.Application.WorkSheets[1].Columns(1).ColumnWidth := 4.14;
+    Excel.Application.WorkSheets[1].Columns(2).ColumnWidth := 13;
+    Excel.Application.WorkSheets[1].Columns(3).ColumnWidth := 50.57;
+
+    if cbShowCount.Checked then
+      Excel.Application.WorkSheets[1].Columns(4).ColumnWidth := 7.43
+    else
+      Excel.Application.WorkSheets[1].Columns(4).ColumnWidth := 10.86;
+
+    Excel.Application.WorkSheets[1].Columns(5).ColumnWidth := 8.57;
+
+    PriceCount :=0;
+    if cbPrice1.Checked then
+      begin
+        Excel.Application.WorkSheets[1].Columns(6).ColumnWidth := 12.29;
+        Inc(PriceCount);
+      end;
+    if cbPrice2.Checked then
+      begin
+        Excel.Application.WorkSheets[1].Columns(6+PriceCount).ColumnWidth := 12.29;
+        Inc(PriceCount);
+      end;
+    if cbPrice3.Checked then
+      begin
+        Excel.Application.WorkSheets[1].Columns(6+PriceCount).ColumnWidth := 12.29;
+        Inc(PriceCount);
+      end;
+    if cbLoadPhoto.Checked then
+      begin
+        Excel.Application.WorkSheets[1].Columns(6+PriceCount).ColumnWidth := 21.30;
+        Inc(PriceCount);
+      end;
+
+    Excel.Application.WorkSheets[1].Rows(1).RowHeight := 7.5;
+    TrgRange := Excel.Application.WorkSheets[1].Range('A1:A1');
+    Line :=9;
+    if VarAsStr(LogoTbl.Логотип)<>'' then
+      begin
+        dbiLogotip.SaveToFile('C:\PriceLogo.jpg');
+        if FileExists('C:\PriceLogo.jpg') then
+          begin
+            PicRange := TrgRange.Range(TrgRange.Cells(2, 2), TrgRange.Cells(8, 3));
+            ph := PicRange.Parent.Pictures.Insert('C:\PriceLogo.jpg');
+            ph.Top := PicRange.Top + 5;
+            ph.Left := PicRange.Left + 10;
+            ph.Width := PicRange.Width - 30;
+            ph.Height := PicRange.Height - 10;
+//            ph.Placement := 1;
+            DeleteFile('C:\PriceLogo.jpg');
+          end;
+
+      end;
+    if eTitle.Text<>'' then
+      begin
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 3)).MergeCells := True;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).NumberFormat := '@';
+        TrgRange.Cells(Line, 1).Value := eTitle.Text;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Name := 'Tahoma';
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Size := 16;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Bold := 1;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).VerticalAlignment  := 2;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).HorizontalAlignment  := 3;
+        inc(Line);
+      end;
+    if mAdress.Text<>'' then
+      For i := 0 to mAdress.Lines.Count-1 do
+        begin
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 3)).MergeCells := True;
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).NumberFormat := '@';
+          TrgRange.Cells(Line, 1).Value := mAdress.Lines.Strings[i];
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Name := 'Tahoma';
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Size := 10;
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).Font.Bold := 1;
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).VerticalAlignment  := 2;
+          TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 1)).HorizontalAlignment  := 3;
+          inc(Line);
+        end;
+    HeadLines := Line;
+    Line := 2;
+    if mGrafik.Text<>'' then
+      begin
+        For i := 0 to mGrafik.Lines.Count-1 do
+          begin
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).MergeCells := True;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).NumberFormat := '@';
+            TrgRange.Cells(Line, 4).Value := mGrafik.Lines.Strings[i];
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Name := 'Tahoma';
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Size := 10;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Bold := 1;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).VerticalAlignment  := 2;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).HorizontalAlignment  := 3;
+            inc(Line);
+          end;
+        TrgRange.Range(TrgRange.Cells(2, 4), TrgRange.Cells(Line-1, 6)).Borders.LineStyle  := 1;
+        TrgRange.Range(TrgRange.Cells(2, 4), TrgRange.Cells(Line-1, 6)).Borders.Weight := 2;
+        TrgRange.Range(TrgRange.Cells(2, 4), TrgRange.Cells(Line-1, 6)).Borders[11].LineStyle  := 0;
+        TrgRange.Range(TrgRange.Cells(2, 4), TrgRange.Cells(Line-1, 6)).Borders[12].LineStyle  := 0;
+      end;
+    if mContacts.Text<>'' then
+      begin
+        if Line<>2 then
+          inc(Line);
+        GroupCatNumb := Line;
+        For i := 0 to mContacts.Lines.Count-1 do
+          begin
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).MergeCells := True;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).NumberFormat := '@';
+            TrgRange.Cells(Line, 4).Value := mContacts.Lines.Strings[i];
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Name := 'Tahoma';
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Size := 10;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).Font.Bold := 1;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).VerticalAlignment  := 2;
+            TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 4)).HorizontalAlignment  := 3;
+            inc(Line);
+          end;
+        TrgRange.Range(TrgRange.Cells(GroupCatNumb, 4), TrgRange.Cells(Line-1, 6)).Borders.LineStyle  := 1;
+        TrgRange.Range(TrgRange.Cells(GroupCatNumb, 4), TrgRange.Cells(Line-1, 6)).Borders.Weight := 2;
+        TrgRange.Range(TrgRange.Cells(GroupCatNumb, 4), TrgRange.Cells(Line-1, 6)).Borders[11].LineStyle  := 0;
+        TrgRange.Range(TrgRange.Cells(GroupCatNumb, 4), TrgRange.Cells(Line-1, 6)).Borders[12].LineStyle  := 0;
+      end;
+    if HeadLines>Line then
+      Line := HeadLines;
+
+
+
+    TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 5)).MergeCells := True;
+    TrgRange.Cells(Line, 4).Value := DateToStr(CurrentDate);
+    TrgRange.Cells(Line, 6).Value := 'курс: '+DecToStr(Course,2);;
+    TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).Font.Name := 'Tahoma';
+    TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).Font.Size := 8;
+    TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).Font.Bold := 1;
+    TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).VerticalAlignment  := 2;
+    TrgRange.Range(TrgRange.Cells(Line, 4), TrgRange.Cells(Line, 6)).HorizontalAlignment  := 3;
+    Excel.Application.WorkSheets[1].Rows(Line).RowHeight := 11.25;
+    inc(Line);
+
+
+
+    PriceCount := 0;
+    TrgRange.Cells(Line, 1).Value := '№';
+    TrgRange.Cells(Line, 2).Value := 'Код';
+    TrgRange.Cells(Line, 3).Value := 'Название';
+
+    if cbShowCount.Checked then
+      TrgRange.Cells(Line, 4).Value := 'К-во'
+    else
+      TrgRange.Cells(Line, 4).Value := 'Наличие';
+
+    TrgRange.Cells(Line, 5).Value := 'Вал.';
+    if cbPrice1.Checked then
+      begin
+        TrgRange.Cells(Line, 6).Value := 'Цена розн.';
+        Inc(PriceCount);
+      end;
+    if cbPrice2.Checked then
+      begin
+        TrgRange.Cells(Line, 6+PriceCount).Value := 'Цена опт.';
+        Inc(PriceCount);
+      end;
+    if cbPrice3.Checked then
+      begin
+        TrgRange.Cells(Line, 6+PriceCount).Value := 'Цена кропт.';
+        Inc(PriceCount);
+      end;
+
+    if cbLoadPhoto.Checked then
+      begin
+        TrgRange.Cells(Line, 6+PriceCount).Value := 'Фото';
+        Inc(PriceCount);
+      end;
+
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Size := 14;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Bold := 1;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).VerticalAlignment := 2;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).HorizontalAlignment := 3;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Borders.LineStyle  := 1;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Borders.Weight := 2;
+    TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Interior.Color := HexToInt('C3D9DD');;
+
+
+    Excel.Application.WorkSheets[1].Activate;
+    Excel.ActiveWindow.SplitRow := Line;
+    Excel.ActiveWindow.FreezePanes := True;
+    HeadLines :=Line;
+    inc(Line);
+    Total := TblGoods.LineCount;
+    Count:=0;
+    TblCtgG.Select;
+//    Line := 4;
+    GoodCount :=1;
+    while TblCtgG.SelectNext do
+      begin
+
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).MergeCells := True;
+        TrgRange.Cells(Line, 1).Value := VarAsStr(TblCtgG.КатегорияГлн);
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Size := 14;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Bold := 1;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Italic  := 1;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).VerticalAlignment  := 2;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).HorizontalAlignment  := 2;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Borders.LineStyle  := 1;
+        TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Borders.Weight := 2;
+        inc(Line);
+        GGroupCatNumb := Line;
+
+
+        TblCtg.CancelRange;
+        TblCtg.SetRange(TblCtgG.КатегорияГлн,TblCtgG.КатегорияГлн);
+        TblCtg.Select;
+        while TblCtg.SelectNext do
+          begin
+            if VarAsStr(TblCtg.КатегорияГлн)<>VarAsStr(TblCtg.Категория) then
+              begin
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).MergeCells := True;
+                TrgRange.Cells(Line, 1).Value := '   '+VarAsStr(TblCtg.Категория);
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Size := 12;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Bold := 1;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Italic := 1;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Font.Underline  := 2;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).VerticalAlignment  := 2;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).HorizontalAlignment  := 2;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Borders.LineStyle  := 1;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Borders.Weight := 2;
+                inc(Line);
+              end;
+            GroupCatNumb := Line;
+
+            TblGoods.CancelRange;
+            TblGoods.SetRange(TblCtg.Категория,TblCtg.Категория);
+            TblGoods.Select;
+            j := Line;
+            while TblGoods.SelectNext do
+              begin
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).VerticalAlignment  := 2;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Borders.LineStyle  := 1;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).Borders.Weight := 2;
+                TrgRange.Range(TrgRange.Cells(Line, 1), TrgRange.Cells(Line, 5+PriceCount)).WrapText := True;
+                if cbLoadPhoto.Checked then
+                  Excel.Application.WorkSheets[1].Rows(Line).RowHeight := 93;
+
+
+                TrgRange.Cells(Line, 1).Value := GoodCount;
+                TrgRange.Cells(Line, 2).NumberFormat := '@';
+                TrgRange.Cells(Line, 2).Value := VarAsStr(TblGoods.Код);
+                TrgRange.Cells(Line, 3).Value := VarAsStr(TblGoods.Название);
+                if cbShowCount.Checked then
+                  TrgRange.Cells(Line, 4).Value := VarAsDec(TblGoods.КолОбщ)
+                else
+                  TrgRange.Cells(Line, 4).Value := '+';
+
+                if IsObjFocused(TblGoods.@Валюта) then
+                TrgRange.Cells(Line, 5).Value := VarAsStr(TblGoods.Валюта.CodeField);
+
+                PriceCount :=0;
+                if cbPrice1.Checked then
+                  begin
+                    TrgRange.Cells(Line, 6).Value := VarAsDec(TblGoods.Цена);
+                    inc(PriceCount);
+                  end;
+                if cbPrice2.Checked then
+                  begin
+                    TrgRange.Cells(Line, 6+PriceCount).Value := VarAsDec(TblGoods.ОптЦена);
+                    inc(PriceCount);
+                  end;
+                if cbPrice3.Checked then
+                  begin
+                    TrgRange.Cells(Line, 6+PriceCount).Value := VarAsDec(TblGoods.КрОптЦена);
+                    Inc(PriceCount);
+                  end;
+                if cbLoadPhoto.Checked then
+                  begin
+//                    TrgRange.Cells(Line, 6+PriceCount).Value := VarAsDec(TblGoods.КрОптЦена);
+                    Target:=  TrgRange.Range(TrgRange.Cells(Line, 6+PriceCount), TrgRange.Cells(Line, 6+PriceCount));
+                    AddPictureToExel(Target, VarAsStr(TblGoods.Фото));
+                    Inc(PriceCount);
+                  end;
+
+                Inc(Count);
+                SysProgress(0, Total, Count, 'Выгрузка: '+IntToStr(Count) + '/'+IntToStr(Total));
+                inc(Line);
+                inc(GoodCount);
+              end;
+            TrgRange.Range(TrgRange.Cells(j, 1), TrgRange.Cells(Line, 2)).HorizontalAlignment := 3;
+            TrgRange.Range(TrgRange.Cells(j, 3), TrgRange.Cells(Line, 3)).HorizontalAlignment := 2;
+            TrgRange.Range(TrgRange.Cells(j, 4), TrgRange.Cells(Line, 4)).HorizontalAlignment := 4;
+            TrgRange.Range(TrgRange.Cells(j, 5), TrgRange.Cells(Line, 5)).HorizontalAlignment := 3;
+            TrgRange.Range(TrgRange.Cells(j, 6), TrgRange.Cells(Line, 6+PriceCount)).HorizontalAlignment := 4;
+
+            TrgRange.Range(TrgRange.Cells(GroupCatNumb, 1), TrgRange.Cells(Line-1, 10)).Rows.Group;
+
+          end;
+        TrgRange.Range(TrgRange.Cells(GGroupCatNumb, 1), TrgRange.Cells(Line-1, 10)).Rows.Group;
+      end;
+
+   DataDir := eFolderSaves.Text;
+   if DataDir[StrLength(DataDir)]<>'\' then
+     DataDir := DataDir + '\';
+   if not DirectoryExists(DataDir) then
+     DataDir := 'C:\';
+
+
+    //    FileName := 'PriceList'+DateToStr(CurrentDate)+'.xlsx';
+    FileName := GetFileName;
+
+    MacroList := CreateStringList;
+    MacroList.Text := 'Sub Add()'+#13+
+                      '   Dim CRow As Long'+#13+
+                      '   Dim CNum As Long'+#13+
+                      '   Dim Ctg As Object, Blnk As Object'+#13+
+                      '   Set Ctg = ActiveSheet'+#13+
+                      '   Set Blnk = Worksheets("Заказ")'+#13+
+                      '   CRow = ActiveWindow.ActiveCell.Row'+#13+
+                      '   If CRow < '+IntToStr(HeadLines+1)+' Then Exit Sub'+#13+
+                      '   If (Ctg.Cells(CRow, 20) < 0) Then Exit Sub'+#13+
+                      '   Dim x As Single'+#13+
+                      '   x = Val(InputBox("Введите количество товара:  " + Ctg.Cells(CRow, 3), "Ввод количества", 1))'+#13+
+                      '   if x = 0 Then  Exit Sub'+#13+
+//                      '   Worksheets(1).Rows(21).Insert'+#13+
+                      '   Blnk.Rows('+IntToStr(ZacazLine)+').Insert'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 1).Formula = "=SUM(i'+IntToStr(ZacazLine-1)+':i'+IntToStr(ZacazLine)+')"'+#13+  //Номер по порядку
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 2).Value = Ctg.Cells(CRow, 2)'+#13+ // Код товара
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 3).Value = Ctg.Cells(CRow, 3)'+#13+ // Название товара
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 4).Value = x'+#13+                  //количество в заказе
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 5).Value = Ctg.Cells(CRow, 6)'+#13+ //Цена
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 6).Formula = "=$d$'+IntToStr(ZacazLine)+'*$e$'+IntToStr(ZacazLine)+'"'+#13+   //Сумма
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 9).Formula = 1'+#13+
+                      '   For n = 1 To 6'+#13+
+                      '   With Blnk.Cells('+IntToStr(ZacazLine)+', n).Borders(xlBottom)'+#13+
+                      '     .LineStyle = xlContinuous'+#13+
+                      '     .Weight = xlThin'+#13+
+                      '   End With'+#13+
+                      '   With Blnk.Cells('+IntToStr(ZacazLine)+', n).Borders(xlRight)'+#13+
+                      '     .LineStyle = xlContinuous'+#13+
+                      '     .Weight = xlThin'+#13+
+                      '   End With'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', n).Font.Size = 12'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', n).Font.Bold = 0'+#13+
+                      '   Next n'+#13+
+                      '   With Blnk.Cells('+IntToStr(ZacazLine)+', 6).Borders(xlRight)'+#13+
+                      '     .LineStyle = xlContinuous'+#13+
+                      '     .Weight = xlMedium'+#13+
+                      '   End With'+#13+
+                      '   With Blnk.Cells('+IntToStr(ZacazLine)+', 1).Borders(xlLeft)'+#13+
+                      '     .LineStyle = xlContinuous'+#13+
+                      '     .Weight = xlMedium'+#13+
+                      '   End With'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 1).HorizontalAlignment = 3'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 2).HorizontalAlignment = 3'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 3).HorizontalAlignment = 2'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 4).HorizontalAlignment = 4'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 5).HorizontalAlignment = 4'+#13+
+                      '   Blnk.Cells('+IntToStr(ZacazLine)+', 6).HorizontalAlignment = 4'+#13+
+                      'End Sub'+#13+#13+
+
+                      'Sub Auto_Open()'+#13+
+                      '  Worksheets("ПрайсЛист").OnDoubleClick = "Add"'+#13+
+                      'End Sub';
+    try
+
+
+      Wsh := CreateOleObject('WScript.Shell');
+      Wsh.RegWrite('HKEY_CURRENT_USER\SOFTWARE\Microsoft\Office\10.0\Excel\Security\AccessVBOM', 1, 'REG_DWORD');
+      Wsh.RegWrite('HKEY_CURRENT_USER\SOFTWARE\Microsoft\Office\11.0\Excel\Security\AccessVBOM', 1, 'REG_DWORD');
+      Wsh := '';
+      AddModule := Excel.WorkBooks(1).VBProject.VBComponents.Add(1);
+      AddModule.CodeModule.InsertLines(1, MacroList.Text);
+    except
+      ShowMessage('Ошибка');
+      Excel.SendKeys('%е%м%б%н%в');
+      AddModule := Excel.WorkBooks(1).VBProject.VBComponents.Add(1);
+      AddModule.CodeModule.InsertLines(1, MacroList.Text);
+    end;
+      Wsh := CreateOleObject('WScript.Shell');
+      Wsh.RegWrite('HKEY_CURRENT_USER\SOFTWARE\Microsoft\Office\10.0\Excel\Security\AccessVBOM', 0, 'REG_DWORD');
+      Wsh.RegWrite('HKEY_CURRENT_USER\SOFTWARE\Microsoft\Office\11.0\Excel\Security\AccessVBOM', 0, 'REG_DWORD');
+      Wsh := '';
+
+    Excel.Application.DisplayAlerts := False;
+//    Excel.WorkBooks(1).SaveAs(DataDir + FileName,52);
+    Excel.WorkBooks(1).SaveAs(DataDir + FileName,56);
+    Excel.Application.DisplayAlerts := True;
+    Excel.Application.Quit;
+
+
+   if cbSendEmail.Checked   then
+     Comanda := ';SEND'
+   else
+     Comanda := ';QUEUE';
+
+   MemoStr := CreateStringList;
+   MemoStr.Text := mMailText.Text;
+   MemoStr.SaveToFile('C:\SendMailText.MSG');
+   MemoStr.Clear;
+
+
+   Case rgTypesendEm.ItemIndex of
+     0: Begin
+       MemoStr.Text := 'C:\Program Files (x86)\The Bat!\thebat.exe ' +
+   //                    '/MAILU=andruhovsasha@mail.ru;' +
+                       '/MAILU='+eMailName.Text+'' +
+                       ';TO=' + EmailList.ComaStr[','] + '' +
+                       ';S=" Прайс лист SkyFishing"'+
+                       ';TEXT="C:\SendMailText.MSG"'+
+                       ';A="' + DataDir + FileName +'"'+
+                       Comanda+
+                       ';EXIT';
+       Run(MemoStr.Text, false);
+     end;
+     1: begin
+       for i := 0 to EmailList.Count-1 do
+         begin
+           MemoStr.Clear;
+           MemoStr.Text := 'C:\Program Files (x86)\The Bat!\thebat.exe ' +
+                           '/MAILU='+eMailName.Text+'' +
+                           ';TO=' + EmailList.GetStr(i) + '' +
+                           ';S=" Прайс лист SkyFishing"'+
+                           ';TEXT="C:\SendMailText.MSG"'+
+                           ';A="' + DataDir + FileName +'"'+
+                           Comanda+
+                           ';EXIT';
+           Run(MemoStr.Text, false);
+         end;
+//       MemoStr.Text := MemoStr.Text +  ';EXIT';
+
+     end;
+   end;
+  finally
+    SysProgress(0, 0, 0, '');
+    StatusText('');
+    Nil(Excel);
+  end;
+
+end;
+
+
+
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+PageControl:TO4PageControl
+tsShape:TTabSheet
+Panel1:TO4Panel
+Label2:TO4Label
+Label3:TO4Label
+Label6:TO4Label
+gbTypePrice:TO4GroupBox
+cbPrice1:TO4CheckBox
+cbPrice2:TO4CheckBox
+cbPrice3:TO4CheckBox
+btSendPriceList:TO4Button
+eMailName:TO4Edit
+eFolderSaves:TO4Edit
+btnBrowse:TO4Button
+mMailText:TO4Memo
+cbSendEmail:TO4CheckBox
+rgTypesendEm:TO4RadioGroup
+cbShowCount:TO4CheckBox
+cbLoadPhoto:TO4CheckBox
+pGoodsCtg:TO4Panel
+Label1:TO4Label
+pStores:TO4Panel
+Label5:TO4Label
+cbStores:TO4CheckListBox
+Panel2:TO4Panel
+Label4:TO4Label
+clbEmails:TO4CheckListBox
+Panel3:TO4Panel
+btCheckAllPart:TO4Button
+btUnCheckAllPart:TO4Button
+tsTitle:TTabSheet
+Label7:TO4Label
+Label8:TO4Label
+Label9:TO4Label
+Label10:TO4Label
+gbLogotip:TO4GroupBox
+dbiLogotip:TO4DBImage
+btLoadLogotip:TO4Button
+eTitle:TO4Edit
+mAdress:TO4Memo
+mGrafik:TO4Memo
+mContacts:TO4Memo
+SaveDialog:TO4SaveDialog
+TVSLogotip:TO4TableValueSource
+opDlg:TO4OpenPictureDialog

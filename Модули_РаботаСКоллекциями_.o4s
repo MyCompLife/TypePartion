@@ -1,0 +1,45 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+function GenerateNewCollElem(var ColCurrent : ISCollection; CollComment : string) : Boolean;
+procedure ChangeCollectionField(ColCurrent : ISCollection; ObjData : IObject;
+  FieldName, CollComment : string);
+
+implementation
+
+function GenerateNewCollElem(var ColCurrent : ISCollection; CollComment : string) : Boolean;
+var
+  i : Integer;
+begin
+  ColCurrent := CreateObject('Коллекции.' + ColCurrent.GetSign);
+  ColCurrent.Select;
+  Result := not ColCurrent.FindByComment(CollComment, False);
+  if Result then // генерация нового элемента
+    begin
+      i := 0;
+      if ColCurrent.Select and ColCurrent.SelectNext then
+        while ColCurrent.Find('Sign' + IntToStr(i)) do
+          inc(i);
+      ColCurrent.Change('Sign' + IntToStr(i), CollComment);
+      ColCurrent.ApplyUpdates;
+    end;
+end;
+
+//Внесение изменений в Коллекции из Edit
+
+procedure ChangeCollectionField(ColCurrent : ISCollection; ObjData : IObject;
+  FieldName, CollComment : string);
+begin
+  CollComment := StrTrim(CollComment);
+  if GenerateNewCollElem(ColCurrent, CollComment) then
+    if ColCurrent.FindByComment(CollComment, False) then
+      ObjData._Default[FieldName] := ColCurrent
+    else
+      ObjData._Default[FieldName] := Null
+  else
+    ObjData._Default[FieldName] := ColCurrent;
+end;
+
+end.

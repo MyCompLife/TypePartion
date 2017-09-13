@@ -1,0 +1,131 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF, TmpStore : ICDictionary;
+  CNV : ICWriNums;
+  Tbl, TblStore : ICValueTable;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetParams; //Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+  TblStore := CreateObject('ТаблицаЗначений');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      Value['Summa'] := MasterData.Сумма;
+      Value['SumCnt'] := MasterData.КолОбщ;
+      if VarAsBool(MasterData.@Ответственный.IsFocused) then
+        Value['ResponsName'] := GetShortPartName(MasterData.Ответственный);
+      if VarAsBool(MasterData.@СкладПр.IsFocused) then
+        begin
+          TmpStore := MasterData.СкладПр;
+          Value['STOREIN'] := MasterData.СкладПр.Название;
+          if VarAsBool(MasterData.СкладПр.@Ответственный.IsFocused) then
+            Value['STOREINMAN'] := GetShortPartName(MasterData.СкладПр.Ответственный);
+        end;
+      if VarAsBool(MasterData.@СкладОтп.IsFocused) then
+        begin
+          TmpStore := MasterData.СкладОтп;
+          Value['STOREOUT'] := MasterData.СкладОтп.Название;
+          if VarAsBool(MasterData.СкладОтп.@Ответственный.IsFocused) then
+            Value['STOREOUTMAN'] := GetShortPartName(MasterData.СкладОтп.Ответственный);
+        end;
+    end;
+  MasterData.SaveContents('', Tbl);
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*Цена');
+  lbSumInWord.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058); //C_GRN,C_KOP,True);
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    Accept := Tbl.SelectFirst()
+  else
+    Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+      Value['Price'] := Tbl.Цена;
+      Value['SummaStr'] := VarAsDec(Tbl.Количество) * VarAsDec(Tbl.Цена);
+    end;
+end;
+
+procedure bndFtRetTara_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  if MasterData.СуммаВозврТары = 0 then
+    Accept := False;
+end;
+
+procedure bndFtTara_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  if MasterData.СуммаТары = 0 then
+    Accept := False;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label32:TRBLabel
+bndDET:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label38:TRBLabel
+Label40:TRBLabel
+SysData1:TRBSysData
+bndROOT:TRBDetailBand
+Label5:TRBLabel
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label6:TRBLabel
+Label11:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+bndFtALL:TRBBand
+Label20:TRBLabel
+Label71:TRBLabel
+Label47:TRBLabel
+lbSumInWord:TRBLabel
+Label8:TRBLabel
+Label12:TRBLabel
+bndFtDET:TRBBand
+Label48:TRBLabel
+Label7:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label19:TRBLabel
+Label22:TRBLabel
+Structure1:TRBStructure

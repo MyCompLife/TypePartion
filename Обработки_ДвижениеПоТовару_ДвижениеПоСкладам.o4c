@@ -1,0 +1,463 @@
+interface
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports, InitColors;
+
+implementation
+
+const
+  errUserBreak = 'Формирование отчета прекращено пользователем!';
+
+Var
+  Stores : ICValueList;
+  GoodDic, S, Store : ICDictionary;
+  MasterTbl, DocListTbl: ICValueTable;
+  RepCurrent : ICProcessing;
+  Constants : IC4VPAConst;
+  CursorVis : TCursor;
+  CursorsRefCount : Integer;
+  DateFrom, DateTo : DateTime;
+  LockStoreEdit, AfterExecute : Boolean;
+  TypeRepport: Integer;
+
+procedure CreateTblObjects;
+Begin
+  //партии товара
+  MasterTbl := CreateObject('ТаблицаЗначений');
+  MasterTbl.Close();
+  MasterTbl.AddColumn('Товар', vtcLink, 0);
+  MasterTbl.AddColumn('Склад', vtcLink, 0);
+  MasterTbl.AddColumn('Партнер', vtcLink, 0);
+  MasterTbl.AddColumn('Партия', vtcFloat, 0);
+  MasterTbl.AddColumn('Валюта', vtcLink, 0);
+  MasterTbl.AddColumn('ДатаПр', vtcDate, 0);
+  AddFFtColumnsList(MasterTbl, 'КолОбщ;ВхЦенаБезНДС;ВхЦенаВал;СумВх;СумВалВх');
+  SetFormatStdColumnsList(MasterTbl, 'КолОбщ', '0.####');
+  SetFormatStdColumnsList(MasterTbl, 'ВхЦенаБезНДС;ВхЦенаВал', '0.00##');
+  MasterTbl.Open;
+
+{  Case TypeRepport of
+    0: MasterTbl.SortedColumns := 'Склад';
+    1: MasterTbl.SortedColumns := 'ДатаПр;Склад;Партнер';
+  end;
+}
+  //документы
+  DocListTbl := CreateObject('ТаблицаЗначений');
+  DocListTbl.AddColumn('Date', vtcDateTime, 0);
+  DocListTbl.AddColumn('Document', vtcLink, 0);
+  DocListTbl.AddColumn('DNames', vtcString, 70);
+  DocListTbl.AddColumn('MotionSign', vtcInteger, 0);
+  AddFFtColumnsList(DocListTbl, 'КолОбщ;СумВх;СумВхНДС;СумОтпНДС;СумОтп;СумНакоп;СумНац;СумОбщ');
+  DocListTbl.AddColumn('Sort', vtcInteger, 0);
+  DocListTbl.AddColumn('Документ', vtcString, 150);
+  DocListTbl.AddColumn('Партнер', vtcLink, 0);
+  DocListTbl.AddColumn('НазвПартнера', vtcString, 150);
+  DocListTbl.AddColumn('НомерДокумента', vtcString, 20);
+  DocListTbl.AddColumn('Цена', vtcFFt, 4);
+  DocListTbl.AddColumn('Товар', vtcLink, 0);
+  DocListTbl.AddColumn('Склад', vtcLink, 0);
+  DocListTbl.AddColumn('Партия', vtcFloat, 0);
+  DocListTbl.AddColumn('Отпуск', vtcInteger, 0);
+  SetFormatStdColumnsList(DocListTbl, 'КолОбщ', '0.####');
+  SetFormatStdColumnsList(DocListTbl, 'СумВх;СумВхНДС;СумОтпНДС;СумОтп;СумНакоп;СумНац;СумОбщ;Цена', '0.00##');
+  DocListTbl.Open;
+  DocListTbl.SortBy('Склад;Date;Document;Партнер');
+end;
+
+procedure TVSPartGood_VPATimedAfterScroll(Sender : TObject);
+var
+  FieldsStr: String;
+  Fields: Variant;  
+  RecID : Double;
+begin
+  if not MasterTbl.IsFocused then
+    exit;
+  CursorsRefCount := UnuseCursor(CursorVis, CursorsRefCount);
+  try  
+    if DocListTbl.IsFocused then
+      RecID :=  DocListTbl.RecID;
+    DocListTbl.DisableControls;
+    DocListTbl.CancelRange;
+    case TypeRepport of
+      0: begin
+           FieldsStr := 'Склад;Sort;Date';
+           Fields :=  ArrayOf(MasterTbl.Склад);
+         end;
+      1: begin
+           FieldsStr := 'Партия;Склад;Sort;Date';
+           Fields := ArrayOf(MasterTbl.Партия,MasterTbl.Склад);
+         end;
+    end;
+    DocListTbl.SortBy(FieldsStr);
+    DocListTbl.SetRange(Fields,Fields);
+  finally
+    DocListTbl.UseDataSource(CtrlToVar(TVSDoc));
+    if (RecID=0) or not DocListTbl.FindByRecID(RecID) then
+      DocListTbl.SelectFirst;
+    DocListTbl.EnableControls; 
+    CursorsRefCount := UseCursor(CursorVis, CursorsRefCount);
+  end;
+end;
+
+procedure StructuredGrid(TypeRepport: Integer);
+var
+  ColumnsName: String;
+  ColumnCnt, ColumnTotal : Integer;
+begin
+  TypeRepport := rgRepType.ItemIndex;
+  Case TypeRepport of
+    0: ColumnsName := 'Склад*Склад*60|КолОбщ*Количество*30|СумВх*Сумма вх.*30|СумВалВх*Сумма вх.(Вал)*30';
+    1: ColumnsName := 'Склад*Склад*100|ДатаПр*Дата*40|Партнер*Партнер*100|КолОбщ*Количество*30|ВхЦенаБезНДС*Вх.цена*30|ВхЦенаВал*Вх.цена(Вал)*30|Валюта*Валюта*30';
+  end;
+  dbgPartGood.AutoAlign := false;
+  ColumnTotal := dbgPartGood.PosColumns.Count;
+  for ColumnCnt := ColumnTotal - 1 downto 0 do
+    dbgPartGood.PosColumns.Delete(ColumnCnt);
+
+  ColumnTotal := WordCount(ColumnsName,'|');
+  for ColumnCnt := 1 to ColumnTotal do
+    begin
+      dbgPartGood.PosColumns.Add;
+     (dbgPartGood.PosColumns.Items[ColumnCnt-1] as TO4GridColumn).O4FieldName := ExtractWord(1, ExtractWord(ColumnCnt, ColumnsName, '|'), '*');
+     (dbgPartGood.PosColumns.Items[ColumnCnt-1] as TO4GridColumn).Title.Caption := ExtractWord(2, ExtractWord(ColumnCnt, ColumnsName, '|'), '*');
+     (dbgPartGood.PosColumns.Items[ColumnCnt-1] as TO4GridColumn).Width := VarAsInt(ExtractWord(3, ExtractWord(ColumnCnt, ColumnsName, '|'), '*'));
+    end;
+   dbgPartGood.AutoAlign := true;
+end;
+
+procedure RunReport;
+begin
+  MasterTbl.UseDataSource(Null);
+  DocListTbl.UseDataSource(Null);
+  StructuredGrid(TypeRepport);
+  MasterTbl.Clear;
+  DocListTbl.Clear;
+  MasterTbl.CopyDataToServer;
+  DocListTbl.CopyDataToServer;
+  server.CreateSrvObjects(GoodDic,Store,DateFrom,DateTo, MasterTbl.SrvMean,DocListTbl.SrvMean,TypeRepport);
+  server.AssignMotionToDocListTbl;
+  server.SetRestFromBeginAndEndDates();
+  MasterTbl.CopyDataFromServer;
+  MasterTbl.UseDataSource(CtrlToVar(TVSPartGood));
+  //MasterTbl.Select;
+  DocListTbl.CopyDataFromServer;
+  TVSPartGood_VPATimedAfterScroll(dbgDocs);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  InPriceNt, InPrice, InHdPrice : decimal;
+  GoodName, Units, ГРН, ВалВх, ВалОтп : string;
+begin
+  Constants := GetConstants;
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  CreateTblObjects;
+  GoodDic := Params; //Спавочник товаров
+//--------------------- Склад----------------------
+  LockStoreEdit := true;
+  Stores := CreateObject('СписокЗначений');
+  Store := CreateObject('Справочники.Склады');
+  if VarAsBool(Params.HasParam('Store')) then
+    if IsObjFocused(Params) then
+      Store := Params.Params['Store'];
+  S := CreateObject('Справочники.Склады');
+  Stores.AddValue(Trans('Все склады'), Null);
+  S.Select;
+  if S.FindByField('Активность', True, False) then
+    Stores.AddValue(S.Название, S);
+  S.Select;
+  while S.SelectNext do
+    if not S.Активность = True then
+      Stores.AddValue(S.Название, S); // или ('', S)
+  Stores.UseControl(CtrlToVar(eStores));
+  if IsObjFocused(Store) then
+    Stores.CurIndex := Stores.FindByValue(Store)
+  else
+    Stores.CurIndex := 0;
+  LockStoreEdit := false;
+//--------------------------------------------------
+  if VarAsBool(GoodDic.IsFocused) then
+    begin
+      if GoodDic.Код <> '' then
+        GoodName := GoodDic.Код + ' ' + GoodDic.НазвТовара
+      else
+        GoodName := GoodDic.НазвТовара;
+    end;
+  lGoodNameWhite.Caption := GoodName;
+  lGoodNameBlack.Caption := GoodName;
+  RunReport;
+  AfterExecute := true;
+end;
+
+procedure eStores_Change(Sender : TObject);
+begin
+  if not LockStoreEdit then
+    begin
+      GetStore(Stores, Store);
+      RunReport;
+    end;
+end;
+
+procedure EditDoc(DocListTbl : ICValueTable);
+var Doc : ICDocuments;
+begin
+ Doc := CreateObject('Документы.'+DocListTbl.Document.GetSign);
+ Doc.Select;
+ if Doc.Find(DocListTbl.@Document) then
+   Doc.EditInForm('', 3);
+end;
+
+procedure pmiView_Click(Sender : TObject);
+var Tag : integer;
+begin
+  case Sender.ClassName of
+    'TO4ToolButton' : Tag :=  (Sender as TO4ToolButton).Tag;
+    'TO4MenuItem' : Tag :=  (Sender as TO4MenuItem).Tag;
+  end;
+  if VarAsBool(DocListTbl.IsFocused) then
+    Case Tag of
+      1 :  EditDoc(DocListTbl);
+      2 :  DocListTbl.Document.StateUp;
+      3 :  DocListTbl.Document.StateDown;
+    end;
+  TVSPartGood_VPATimedAfterScroll(dbgDocs);
+end;
+
+procedure dbgDocs_DblClick(Sender : TObject);
+begin
+  if VarAsBool(DocListTbl.@Document.IsFocused) then
+    EditDoc(DocListTbl);
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+Var
+  DocSign : String;
+  V : ICProcessing;
+begin
+  if VarAsBool(DocListTbl.IsFocused) then
+    begin
+      DocSign := DocListTbl.Document.GetSign;
+      Case DocSign of
+        'СписаниеТовара':
+          DocListTbl.Document.PrintForm('', not VarAsBool(GetOptions.GetServerPrm(DirectPrint)), DocListTbl.Document);
+        'НакладнаяВнутрПеремещ':
+          begin
+            V := CreateObject('Обработки.ПечВнутрПеремещ');
+            V.PrintForm('', not VarAsBool(GetOptions.GetServerPrm(DirectPrint)), DocListTbl.Document)
+          end;
+        'ВводОстатков':
+          begin
+            V := CreateObject('Обработки.ПечВводОстатков');
+            V.PrintForm('', not VarAsBool(GetOptions.GetServerPrm(DirectPrint)), DocListTbl.Document)
+          end;
+      else
+        begin
+          V := CreateObject('Обработки.ПечУнивНакладнаяОтпуска');
+          V.PrintForm('', not VarAsBool(GetOptions.GetServerPrm(DirectPrint)), DocListTbl.Document)
+        end;
+      end
+    end;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo, eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := true;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  x, y : integer;
+begin
+  tbSelectDates.GetScreenPos(x, y);
+  y := y + tbSelectDates.Height;
+  pmDates.Popup(x, y);
+end;
+
+procedure DateFrom_Change(Sender: TObject);
+begin
+  Case (Sender as TO4Edit).Tag of       // проверка на неверный период
+    0 : begin
+          if StrToDate((Sender as TO4Edit).Text) > DateTo then
+            begin
+              ShowMessage('Начальная дата не может быть больше конечной');
+              eDateFrom.VPAOnChange.EventName := '';
+              (Sender as TO4Edit).Text := VarAsStr(DateFrom);
+              eDateFrom.VPAOnChange.EventName := 'DateFrom_Change';
+              exit;
+            end;
+        end;
+    1 : begin
+          if StrToDate((Sender as TO4Edit).Text) < DateFrom then
+            begin
+              ShowMessage('Конечная дата не может быть меньше начальной');
+              eDateFrom.VPAOnChange.EventName := '';
+              (Sender as TO4Edit).Text := VarAsStr(DateFrom);
+              eDateFrom.VPAOnChange.EventName := 'DateFrom_Change';
+              exit;
+            end;
+        end;
+  end;
+  if AfterExecute then
+    begin
+      SetOneDates(Sender,DateFrom,DateTo);
+      RunReport;
+    end;
+end;
+
+{$D-}
+procedure dbgDocs_GetImageIndex(Sender : TObject; var Index1, Index2 : integer);
+begin
+ if DocListTbl.Document.GetDocState = 0 then
+   Index1 := 92
+ else
+   Index1 := 86;
+//--------------------------------------------
+ if DocListTbl.КолОбщ > 0 then
+   Index2 := 82
+ else
+   Index2 := 83;
+end;
+
+procedure dbgDocs_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if DocListTbl.IsFocused and (DocListTbl.Sort <> 0) then
+   if Highlight then
+     begin
+       BackColor := clSilver;
+      // DrawFont.Color := clSilver;
+     end
+   else
+     begin
+       BackColor := clSilver;
+      // DrawFont.Color := clSilver;
+     end;
+end;
+{$D+}
+
+{$D-}
+procedure dbgPartGood_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : boolean);
+begin
+ if MasterTbl.IsFocused and (MasterTbl.КолОбщ <= 0) then
+   if Highlight then
+     begin
+       BackColor:=BlZeroSel;
+       DrawFont.Color := BlFZeroSel;
+     end
+   else
+     begin
+       BackColor:=BlZero;
+       DrawFont.Color := BlFZero;
+     end;
+end;
+{$D+}
+
+procedure rgRepType_Click(Sender: TObject);
+begin
+  TypeRepport := rgRepType.ItemIndex;
+  RunReport;
+end;
+      
+function GetColumnsList(TblCurrent : ICValueTable) : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 0 to TblCurrent.GetColumnCount - 1 do
+    Result := Result + ';' + TblCurrent.GetColumnName(i);
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+procedure tbPrintAll_Click(Sender: TObject);
+var
+  PrintProc: ICProcessing;
+  CurRecTbl: ICValueTable;
+begin
+  PrintProc := CreateObject('Обработки.ДвижениеПоТовару');
+  case (Sender as TO4ToolButton).Tag of
+    0: GoodDic.Params['MasterTbl'] := MasterTbl;
+    1: begin
+         CurRecTbl := CreateObject('ТаблицаЗначений');
+         MasterTbl.CopyColumnsTo(CurRecTbl);
+         CurRecTbl.Append;
+         CurRecTbl.AssignFields(GetColumnsList(MasterTbl),MasterTbl);
+         CurRecTbl.Post;
+         GoodDic.Params['MasterTbl'] := CurRecTbl;
+       end;
+  end;
+  GoodDic.Params['DocListTbl'] := DocListTbl;
+  GoodDic.Params['Period'] := 'с ' + VarAsStr(DateFrom) + ' по ' + VarAsStr(DateTo);
+  GoodDic.Params['Store'] := eStores.Text;
+  GoodDic.Params['TypeRepport'] := TypeRepport;
+  PrintProc.Execute('ПечатьОтчета',GoodDic);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+tbrData:TO4ToolBar
+tbPrintAll:TO4ToolButton
+tbPrintCurrent:TO4ToolButton
+ToolButton2:TO4ToolButton
+Panel13:TO4Panel
+Label8:TO4Label
+Label9:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel5:TO4Panel
+Splitter3:TO4Splitter
+Panel1:TO4Panel
+lbGoodName:TO4Label
+lGoodNameBlack:TO4Label
+lGoodNameWhite:TO4Label
+GroupBox2:TO4GroupBox
+eStores:TO4Edit
+rgRepType:TO4RadioGroup
+Panel3:TO4Panel
+Label3:TO4Label
+dbgPartGood:TO4DBGrid
+Panel2:TO4Panel
+Label4:TO4Label
+dbgDocs:TO4DBGrid
+tbrData1:TO4ToolBar
+tbView:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton6:TO4ToolButton
+ToolButton7:TO4ToolButton
+tbParam1:TO4ToolButton
+TVSPartGood:TO4TableValueSource
+TVSDoc:TO4TableValueSource
+pmDocs:TO4PopupMenu
+pmiView:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiPrint:TO4MenuItem
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+TVSStore:TO4TableValueSource
+TVSStoreDocs:TO4TableValueSource

@@ -1,0 +1,107 @@
+interface
+
+uses
+  System, DispIntf, РаботаСТаблицамиЗначенийCL, Расчеты, Reports;
+
+implementation
+
+var
+  TblDoc, TblDetailDoc: ICValueTable;
+  DateFrom, DateTo : DateTime;
+  Data : Variant;
+  CNV : ICWriNums;
+  V: ICProcessing;
+  X: ICReport;
+  Options : ICOptions;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+var
+  i : integer;
+begin       
+  TblDoc := CreateObject('ValueTable');
+  TblDoc.AddColumn('ТипДокумента',vtcString,30);
+  TblDoc.Addcolumn('Идентификатор', vtcLink,0);
+  TblDoc.Addcolumn('НомерДокумента', vtcString, 20);
+  TblDoc.Addcolumn('ДатаДокумента', vtcDateTime, 0);
+  TblDoc.Open;
+  TblDoc.UseDataSource(CtrlToVar(TVSDoc));
+  TblDetailDoc := CreateObject('ValueTable');
+  TblDetailDoc.Open;
+  Options := GetOptions;
+  Server.CreateObjects;
+  if not IsObjFocused(Params) then
+    exit;
+  V := Mean;
+  X := Mean;
+  Data := Params;
+  DateFrom := RoundDate(dpDates.DateFrom,rdDay,false);
+  DateTo := RoundDate(dpDates.DateTo,rdDay,true);
+end;
+
+procedure eDateFrom_Change(Sender: TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure tbRun_Click(Sender: TObject); 
+var TypeDoc : string;
+begin
+ try  
+  TVSDoc.AfterScrollLock := true;
+  TblDetailDoc.DisableControls;
+  TblDoc.DisableControls;
+  DateFrom := RoundDate(dpDates.DateFrom,rdDay,false);
+  DateTo := RoundDate(dpDates.DateTo,rdDay,true);
+  TblDetailDoc.CopyDataToServer;
+  TblDoc.CopyDataToServer; 
+  if edTypeDoc.ItemIndex>0 then
+   TypeDoc := edTypeDoc.Text
+  else
+   TypeDoc := '';
+  Server.FillTblDocS(TblDoc.SrvMean, TblDetailDoc.SrvMean, DateFrom, DateTo, TypeDoc, chOnlyDelete.Checked);
+  TblDoc.CopyDataFromServer;
+  TblDoc.SortBy('ДатаДокумента');
+  TblDetailDoc.CopyDataFromServer2;
+  TblDetailDoc.SortBy('Идентификатор;-date');
+ finally
+  TblDoc.EnableControls; 
+    TVSDoc.AfterScrollLock := false;
+  TblDoc.SelectFirst; 
+  TblDetailDoc.EnableControls;
+ end;
+end;
+
+procedure TVSDoc_VPATimedAfterScroll(Sender: TObject);
+begin
+  TblDetailDoc.UseDataSource(0);
+  if TblDoc.IsFocused then
+    begin
+      TblDetailDoc.SortBy('Идентификатор;-date');
+      TblDetailDoc.SetRange(TblDoc.Идентификатор, TblDoc.Идентификатор);
+      TblDetailDoc.SelectFirst; 
+      TblDetailDoc.UseDataSource(CtrlToVar(TVSDetailDoc));
+    end;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  //Options.SetServerPrm((GetUserID + V.GetSign + Form.Caption), chOnlyDelete.Checked);
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+edTypeDoc:TO4Edit
+dpDates:TO4DatePeriod
+ToolButton2:TO4ToolButton
+chOnlyDelete:TO4CheckBox
+Panel3:TO4Panel
+dbgDoc:TO4DBGrid
+Panel2:TO4Panel
+dbgDetailDoc:TO4DBGrid
+TVSDetailDoc:TO4TableValueSource
+TVSDoc:TO4TableValueSource

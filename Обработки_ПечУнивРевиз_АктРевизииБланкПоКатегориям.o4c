@@ -1,0 +1,192 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  Tbl, CtgTbl : ICValueTable;
+  SortType : integer;
+  ShowRestBegin, ShowRestEnd, GroupByCtg : Boolean;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);  
+var   PrintParamProc : ICProcessing;  
+     // GoodsDic : ICDictionary;
+begin
+  MasterData := Form.GetParams;
+  //GoodsDic  := CreateObject('Справочники.Товары');
+  PrintParamProc := CreateObject('Обработки.Диалоги');
+  PrintParamProc.Execute('ПараметрыПечатиБланкаРевизии',Null);
+  SortType := VarAsInt(PrintParamProc.Params['SortType']);
+  ShowRestBegin := VarAsBool(PrintParamProc.Params['ShowRestBegin']);
+  ShowRestEnd := VarAsBool(PrintParamProc.Params['ShowRestEnd']);
+  GroupByCtg := VarAsBool(PrintParamProc.Params['GroupByCtg']);
+  if not ShowRestBegin then
+    begin
+      lbUnitNameTitle.LinkRight := lbCountEndTitle;
+      lbGoodNameTitle.Width := lbGoodNameTitle.Width + lbCountBeginTitle.Width;
+      lbCountBeginTitle.Visible := false; 
+
+      lbUnitName.LinkRight := lbCountEnd;
+      lbGoodName.Width := lbGoodName.Width + lbCountBegin.Width;
+      lbCountBegin.Visible := false;
+    end;
+  Tbl := CreateObject('ТаблицаЗначений');
+  Tbl.AddColumn('НомСтроки', lftInteger, 0);
+  Tbl.AddColumn('Товар', lftLink, 0);
+  Tbl.AddColumn('Модель', lftLink, 0);
+  Tbl.AddColumn('Код', lftString, 20);
+  Tbl.AddColumn('ЕдИзм', lftLink, 0);
+  Tbl.AddColumn('КоличествоДо', lftFFT, 5);     
+  Tbl.AddColumn('КоличествоПосле', lftFFT, 5);
+  Tbl.AddColumn('Категория', lftString, 150);
+  Tbl.Open;
+
+
+  CtgTbl := CreateObject('ТаблицаЗначений');
+  CtgTbl.AddColumn('Категория', lftString, 150);
+  CtgTbl.Open;
+  MasterData.AppendLinesTo('НомСтроки;Товар;Категория;КоличествоДо;КоличествоПосле', Tbl);
+  if GroupByCtg then
+    begin
+      Tbl.GroupBy('НомСтроки;Товар;Категория','КоличествоДо;КоличествоПосле');
+      Tbl.AppendTo('Категория',CtgTbl);
+      CtgTbl.GroupBy('Категория','');
+    end
+  else
+    Tbl.GroupBy('НомСтроки;Товар','КоличествоДо;КоличествоПосле');
+
+  //Tbl.DoGetLinks('Модель=Товар.Модель');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+//  Tbl.Select;
+//  While Tbl.SelectNext do
+//   if (VarAsStr(Tbl.Код)='') and GoodsDic.Find(Tbl.@Товар) then
+//     begin
+//       Tbl.Edit;
+//       Tbl.Код := GoodsDic.CodeField;
+//       Tbl.Post;
+ //    end;    
+ if GroupByCtg then
+    begin
+      case SortType of
+        0 : Tbl.SortBy('Категория;Код;Товар');
+        1 : Tbl.SortBy('Категория;Товар');  
+        2 : Tbl.SortBy('Категория;НомСтроки;Товар');
+      end;
+    end
+ else
+   begin
+      case SortType of
+        0 : Tbl.SortBy('Код;Товар');
+        1 : Tbl.SortBy('Товар'); 
+        2 : Tbl.SortBy('НомСтроки;Товар');
+      end;
+   end;
+ if SortType<>2 then
+   Tbl.DoNumbering('НомСтроки',1,1);
+ Tbl.Select;
+ CtgTbl.SortBy('Категория');
+ CtgTbl.Select;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if VarAsBool(MasterData.@Ответственный.IsFocused) then
+        Value['PARTNAME'] := VarAsStr(MasterData.Ответственный.ПолноеНазвание);
+      if VarAsBool(MasterData.@СкладПоУмолч.IsFocused) then
+        Value['Store'] := VarAsStr(MasterData.СкладПоУмолч.Название);
+      Value['DOVEROSN'] := VarAsStr(MasterData.Заметки);
+    end;
+end;
+
+
+procedure Structure1_ROOT_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+procedure Structure1_ROOT_Ctg_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+ if not GroupByCtg and (Index=0) then
+   begin
+     Accept := true;
+     exit;
+   end;
+ Accept := CtgTbl.SelectNext;
+ if Accept then
+   begin
+     Tbl.SetRange(CtgTbl.Категория,CtgTbl.Категория); 
+     Tbl.Select;  
+     with Table do
+       begin
+         Value['CtgName'] := VarAsStr(CtgTbl.Категория);
+       end;
+   end;
+end;
+
+procedure bndCtg_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+  Accept := GroupByCtg;
+end;
+
+procedure Structure1_ROOT_Ctg_Det_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  Accept := Tbl.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];   
+      Value['Num'] := VarAsInt(Tbl.НомСтроки);
+      if ShowRestBegin then
+        Value['CountBegin'] := Tbl.КоличествоДо;  
+      if ShowRestEnd then
+        Value['CountEnd'] := Tbl.КоличествоПосле;
+    end;
+end;
+
+
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+SysData1:TRBSysData
+bndRoot:TRBBand
+Label1:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label7:TRBLabel
+Label5:TRBLabel
+Label9:TRBLabel
+Label6:TRBLabel
+Label10:TRBLabel
+Label4:TRBLabel
+bndCtg:TRBDetailBand
+Label11:TRBLabel
+bndFtDET:TRBBand
+Label44:TRBLabel
+Label46:TRBLabel
+BndRespons2:TRBDetailBand
+Label12:TRBLabel
+lbGoodName:TRBLabel
+lbUnitName:TRBLabel
+lbCountBegin:TRBLabel
+lbCountEnd:TRBLabel
+Label13:TRBLabel
+bndColumnHed:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+lbGoodNameTitle:TRBLabel
+lbUnitNameTitle:TRBLabel
+lbCountBeginTitle:TRBLabel
+lbCountEndTitle:TRBLabel
+Structure1:TRBStructure

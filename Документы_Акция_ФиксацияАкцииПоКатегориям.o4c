@@ -1,0 +1,76 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация, РаботаСоСправочникамиCL, Пользователи, НумерацияДокументов,
+  РаботаСЖурналомИзменений;
+
+implementation 
+var
+  FullName, ErrorStr : string;
+
+procedure CanChangeStateUp(Doc : ICDocuments; var Accept : Boolean);
+var   AccsAction : ICAccs;
+      P:ICProcessing;
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniFix, FixAck);
+  if  Accept then
+    begin     
+     Accept := Doc.RunThreadProcess(server.GetCanChangeStateUpEP, UniFixProgress + FullName);
+     if not Accept then
+       begin      
+         ErrorStr := server.GetErrorStr;
+         if ErrorStr='' then
+          ShowMessage('Во время проверки скидок произошла ошибка')
+         else    
+           begin
+             P:= CreateObject('Обработки.Диалоги'); 
+             P.Execute('Log','Список скидок мешающих проведению документа:'+#13+ErrorStr);
+           end;
+       end;
+    end;
+end;
+
+procedure DoChangeStateUp(Doc : ICDocuments);
+var
+  i: Integer;
+  DocName : String;
+begin
+  case Doc.GetDocState of
+    1 :
+      begin
+        if not Doc.RunThreadProcess(server.GetChangeStateUpEP, UniFixProgress + FullName) then
+          raise(emsgFixFail); 
+        ChangeDoc(clmtStateUp, Doc);
+        Doc.SendEvent(evCount, Unassigned, False);
+        Doc.SendEvent(evNakladn, Unassigned, False);
+      end;
+  end;
+end;
+
+procedure CanChangeStateDown(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniUnFix, FixAck);
+end;
+
+procedure DoChangeStateDown(Doc : ICDocuments);
+begin   
+  ChangeDoc(clmtStateDown, Doc);
+  Doc.SendEvent(evCount, Unassigned, False);
+  Doc.SendEvent(evNakladn, Unassigned, False);
+end;
+
+procedure CanDelete(Doc : ICDocuments; var Accept : Boolean);
+begin
+  FullName := CanFixDel(Doc, Accept, DecGood, UniDel, DelAck); 
+  if Accept then
+    ChangeDoc(clmtDelete, Doc);
+end;
+
+procedure DoDelete(Doc : ICDocuments);
+begin         
+  Doc.SendEvent(evCount, Unassigned, False);
+  Doc.SendEvent(evNakladn, Unassigned, False);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form

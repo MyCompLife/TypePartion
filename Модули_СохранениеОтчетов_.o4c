@@ -1,0 +1,284 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL;
+
+const
+  DefSectionName = 'Head';
+  //
+  prmnReportType = 'GlobalName'; // тип отчета, что сохраняется
+  prmnOpenedDoc = 'Doc'; // открываемый документ, из которого грузится сохраненный отчет
+  prmnOpenedJournal = 'JrnReport'; // журнал с сохраненными отчетами, что передается к открываемому интерфейсу-отчету
+  prmnForReportSavedFieldParams = 'Параметры';
+  prmnForReportSavedFieldPeriod = 'Период';
+  prmnForReportSavedFieldVersion = 'Версия';
+  prmnForReportSavedFieldDocumDate = 'ДатаДокумента';
+  prmnForReportSavedContents = 'TblContents';
+  DefRepVersion = '1.0.0.0';
+
+  // загрузка форм отчета из документа
+function LoadReportLinesFromDocument(ctrlLoadTo : TWinControl; DocForReportSaving : ICDocuments;
+  ClearBeforeLoad : Boolean = True) : Boolean;
+// загрузка форм отчета из DesignTime
+procedure LoadReportLinesFromDefault(ctrlLoadTo : TWinControl; ClearBeforeLoad : Boolean = True);
+// проверят, нужно ли загружать формы из документа при открытии отчета
+function DoLoadReportFromDocumentOnOpen(RepCurrent : ICReport; DocForReportSaving : ICDocuments;
+  CurrentRepVersion : string) : Boolean;
+// загрузка форм отчета из документа при открытии отчета. Выполняются также
+// дополнительные действия как запоминание открытого документа в таблице выбора link-полей
+function LoadReportLinesOnFormOpen(ctrlLoadTo : TWinControl; TblSelectedReport : ICValueTable;
+  DocForReportSaving : ICDocuments; RepCurrent : ICReport) : Boolean;
+// сохранение отчета в новый или выбранный документ отчетов. Возвращает название сохраненного документа
+function SaveReport(ctrlFrom : TWinControl; DocForReportSaving : ICDocuments;
+  TblSelectedLinks : ICValueTable; RepCurrent : ICReport;
+  SaveMode : TEditMode) : string;
+// создание документа-отчета
+function CreateReportDoc(RepID : string; DocForReportSavingSign : string = 'Отчет') : ICDocuments;
+// создание таблицы дополнительных параметров отчета со чт. полями для запоминания дат
+procedure CreateStandartAdditParamsColumns(var TblAdditParams : ICValueTable; DoOpen : Boolean = False);
+
+implementation
+
+const
+  errCannotReadThisReportForm = 'Невозможно прочитать формы отчета.%s' +
+    'Возможно, Вы пытаетесь прочитать форму, версия которой младшая от текущей.%s' +
+    'Данный отчет возможно просматирвать только по кнопке для отчетов младших версий';
+  errCodeTemplateMismatch = 'Несовпадение кода формы '#39'%s'#39' отчета с сохраненным шаблоном в документе %s';
+
+  // загрузка
+  //******************************************************************************
+
+function LoadOneXGridFromDocument(xgCurrent : TO4XGrid; DocForReportSaving : ICDocuments) : Boolean;
+begin
+  Result := DocForReportSaving.FindLineBy('Код', xgCurrent.Name);
+  if Result then
+    if StrPos('object ' + DocForReportSaving.Код, VarAsStr(DocForReportSaving.Шаблон)) = 1 then
+      begin
+        xgCurrent.LoadFromString(DocForReportSaving.Шаблон);
+        xgCurrent.Refresh;
+      end
+    else
+      raise(GetTranslation(errCodeTemplateMismatch, ArrayOf(xgCurrent.Name, GetDefaultLinkValue(DocForReportSaving))));
+end;
+
+procedure LoadOneXGridFromDefault(xgCurrent : TO4XGrid; ClearBeforeLoad : Boolean = True);
+begin
+  if ClearBeforeLoad then
+    xgCurrent.ClearAll; // - должно быть, но пока стирает разделители страниц
+  xgCurrent.AddSection(DefSectionName);
+  xgCurrent.Refresh;
+end;
+
+procedure CompareReportVersions(VerOld, VerNew : string);
+begin
+  if VerOld <> VerNew then
+    raise(GetTranslation(errCannotReadThisReportForm, ArrayOf(#13, #13)));
+end;
+
+// загрузка форм отчета из документа
+
+function LoadReportLinesFromDocument(ctrlLoadTo : TWinControl; DocForReportSaving : ICDocuments;
+  ClearBeforeLoad : Boolean = True) : Boolean;
+var
+  i, j : Integer;
+  tsTemp : TTabSheet;
+  xgCurrent : To4XGrid;
+begin
+  Result := False;
+  case ctrlLoadTo.ClassName of
+    'TO4PageControl' :
+      for i := 0 to (ctrlLoadTo as TO4PageControl).PageCount - 1 do
+        begin
+          tsTemp := (ctrlLoadTo as TO4PageControl).Pages[i];
+          for j := 0 to tsTemp.ControlCount - 1 do
+            if tsTemp.Controls[j] is TO4XGrid then
+              begin
+                xgCurrent := tsTemp.Controls[j] as TO4XGrid;
+                tsTemp.TabVisible := LoadOneXGridFromDocument(xgCurrent, DocForReportSaving);
+                if tsTemp.TabVisible then
+                  Result := Result or xgCurrent.Calc
+                else
+                  begin
+                    LoadOneXGridFromDefault(xgCurrent, ClearBeforeLoad);
+                    xgCurrent.Calc := False; // скрытые XGridы должны быть деактивированы
+                  end;
+                break; // больше XGrid-ов на данной компоненте быть не должно
+              end;
+        end;
+    'TO4XGrid' :
+      LoadOneXGridFromDocument(ctrlLoadTo as TO4XGrid, DocForReportSaving);
+  end;
+end;
+
+// загрузка форм отчета по умолчанию
+
+procedure LoadReportLinesFromDefault(ctrlLoadTo : TWinControl; ClearBeforeLoad : Boolean = True);
+var
+  i, j : Integer;
+  tsTemp : TTabSheet;
+  xgCurrent : To4XGrid;
+begin
+  case ctrlLoadTo.ClassName of
+    'TO4PageControl' :
+      for i := 0 to (ctrlLoadTo as TO4PageControl).PageCount - 1 do
+        begin
+          tsTemp := (ctrlLoadTo as TO4PageControl).Pages[i];
+          for j := 0 to tsTemp.ControlCount - 1 do
+            if tsTemp.Controls[j] is TO4XGrid then
+              begin
+                xgCurrent := tsTemp.Controls[j] as TO4XGrid;
+                LoadOneXGridFromDefault(xgCurrent, ClearBeforeLoad);
+                xgCurrent.Calc := False;
+                break; // больше XGrid-ов на данной компоненте быть не должно
+              end;
+        end;
+    'TO4XGrid' :
+      begin
+        LoadOneXGridFromDefault(ctrlLoadTo as TO4XGrid, ClearBeforeLoad);
+        (ctrlLoadTo as TO4XGrid).Calc := False;
+      end;
+  end;
+end;
+
+function DoLoadReportFromDocumentOnOpen(RepCurrent : ICReport; DocForReportSaving : ICDocuments;
+  CurrentRepVersion : string) : Boolean;
+begin
+  Result := IsObjFocused(RepCurrent.Params[prmnOpenedDoc]) and DocForReportSaving.Find(RepCurrent.Params[prmnOpenedDoc]);
+  if Result then
+    CompareReportVersions(VarAsStr(DocForReportSaving.Версия, DefRepVersion), CurrentRepVersion);
+end;
+
+function LoadReportLinesOnFormOpen(ctrlLoadTo : TWinControl; TblSelectedReport : ICValueTable;
+  DocForReportSaving : ICDocuments; RepCurrent : ICReport) : Boolean;
+begin
+  try
+    Result := LoadReportLinesFromDocument(ctrlLoadTo, DocForReportSaving);
+    FillSelectedLinksValue(TblSelectedReport, DocForReportSaving);
+  finally
+    RepCurrent.Params[prmnOpenedDoc] := Null; // освобождение
+  end;
+end;
+//******************************************************************************
+
+// сохранение
+//******************************************************************************
+
+procedure CreateSavedRepDocContents(var TblContents : ICValueTable; DocForReportSaving : ICDocuments);
+begin
+  if IsNil(TblContents) then
+    TblContents := CreateObject('ValueTable')
+  else
+    TblContents.Close;
+  TblContents.AddColumn('Код', vtcString, 128);
+  TblContents.AddColumn('Шаблон', vtcMemo, 0);
+  TblContents.AddColumn('ORDNUM', vtcInteger, 0);
+  TblContents.AddColumn('НазваниеФормы', vtcString, 100);
+  TblContents.Open;
+end;
+
+procedure CreateStandartAdditParamsColumns(var TblAdditParams : ICValueTable; DoOpen : Boolean = False);
+begin
+  if IsNil(TblAdditParams) then
+    TblAdditParams := CreateObject('ValueTable');
+  TblAdditParams.AddColumn('DateFrom', vtcDate, 0);
+  TblAdditParams.AddColumn('DateTo', vtcDate, 0);
+  if DoOpen then
+    TblAdditParams.Open;
+end;
+
+procedure AppendOneXGridLineToTable(ctrlFrom : To4XGrid; TblContents : ICValueTable; FormCaption : string);
+begin
+  TblContents.Append;
+  TblContents.Код := ctrlFrom.Name;
+  TblContents.Шаблон := ctrlFrom.SaveToString;
+  TblContents.НазваниеФормы := FormCaption;
+  TblContents.Post;
+end;
+
+function FillReportTableFromControl(ctrlFrom : TWinControl; DocForReportSaving : ICDocuments) : ICValueTable;
+var
+  i, j : Integer;
+  tsTemp : TTabSheet;
+begin
+  Result := Null;
+  CreateSavedRepDocContents(Result, DocForReportSaving);
+  case ctrlFrom.ClassName of
+    'TO4PageControl' :
+      for i := 0 to (ctrlFrom as TO4PageControl).PageCount - 1 do
+        begin
+          tsTemp := (ctrlFrom as TO4PageControl).Pages[i];
+          if tsTemp.TabVisible then
+            for j := 0 to tsTemp.ControlCount - 1 do
+              if tsTemp.Controls[j] is TO4XGrid then
+                begin
+                  AppendOneXGridLineToTable(tsTemp.Controls[j] as TO4XGrid, Result, tsTemp.Caption);
+                  break; // больше XGrid-ов на данной компоненте быть не должно
+                end;
+        end;
+    'TO4XGrid' :
+      AppendOneXGridLineToTable(ctrlFrom as TO4XGrid, Result, ctrlFrom.Name);
+  end;
+  Result.DoNumbering('ORDNUM', 1, 1);
+  Result.SortBy('ORDNUM');
+end;
+
+// сохранение отчета в новый или выбранный документ отчетов. Возвращает название сохраненного документа
+
+function SaveReport(ctrlFrom : TWinControl; DocForReportSaving : ICDocuments;
+  TblSelectedLinks : ICValueTable; RepCurrent : ICReport;
+  SaveMode : TEditMode) : string;
+var
+  JrnReport : ICJournal;
+  TblSavedDoc : ICValueTable;
+begin
+  DocForReportSaving.Params[prmnForReportSavedContents] := FillReportTableFromControl(ctrlFrom, DocForReportSaving);
+  DocForReportSaving.Params[prmnForReportSavedFieldDocumDate] := CurrentDateTime;
+  // предполагается, что остальные параметры были заполнены до вызова процедуры
+  try
+    if VarAsBool(TblSelectedLinks.@ЛинкПоле.IsFocused) then
+      DocForReportSaving.EditInForm('Отчет', SaveMode)
+    else
+      DocForReportSaving.EditInForm('Отчет', dmAppend); // обязательно новый, если не выбран старый
+  finally
+    DocForReportSaving.Params[prmnForReportSavedContents] := Null;
+    TblSavedDoc := DocForReportSaving.Params['TblSavedDoc']; // ссылка на сохраненный интерфейс после сохранения по EditInForm
+    DocForReportSaving.Params['TblSavedDoc'] := Null;
+  end;
+  DocForReportSaving.ApplyUpdates;
+  //
+  if VarAsBool(DocForReportSaving.Params['IsReportFocused']) then
+    begin
+      if DocForReportSaving.Find(TblSavedDoc.@SavedLink) then
+        begin
+          FillSelectedLinksValue(TblSelectedLinks, DocForReportSaving);
+          Result := GetDefaultLinkValue(DocForReportSaving);
+        end
+      else
+        Result := '';
+    end
+  else
+    if VarAsBool(TblSelectedLinks.@ЛинкПоле.IsFocused) and
+      DocForReportSaving.Find(TblSelectedLinks.@ЛинкПоле) then
+      Result := GetDefaultLinkValue(DocForReportSaving)
+    else
+      Result := '';
+  //
+  JrnReport := RepCurrent.Params[prmnOpenedJournal];
+  if Result <> '' then
+    JrnReport.FindDoc(DocForReportSaving);
+end;
+//******************************************************************************
+
+// создание документа-отчета
+//******************************************************************************
+
+function CreateReportDoc(RepID : string; DocForReportSavingSign : string = 'Отчет') : ICDocuments;
+begin
+  Result := CreateObject('Документы.' + DocForReportSavingSign);
+  Result.SetFieldFilter('Название', '=', RepID, '', '', '');
+  Result.Select;
+  Result.Params[prmnReportType] := RepID;
+end;
+//******************************************************************************
+
+end.

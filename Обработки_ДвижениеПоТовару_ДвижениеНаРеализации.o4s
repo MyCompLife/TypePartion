@@ -1,0 +1,119 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Reports;
+
+implementation
+
+Var
+  TblConsgGoodFilter, PartionTbl, DocListTbl : ISValueTable;
+  AccsGood, AccsPartGood : ISAccs;
+  Constants : IS4VPAConst;
+  Part : Extended;
+  PTbl : ISValueTable;
+
+Procedure CreateSrvObjects(CPartionTbl, CDocListTbl: ISValueTable); server;
+begin
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваровНаРеализаторах');
+  AccsGood.ClearFieldBuffers;
+  AccsGood.ClearFieldFilters;
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+
+  //
+  PartionTbl := CPartionTbl;
+  DocListTbl := CDocListTbl;
+  //
+  Constants := GetConstants;
+end;
+
+//Procedure GetReportData(Doc : ISProcessing; var Accept : boolean);
+Procedure GetReportData(cGood: Variant; cStore: Variant; IsZerro: Boolean); server;
+Var
+  Count, TotalCount : Integer;
+  PTbl : ISValueTable;
+Begin
+  PTbl := CreateObject('ТаблицаЗначений');
+  PartionTbl.CopyColumnsTo(PTbl);
+  PartionTbl.CancelRange;
+  PartionTbl.Clear;
+  DocListTbl.CancelRange;
+  DocListTbl.Clear;
+  if IsObjFocused(cGood) then
+    AccsGood.SetFieldFilter('Товар',cGood);
+  if IsObjFocused(cStore) then
+    AccsGood.SetFieldFilter('Партнер',cStore);
+
+  AccsGood.AppendGroupRestToValueTable(CurrentDate, 'Партия;Товар;Партнер=Склад;КолОбщ;СумВх;СумВалВх;' +
+                                     'СумОтп;СумОтпНДС', PTbl);
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'Партнер;ДатаПр;Валюта;ВхЦенаБезНДС;ВхЦенаВал', PTbl);
+
+  PTbl.Select;
+  While PTbl.SelectNext Do
+    begin           
+      if not(IsZerro) then
+        begin
+          if (PTbl.КолОбщ <> 0) then
+            begin
+              PartionTbl.Append;
+              PartionTbl.AssignFields('Партия;Товар;Партнер=Склад;КолОбщ;СумВх;СумВалВх;СумОтп;' +
+                                       'СумОтпНДС;Партнер;ДатаПр;Валюта;ВхЦенаБезНДС;ВхЦенаВал',PTbl);
+              PartionTbl.Post;
+            end;
+        end
+      else
+        begin
+          PartionTbl.Append;
+          PartionTbl.AssignFields('Партия;Товар;Партнер=Склад;КолОбщ;СумВх;СумВалВх;СумОтп;' +
+                                   'СумОтпНДС;Партнер;ДатаПр;Валюта;ВхЦенаБезНДС;ВхЦенаВал',PTbl);
+          PartionTbl.Post;
+        end;
+    end;
+End;
+
+procedure GetDocsTable(Doc : ISProcessing; var Accept : boolean);
+var
+  Count, i, Total : integer;
+  tmpDoc : ISDocuments;
+  PartionList : ISValueList;
+begin
+  Accept := False;
+  PartionList := CreateObject('ValueList');
+  PartionTbl.GroupToList('Партия',PartionList);
+  AccsGood.SetFieldFilter('Партия',PartionList);
+  AccsGood.OutcomeMotionWithMinus := True;
+  AccsGood.AppendGroupMotionToValueTable(0, CurrentDate, amtBoth, 'Товар;Партнер=Склад;MotionSign;'+
+           'Партия;Document;Date;СумОтп;СумОтпНДС;КолОбщ;СумВх;СумНац',
+           -1, DocListTbl);
+  DocListTbl.DoGetLinks('Партнер=Document.Партнер');
+  DocListTbl.DoGetMeanNames('Document', 'DNames');
+  DocListTbl.DoCalculation('Цена', 'СумОтп/КолОбщ');
+  DocListTbl.Select;
+  Count := 1;
+  Total := DocListTbl.LineCount;
+  while DocListTbl.SelectNext do
+    begin
+      DocListTbl.Edit;
+      DocListTbl.НазваниеПартнера := GetPartName(DocListTbl.Партнер);
+      DocListTbl.Post;
+    end;
+  DocListTbl.DoGetLinks('Отпуск=Document.Отпуск;НомерДокумента=Document.НомерДокумента');
+  Accept := True;
+end;
+
+
+procedure SetPartScrollParams(Parts, CStore : Variant); server;
+var
+  Accept : boolean;
+begin
+  Part := Parts;
+//  Store := CStore;
+  GetDocsTable(Null, Accept);
+end;
+
+//function GetRunReportEP(CGood: Variant) : Variant; server;
+//begin
+//  Good := CGood;
+//  Result := EntryPoint(GetReportData);
+//end;
+
+end.

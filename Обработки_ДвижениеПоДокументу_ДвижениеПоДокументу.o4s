@@ -1,0 +1,27 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation  
+var DocMoveTbl : ISValueTable;
+    AccsSign : string;
+    Accs : ISAccs;
+    Doc : ISDocuments;
+procedure GetDocMotion(Proc:ISProcessing; var Accept : boolean);
+begin        
+ Accept := false;
+ Accs := CreateObject('Аккумуляторы.'+AccsSign);
+ Accs.SaveDocMotionToValueTable(Doc, amtBoth, DocMoveTbl);
+ Accept := not Proc.Terminated;
+end;
+
+function GetDocMotionEP(DocMoveTbls : ISValueTable; Docs:ISDocuments; AccsSigns : string) : Variant; server;
+begin
+ DocMoveTbl := DocMoveTbls; 
+ Doc := Docs;
+ AccsSign := AccsSigns;
+ Result := EntryPoint(GetDocMotion);
+end;
+
+end.

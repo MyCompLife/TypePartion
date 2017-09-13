@@ -1,0 +1,43 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+ AccPr : ICProcessing;
+ FilterTbl : ICValueTable;
+ ColName : String;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+ AccPr := Mean;
+ ColName := Params[1];
+ FilterTbl := CreateObject('ТаблицаЗначений');
+ Params[0].GroupTo(ColName,'',FilterTbl);
+ (dbgData.PosColumns.Items[0] as TO4GridColumn).O4FieldName := ColName;
+ (dbgData.PosColumns.Items[0] as TO4GridColumn).Title.Caption := ColName;
+ (dbgData.PosColumns.Items[0] as TO4GridColumn).Width := 200;
+ FilterTbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+procedure btnOK_Click(Sender : TObject);
+begin
+ if FilterTbl.IsFocused then
+   begin
+     AccPr.Params['Filter'] := FilterTbl._Default[ColName];
+     Form.ModalResult := 1;
+   end
+ else
+   ShowMessage('Выберите запись!');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+Panel2:TO4Panel
+btnOK:TO4Button
+btnCancel:TO4Button
+TVS:TO4TableValueSource

@@ -1,0 +1,491 @@
+interface
+
+uses
+  System, DispIntf, –асчеты, Reports, Ѕух‘ункции;
+
+implementation
+
+const
+  ReportName = 'ќб≥гово-сальдова в≥дом≥сть за рахунком ';
+
+var
+  Plan : ICPlan;
+  DSum : Variant;
+  DateFrom, DateTo : DateTime;
+  Q : ICBhQuery;
+  sfSum : Integer;
+  AO, CorAO : string;
+  MYF : ICDictionary;
+  Acc : IObject;
+
+procedure tbShowTools_Click(Sender : TObject);
+begin
+  XGridTools1.Visible := not XGridTools1.Visible;
+  if XGridTools1.Visible then
+    tbShowTools.ImageIndex := 98
+  else
+    tbShowTools.ImageIndex := 44;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  GRD.ClearAll();
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+end;
+
+procedure AddHorz(Sec : string);
+begin
+  GRD.AddSection(Sec + ':M', True);
+  if cbAO2.Checked then
+    GRD.AddSection(Sec + ':AN', False);
+  if cbDet.Checked then
+    GRD.AddSection(Sec + ':OP', False);
+  if cbPrice.Checked then
+    GRD.AddSection(Sec + ':PRICE', False);
+  if cbCount.Checked then
+    GRD.AddSection(Sec + ':SCNT', False)
+  else
+    GRD.AddSection(Sec + ':S', False);
+  if cbCount.Checked then
+    GRD.AddSection(Sec + ':DRCNT', False);
+  if cbDetail.Checked then
+    begin
+      Q.SelectCorAcc(1, 5, rfCorDR);
+      while Q.SelectCorAccNext(1) do
+        GRD.AddSection(Sec + ':DR1', False);
+    end;
+  GRD.AddSection(Sec + ':DR', False);
+  if cbCount.Checked then
+    GRD.AddSection(Sec + ':CRCNT', False);
+  if cbDetail.Checked then
+    begin
+      Q.SelectCorAcc(1, 5, rfCorCR);
+      while Q.SelectCorAccNext(1) do
+        GRD.AddSection(Sec + ':CR1', False);
+    end;
+  GRD.AddSection(Sec + ':CR', False);
+  if cbCount.Checked then
+    GRD.AddSection(Sec + ':ECNT', False)
+  else
+    GRD.AddSection(Sec + ':E', False);
+end;
+
+function DebCred(TypeTest : Integer) : Boolean;
+var
+  SumD, SumC : Variant;
+begin
+  Result := False;
+  case TypeTest of
+    0 :
+      begin
+        if (RoundFloat(Q.DS(sfSum), 2) <> 0) or (RoundFloat(Q.CS(sfSum), 2) <> 0) then
+          Result := True
+        else
+          if (RoundFloat(Q.DE(sfSum), 2) <> 0) or (RoundFloat(Q.CE(sfSum), 2) <> 0) then
+            Result := True
+          else
+            begin
+              Q.SelectCorAcc(1, 5, rfCorDR);
+              while Q.SelectCorAccNext(1) do
+                if (RoundFloat(Q.CorDR(sfSum), 2) <> 0) then
+                  Result := True;
+              Q.SelectCorAcc(1, 5, rfCorCR);
+              while Q.SelectCorAccNext(1) do
+                if (RoundFloat(Q.CorCR(sfSum), 2) <> 0) then
+                  Result := True;
+            end;
+        if Result and cbRotate.Checked then
+          if (RoundFloat(Q.DR(sfSum), 2) = 0) and (RoundFloat(Q.CR(sfSum), 2) = 0) then
+            Result := False
+      end;
+    1 :
+      if (RoundFloat(Q.DR(sfSum), 2) <> 0) or (RoundFloat(Q.CR(sfSum), 2) <> 0) then
+        Result := True;
+  end;
+end;
+
+procedure Period;
+begin
+  if cbRotate.Checked and (RoundFloat(Q.DR(sfSum), 2) = 0) and (RoundFloat(Q.CR(sfSum), 2) = 0) then
+    exit;
+  if cbDet.Checked then
+    begin
+      Q.SelectPeriod(0, 0, rfAll);
+      while Q.SelectPeriodNext(0) do
+        if DebCred(1) then
+          AddHorz('DOC');
+    end;
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  BI : ICBuh;
+  prk, N, i : Integer;
+  SumD, SumC : Variant;
+  AccCode : string;
+begin
+  GRD.ClearAll();
+  DateFrom := StrToDate(eDateFrom.Text);
+  DateTo := StrToDate(eDateTo.Text);
+
+  MYF := CreateObject('—правочники.¬ашеѕредпри€тие');
+  MYF.Select;
+  MYF.SelectNext;
+  BI := CreateObject('Ѕух”чет.Ѕухучет');
+  AccCode := edAcc.Text;
+  if CheckAcc(AccCode, Plan) then
+    edAcc.Text := AccCode
+  else
+    exit;
+  Q := BI.Query();
+  Q.UseAcc(edAcc.Text);
+  case edAO.ItemIndex of
+    0 :
+      AO := '“овары';
+    1 :
+      AO := 'ѕартнеры';
+    2 :
+      AO := '—лужащие';
+    3 :
+      AO := '—клады';
+    4 :
+      AO := '–асч—чет';
+    5 :
+      AO := '–еализаторы';
+    6 :
+      AO := '¬алюты';
+  end;
+  case edAO2.ItemIndex of
+    0 :
+      CorAO := '“овары';
+    1 :
+      CorAO := 'ѕартнеры';
+    2 :
+      CorAO := '—лужащие';
+    3 :
+      CorAO := '—клады';
+    4 :
+      CorAO := '–асч—чет';
+    5 :
+      CorAO := '–еализаторы';
+    6 :
+      CorAO := '¬алюты';
+  end;
+  if cbAO.Checked then
+    Q.UseAo(AO, Unassigned, False)
+  else
+    if cbPlus.Checked then
+      Q.UseAO('ѕартнеры', Unassigned, False);
+  if cbAO2.Checked then
+    Q.UseAo(CorAO, Unassigned, False);
+  if cbCurrency.Checked then
+    sfSum := sfCurSumma
+  else
+    sfSum := sfSumma;
+  if edCorAcc.Text <> '' then
+    begin
+      AccCode := edCorAcc.Text;
+      if CheckAcc(AccCode, Plan) then
+        edCorAcc.Text := AccCode
+      else
+        exit;
+    end;
+  Q.UseCorAcc(edCorAcc.Text);
+  Q.SetSubAccLevel(3, 3);
+  prk := rgPeriodKind.ItemIndex + 1;
+  if cbCode.Checked then
+    Q.DefineFields('Code= од;≈д»зм=≈д»зм;LF=ќѕ‘');
+  Q.RunThreaded(trans('ќтчет с детализацией'),
+    DateFrom, DateTo + 1,
+    prk, sfAll);
+
+  AddHorz('H');
+  if cbAO.Checked then
+    begin
+      Q.SelectAO(1, 0, 1, rfAll);
+      while Q.SelectAONext(1, 0) do
+        begin
+          Inc(N);
+          if DebCred(0) then
+            AddHorz('T');
+          StatusText(IntToStr(N));
+
+          if cbAO2.Checked then
+            begin
+              Q.SelectAO(2, 0, 1, rfAll);
+              while Q.SelectAONext(2, 0) do
+                begin
+                  Inc(N);
+                  if not (cbRotate.Checked and (RoundFloat(Q.DR(sfSum), 2) = 0) and (RoundFloat(Q.CR(sfSum), 2) = 0)) then
+                    if (RoundFloat(Q.DS(sfSum), 2) + RoundFloat(Q.CS(sfSum), 2) + RoundFloat(Q.DR(sfSum), 2) +
+                      RoundFloat(Q.CR(sfSum), 2) + RoundFloat(Q.DS(sfSum), 2) + RoundFloat(Q.CS(sfSum), 2) <> 0) then
+                      AddHorz('D');
+                  StatusText(IntToStr(N));
+                  Period;
+                end
+            end
+          else
+            Period;
+        end;
+    end
+  else
+    Period;
+  //
+{  Nil(Q);
+  Q := BI.Query();
+  Q.UseAcc(edAcc.Text);
+  if cbAO.Checked then Q.UseAo(AO,Unassigned,False);
+  if cbAO2.Checked then Q.UseAo(CorAO,Unassigned,False);
+  Q.UseCorAcc(edCorAcc.Text);
+  Q.SetSubAccLevel(0,0);
+  if cbCode.Checked then Q.DefineFields('Code= од;≈д»зм=≈д»зм;LF=ќѕ‘');
+  Q.RunThreaded(trans('ќтчет с детализацией'),
+    DateFrom,DateTo+1,
+    prk,sfAll);
+  Q.SelectAcc(0,0,rfAll);
+  while Q.SelectAccNext(0) do }
+  //
+  Acc := Plan.AccByCode(edAcc.Text);
+  if VarAsBool(Acc.IsFocused) and cbPlus.Checked and (Acc.“ип—альдо = 1) then
+    begin
+      Q.SelectAO(1, 0, 1, rfAll);
+      while Q.SelectAONext(1, 0) do
+        ;
+    end;
+  AddHorz('F');
+  nil(Q);
+  StatusText('');
+  i := 1;
+  if cbAO2.Checked then
+    inc(i);
+  if cbDet.Checked then
+    inc(i);
+  GRD.FixedColCount := i;
+  if GRD.RowCount > 4 then
+    GRD.FixedRowCount := 4;
+end;
+
+procedure GRD_VPASetSectionVarValues(XGrid : TO4XGrid; HSect, VSect : string; Vars : Variant);
+var
+  Name : string;
+begin
+  if isNil(Q) then
+    exit;
+  case HSect of
+    'H' :
+      case VSect of
+        'M' :
+          begin
+            Vars.M := ReportName + edAcc.Text + ' з ' +
+              FormatDateTime('dd.mm.yyyy', DateFrom) + ' до ' + FormatDateTime('dd.mm.yyyy', DateTo);
+            Vars.MyFirm := GetPartName(MYF);
+          end;
+        'DR1', 'CR1' :
+          Vars.ACC := Q.CorAcc();
+      end;
+    'T', 'D', 'DOC' :
+      begin
+        case HSect of
+          'T' :
+            begin
+              Name := Q.AO(1);
+              if cbCode.Checked then
+                Name := Q.AoObj(1). од + ' ' + Name;
+              if cbUnitName.Checked then
+                if VarAsBool(Q.AoObj(1).≈д»зм.IsFocused) then
+                  Name := Name + ', ' + Q.AoObj(1).≈д»зм.Value;
+              Vars.M := Name;
+            end;
+          'D' :
+            Vars.M := Q.AO(2);
+          'DOC' :
+            begin
+              if rgPeriodKind.ItemIndex < 2 then
+                Vars.M := FormatDateTime('dd.mm.yyyy', Q.BegDate()) + ' ' + Q.OperFld('ƒокумент')
+              else
+                if rgPeriodKind.ItemIndex = 2 then
+                  Vars.M := FormatDateTime('dd.mm.yyyy', Q.BegDate())
+                else
+                  Vars.M := (FormatDateTime('dd.mm.yyyy', Q.BegDate()) + '-' +
+                    FormatDateTime('dd.mm.yyyy', Q.EndDate()));
+            end;
+        end;
+        case VSect of
+          'S' :
+            begin
+              Vars.D := Q.DSx(sfSum);
+              Vars.C := Q.CSx(sfSum);
+            end;
+          'DR1' :
+            Vars.D := Q.CorDR(sfSum);
+          'DR' :
+            Vars.D := Q.DR(sfSum);
+          'CR1' :
+            Vars.C := Q.CorCR(sfSum);
+          'CR' :
+            Vars.C := Q.CR(sfSum);
+          'E' :
+            begin
+              Vars.D := Q.DEx(sfSum);
+              Vars.C := Q.CEx(sfSum);
+            end;
+          'SCNT' :
+            begin
+              Vars.D := Q.DS(sfSum);
+              Vars.C := Q.CS(sfSum);
+              Vars.DC := Q.DS(sfCount);
+              Vars.CC := Q.CS(sfCount);
+            end;
+          'DRCNT' :
+            Vars.DC := Q.DR(sfCount);
+          'CRCNT' :
+            Vars.CC := Q.CR(sfCount);
+          'ECNT' :
+            begin
+              Vars.D := Q.DE(sfSum);
+              Vars.C := Q.CE(sfSum);
+              Vars.DC := Q.DE(sfCount);
+              Vars.CC := Q.CE(sfCount);
+            end;
+          'PRICE' :
+             if Q.DE(sfCount) <> 0 then
+               Vars.PRICE := Q.DE(sfSum) / Q.DE(sfCount);
+        end;
+      end;
+    'F' :
+      case VSect of
+        'S', 'SCNT' :
+          begin
+            Vars.D := Q.DSx(sfSum);
+            Vars.C := Q.CSx(sfSum);
+          end;
+        'DR1' :
+          Vars.D := Q.CorDR(sfSum);
+        'DR' :
+          Vars.D := Q.DR(sfSum);
+        'CR1' :
+          Vars.C := Q.CorCR(sfSum);
+        'CR' :
+          Vars.C := Q.CR(sfSum);
+        'E', 'ECNT' :
+          begin
+            Vars.D := Q.DEx(sfSum);
+            Vars.C := Q.CEx(sfSum);
+          end
+      end;
+  end;
+end;
+
+procedure ToolButton1_Click(Sender : TObject);
+begin
+  GRD.Print(trans('ќборотно-сальдова€ по счету'), True);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Plan := CreateObject('ѕланы—четов.ѕлан—четов');
+  Plan.Select();
+  while Plan.SelectNext(True) do
+    begin
+      edAcc.Items.Add(Plan.CodeField);
+      edCorAcc.Items.Add(Plan.CodeField);
+    end;
+end;
+
+procedure cbDet_Click(Sender : TObject);
+begin
+  rgPeriodKind.Enabled := cbDet.Checked;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  GRD.ExportToExcel;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+ToolBar1:TO4ToolBar
+ToolButton5:TO4ToolButton
+tbRun:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbShowTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton2:TO4ToolButton
+ToolButton3:TO4ToolButton
+Panel8:TO4Panel
+Label1:TO4Label
+Label4:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel1:TO4Panel
+Label2:TO4Label
+Label3:TO4Label
+edAcc:TO4Edit
+cbAO:TO4CheckBox
+edAO:TO4Edit
+cbAO2:TO4CheckBox
+edAO2:TO4Edit
+edCorAcc:TO4Edit
+rgPeriodKind:TO4RadioGroup
+cbDet:TO4CheckBox
+GroupBox1:TO4GroupBox
+cbCount:TO4CheckBox
+cbPrice:TO4CheckBox
+cbCode:TO4CheckBox
+cbUnitName:TO4CheckBox
+cbDetail:TO4CheckBox
+cbCurrency:TO4CheckBox
+cbRotate:TO4CheckBox
+cbPlus:TO4CheckBox
+GRD:TO4XGrid
+XGridTools1:TXGridTools
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem

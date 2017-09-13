@@ -1,0 +1,38 @@
+interface
+
+uses System, DispIntf, Расчеты;
+
+implementation
+
+var MasterData, UserStores: ICDictionary;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if not VarAsBool(MasterData.Склад.IsFocused) then
+    Raise('Склад не можеть быть пустым!');
+  if UserStores.FindByField('Склад',MasterData.Склад,false) then
+    Raise('Этот склад уже выбран для пользователя!');
+end;
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  MasterData := MDS.GetMean;
+  UserStores := CreateObject('Справочники.СкладыПользователей');
+  UserStores.UseMaster(MasterData._GetOwner);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+MainPanel:TO4Panel
+Label5:TO4Label
+deStore:TO4DBEdit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem
+MDS:TO4DataSource

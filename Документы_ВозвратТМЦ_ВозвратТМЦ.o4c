@@ -1,0 +1,730 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, InitColors, ConstNames, Расчеты, РаботаСЖурналомИзменений;
+
+implementation
+
+procedure bFresh_Click(Sender : TObject); forward;
+procedure eCurrencyDoc_Change(Sender : TObject); forward;
+
+var
+  ChangeLock, HasOwner, DropMode, LockCalc, ScrollLock, isSave, AddDoc  : Boolean;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  LinkDoc : Variant;
+  MasterData, OrderOwner : ICDocuments;
+  cvtICalc, tmpGoods, GoodTbl, tmpCtx : ICValueTable;
+  InputStores : ICValueList;
+  Currency, Store : ICDictionary;
+  CursorVis : TCursor;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  Currency := CreateObject('Справочники.Валюты');
+  Store := CreateObject('Справочники.Склады');
+  GoodTbl := CreateObject('ТаблицаЗначений');
+  tmpGoods := CreateObject('ТаблицаЗначений');
+  cvtICalc := CreateObject('ТаблицаЗначений');
+  InputStores := CreateObject('СписокЗначений');
+  Store.Select;
+  if Store.FindByField('Активность', True, False) then
+    InputStores.AddValue(Store.Название, Store);
+  Store.Select;
+  while Store.SelectNext do
+    if not Store.Активность = True then
+      InputStores.AddValue(Store.Название, Store); // или ('',S)
+  InputStores.UseControl(CtrlToVar(eInputStores));
+  InputStores.CurIndex := 0;
+end;
+
+procedure CheckControls;
+begin
+  if MasterData.GetDocState > 0 then
+    exit;
+  if MasterData.LinesCount() = 0 then
+    begin
+      eDetTax.Enabled := False;
+      eCountPack.Enabled := False;
+      eCurrency.Enabled := False;
+      eCurs.Enabled := False;
+      eSumVal.Enabled := False;
+      ePack.Enabled := False;
+    end
+  else
+    begin
+      eDetTax.Enabled := True;
+      eCountPack.Enabled := True;
+      eCurrency.Enabled := True;
+      eCurs.Enabled := True;
+      eSumVal.Enabled := True;
+      ePack.Enabled := True;
+    end;
+end;
+
+procedure TableCalcFields(Doc : ICDocuments);
+begin
+  if lockCalc then
+    exit;
+  CalcLineSumma(Doc); //находится в модуле Расчёты
+  GetOverSumPerc(Doc); //находится в модуле Расчёты
+end;
+
+procedure CalcFields(Doc : ICDocuments);
+begin
+  if lockCalc then
+    exit;
+  GetCalcValSumma(Doc); //находится в модуле Расчёты
+end;
+
+procedure CalcLocalDocSumByTableChange;
+begin
+  try
+    DropMode := True;
+    ScrollLock := True;
+    MasterData.TableAutoCalcFields := False;
+    TDS.VPAOnFieldChange.EventName := ''; //блокировка изменения поля в табл. части документа
+    MDS.VPAOnFieldChange.EventName := ''; //блокировка изменения поля в шапке документа
+    MasterData.SaveTableBookmark;
+    MasterData.DisableTableControls;
+    CalcTransSumma(MasterData, Constants.ProcentPDV);
+  finally
+    MasterData.EnableTableControls;
+    DropMode := False;
+    ScrollLock := False;
+    MasterData.TableAutoCalcFields := True;
+    TDS.VPAOnFieldChange.EventName := 'TDS_FieldChange';
+    MDS.VPAOnFieldChange.EventName := 'MDS_FieldChange';
+    MasterData.GotoTablebookmark(True);
+  end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  LockCalc := True;
+  try
+    server.InitSrvData;
+  finally
+    LockCalc := False;
+  end;
+  CreateObjects;
+  edTax.Text := FloatToStr(Constants.ProcentPDV);
+  SetColors(Constants);
+  MasterData.SetTableOnCalcFields(EntryPoint(TableCalcFields));
+  MasterData.SetOnCalcFields(EntryPoint(CalcFields));
+  MasterData.SetSrvTableOnCalcFields(server.GetCalcParams);
+end;
+
+procedure btnBrowser_Click(Sender : TObject);
+begin
+  if IsNil(tmpCtx) then
+    begin
+      tmpCtx := CreateObject('ТаблицаЗначений');
+      MasterData.SaveTableStructure('', tmpCtx);
+      OrderOwner := MasterData.Owner;
+      if (not IsNil(OrderOwner)) and (OrderOwner.IsFocused) then
+        begin
+          OrderOwner.SetSrvToClientPos();
+          tmpCtx.CopyDataToServer;
+          server.СформироватьСодержимоеДляСброса(tmpCtx.SrvMean, OrderOwner.SrvMean);
+          tmpCtx.CopyDataFromServer;
+          tmpCtx.SrvMean.Clear;
+        end;
+    end;
+  LinkDoc := MasterData.OpenDropSource('Обработки.ПодборПоСчетуПарт', 'ПодборПоСчетуПарт', tmpCtx);
+end;
+
+procedure TDS_StartDrop(Source : Variant; var Accept : Boolean);
+begin
+  if nbList.PageIndex = 0 then
+    begin
+      LockCalc := True;
+      MasterData.UpdateLine(True);
+      DropMode := True;
+      ScrollLock := True;
+      MasterData.TableAutoCalcFields := False;
+      CursorVis := WaitCursorStart;
+    end
+  else
+    begin
+      Accept := False;
+      SetCursor(CursorVis);
+    end;
+end;
+
+procedure AddGoodFInv(TblPartFromInvoice : ICValueTable; GetCount : Boolean; Count : Decimal);
+begin
+  if VarAsBool(TblPartFromInvoice.IsFocused) and (not MasterData.FindLineBy('Товар;Партия', ArrayOf(TblPartFromInvoice.@Товар, TblPartFromInvoice.Партия))) then
+    begin
+      LockCalc := True;
+      try
+        MasterData.AppendLine();
+        MasterData.AssignFields('Товар;Партия;ВхЦенаБезНДС;Цена;ЦенаВВалюте=Цена', TblPartFromInvoice);
+        if GetCount then
+          MasterData.Количество := Count
+        else
+          if TblPartFromInvoice.Количество > 0 then
+            MasterData.Количество := TblPartFromInvoice.Количество
+          else
+            MasterData.Количество := 1;
+        MasterData.СтавкаНДС := MasterData.Товар.СтавкаНДС;
+        MasterData.Код := MasterData.Товар.Код;
+        MasterData.ЕдИзм := MasterData.Товар.ЕдИзм;
+        MasterData.ЦенаБезНДС := GetPriceNT(MasterData.Цена, MasterData.СтавкаНДС);
+        MasterData.НДС := MasterData.Цена - MasterData.ЦенаБезНДС;
+        MasterData.ВалютаТовара := GetNatCurrency(Currency);
+        MasterData.КурсТовара := 1;
+        MasterData.НаличиеТовара := TblPartFromInvoice.Количество;
+        MasterData.ОбщКол := TblPartFromInvoice.Количество;
+        MasterData.Склад := Store;
+        MasterData.ЦенаБезСкидкиНадбавки := MasterData.Цена;
+      finally
+        LockCalc := False;
+      end;
+      MasterData.PostLine();
+    end;
+end;
+
+procedure TDS_Drop(Source : Variant; var Accept : Boolean);
+var
+  GetCount : Boolean;
+  TblPartFromInvoice : ICValueTable;
+  Count : Decimal;
+  s : string;
+  Good : Variant;
+begin
+  GetCount := False;
+  Count := 1;
+  //   S := '';
+  if VarAsBool(Source.IsType('ТаблицаЗначений')) then
+    begin
+      S := Source.Товар.NameField;
+      Good := Source.Params['Товар'];
+      if IsObject(Good) then
+        Count := Good.Количество
+      else
+        Count := Source.Количество;
+    end
+  else
+    S := '';
+
+  Store := InputStores.GetValue(InputStores.CurIndex);
+  if not VarAsBool(Store.IsFocused) then
+    Store := GetAStore(Store);
+  if VarAsBool(Options.GetServerPrm(CountAck)) then
+    begin
+      GetCount := True;
+      if not StdInpDec(inpGoodCount + s, Count) then
+        Accept := MessageDlg(EnterAsk, mtConfirmation, ArrayOf(mbYes, mbNo)) = mrNo;
+    end;
+  if not Accept then
+    exit;
+  case VarAsStr(Source.TblName) of
+    'TblPartFromInvoice' :
+      AddGoodFInv(Source, GetCount, Count);
+    'TblFromInvoice' :
+      begin
+        TblPartFromInvoice := Source.Params['ПодчиненнаяТаблица'];
+        if TblPartFromInvoice.SelectFirst() then
+          AddGoodFInv(TblPartFromInvoice, GetCount, Count);
+      end;
+  end;
+end;
+
+procedure TDS_EndDrop(Source : Variant);
+begin
+  LockCalc := False;
+  SetCursor(CursorVis);
+  CalcLocalDocSumByTableChange;
+  MasterData.TableAutoCalcFields := True;
+  DropMode := False;
+  ScrollLock := False;
+end;
+
+procedure TDS_VPAAfterPost(Sender : TObject);
+begin
+  if not DropMode then
+    CalcLocalDocSumByTableChange;
+end;
+
+procedure tbsHeader_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbHeader.PageIndex := NewTab;
+end;
+
+procedure tsTable_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbList.PageIndex := Newtab;
+  if (NewTab = 1) or (NewTab = 2) then
+    begin
+      CursorVis := WaitCursorStart;
+      GoodTbl.UseDataSource(0);
+      MasterData.SaveContents('', GoodTbl);
+      try
+        case NewTab of
+          1 :
+            GoodTbl.GroupBy('Товар;Код;ЕдИзм', 'Количество;СуммаСтроки;СуммаСтрокиБезНДС;НДССтроки;НаличиеТовара');
+          2 :
+            GoodTbl.GroupBy('Склад;Товар;Код;ЕдИзм', 'Количество;СуммаСтроки;СуммаСтрокиБезНДС;НДССтроки;НаличиеТовара');
+        end;
+      finally
+        SetCursor(CursorVis);
+      end;
+      SetGoodTblFormat(GoodTbl);
+      case NewTab of
+        1 :
+          GoodTbl.UseDataSource(CtrlToVar(TVSGood));
+        2 :
+          GoodTbl.UseDataSource(CtrlToVar(TVSStore));
+      end;
+    end;
+end;
+
+procedure eTransSummaNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure ReceiveEvent(Sender : ICDocuments; CenterName, FromUserName : string;
+  Param : Variant);
+begin
+  if MasterData.BrowseMode then
+    bFresh_Click(tbRefresh);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form)
+  else
+    begin
+      ePayDate.Enabled := MasterData.ПризнакСрокаОплаты;
+      CheckControls;
+      eRespons.Enabled := GetUDASet('changeresp');
+    end;
+  nbList.PageIndex := 0;
+  nbHeader.PageIndex := 0;
+  nbSumms.PageIndex := 0;
+  cbPayDate.Checked := MasterData.ПризнакСрокаОплаты;
+  eCurrencyDoc_Change(eCurrencyDoc);
+  if VarAsBool(Options.GetServerPrm(RefreshOnEnter)) then
+    bFresh_Click(tbRefresh);
+  if VarAsBool(Options.GetServerPrm(RefCountOpt)) then
+    MasterData.RegEventReceiver(evCount, EntryPoint(ReceiveEvent), VarAsInt(Options.GetLocalPrm(DelayTime), 1000));
+  rgCalcSum.ItemIndex := MasterData.МетодРасчета;
+end;
+
+procedure ePriceNT_Change(Sender : TObject);
+begin
+  if ChangeLock or VarAsBool(MasterData.BrowseMode) or DropMode then
+    exit;
+  MasterData.UpdateLine(True);
+end;
+
+procedure TDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  GoodTDSFieldChange(MasterData, FieldName, Value, ChangeLock, DropMode);
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  GoodMDSFieldChange(MasterData, FieldName, Value, ChangeLock);
+end;
+
+procedure cbPayDate_Click(Sender : TObject);
+begin
+  MasterData.ПризнакСрокаОплаты := cbPayDate.Checked;
+  GetNextDateForDocument(MasterData, Constants, False);
+  ePayDate.Enabled := cbPayDate.Checked;
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin        
+  AddDoc := true;
+  MasterData.TableAutoCalcFields := False;
+  LockCalc := True;
+  HasOwner := False;
+  try
+    if not Currency.FindByField('Активность', VarAsInt(True), True) then
+      Currency := GetNatCurrency(Currency);
+    if Currency.IsFocused then
+      begin
+        MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+        MasterData.Валюта := Currency;
+      end;
+    MasterData.Отпуск := 0;
+    GetNextDateForDocument(MasterData, Constants, True);
+    MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+    MasterData.ДатаДоверенности := CurrentDate;
+    MasterData.МетодРасчета := VarAsInt(Options.GetServerPrm(CalcSumRule));
+    //перенос данных из счета
+    OrderOwner := MasterData.Owner;
+    if not ((not IsNil(OrderOwner)) and OrderOwner.IsFocused) then
+      exit;
+
+    MasterData.AssignFields('Партнер;Посредник;ПроцентОбщий;Валюта;Курс', OrderOwner);
+  finally
+    LockCalc := False;
+    MasterData.TableAutoCalcFields := True;
+    HasOwner := True;
+  end;
+end;
+
+procedure ePack_ActionExecute(Sender : TObject);
+var
+  Count : Decimal;
+begin
+  Count := 1;
+  if VarAsBool(Options.GetServerPrm(CountAck)) then
+    StdInpDec(inpPackCount, Count);
+  MasterData.КоличествоУпаковок := Count;
+  MasterData.Количество := MasterData.Упаковка.Количество * MasterData.КоличествоУпаковок;
+end;
+
+procedure tsSumms_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  nbSumms.PageIndex := Newtab;
+end;
+
+procedure bCurrency_Click(Sender : TObject);
+begin
+  ChangeLock := True;
+  DropMode := True;
+  try
+    ChCurrency(MasterData, cvtICalc);
+  finally
+    ChangeLock := False;
+    DropMode := False;
+  end;
+end;
+
+procedure bFresh_Click(Sender : TObject);
+begin
+  //  if MasterData.LinesCount <= 0 then tbRefresh.Enabled := false else tbRefresh.Enabled := true;
+  CursorVis := WaitCursorStart;
+  MasterData.TableAutoCalcFields := False;
+  ChangeLock := True;
+  ScrollLock := True;
+  LockCalc := True;
+  DropMode := True;
+  try
+    MasterData.SaveContents('', tmpGoods);
+    LockCalc := False;
+    tmpGoods.CopyDataToServer;
+    server.GetMyGoodCount(tmpGoods.SrvMean, MasterData);
+    tmpGoods.CopyDataFromServer;
+    tmpGoods.SrvMean.Clear;
+    LockCalc := False;
+    MasterData.LoadContents('', tmpGoods);
+  finally
+    ChangeLock := False;
+    ScrollLock := False;
+    DropMode := False;
+    MasterData.TableAutoCalcFields := True;
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure eCurrencyDoc_Change(Sender : TObject);
+begin
+  eTransSummaNT_Change(eCurrencyDoc);
+  // if VarAsBool(MasterData.Валюта.IsFocused) then bCurrency.Enabled:=True
+  // else bCurrency.Enabled:=False;
+end;
+
+procedure eCurrencyDoc_ActionClear(Sender : TObject);
+begin
+  bCurrency.Enabled := False;
+end;
+
+{$D-}
+procedure dbgListData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.LinesCount() > 0 then
+    if MasterData.Партия <> 0 then
+      Index1 := 52
+    else
+      if VarAsBool(MasterData.@Правило.IsFocused) then
+        Index1 := 42
+      else
+        Index1 := 49;
+end;
+
+procedure dbgListData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if (MasterData.LinesCount > 0) and (MasterData.GetDocState < 1) and
+    (MasterData.НаличиеТовара < MasterData.Количество) then
+    if Highlight then
+      begin
+        BackColor := BlZeroSel;
+        DrawFont.Color := BlFZeroSel;
+      end
+    else
+      begin
+        BackColor := BlZero;
+        DrawFont.Color := BlFZero;
+      end;
+end;
+{$D+}
+
+procedure ePartner_ActionExecute(Sender : TObject);
+var
+  TmpPartner : ICDictionary;
+begin
+  if VarAsBool(MasterData.@Партнер.IsFocused) then
+    begin
+      TmpPartner := MasterData.Партнер;
+      if TmpPartner.GetSign = 'ФизЛица' then
+        MasterData.ЧерезКого := TmpPartner;
+      GetNextDateForDocument(MasterData, Constants, True); 
+      cbPayDate.Checked := MasterData.ПризнакСрокаОплаты;
+    end;
+end;
+
+procedure bCourse_Click(Sender : TObject);
+begin
+  ChangeLock := True;
+  DropMode := True;
+  try
+    ChCourse(MasterData, cvtICalc);
+  finally
+    ChangeLock := False;
+    DropMode := False;
+  end;
+end;
+
+{$D-}
+procedure dbgGood_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if GoodTbl.IsFocused and (GoodTbl.НаличиеТовара < GoodTbl.Количество) and (MasterData.GetDocState < 1) then
+    if Highlight then
+      begin
+        BackColor := BlZeroSel;
+        DrawFont.Color := BlFZeroSel;
+      end
+    else
+      begin
+        BackColor := BlZero;
+        DrawFont.Color := BlFZero;
+      end;
+end;
+
+procedure dbgStore_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+  if GoodTbl.IsFocused and (GoodTbl.НаличиеТовара < GoodTbl.Количество) and (MasterData.GetDocState < 1) then
+    if Highlight then
+      begin
+        BackColor := BlZeroSel;
+        DrawFont.Color := BlFZeroSel;
+      end
+    else
+      begin
+        BackColor := BlZero;
+        DrawFont.Color := BlFZero;
+      end;
+end;
+{$D+}
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  GoodTbl.SortBy('Код;Товар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  GoodTbl.SortBy('Товар;Код');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure TDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if ScrollLock then
+    exit;
+  CheckControls;
+  if miLinkDict.Checked and not IsNil(LinkDoc) then
+      LinkDoc.ExecProc(Null, '', MasterData.Товар, Null);
+end;
+
+procedure MenuItem6_Click(Sender : TObject);
+begin
+  TDS_VPAAfterPost(TDS);
+end;
+
+procedure miLinkDict_Click(Sender : TObject);
+begin
+  miLinkDict.Checked := not miLinkDict.Checked;
+end;
+
+procedure btnTax_Click(Sender : TObject);
+begin
+  DropMode := True;
+  ScrollLock := True;
+  LockCalc := True;
+  MasterData.TableAutoCalcFields := False;
+  try
+    MasterData.SelectLines;
+    while MasterData.SelectNextLine do
+      begin
+        MasterData.EditLine;
+        MasterData.СтавкаНДС := StrToFloat(edTax.Text);
+        CalcPrices('СтавкаНДС', Null, MasterData);
+        MasterData.PostLine;
+      end;
+  finally
+    DropMode := False;
+    ScrollLock := False;
+    LockCalc := False;
+    MasterData.TableAutoCalcFields := True;
+  end;
+  CalcLocalDocSumByTableChange;
+end;
+
+procedure rgCalcSum_Click(Sender : TObject);
+begin
+  MasterData.МетодРасчета := rgCalcSum.ItemIndex;
+  TDS_VPAAfterPost(TDS);
+end;
+
+procedure ePartner_ActionClear(Sender : TObject);
+begin
+  MasterData.ЧерезКого := Null;
+  GetNextDateForDocument(MasterData, Constants, True);   
+  cbPayDate.Checked := MasterData.ПризнакСрокаОплаты;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+ if AddDoc then
+   ChangeDoc(clmtAppend,MasterData)
+ else
+   ChangeDoc(clmtEdit,MasterData);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel4:TO4Panel
+nbHeader:TO4Notebook
+Label1:TO4Label
+Label2:TO4Label
+Label6:TO4Label
+Label26:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+ePartner:TO4DBEdit
+GroupBox7:TO4GroupBox
+cbPayDate:TO4CheckBox
+ePayDate:TO4DBEdit
+eRespons:TO4DBEdit
+rgCalcSum:TO4RadioGroup
+Label30:TO4Label
+Label31:TO4Label
+Label32:TO4Label
+Label33:TO4Label
+eThrought:TO4DBEdit
+eNum:TO4DBEdit
+eFrom:TO4DBEdit
+emAbout:TO4DBMemo
+tbsHeader:TO4TabSet
+nbList:TO4Notebook
+dbgListData:TO4DBGrid
+Panel2:TO4Panel
+Panel6:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+Panel7:TO4Panel
+tbrData:TO4ToolBar
+ToolButton1:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+Panel1:TO4Panel
+Label13:TO4Label
+eInputStores:TO4Edit
+dbgGood:TO4DBGrid
+dbgStore:TO4DBGrid
+tsTable:TO4TabSet
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+Panel8:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+Panel5:TO4Panel
+tsSumms:TO4TabSet
+nbSumms:TO4Notebook
+Label4:TO4Label
+Label5:TO4Label
+Label3:TO4Label
+Label34:TO4Label
+DBText2:TO4DBText
+Label9:TO4Label
+Label8:TO4Label
+eSumNT:TO4DBEdit
+eTax:TO4DBEdit
+eSumma:TO4DBEdit
+eSummaV:TO4DBEdit
+dbeWeight:TO4DBEdit
+dbeSquare:TO4DBEdit
+Label10:TO4Label
+Label16:TO4Label
+Label17:TO4Label
+Label18:TO4Label
+Label11:TO4Label
+Label12:TO4Label
+eDetTax:TO4DBEdit
+eSummaNT:TO4DBEdit
+eSummaTax:TO4DBEdit
+eSummaGood:TO4DBEdit
+ePack:TO4DBEdit
+eCountPack:TO4DBEdit
+GroupBox5:TO4GroupBox
+Label23:TO4Label
+Label28:TO4Label
+eCurrencyDoc:TO4DBEdit
+eCourseDoc:TO4DBEdit
+bCurrency:TO4Button
+GroupBox6:TO4GroupBox
+Label20:TO4Label
+Label21:TO4Label
+eCurrency:TO4DBEdit
+eCurs:TO4DBEdit
+eSumVal:TO4DBEdit
+bCourse:TO4Button
+GroupBox1:TO4GroupBox
+Label7:TO4Label
+Label14:TO4Label
+btnTax:TO4Button
+edTax:TO4Edit
+TDS:TO4DocContentsSource
+MDS:TO4DataSource
+TVSGood:TO4TableValueSource
+TVSStore:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+pmList:TO4PopupMenu
+miLinkDict:TO4MenuItem
+miDelRec:TO4MenuItem
+miFresh:TO4MenuItem
+MenuItem1:TO4MenuItem
+MenuItem2:TO4MenuItem
+MenuItem3:TO4MenuItem
+miSort:TO4MenuItem
+pmSave:TO4PopupMenu
+MenuItem6:TO4MenuItem

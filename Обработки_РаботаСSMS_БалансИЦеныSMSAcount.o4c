@@ -1,0 +1,77 @@
+interface
+
+uses
+ System, DispIntf, РаботаСSMS;
+
+implementation
+var SMSDic : ICdictionary;
+    Tbl : ICValueTable;
+    CountSMS : integer;   
+    
+
+
+procedure Form_Open(Sender: TObject);
+var AnswerStrBalance, AnswerStrPrice : string;
+begin
+ Tbl := CreateObject('ТаблицаЗначений');
+ Tbl.AddColumn('SMSAcount',vtcLink,0);
+ Tbl.AddColumn('Баланс',vtcString,50);
+ Tbl.AddColumn('КоличествоSMS',vtcString,50);
+ Tbl.AddColumn('Цена',vtcString,50);
+ Tbl.AddColumn('AnswerStrBalance',vtcString,255);
+ Tbl.AddColumn('AnswerStrPrice',vtcString,255);
+ Tbl.Open;
+ SMSDic := CreateObject('Справочники.SMSНастройки');
+ SMSDic.Select; 
+
+ While SMSDic.SelectNext do 
+  begin
+   Tbl.Append;
+   Tbl.SMSAcount := SMSDic;
+   if CreateSMSManager(SMSDic) then
+     begin
+       AnswerStrBalance := GetSMSBalans(SMSDic);
+       Tbl.Баланс := AnswerStrBalance;
+       Tbl.AnswerStrBalance := AnswerStrBalance;
+       if UpdatePriceByDic(SMSDic, AnswerStrPrice) then
+        Tbl.Цена := VarAsStr(RoundDec(SMSDic.ЦенаSMS,2))
+       else
+        Tbl.Цена := GetAlphaSMSAnswerError(AnswerStrPrice);;
+       Tbl.AnswerStrPrice := AnswerStrPrice;
+        if (VarAsDec(Tbl.Цена,-1)>0) and (VarAsDec(Tbl.Баланс,0)<>0) then
+          Tbl.КоличествоSMS := VarAsStr(trunc(Tbl.Баланс/Tbl.Цена),'0')
+        else
+         Tbl.КоличествоSMS := '0'; 
+        CloseSMSManager;
+     end
+    else
+      begin
+        Tbl.AnswerStrPrice := 'Ошибка инициализации OLE-объекта';
+      end;
+   Tbl.Post;
+  end;
+  Tbl.UseDataSource(CtrlToVar(TVS));
+end;
+
+
+procedure miAnswerBalance_Click(Sender: TObject);
+begin
+ if Tbl.IsFocused then
+   showmessage('Ответ от сервера на запрос баланса:"'+VarAsStr(Tbl.AnswerStrBalance)+'"');
+end;
+
+procedure miAnswerPrice_Click(Sender: TObject);
+begin
+ if Tbl.IsFocused then
+   showmessage('Ответ от сервера на запрос цены:"'+VarAsStr(Tbl.AnswerStrPrice)+'"');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+btOk:TO4Button
+dbgMain:TO4DBGrid
+TVS:TO4TableValueSource
+PopupMenu1:TO4PopupMenu
+miAnswerBalance:TO4MenuItem
+miAnswerPrice:TO4MenuItem

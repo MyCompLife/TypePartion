@@ -1,0 +1,48 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+const
+  fnSorting = 'Сортировка';
+
+implementation
+
+
+procedure GetGroupTbl(GroupTbl: ISValueTable);server;
+var
+  GroupDic: ISDictionary;
+  TempTbl: ISValueTable;
+begin
+  GroupDic := CreateObject('Справочники.Производители');
+  GroupDic.Select;
+  TempTbl := CreateObject('ValueTable');
+  GroupDic.SaveToValueTable('',TempTbl,1,GroupDic.RecordCount);
+  TempTbl.AppendTo('SELF=ГруппаТовара',GroupTbl);
+  GroupTbl.DoGetLinks('Группа=ГруппаТовара.Название');
+  GroupTbl.DoCalculation('Order','1');
+  GroupTbl.Append;
+  GroupTbl.Группа := 'Все';
+  GroupTbl.Order := 0;
+  GroupTbl.Post;
+end;
+
+procedure GetManufacturerTbl(Tbl: ISValueTable);server;
+var
+  Dic: ISDictionary;
+  TempTbl: ISValueTable;
+begin
+  Dic := CreateObject('Справочники.Производители');
+  Dic.Select;
+  TempTbl := CreateObject('ValueTable');
+  Dic.SaveToValueTable('',TempTbl,1,Dic.RecordCount);
+  TempTbl.AppendTo('SELF=ПроизводительТовара',Tbl);
+  Tbl.DoGetLinks('Производитель=ПроизводительТовара.Название');
+  Tbl.DoCalculation('Order','1');
+  Tbl.Append;
+  Tbl.Производитель := 'Все';
+  Tbl.Order := 0;
+  Tbl.Post;
+end;
+
+end.

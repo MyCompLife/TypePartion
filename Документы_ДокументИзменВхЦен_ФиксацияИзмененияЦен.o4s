@@ -1,0 +1,161 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€;
+
+implementation
+
+var
+  AccsGood, AccPartGood : ISAccs;
+  ApplyTbl, MinTbl : ISValueTable;
+  Constants : IS4VPAConst;
+
+procedure CreateApplyTable(Doc : ISDocuments; var Accept : Boolean);
+begin
+  // отправка сообщени€ клиенту
+  Doc.NotifyClient(CheckAboutOverflow, 1, 2);
+  CreateApplyTableExternal(Doc, AccsGood, ApplyTbl, MinTbl);
+  Accept := not Doc.Terminated
+end;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  PartGoodID : Double;
+  Count, Total : Integer;
+  Sum, SumNT, Tax, Col, CurSum : Decimal;
+begin
+  DocDate := Doc.GetDate;
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  while Doc.SelectNextLine do
+    begin
+      if not AccPartGood.SelectDimID(Doc.ѕарти€) then
+        continue;
+      —уммаЌƒ—(Doc, Sum, SumNT, Tax, Col);
+      CurSum := VarAsDec(Doc.÷ена¬¬алюте) * Col;
+      PartGoodID := RebuildConsgs(Doc, AccPartGood, '¬алюта;¬х÷енаЅезЌƒ—;¬х÷ена¬ал;' +
+        '—тавкаЌƒ—', '¬алюта“овара;÷енаЅезЌƒ—;÷ена¬¬алюте;—тавкаЌƒ—');
+      // остатки товаров в осн. валюте - приход на новую партию
+      AccsGood.ClearFieldBuffers;
+      MakeGoodMotion(AccsGood, Doc, PartGoodID, midPriceChange,
+        ArrayOf(Col, SumNT, Tax, SumNT, Tax, 0, CurSum, CurSum));
+      // остатки товаров в осн. валюте - расход со старой партии
+      AccsGood.ClearFieldBuffers;
+      Col := -1 * Col;
+      SumNt := Doc.¬х÷енаЅезЌƒ— * Col;
+      CurSum := Doc.¬х÷ена¬¬алюте * Col;
+      Tax := SumNt * Doc.—тавкаЌƒ— / 100;
+      //–асход товаров в осн. валюте
+      MakeGoodMotion(AccsGood, Doc, Doc.ѕарти€, midPriceChange,
+        ArrayOf(Col, SumNt, Tax, SumNt, Tax, 0, CurSum, CurSum));
+      // отправка сообщени€ клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+  //взаиморасчеты с партнерами
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure ChangeStateDown(Doc : ISDocuments; var Accept : Boolean);
+begin
+  // SetFldToMinTbl(MinTbl);
+  Accept := not Doc.Terminated
+end;
+
+function GetCanChangeStateDownEP(TmpGoods, TmpStoreGoods, TmpPartGoods : ISValueTable) : Variant; server;
+begin
+  Result := EntryPoint(ChangeStateDown)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  AccPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  case Doc.GetDocState of
+    1 :
+      ChangeStateUp(Doc, Accept);
+    2 :
+      ;
+  end;
+end;
+
+procedure GetAttr(Tmp : ISValueTable);
+begin
+  Tmp.Select;
+  while Tmp.SelectNext do
+    begin
+      Tmp.Edit;
+      Tmp. од := Tmp.“овар. од;
+      Tmp.≈д»зм := Tmp.“овар.≈д»зм;
+      Tmp.Post;
+    end;
+end;
+
+function GetCanChangeStateUpEP(AccsGoods : ISAccs; ApplyTbls, MinTbls : ISValueTable) : Variant; server;
+begin
+  AccsGood := AccsGoods;
+  ApplyTbl := ApplyTbls;
+  MinTbl := MinTbls;
+  Result := EntryPoint(CreateApplyTable);
+end;
+
+procedure CanChangeStateUp(Data : ISDocuments; var Accept : Boolean);
+begin
+  Accept := True;
+  case Data.GetDocState of
+    0 :
+      begin
+        AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+        ApplyTbl := CreateObject('“аблица«начений');
+        MinTbl := CreateObject('“аблица«начений');
+        CreateApplyTable(Data, Accept);
+      end;
+    1 :
+      ;
+  end;
+end;
+
+// обработка в бухгалтерии
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  SumNt : Decimal;
+begin
+  case StrLowerCase(Synonym) of
+    'суммастрокибезндс' :
+      begin
+        SumNt := AbsF(Doc.¬х÷енаЅезЌƒ— - Doc.÷енаЅезЌƒ—) * Doc. оличество;
+        if VarAsBool(Constants.ќкругл€ть—умму—трокиЅезЌƒ—) then
+          Value := RoundFloat(SumNt, Constants. оличество«наков¬—умме—трокиЅезЌƒ—)
+        else
+          Value := SumNt;
+      end;
+    'суммастроки' :
+      Value := AbsF(Doc.¬х÷енаЅезЌƒ— - Doc.÷енаЅезЌƒ—) * Doc. оличество * (1 + Doc.—тавкаЌƒ— / 100);
+    'суммандсстроки' :
+      Value := AbsF(Doc.¬х÷енаЅезЌƒ— - Doc.÷енаЅезЌƒ—) * Doc. оличество * Doc.—тавкаЌƒ— / 100;
+  end
+end;
+
+end.

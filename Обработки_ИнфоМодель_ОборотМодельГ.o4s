@@ -1,0 +1,170 @@
+interface
+
+uses
+  System, DispIntf, Reports, ConstNames;
+
+implementation
+
+var
+  AccsGood, AccsPartGood : ISAccs;
+  TblPartGood, GoodsTbl, StoreTbl : ISValueTable;
+  PartGoodList, PartList, GoodsList : ISValueList;
+  Partner, Store : Variant;
+  DateFrom, DateTo : DateTime;
+  ShowCodeUnitname : Boolean;
+  OnlyMoving, UseLevel : Boolean;
+  Items : ISDictionary;    
+  Model : string;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  TblPartGood := CreateObject('“аблица«начений');
+  TblPartGood.Close();
+  TblPartGood.AddColumn('DimensionID', lftFloat, 0);
+  TblPartGood.AddColumn('“овар', lftLink, 0);
+  TblPartGood.Open();
+  PartList := CreateObject('—писок«начений');
+  PartGoodList := CreateObject('—писок«начений');
+end;
+
+function SetFilters : Boolean;
+begin
+  Result := True;
+  if (not IsNil(Store)) and VarAsBool(Store.IsFocused) then
+    AccsGood.SetFieldFilter('—клад', Store);
+    if OnlyMoving then
+      begin
+        TblPartGood.Clear();
+        AccsGood.AppendMotionToValueTable(DateFrom, DateTo, amtBoth,
+          '“овар;ѕарти€=DimensionID', -1, TblPartGood);
+        TblPartGood.GroupToList('DimensionID', PartList);
+        TblPartGood.GroupToList('“овар', PartGoodList);
+        Result := (PartList.Count <> 0);
+        AccsGood.SetFieldFilter('ѕарти€', PartList);
+        AccsGood.SetFieldFilter('“овар', PartGoodList);
+      end;
+end;
+
+procedure SetGoods(Doc : ISProcessing; var Accept : Boolean);
+var
+  Dims : Double;
+  b : Boolean;
+  MotionID : Integer;
+  «начени€ѕрихода, «начени€ќтпуска : string;
+begin
+  AccsGood.ClearFieldBuffers();
+  AccsGood.ClearFieldFilters();
+  AccsPartGood.ClearFieldBuffers();
+  AccsPartGood.ClearFieldFilters();
+  PartList.Clear();
+
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+
+  GoodsTbl.Clear();
+  GoodsTbl.SortBy('');
+  StoreTbl.Clear();
+  StoreTbl.SortBy('');
+
+  if SetFilters then
+    begin
+      // отправка сообщени€ клиенту
+      Doc.NotifyClient(RestsView, 1, 50);
+      if Doc.Terminated then
+        exit;
+      for MotionID := 1 to 36 do
+        begin
+          if Doc.Terminated then
+            break;
+          «начени€ѕрихода := '';
+          «начени€ќтпуска := '';
+          case MotionID of
+            midIncome : «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х;—ум¬хЌƒ—=—умѕрих¬хЌƒ—';
+            midOutcome : «начени€ќтпуска := ' олќбщ= ол–асх;—ум¬х=—ум–асх¬х;—умќтп=—ум–асхќтп;—умќтпЌƒ—=—ум–асхќтпЌƒ—;—умЌац=—ум–асхЌац';
+            midInternalIncome : «начени€ѕрихода := ' олќбщ= ол¬ѕрих;—ум¬х=—ум¬ѕрих¬х';
+            midInternalOutcome : «начени€ќтпуска := ' олќбщ= ол¬–асх;—ум¬х=—ум¬–асх¬х';
+            //       midRetComBuyer    : «начени€ѕрихода := ' олќбщ= ол¬ѕрих;—ум¬х=—ум¬ѕрих¬х';
+            //       midComOutcome     : «начени€ќтпуска := ' олќбщ= ол¬–асх;—ум¬х=—ум¬–асх¬х';
+            midRetBuyer : «начени€ѕрихода := ' олќбщ= ол¬озвр;—ум¬х=—ум¬озвр¬х;—умќтп=—ум¬озврќтп;—умќтпЌƒ—=—ум¬озврќтпЌƒ—;—умЌац=—ум¬озврЌац';
+            midRetSupplier : «начени€ќтпуска := ' олќбщ= ол¬озврѕост;—ум¬х=—ум¬озврѕост¬х;—ум¬хЌƒ—=—ум¬озврѕост¬хЌƒ—';
+            midRetRealBuyer : «начени€ѕрихода := ' олќбщ= ол¬озвр;—ум¬х=—ум¬озвр¬х;—умЌац=—ум¬озврЌац;—умќтпЌƒ—=—ум¬озврќтпЌƒ—;—умќтп=—ум¬озврќтп';
+            midRetRealSupplier : «начени€ќтпуска := ' олќбщ= ол¬озврѕост;—ум¬х=—ум¬озврѕост¬х;—ум¬хЌƒ—=—ум¬озврѕост¬хЌƒ—';
+            midInputRest : «начени€ѕрихода := ' олќбщ= олќст;—ум¬х=—умќст¬х';
+            midDiscard : «начени€ќтпуска := ' олќбщ= ол—пис;—ум¬х=—ум—пис¬х';
+            midRevision : «начени€ѕрихода := ' олќбщ= ол–евиз;—ум¬х=—ум–евиз¬х';
+            midPriceChange : «начени€ѕрихода := '—умќтп=—умѕереоц';
+            midRetFactory : «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х;—ум¬хЌƒ—=—умѕрих¬хЌƒ—';
+            midReadyFactory : «начени€ѕрихода := ' олќбщ= олѕрих;—ум¬х=—умѕрих¬х;—ум¬хЌƒ—=—умѕрих¬хЌƒ—';
+            midDiscardFactory : «начени€ќтпуска := ' олќбщ= ол—пис;—ум¬х=—ум—пис¬х';
+            else
+              continue;
+          end;
+          AccsGood.SetFieldFilter('“ип', MotionID);
+          AccsGood.AppendGroupRest2ToValueTable(DateFrom, DateTo, '“овар;—клад',
+            «начени€ЌаЌачало, «начени€ѕрихода, «начени€ќтпуска,
+            «начени€Ќа онец, GoodsTbl);
+        end;                    
+      GoodsTbl.DoGetLinks('ћодель=“овар. од; од=“овар. од;≈д»зм=“овар.≈д»зм');
+      GoodsTbl.DoCalculation(' од','ћодель');
+      GoodsTbl.GroupBy('—клад; од;≈д»зм', GoodLinksListAll);
+      GoodsTbl.SortBy('ћодель;—клад');
+    end;
+  AccsGood.ClearFieldFilters();
+  //удал€ем 0-вые позиции, добавлено 16.09.02, замедл€ет выполнение отчета
+  GoodsTbl.Select;
+  GoodsTbl.SelectFirst;
+  while not GoodsTbl.EOF do
+    begin
+      if((GoodsTbl. олЌач <> 0) or (GoodsTbl.—умЌач¬х <> 0) or
+        (GoodsTbl. олѕрих <> 0) or (GoodsTbl.—умѕрих¬х <> 0) or
+        (GoodsTbl. ол–асх <> 0) or (GoodsTbl.—ум–асх¬х <> 0) or (GoodsTbl.—ум–асхќтп <> 0) or
+        (GoodsTbl. ол он <> 0) or (GoodsTbl.—ум он¬х <> 0) or
+        (GoodsTbl. ол¬ѕрих <> 0) or (GoodsTbl.—ум¬ѕрих¬х <> 0) or
+        (GoodsTbl. ол¬–асх <> 0) or (GoodsTbl.—ум¬–асх¬х <> 0) or
+        (GoodsTbl. ол¬озвр <> 0) or (GoodsTbl.—ум¬озвр¬х <> 0) or (GoodsTbl.—ум¬озврќтп <> 0) or
+        (GoodsTbl. ол¬озврѕост <> 0) or (GoodsTbl.—ум¬озврѕост¬х <> 0) or
+        (GoodsTbl. ол—пис <> 0) or (GoodsTbl.—ум—пис¬х <> 0) or
+        (GoodsTbl. олќст <> 0) or (GoodsTbl.—умќст¬х <> 0) or
+        (GoodsTbl. ол–евиз <> 0) or (GoodsTbl.—ум–евиз¬х <> 0) or (GoodsTbl.—умѕереоц <> 0)) and
+        (StrCopy(GoodsTbl. од,1,4) = Model) then
+        GoodsTbl.SelectNext
+      else
+        GoodsTbl.Delete;
+    end;
+//  GoodsTbl.DoGetLinks('ћодель=“овар. од; од=“овар. од;≈д»зм=“овар.≈д»зм');
+//  GoodsTbl.DoCalculation(' од','ћодель');
+  GoodsTbl.DoCalculation('—умЌац', '—умЌацЌачало-—умЌац');
+  GoodsTbl.CopyTo('“овар;—клад; од;≈д»зм;ѕарти€;ћодель;' + GoodLinksListAll, StoreTbl);
+  StoreTbl.GroupBy('—клад', GoodLinksListAll);
+  StoreTbl.SortBy('—клад');
+  AddTotalRow(GoodsTbl, ' од', GoodLinksListAll);
+  Accept := True;
+end;
+
+function GetRunReportEP(GoodsTbls, StoreTbls : ISValueTable; GoodLists : ISValueList;
+  Models : string; Stores : Variant; ShowCodeUnitnames, UseLevels : Boolean;
+  AItems : ISDictionary;
+  DateFroms, DateTos : DateTime; OnlyMovings : Boolean) : Variant; server;
+begin
+  GoodsTbl := GoodsTbls;
+  GoodsList := GoodLists;
+  StoreTbl := StoreTbls;
+  Model := Models;
+  Store := Stores;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  ShowCodeUnitname := ShowCodeUnitnames;
+  OnlyMoving := OnlyMovings;
+  UseLevel := UseLevels;
+  Items := AItems;
+  Result := EntryPoint(SetGoods);
+end;
+
+function GetGoodLinksList : string; server;
+begin
+  Result := GoodLinksListAll;
+end;
+
+end.

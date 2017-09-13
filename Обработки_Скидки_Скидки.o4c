@@ -1,0 +1,84 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  Param : Variant;
+  Doc : ICDocuments;
+  AccsPart : ICAccs;
+  TmpPartner : ICDictionary;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Doc := Params;
+  if VarAsDec(Doc.ПроцентОбщий) <> 0 then
+    begin
+      rgSum.ItemIndex := 1;
+      if VarAsDec(Doc.ПроцентОбщий) < 0 then
+        rgProc.ItemIndex := 0
+      else
+        rgProc.ItemIndex := 1;
+      eLowHigh.Text := DecToStr(AbsD(Doc.ПроцентОбщий));
+    end
+  else
+    if VarAsDec(Doc.ПроцентСкидкиНадбавки) <> 0 then
+      begin
+        rgSum.ItemIndex := 0;
+        if VarAsDec(Doc.ПроцентСкидкиНадбавки) < 0 then
+          rgProc.ItemIndex := 0
+        else
+          rgProc.ItemIndex := 1;
+        eLowHigh.Text := DecToStr(AbsD(Doc.ПроцентСкидкиНадбавки));
+      end;
+  if VarAsBool(Doc.@Партнер.IsFocused) then
+    begin
+      TmpPartner := Doc.Партнер;
+      if TmpPartner.IsFocused then
+        begin
+          if (TmpPartner.GetSign() = 'Реализаторы')
+            or (TmpPartner.GetSign() = 'ПостНаРеализацию')
+            or (TmpPartner.GetSign() = 'ДоговПоставки')
+            or (TmpPartner.GetSign() = 'ОбъектыПроизводства')
+            or (TmpPartner.GetSign() = 'ТорговыеТочки') then
+            TmpPartner := TmpPartner.Партнер;
+        end;
+      AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+      AccsPart.SetFieldFilter('Партнер', TmpPartner);
+      AccsPart.SelectRest(CurrentDate + 1);
+      while AccsPart.SelectRestNext do
+        lbBalanse.Caption := AccsPart.СумОбщ;
+      mNotes.Lines.Add(TmpPartner.Заметки);
+    end
+  else
+    Panel1.Visible := False;
+end;
+
+procedure btOK_Click(Sender : TObject);
+begin
+  Doc.Params['Скидки'] := ArrayOf(rgSum.ItemIndex, rgProc.ItemIndex, StrToDec(eLowHigh.Text));
+  if VarAsBool(Doc.@Партнер.IsFocused) then
+    begin
+      TmpPartner.Edit;
+      TmpPartner.Заметки := mNotes.Lines.Text;
+      TmpPartner.Post;
+      TmpPartner.ApplyUpdates;
+    end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+rgSum:TO4RadioGroup
+rgProc:TO4RadioGroup
+Panel1:TO4Panel
+Label1:TO4Label
+lbBalanse:TO4Label
+mNotes:TO4Memo
+Panel2:TO4Panel
+Panel3:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+eLowHigh:TO4Edit

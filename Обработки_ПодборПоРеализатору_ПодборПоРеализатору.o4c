@@ -1,0 +1,201 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, Интерфейс, Расчеты;
+
+implementation
+
+var
+  Partner, Good : Variant;
+  TblGood, TblDetailGood : ICValueTable;
+  ChangeImage : Integer;
+  ChangeSort : Boolean;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  if not IsNil(Params) and VarAsBool(Params.IsType('Справочники')) then
+    begin
+      Partner := Params;
+      TblGood := CreateObject('ТаблицаЗначений');
+      TblGood.Close;
+      TblGood.AddColumn('Код', lftString, 20);
+      TblGood.AddColumn('Товар', lftLink, 0);
+      TblGood.AddColumn('ЕдИзм', lftLink, 0);
+      AddFFtColumnsList(TblGood, 'КолОбщ');
+      TblDetailGood := CreateObject('ТаблицаЗначений');
+      TblDetailGood.Close;
+      TblDetailGood.AddColumn('Код', lftString, 20);
+      TblDetailGood.AddColumn('Товар', lftLink, 0);
+      TblDetailGood.AddColumn('ЕдИзм', lftLink, 0);
+      TblDetailGood.AddColumn('ВалютаТовара', lftLink, 0);
+      TblDetailGood.AddColumn('ВхВалюта', lftLink, 0);
+      TblDetailGood.AddColumn('Партнер', lftLink, 0);
+      TblDetailGood.AddColumn('Партия', lftFloat, 0);
+      TblDetailGood.AddColumn('СтавкаНДС', lftInteger, 0);
+      AddFFtColumnsList(TblDetailGood, 'Цена;ВхЦенаВал;ВхЦенаБезНДС;ЦенаВВалюте;КурсТовара;КолОбщ');
+      TblGood.Open;
+      TblGood.tblName := 'TblGoodByReal';
+      TblDetailGood.Open;
+      TblDetailGood.tblName := 'TblGoodByRealDet';
+      SetFormatStdColumnsList(TblGood, 'КолОбщ');
+      SetFormatStdColumnsList(TblDetailGood, 'ВхЦенаБезНДС;Цена;ЦенаВВалюте;КолОбщ');
+      TblGood.UseDataSource(0);
+      TblDetailGood.UseDataSource(0);
+      server.CreateSrvObj;
+      try
+        TblGood.CopyDataToServer;
+        server.GetStoreList(TblGood.SrvMean, Partner);
+        TblGood.CopyDataFromServer;
+        TblGood.SrvMean.Clear;
+      finally
+        TblGood.UseDataSource(CtrlToVar(TVSGood));
+        TblGood.SortBy('Товар;Код');
+      end;
+      if TblGood.IsFocused() then
+        Good := TblGood.Товар;
+      try
+        TblDetailGood.CopyDataToServer;
+        server.GetDStoreList(TblDetailGood.SrvMean, Partner, Good);
+        TblDetailGood.CopyDataFromServer;
+        TblDetailGood.SrvMean.Clear;
+      finally
+        TblDetailGood.UseDataSource(CtrlToVar(TVS_DetGood));
+        TblDetailGood.SortBy('Партнер;Цена');
+      end;
+    end
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  TblGood.SortBy('Код;Товар');
+  miSortByCode.Checked := True;
+  miSortByName.Checked := False;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  TblGood.SortBy('Товар;Код');
+  miSortByCode.Checked := False;
+  miSortByName.Checked := True;
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+  TVSGood.AfterScrollLock := True;
+end;
+
+procedure TVSGood_VPAAfterMove(Sender : TObject);
+begin
+  TVSGood.AfterScrollLock := False;
+  if TblGood.IsFocused() then
+    Good := TblGood.Товар;
+  try
+    TblDetailGood.Clear;
+    TblDetailGood.CopyDataToServer;
+    server.GetDStoreList(TblDetailGood.SrvMean, Partner, Good);
+    TblDetailGood.CopyDataFromServer;
+    TblDetailGood.SrvMean.Clear;
+  finally
+    TblDetailGood.UseDataSource(CtrlToVar(TVS_DetGood));
+    TblDetailGood.SortBy('Партнер;Цена');
+  end;
+end;
+
+procedure TVSGood_VPATimedAfterScroll(Sender : TObject);
+begin
+  if TblGood.IsFocused() then
+    Good := TblGood.Товар;
+  try
+    TblDetailGood.Clear();
+    TblDetailGood.CopyDataToServer;
+    server.GetDStoreList(TblDetailGood.SrvMean, Partner, Good);
+    TblDetailGood.CopyDataFromServer;
+    TblDetailGood.SrvMean.Clear;
+  finally
+    TblDetailGood.UseDataSource(CtrlToVar(TVS_DetGood));
+    TblDetailGood.SortBy('Партнер;Цена');
+  end;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  TblGood.Locate('Товар', InParams);
+end;
+
+procedure Sort(Sender : TObject);
+begin
+  if TblDetailGood.IsFocused then
+    begin
+      miSortByPrice.ImageIndex := -1;
+      miSortByCnt.ImageIndex := -1;
+      if ChangeImage = (Sender as TO4MenuItem).Tag then
+        begin
+          if ChangeSort then
+            begin
+              case (Sender as TO4MenuItem).Tag of
+                0 :
+                  TblDetailGood.SortBy('-ВхЦенаБезНДС');
+                1 :
+                  TblDetailGood.SortBy('-КолОбщ');
+              end;
+              ChangeSort := False;
+              (Sender as TO4MenuItem).ImageIndex := 225
+            end
+          else
+            begin
+              case (Sender as TO4MenuItem).Tag of
+                0 :
+                  TblDetailGood.SortBy('ВхЦенаБезНДС');
+                1 :
+                  TblDetailGood.SortBy('КолОбщ');
+              end;
+              ChangeSort := True;
+              (Sender as TO4MenuItem).ImageIndex := 224
+            end
+        end
+      else
+        begin
+          case (Sender as TO4MenuItem).Tag of
+            0 :
+              TblDetailGood.SortBy('ВхЦенаБезНДС');
+            1 :
+              TblDetailGood.SortBy('КолОбщ');
+          end;
+          ChangeSort := True;
+          (Sender as TO4MenuItem).ImageIndex := 224
+        end;
+
+      miSortByPrice.Checked := False;
+      miSortByCnt.Checked := False;
+      case (Sender as TO4MenuItem).Tag of
+        0 :
+          miSortByPrice.Checked := True;
+        1 :
+          miSortByCnt.Checked := True;
+      end;
+      ChangeImage := (Sender as TO4MenuItem).Tag;
+    end
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+Splitter1:TO4Splitter
+Panel3:TO4Panel
+DBGrid1:TO4DBGrid
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+TVS_DetGood:TO4TableValueSource
+pmPart:TO4PopupMenu
+miSortByPrice:TO4MenuItem
+miSortByCnt:TO4MenuItem

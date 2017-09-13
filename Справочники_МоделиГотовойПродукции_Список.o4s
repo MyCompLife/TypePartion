@@ -1,0 +1,35 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+var GoodsDic : ISDictionary;
+    tmpGoodsTbl:ISValueTable;
+
+procedure CreateSrvObjects; server;
+begin
+ GoodsDic := CreateObject('Справочники.Товары');
+ tmpGoodsTbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure FillGoodsByModel(GoodsTbl:ISValueTable; MasterData:ISDictionary);  server;
+begin
+ GoodsDic.SetFieldFilter('Модель','=',MasterData,'','',Null);
+ GoodsDic.Select;
+ GoodsDic.SaveToValueTable('Self;Код;Цвет;Размер',tmpGoodsTbl,1, GoodsDic.RecordCount);
+ tmpGoodsTbl.AppendTo('',GoodsTbl);
+ tmpGoodsTbl.Close;
+end;
+
+procedure SrvCalcFields(Dic : ISDictionary);
+begin
+  PricesInNativeCurrency(Dic); //находится в модуле Расчёты
+end;
+
+function SrvCalcFieldsEP : Variant; server;
+begin
+  Result := EntryPoint(SrvCalcFields);
+end;
+
+end.

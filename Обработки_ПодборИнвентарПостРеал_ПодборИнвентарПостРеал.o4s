@@ -1,0 +1,60 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsGood, AccsPartGood, AccPostRealGood : ISAccs;
+  Partner : Variant;
+  Date : DateTime;
+
+procedure InitSrvData(PostReal : Variant; DateDoc : DateTime); server;
+begin
+  //  Date := RoundDate(CurrentDate,rdDay,True);
+  Date := DateDoc;
+  Partner := PostReal;
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+  AccsPartGood.SetFieldFilter('Партнер', Partner);
+  AccPostRealGood := CreateObject('Аккумуляторы.ОстаткиТоваровНаПостРеал');
+  AccPostRealGood.SetFieldFilter('Партнер', Partner);
+end;
+
+procedure LoadGoodsParams(TblGoods, TblPartGood : ISValueTable); server;
+var
+  LstPart : ISValueList;
+begin
+  LstPart := CreateObject('СписокЗначений');
+  //расход товаров из партий поставленных поставщиком
+  AccPostRealGood.IncludeZeroRest := False;
+  AccPostRealGood.AppendGroupRestToValueTable(Date, 'Товар;Партия;КолОбщ', TblGoods);
+  TblGoods.GroupToList('Партия', LstPart);
+  TblGoods.GroupBy('Товар', 'КолОбщ');
+  TblGoods.SortBy('Товар');
+  AccsGood.SetFieldFilter('Партия', LstPart);
+  AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Склад;Партия;КолОбщ', TblPartGood);
+  TblPartGood.GroupBy('Партия;Склад;Товар', 'КолОбщ');
+  TblPartGood.SortBy('Партия;Склад;Товар');
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ВхЦенаБезНДС;Валюта;ВхЦенаВал;СтавкаНДС', TblPartGood);
+  TblPartGood.SortBy('Партия');
+
+  TblGoods.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  TblGoods.SortBy('Товар');
+  TblPartGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+end;
+
+procedure FindAllPart(OneGood : ISDictionary; TblPartOneGood : ISValueTable); server;
+begin
+  AccsPartGood.ClearFieldFilters();
+  AccsPartGood.SetFieldFilter('Товар', OneGood);
+  AccsPartGood.SetFieldFilter('Партнер', Partner);
+  AccsPartGood.IncludeZeroRest := True;
+  AccsPartGood.AppendRestToValueTable(Date, 'Товар;DimensionID=Партия;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал;КолОбщ;Комиссия', TblPartOneGood);
+  TblPartOneGood.GroupBy('Товар;Партия;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', 'КолОбщ');
+  TblPartOneGood.SortBy('Товар;Партия;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал');
+  TblPartOneGood.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+end;
+
+end.

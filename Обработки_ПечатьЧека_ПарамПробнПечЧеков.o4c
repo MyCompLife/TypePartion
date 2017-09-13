@@ -1,0 +1,224 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+Var
+  CurrencyDoc, CurrencyGoods, S : ICDictionary;
+  CurrencysDoc,CurrencysGoods : ICValueList;
+  Constants : IC4VPAConst;
+  CourseDoc,CourseGoods : Decimal;
+  ShowCurrencyTbl, ShowCurrencyDoc, ShowDiscountTbl, ShowDiscountDoc, ShowPaysHed : Boolean;
+
+procedure GetCurrency(Currencys: ICValueList; var Currency: ICDictionary);
+begin
+  if Currencys.ValidIndex(Currencys.CurIndex) then
+    Currency := Currencys.GetValue(Currencys.CurIndex)
+  else Nil(Currency);
+end;
+
+
+Function CreateTestTables( var TblHead,TblLines,TblPayDocs : ICValueTable):Boolean;
+Begin
+  Result := False;
+
+//------------------------------------------------
+
+
+  TblLines := CreateObject('ТаблицаЗначений');
+  TblLines.AddColumn('Товар',vtcLink,0);
+  TblLines.AddColumn('НазваТовара',vtcString,255);
+  TblLines.AddColumn('ВалютаТовара',vtcLink,0);
+  TblLines.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,7);
+  TblLines.AddColumn('ПроцентСкидкиНадбавки',vtcFFT,7);
+  TblLines.AddColumn('Цена',vtcFFT,7);
+  TblLines.AddColumn('ЦенаВВалюте',vtcFFT,7);
+  TblLines.AddColumn('КурсТовара',vtcFFT,7);
+  TblLines.AddColumn('Количество',vtcFFT,5);
+  TblLines.AddColumn('Код',vtcString,20);
+  TblLines.AddColumn('ЕдИзм',vtcLink,0);
+  TblLines.AddColumn('ЕдИзмНазв',vtcString,20);
+  TblLines.AddColumn('СуммаСтроки',vtcFFT,7);
+  TblLines.AddColumn('СуммаСтрокиВВалюте',vtcFFT,7);
+  TblLines.AddColumn('СуммаСтрокиБезСкидки',vtcFFT,7);
+  TblLines.AddColumn('СуммаСкидки',vtcFFT,7);
+  TblLines.Open;
+
+  TblLines.Append;
+  TblLines.НазваТовара := 'Тестовый товар №1';
+  TblLines.ВалютаТовара := CurrencyGoods;
+  TblLines.ЦенаБезСкидкиНадбавки := 150;
+  TblLines.ПроцентСкидкиНадбавки := 99;
+  TblLines.ЦенаВВалюте := RoundDec(TblLines.ЦенаБезСкидкиНадбавки-(TblLines.ЦенаБезСкидкиНадбавки*(TblLines.ПроцентСкидкиНадбавки/100)),2);
+  TblLines.КурсТовара := CourseGoods;
+  TblLines.Цена := RoundDec(TblLines.ЦенаВВалюте*TblLines.КурсТовара,2);
+  TblLines.Количество := 7;
+  TblLines.Код := '0001';
+  TblLines.ЕдИзмНазв := 'шт';
+  TblLines.Post;
+
+  TblLines.Append;
+  TblLines.НазваТовара := 'Тестовый товар №2 (строка на сорок символов)';
+  TblLines.ВалютаТовара := CurrencyGoods;
+  TblLines.ЦенаБезСкидкиНадбавки := 400;
+  TblLines.ПроцентСкидкиНадбавки := 20;
+  TblLines.ЦенаВВалюте := RoundDec(TblLines.ЦенаБезСкидкиНадбавки-(TblLines.ЦенаБезСкидкиНадбавки*(TblLines.ПроцентСкидкиНадбавки/100)),2);
+  TblLines.КурсТовара := CourseGoods;
+  TblLines.Цена := RoundDec(TblLines.ЦенаВВалюте*TblLines.КурсТовара,2);
+  TblLines.Количество := 2;
+  TblLines.Код := '0002';
+  TblLines.ЕдИзмНазв := 'кг';
+  TblLines.Post;
+
+  TblLines.Append;
+  TblLines.НазваТовара := 'Тестовый товар № 3';
+  TblLines.ВалютаТовара := CurrencyGoods;
+  TblLines.ЦенаБезСкидкиНадбавки := 2564.32;
+  TblLines.ПроцентСкидкиНадбавки := 10;
+  TblLines.ЦенаВВалюте := RoundDec(TblLines.ЦенаБезСкидкиНадбавки-(TblLines.ЦенаБезСкидкиНадбавки*(TblLines.ПроцентСкидкиНадбавки/100)),2);
+  TblLines.КурсТовара := CourseGoods;
+  TblLines.Цена := RoundDec(TblLines.ЦенаВВалюте*TblLines.КурсТовара,2);
+  TblLines.Количество := 1;
+  TblLines.Код := '0003';
+  TblLines.ЕдИзмНазв := 'тонн';
+  TblLines.Post;
+
+  TblLines.Append;
+  TblLines.НазваТовара := 'Тестовый товар № 4';
+  TblLines.ВалютаТовара := CurrencyGoods;
+  TblLines.ЦенаБезСкидкиНадбавки := 456;
+  TblLines.ПроцентСкидкиНадбавки := 0;
+  TblLines.ЦенаВВалюте := RoundDec(TblLines.ЦенаБезСкидкиНадбавки-(TblLines.ЦенаБезСкидкиНадбавки*(TblLines.ПроцентСкидкиНадбавки/100)),2);
+  TblLines.КурсТовара := CourseGoods;
+  TblLines.Цена := RoundDec(TblLines.ЦенаВВалюте*TblLines.КурсТовара,2);
+  TblLines.Количество := 5;
+  TblLines.Код := '0004';
+  TblLines.ЕдИзмНазв := 'пара';
+  TblLines.Post;
+//--------------------------------------------------
+  TblHead := CreateObject('ТаблицаЗначений');
+  TblHead.AddColumn('НомерДокумента',vtcString,4);
+  TblHead.AddColumn('ДатаДокумента',vtcDateTime,0);
+  TblHead.AddColumn('Ответственный',vtcLink,0);
+  TblHead.AddColumn('ОтветственныйНазва',vtcString,150);
+  TblHead.AddColumn('Валюта',vtcLink,0);
+  TblHead.AddColumn('Курс',vtcFFT,5);
+  TblHead.AddColumn('Сумма',vtcFFT,7);
+  TblHead.AddColumn('СуммаВВалюте',vtcFFT,7);
+  TblHead.Open;
+  TblHead.Append;
+  TblHead.НомерДокумента := '0001';
+  TblHead.ДатаДокумента := CurrentDateTime;
+  TblHead.ОтветственныйНазва := 'Кассир';
+  TblHead.Валюта := CurrencyDoc;
+  TblHead.Курс :=CourseDoc;
+  TblHead.Post;
+
+//--------------------------------------------------------
+  TblPayDocs := CreateObject('ТаблицаЗначений');
+  TblPayDocs.AddColumn('Документ',vtcString,64);
+  TblPayDocs.AddColumn('СуммаВВалюте',vtcFFT,2);
+  TblPayDocs.AddColumn('Валюта',vtcLink,0);
+  TblPayDocs.Open;
+
+  TblPayDocs.Append;
+  TblPayDocs.Документ := 'Приход в кассу';
+  TblPayDocs.СуммаВВалюте := 100;
+  TblPayDocs.Валюта := CurrencyDoc;
+  TblPayDocs.Post;
+  TblPayDocs.Append;
+  TblPayDocs.Документ := 'Расход с кассы';
+  TblPayDocs.СуммаВВалюте := 50;
+  TblPayDocs.Валюта := CurrencyDoc;
+  TblPayDocs.Post;
+//------------------------------------------------------------------
+  Result := True;
+end;
+
+procedure Button2_Click(Sender: TObject);
+var
+  TblHead,TblLines,TblPayDocs : ICValueTable;
+  V : ICProcessing;
+begin
+  if not CurrencyDoc.IsFocused then
+    begin
+      ShowMessage('Не выбрана валюта документа');
+      exit;
+    end;
+  if not CurrencyGoods.IsFocused then
+    begin
+      ShowMessage('Не выбрана валюта товара');
+      exit;
+    end;
+  CourseDoc := CurrencyDoc.GetTimedValue('КурсНаличный',RoundDate(CurrentDateTime,rdDay,true));
+  CourseGoods := CurrencyGoods.GetTimedValue('КурсНаличный',RoundDate(CurrentDateTime,rdDay,true));
+
+  if CreateTestTables( TblHead,TblLines,TblPayDocs) then
+    begin
+      V := CreateObject('Обработки.ПечатьЧека');
+      V.PrintForm(eCheckName.Text, true,
+                   ArrayOf(TblHead,TblLines,TblPayDocs));
+    end;
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  Constants := GetConstants;
+  CurrencyDoc := CreateObject('Справочники.Валюты');
+  CurrencyGoods := CreateObject('Справочники.Валюты');
+  S := CreateObject('Справочники.Валюты');
+  CurrencysDoc := CreateObject('СписокЗначений');
+  CurrencysGoods := CreateObject('СписокЗначений');
+
+  if S.Select then
+    Begin
+      while S.SelectNext do
+        begin
+          CurrencysDoc.AddValue(S.Код,S); // или ('',S)
+          CurrencysGoods.AddValue(S.Код,S); // или ('',S)
+        end;
+      CurrencysGoods.UseControl(CtrlToVar(eCurrencyGoods));
+      CurrencysDoc.UseControl(CtrlToVar(eCurrencyDoc));
+      GetCurrency(CurrencysGoods,CurrencyGoods);
+      GetCurrency(CurrencysDoc,CurrencyDoc);
+    end
+  else
+    Begin
+      ShowMessage('В справочнике Валюты нет ни одной валюты');
+      btPrint.Enabled:=False;
+    end;
+
+end;
+
+procedure eCurrencyDoc_Change(Sender: TObject);
+begin
+  GetCurrency(CurrencysDoc,CurrencyDoc);
+end;
+
+procedure eCurrencyGoods_Change(Sender: TObject);
+begin
+  GetCurrency(CurrencysGoods,CurrencyGoods);
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+{  ShowCurrencyTbl := Params[0];
+  ShowCurrencyDoc := Params[1];
+  ShowDiscountTbl := Params[2];
+  ShowDiscountDoc := Params[3];
+  ShowPaysHed := Params[4];}
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+eCurrencyGoods:TO4Edit
+eCurrencyDoc:TO4Edit
+eCheckName:TO4Edit
+Panel2:TO4Panel
+Button1:TO4Button
+btPrint:TO4Button

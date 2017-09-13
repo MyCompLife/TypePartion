@@ -1,0 +1,314 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, Расчеты, ConstNames, Reports;
+
+
+implementation
+
+var
+ Constants : IC4VPAConst;
+ Options : ICOptions;
+ CursorVis : TCursor;
+ V : ICReport;
+ DateFrom, DateTo : DateTime;
+ Partner, UrPartner, ManPartner, EmplPartner, AnalitDic, SelAnalitDic : ICDictionary;
+ GoodsTbl, DocsTbl : ICValueTable;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+ V := Mean;
+end;
+
+procedure CreateObjects;
+begin
+ Constants := GetConstants;
+ Options := GetOptions;
+ UrPartner := CreateObject('Справочники.ЮрПартнеры');
+ ManPartner := CreateObject('Справочники.ФизЛица');
+ EmplPartner := CreateObject('Справочники.Служащие');
+ AnalitDic := CreateObject('Справочники.АналитикаВзаиморасчета');
+
+ GoodsTbl := CreateObject('ТаблицаЗначений');
+ GoodsTbl.AddColumn('Товар', vtcLink, 0);
+ GoodsTbl.AddColumn('Код', lftString, 20);
+ GoodsTbl.AddColumn('ЕдИзм', vtcLink, 0);
+ GoodsTbl.AddColumn('КолОтпуск', vtcFFT, 0);
+ GoodsTbl.AddColumn('СумОтпуск', vtcFFT, 2);
+ GoodsTbl.AddColumn('КолВозврат', vtcFFT, 0);
+ GoodsTbl.AddColumn('СумВозврат', vtcFFT, 2);
+ GoodsTbl.Open;
+
+ DocsTbl := CreateObject('ТаблицаЗначений');
+ DocsTbl.AddColumn('Товар', vtcLink, 0);
+ DocsTbl.AddColumn('Код', lftString, 20);
+ DocsTbl.AddColumn('ЕдИзм', vtcLink, 0);
+ DocsTbl.AddColumn('Document', vtcLink, 0);
+ DocsTbl.AddColumn('Date', vtcDateTime, 0);
+ DocsTbl.AddColumn('MotionSign', vtcInteger, 20);
+ DocsTbl.AddColumn('Цена', vtcFFT, 2);
+ DocsTbl.AddColumn('Количество', vtcFFT, 0);
+ DocsTbl.AddColumn('КолОтпуск', vtcFFT, 0);
+ DocsTbl.AddColumn('СумОтпуск', vtcFFT, 2);
+ DocsTbl.AddColumn('КолВозврат', vtcFFT, 0);
+ DocsTbl.AddColumn('СумВозврат', vtcFFT, 2);
+ DocsTbl.Open;
+
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+ SetMenuDates(Sender, DateFrom, DateTo,
+              eDateFrom, eDateTo);
+ (Sender as TO4MenuItem).Checked := true;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+ X, Y : integer;
+begin
+ tbSelectDates.GetScreenPos(X, Y);
+ Y := Y + tbSelectDates.Height;
+ pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+ SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+ CreateObjects;
+ Server.CreateSrvObjects;
+ SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+ DateTo := CurrentDate;
+ eDateTo.Text := DateToStr(DateTo);
+
+end;   
+
+procedure ClearAllTable;
+begin
+   GoodsTbl.UseDataSource(0);
+   GoodsTbl.Clear();
+   DocsTbl.UseDataSource(0);
+   DocsTbl.Clear();
+end;   
+
+procedure edAnalit_ActionClear(Sender: TObject);
+begin
+  Nil(SelAnalitDic);
+  edAnalit.Text := '';
+end;
+
+procedure edAnalit_ActionExecute(Sender: TObject);
+var DefName : string;
+    SelFormAnalitDic : ICDictionary;
+begin
+ if IsObjFocused(Partner) then
+   begin
+     SelFormAnalitDic :=  CreateObject('Справочники.АналитикаВзаиморасчета');
+     if SelFormAnalitDic.UseMaster(Partner) and SelFormAnalitDic.SelectInForm('',DefName,Null) then
+       begin
+         if IsNil(SelAnalitDic) then
+           SelAnalitDic := CreateObject('Справочники.АналитикаВзаиморасчета');
+         if SelAnalitDic.Find(SelFormAnalitDic) then
+           edAnalit.Text :=  DefName;
+       end;
+   end
+ else
+   ShowMessage('Выберите партнера!');
+end;  
+
+procedure RefreshAnalitVCL;
+var AnalitVCLVisible : boolean;
+begin 
+ edAnalit_ActionClear(Form);
+ AnalitVCLVisible := false;
+ if IsObjFocused(Partner) then
+   begin
+     AnalitDic.UseMaster(Partner);
+     AnalitVCLVisible := AnalitDic.Select;
+   end;
+ lbAnalit.Visible := AnalitVCLVisible;
+ edAnalit.Visible := AnalitVCLVisible;
+end;  
+
+
+procedure ePartner_ActionExecute(Sender : TObject);
+var
+  PartName : string;
+begin
+  PartName := ePartner.Text;
+  case VarAsInt(ePartnerType.ItemIndex) of
+    0 :
+      if UrPartner.SelectInForm('ВыборПартнера', PartName, Null) then
+        begin
+          ePartner.Text := PartName;
+          tbRun.Enabled := true;
+          Partner := UrPartner;
+          RefreshAnalitVCL;
+        end;
+    1 :
+      if EmplPartner.SelectInForm('ВыборСлужащего', PartName, Null) then
+        begin
+          ePartner.Text := PartName;
+          tbRun.Enabled := true;
+          Partner := EmplPartner; 
+          RefreshAnalitVCL;
+        end;
+  end;  
+  ClearAllTable;
+end;
+
+procedure ePartner_ActionClear(Sender : TObject);
+begin
+  Partner := Null;
+  tbRun.Enabled := false;
+  tbPrint.Enabled := false; 
+  RefreshAnalitVCL;
+  ClearAllTable;
+end;
+
+procedure TVSGoods_VPATimedAfterScroll(Sender: TObject);
+begin
+ try
+  CursorVis := WaitCursorStart;
+  DocsTbl.UseDataSource(Null);
+  DocsTbl.SetRange(GoodsTbl.@Товар,GoodsTbl.@Товар);
+  DocsTbl.UseDataSource(CtrlToVar(TVSDocs));
+ finally
+  SetCursor(CursorVis);
+ end;
+end;
+
+
+procedure tbRun_Click(Sender: TObject);
+begin
+ try
+   tbRun.Enabled := False;
+   CursorVis := WaitCursorStart;
+
+   GoodsTbl.UseDataSource(0);
+   GoodsTbl.Clear();
+   GoodsTbl.CopyDataToServer;
+   DocsTbl.UseDataSource(0);
+   DocsTbl.Clear();
+   DocsTbl.CopyDataToServer;
+   Partner.SetSrvToClientPos;
+   V.RunThreadProcess(Server.GetRunReportEP(GoodsTbl.SrvMean, DocsTbl.SrvMean,
+                      DateFrom, DateTo, Partner.SrvMean, SelAnalitDic),
+                      ReportRunning);
+   DocsTbl.CopyDataFromServer;
+   GoodsTbl.CopyDataFromServer;
+   GoodsTbl.SrvMean.Clear;
+   DocsTbl.SrvMean.Clear;
+   if miSortByGoodName.Checked then
+    GoodsTbl.SortBy('Товар')
+   else
+    GoodsTbl.SortBy('Код');
+   DocsTbl.SortBy('Товар;Date;Document');
+   TVSGoods_VPATimedAfterScroll(Form);
+   GoodsTbl.UseDataSource(CtrlToVar(TVSGoods));
+
+ finally
+   CursorVis := crDefault;
+   SetCursor(CursorVis);
+ if GoodsTbl.LineCount>0 then
+    tbPrint.Enabled:=True
+ else
+    tbPrint.Enabled:=false;
+ end;
+ tbRun.Enabled := True;
+end;
+
+
+procedure dbgDocs_DblClick(Sender: TObject);
+begin
+ if VarAsBool(DocsTbl.Document.IsFocused) then
+   DocsTbl.Document.EditInForm(DocsTbl.Document.GetSign,3);
+
+end;
+
+procedure tbPrint_Click(Sender: TObject);
+begin
+if IsObjFocused(Partner) then
+    V.PrintForm('ПечОтчетПоПартнерамТовары', not VarAsBool(Options.GetServerPrm(DirectPrint)),
+      ArrayOf(GoodsTbl,Partner, DateFrom, DateTo,SelAnalitDic));
+end;
+
+procedure miSortByGoodName_Click(Sender: TObject);
+begin
+ miSortByGoodName.Checked := true;
+ miSortByGoodCode.Checked := false;
+ if GoodsTbl.IsFocused then GoodsTbl.SortBy('Товар');
+
+end;
+
+procedure miSortByGoodCode_Click(Sender: TObject);
+begin
+ miSortByGoodName.Checked := false;
+ miSortByGoodCode.Checked := true;
+ if GoodsTbl.IsFocused then GoodsTbl.SortBy('Код');
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label3:TO4Label
+Splitter1:TO4Splitter
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbParam:TO4ToolButton
+Panel6:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+Label4:TO4Label
+lbAnalit:TO4Label
+ePartner:TO4Edit
+ePartnerType:TO4Edit
+edAnalit:TO4Edit
+dbgGoods:TO4DBGrid
+Panel2:TO4Panel
+Label2:TO4Label
+dbgDocs:TO4DBGrid
+TVSGoods:TO4TableValueSource
+TVSDocs:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+pmGoods:TO4PopupMenu
+miSortByGoodName:TO4MenuItem
+miSortByGoodCode:TO4MenuItem

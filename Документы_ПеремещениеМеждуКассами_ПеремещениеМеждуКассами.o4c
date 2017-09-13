@@ -1,0 +1,210 @@
+interface
+
+uses
+ System, DispIntf, ConstNames, Расчеты, Интерфейс, Пользователи, НумерацияДокументов, РаботаСТаблицамиЗначенийCL,
+ РаботаСДокументамиCL, ДополнительныйФункционал, РаботаСЖурналомИзменений;
+
+implementation
+
+var
+  Currency, HdCurrency, MyFirm : ICDictionary;
+  MasterData, DocOwner : ICDocuments;
+  Constants : IC4VPAConst;
+  ChangeLock, CreateDoc, isSave: Boolean;
+  Options : ICOptions;
+  AddDoc : Boolean;
+
+procedure CreateObjects;
+begin
+  Constants := GetConstants;
+  Options := GetOptions;
+  Currency := CreateObject('Справочники.Валюты');
+  HdCurrency := GetHdCurrency(Currency);
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  CreateObjects;
+end;
+
+procedure eSumNT_Change(Sender : TObject);
+begin
+  if ChangeLock then exit;
+  MasterData.UpdateRecord(true);
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+var
+  KassaDic : ICDictionary;
+begin
+  isSave := true;
+  KassaDic := CreateObject('Справочники.Кассы');
+  if ChangeLock then exit;
+  try
+    ChangeLock := true;
+    case StrLowerCase(FieldName) of
+      'кассаотп' :
+        begin
+
+        end;
+      'кассапол' :
+        begin
+
+        end;
+    end;
+  finally
+    ChangeLock := false;
+  end;
+end;
+
+procedure eCurrency_ActionExecute(Sender : TObject);
+begin
+  MasterData.Курс := MasterData.Валюта.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+end;
+
+procedure MDS_Append(Sender : TObject);
+var
+  OldDoc : ICDocuments;
+  TmpLHead : ICValueTable;
+  Number : String;
+  Users: ICDictionary;
+begin
+  AddDoc := true;
+  if not Currency.FindByField('Активность', VarAsInt(True), True) then
+    Currency := GetNatCurrency(Currency);
+  if Currency.IsFocused then begin
+    MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+    MasterData.Валюта := Currency;
+  end;
+  MasterData.Ответственный := GetEmplByName(GetUserName, eRespons);
+  MasterData.ЕстьНДС := VarAsInt(true);
+  MasterData.СтавкаНДС := Constants.ProcentPDV;
+  SetDocDefRegonStore(MasterData);
+  MasterData.BaseID := VarAsInt(Constants.КодИБ);
+  if MasterData.BaseID = 0 then
+    raise('Заполните код информационной базы в значениях важных констант');
+  //Для обработки в бух.учете
+  MasterData.AppendLine();
+  MasterData.PostLine();
+  CreateDoc := True;
+end;
+
+procedure tsPay_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+begin
+  nbPay.PageIndex := NewTab;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  eDate.Enabled := GetUDASet('changedate');
+  eRegion.Enabled := not GetUsersBlockedField('БлокировкаВыбораРегиона');
+  eRespons.Enabled := GetUDASet('changeresp');
+  if MasterData.GetDocState > 0 then SetReadOnlyForm(Form);
+end;
+
+procedure MDS_VPAAfterPost(Sender : TObject);
+begin
+  if AddDoc then
+      ChangeDoc(clmtAppend,MasterData)
+  else
+    ChangeDoc(clmtEdit,MasterData);
+  if VarAsBool(Options.GetServerPrm(FixPays)) and CreateDoc then
+    MasterData.StateUp;
+end;
+
+procedure MDS_Validate(Sender : TObject);
+begin
+  if (MasterData.КассаОтп.Регион.Код <> MasterData.Регион.Код) and (MasterData.КассаПол.Регион.Код <> MasterData.Регион.Код) then
+    Raise('Ни одна из выбранных касс не относится к текущему региону!');
+  if MasterData.NumID = 0 then
+    MasterData.NumID := УстановитьНомерДокумента(MasterData, '');
+end;
+
+procedure ePartName_ActionExecute(Sender : TObject);
+begin
+  if VarAsBool(MasterData.Партнер.IsFocused) then
+    begin
+      if VarAsBool(MasterData.Партнер.Валюта.IsFocused) then
+        begin
+          MasterData.Валюта := MasterData.Партнер.Валюта;
+          MasterData.Курс := MasterData.Партнер.Валюта.КурсНацБанка;
+        end
+      else
+        begin
+          if not Currency.FindByField('Активность', VarAsInt(true), True) then
+            Currency := GetNatCurrency(Currency);
+          if Currency.IsFocused then begin
+            MasterData.Валюта := Currency;
+            MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+          end;
+        end;
+      MasterData.ВалютаПарт := MasterData.Валюта;
+      MasterData.КурсПарт := MasterData.Курс;
+    end;
+end;
+
+procedure ePartName_ActionClear(Sender : TObject);
+begin
+  if not Currency.FindByField('Активность', VarAsInt(true), True) then
+    Currency := GetNatCurrency(Currency);
+  if Currency.IsFocused then begin
+    MasterData.Валюта := Currency;
+    MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+  end;
+end;
+
+procedure eCurrencyPart_ActionExecute(Sender : TObject);
+begin
+  MasterData.КурсПарт := MasterData.ВалютаПарт.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+LinkImage1:TO4LinkImage
+Panel1:TO4Panel
+nbPay:TO4Notebook
+Label5:TO4Label
+Label26:TO4Label
+Panel4:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+eDate:TO4DBEdit
+eNumber:TO4DBEdit
+eCtg:TO4DBEdit
+eRespons:TO4DBEdit
+GroupBox3:TO4GroupBox
+Label10:TO4Label
+Label11:TO4Label
+Label9:TO4Label
+eCurrency:TO4DBEdit
+eCourse:TO4DBEdit
+eSumVal:TO4DBEdit
+Panel5:TO4Panel
+edCashOut:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+eCasOut:TO4DBEdit
+eCashIn:TO4DBEdit
+eRegion:TO4DBEdit
+Label12:TO4Label
+DBMemo1:TO4DBMemo
+tsPay:TO4TabSet
+Panel2:TO4Panel
+Panel3:TO4Panel
+btnOK:TO4Button
+btnCancel:TO4Button
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiCancel:TO4MenuItem

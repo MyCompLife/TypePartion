@@ -1,0 +1,150 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+end;
+
+procedure ConcateStr(InputStr : string; MaxLength : integer; DoReverse : Boolean; var OutputStr1, OutputStr2 : string);
+var
+  TmpStr, TmpStrWord : string;
+begin
+  if StrLength(InputStr) < MaxLength then
+    begin
+      if DoReverse then
+        begin
+          OutputStr1 := '';
+          OutputStr2 := InputStr;
+        end
+      else
+        begin
+          OutputStr1 := InputStr;
+          OutputStr2 := '';
+        end
+    end
+  else
+    begin
+      TmpStr := '';
+      TmpStrWord := '';
+      while StrLength(TmpStr) < MaxLength do
+        begin
+          TmpStrWord := ExtractWord(1, InputStr, ' ');
+          if StrLength(TmpStr + TmpStrWord) > MaxLength then
+            break;
+          TmpStr := TmpStr + TmpStrWord + ' ';
+          StrDelete(InputStr, 1, StrLength(TmpStrWord) + 1);
+        end;
+      if StrLength(TmpStr) >= 1 then
+        StrDelete(TmpStr, StrLength(TmpStr), 1);
+      OutputStr1 := TmpStr;
+      OutputStr2 := InputStr;
+    end
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  Partner : ICDictionary;
+  OutputStr1, OutputStr2 : string;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      Partner := GetPartner(MasterData.Партнер);
+      if (not IsNil(Partner)) and (VarAsBool(Partner.IsFocused)) then
+        begin
+          Value['PARTADDR'] := GetActiv(ADR, 'Адрес', Partner);
+          Value['PARTPHONE'] := GetActiv(TLF, 'Номер', Partner);
+          Value['PARTNAME'] := GetPartName(MasterData.Партнер);
+          ConcateStr(Value['PARTNAME'], 20, False, OutputStr1, OutputStr2);
+          Value['PARTNAME1'] := OutputStr1;
+          if StrLength(OutputStr2) < 35 then
+            Value['PARTNAME2'] := OutputStr2
+          else
+            begin
+              ConcateStr(OutputStr2, 35, False, OutputStr1, OutputStr2);
+              Value['PARTNAME2'] := OutputStr1;
+              Value['PARTNAME3'] := OutputStr2;
+            end;
+        end;
+      Value['Summa'] := MasterData.Сумма;
+      Value['AccHiLo'] := MasterData.Счет;
+      Value['AOCode'] := MasterData.ШифрУчета;
+      Value['GoalCode'] := MasterData.ШифрНазначения;
+
+      ConcateStr(MasterData.Комментарий, 70, False, OutputStr1, OutputStr2);
+      Value['Discript4'] := OutputStr1;
+      Value['Discript5'] := OutputStr2;
+
+      ConcateStr(MasterData.Комментарий, 25, False, OutputStr1, OutputStr2);
+      Value['Discript1'] := OutputStr1;
+      if StrLength(OutputStr2) < 35 then
+        Value['Discript2'] := OutputStr2
+      else
+        begin
+          ConcateStr(OutputStr2, 35, False, OutputStr1, OutputStr2);
+          Value['Discript2'] := OutputStr1;
+          Value['Discript3'] := OutputStr2;
+        end;
+
+      ConcateStr(CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058), 35, True, OutputStr1, OutputStr2);
+      Value['StrSum1'] := OutputStr1;
+      Value['StrSum2'] := OutputStr2;
+    end;
+  lbSumW.Caption := CNV.MoneyToStr(MasterData.Сумма, 'ГРН', 1058);
+  lbD.Caption := FormatFloat('00', GetDay(MasterData.ДатаДокумента));
+  lbM.Caption := StrLowerCase(CNV.MonthToStr(GetMonth(MasterData.ДатаДокумента), 1, 1058));
+  lbY.Caption := StrCopy(IntToStr(GetYear(MasterData.ДатаДокумента)), 3, 2);
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  Accept := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+Label51:TRBLabel
+lbSumW1:TRBLabel
+lbSumW:TRBLabel
+Label1:TRBLabel
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+lbPart:TRBLabel
+Label32:TRBLabel
+Label42:TRBLabel
+Label50:TRBLabel
+Label56:TRBLabel
+Label5:TRBLabel
+Label3:TRBLabel
+Label58:TRBLabel
+lbD:TRBLabel
+lbM:TRBLabel
+lbY:TRBLabel
+Label2:TRBLabel
+Label4:TRBLabel
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+Structure1:TRBStructure

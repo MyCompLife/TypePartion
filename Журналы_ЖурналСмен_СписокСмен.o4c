@@ -1,0 +1,225 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors,
+  Расчеты, РаботаСПеременными, РаботаСFtp, СтруктураТаблицДляDBF, РаботаСТаблицамиDBF,
+  РаботаСОбъектами, РаботаСТаблицамиЗначений, РаботаСДокументамиВЖурналах;
+
+
+implementation
+
+var
+  MasterData, ChildPaysOut, ChildPaysIn, ChildNakls, ChildNaklsIn, ChildProxyCards : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  MyDocHasOwner, LockCh : Boolean;
+  Currency : ICDictionary;
+  Tbl, DocsTbl, DocsListTbl : ICValueTable;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+var
+  i : Integer;
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  SetColors(Constants);
+  Options := GetOptions;
+end;
+
+procedure ReceiveEvent(Sender : ICDocuments; SessionID : Integer; CenterName, FromUserID, FromUserName : string;
+  Param : Variant);
+begin
+  if GetSessionID <> SessionID then
+    MasterData.Refresh;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;
+begin
+  MakeInterface(tbrData, Nobody, dbgData);
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  LockCh := True;  
+  miDocMove.Visible := GetUDASet('viewdocmove'); 
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+end;
+
+procedure miPrintActive_Click(Sender : TObject);
+begin
+  // MasterData.PrintForm('', false, 0, Null)
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  if LockCh then
+    begin
+      MasterData.SetDocStateRange(NewTab - 1);
+      MasterData.Select;
+    end;
+end;
+
+procedure pmiSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure pmiPrint_Click(Sender : TObject);
+var
+  V : ICProcessing;
+begin
+  V := CreateObject('Обработки.ПечУнивЖурнала'); //ПечУнивЖурналаСКоличеством
+  //
+end;
+
+
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    begin
+      if MasterData.GetDocState > 0 then
+        Index2 := 10
+      else
+        Index2 := 9;
+      if VarAsBool(MasterData.Отправка) then
+        Index1 := 0;
+    end;
+end;
+
+
+procedure dbgData_GetRowParams(Sender : TObject; DrawFont : TFont; var BackColor : TColor; Highlight : Boolean);
+begin
+//
+end;
+{$D+}
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure MDS_VPATimedAfterScroll(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+//создание документов по шаблону
+
+procedure pmiCopyDoc_Click(Sender : TObject);
+begin
+  AddDocByTemplate(MasterData);
+end;
+
+procedure MDS_VPADataRefreshed(Sender : TObject);
+begin
+  LockCh := False;
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+  LockCh := True;
+end;
+
+procedure DBMemo1_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData);
+end;
+
+procedure miExportChangeDoc_Click(Sender: TObject);
+begin
+{ if MasterData.IsFocused then
+   if MasterData.GetDocState>0 then
+       ExportChangeDoc(MasterData.GetDoc, false)
+   else
+     ShowMessage('Смена не зафикирована');  }
+end;
+
+
+
+procedure miKassReport_Click(Sender: TObject);
+Var Proc:ICProcessing;
+begin   
+  if MasterData.IsFocused then
+    begin
+      Proc := CreateObject('Обработки.РабочееМестоКассираCL');
+      Proc.Execute('ОтчетКассира',MasterData.GetDoc);
+    end;
+end;
+
+procedure pmiPrintOne_Click(Sender: TObject);
+begin
+ if MasterData.IsFocused then
+   MasterData.GetDoc.PrintForm('ПечатьСмена', true, MasterData.GetDoc);
+end;
+
+procedure miDocMove_Click(Sender: TObject);
+var P:ICProcessing;
+begin
+  if MasterData.IsFocused and (MasterData.GetDocState>0) then
+    begin
+      P := CreateObject('Обработки.ДвижениеПоДокументу');
+      P.Execute('ДвижениеПоДокументу',MasterData.GetDoc);
+    end;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter1:TO4Splitter
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+ToolButton1:TO4ToolButton
+ToolButton3:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbSelect:TO4ToolButton
+tbDelimiter3:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+tsState:TO4TabSet
+pnAdditInterface:TO4Panel
+pnForFiscalPrinter:TO4Panel
+Panel2:TO4Panel
+Splitter3:TO4Splitter
+pPays:TO4Panel
+Label2:TO4Label
+nbPays:TO4Notebook
+pPaysIn:TO4Panel
+pPaysOut:TO4Panel
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiFixUp:TO4MenuItem
+pmiFixDown:TO4MenuItem
+pmiDelete:TO4MenuItem
+miExportChangeDoc:TO4MenuItem
+MenuItem1:TO4MenuItem
+pmiPrintOne:TO4MenuItem
+pmiPrint:TO4MenuItem
+miKassReport:TO4MenuItem
+MenuItem2:TO4MenuItem
+pmiSort:TO4MenuItem
+pmiSelect:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiRefresh:TO4MenuItem
+miDocMove:TO4MenuItem
+miInfoChange:TO4MenuItem

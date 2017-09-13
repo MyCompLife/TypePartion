@@ -1,0 +1,136 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+var
+  UseConst : IC4VPAConst;
+  LinkDoc : Variant;
+  TblGood, PartionStoreRestTbl : ICValueTable;
+  MasterData : ICProcessing;
+  Good, StoreDic : ICDictionary;
+  GoodCount : Decimal;
+
+procedure TVSGood_VPATimedAfterScroll(Sender: TObject);
+begin
+  if not IsNil(PartionStoreRestTbl) and TblGood.IsFocused then
+   PartionStoreRestTbl.SetRange(TblGood.Партия, TblGood.Партия);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  TypePrice : String;
+  Course, Proc: Decimal;
+begin
+  MasterData := Mean;
+  UseConst := GetConstants;
+  StoreDic := CreateObject('Справочники.Склады');
+  if not MasterData.HasParam('Good') then
+    raise('Параметр с текущим товаром не задан!'); 
+  GoodCount := 0;
+  if MasterData.HasParam('Count') then
+    GoodCount := VarAsDec(MasterData.Params['Count']);
+  if GoodCount>0 then
+    lbGoodCount.Caption := lbGoodCount.Caption + DecToStr(GoodCount)
+  else
+    lbGoodCount.Visible := false;
+  if MasterData.HasParam('Store') then
+    StoreDic.Find(MasterData.Params['Store']);
+  if not MasterData.HasParam('Course') then
+    raise('Параметр с курсом валюты не задан!');
+  Good := MasterData.Params['Good'];
+  MasterData.Params['Price'] := 0;  
+   if MasterData.HasParam('PartionStoreRestTbl') then
+    begin
+      PartionStoreRestTbl := MasterData.Params['PartionStoreRestTbl'];
+      PartionStoreRestTbl.SortBy('Партия;Склад');
+      PartionStoreRestTbl.SetColumnFormat('КолОбщ', UseConst.ФорматКол);
+    end;
+  if not IsNil(Params) and VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    begin  
+      TblGood := Params;
+      TblGood.SetColumnFormat('Цена', UseConst.ФорматЦеныГРН);
+      TblGood.SetColumnFormat('КолОбщ;КолОбщПартии', UseConst.ФорматКол);
+      TblGood.UseDataSource(CtrlToVar(TVSGood));
+    end;   
+  if IsNil(PartionStoreRestTbl) then  
+    pnPartRestBySores.Visible := false
+  else 
+    begin
+      PartionStoreRestTbl.UseDataSource(CtrlToVar(TVSPartRestByStore));
+      TVSGood_VPATimedAfterScroll(Form);
+    end;
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Код;Товар');
+      miSortByCode.Checked := True;
+      miSortByName.Checked := False;
+    end;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  if TblGood.IsFocused then
+    begin
+      TblGood.SortBy('Товар;Код');
+      miSortByCode.Checked := False;
+      miSortByName.Checked := True;
+    end;
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+  if TblGood.IsFocused  then
+    begin
+      if StoreDic.IsFocused and (GoodCount>0) then
+        begin
+          if (not PartionStoreRestTbl.Locate('Склад',StoreDic) or (PartionStoreRestTbl.КолОбщ<GoodCount)) and
+            (MessageDlg('Остаток товара выбраной партии на складе '+StoreDic.NameField+#13+
+            'меньше количества добавляемого товара! Все равно выбрать эту партию?',mtConfirmation,ArrayOf(mbYes,mbNo))=mrNo) then
+            exit;
+        end;
+      Form.ModalResult := mrOK;
+    end;
+end;
+
+procedure DBGrid1_DblClick(Sender: TObject);
+begin
+  btOk_Click(Form);
+end;
+
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+DBGrid1:TO4DBGrid
+Panel1:TO4Panel
+lbGoodCount:TO4Label
+Panel3:TO4Panel
+btOk:TO4Button
+btCancel:TO4Button
+Panel2:TO4Panel
+Label1:TO4Label
+pnPartRestBySores:TO4Panel
+Label2:TO4Label
+DBGrid2:TO4DBGrid
+TVSGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+TVSPartRestByStore:TO4TableValueSource

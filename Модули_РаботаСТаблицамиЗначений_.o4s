@@ -1,0 +1,1106 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами;
+
+const
+  // сообщения
+  errFieldNameNotFound = 'Поле "%s" не найдено в таблице значений';
+  errFieldsToComposeIsEmpty = 'Список полей для разбивки пуст';
+  // параметры фильтра для таблицы значений
+  fpOneValue = 0;
+  fpValuesArray = 1;
+  fpRange = 2;
+
+procedure AddColumnsByStrDescr(var Tbl : ISValueTable; ColsDescriptorList : string;
+  DoOpen : Boolean = True; DoClose : Boolean = True);
+procedure AddColumnsByArrDescr(var Tbl : ISValueTable; ColsDescriptorList : Variant;
+  DoOpen, DoClose : Boolean = True);
+procedure AddColumnsByType(var Tbl : ISValueTable; ColNamesList : string;
+  ColType : Integer; Precision : Integer = 0;
+  DoOpen : Boolean = False; DoClose : Boolean = False);
+procedure SetColumnsFormat(Tbl : ISValueTable; ColNamesList : string;
+  Format : string = '0.00');
+procedure CopyColumnsFormat(Columns : string; TblSource, TblTarget : ISValueTable);
+procedure AddFFtColumnsList(ValTbl : ISValueTable; ColumnList : string);
+procedure SetFormatStdColumnsList(ValTbl : ISValueTable; ColumnList : string; Fmt : string = '');
+function GetColumnIndexByName(TblWithField : IObject; FieldName : string;
+  DoRaise : Boolean = True) : Integer; server;
+procedure GetListOfValues(ValueFieldNames : string; LstTarget : ISValueList;
+  TblSource, TblTemp : ISValueTable);
+function AppendColumnsFromOneToOther(TblSource, TblTarget : ISValueTable; FieldsList : string;
+  Multiplicity : Integer = 1; DoIndexOnMultOne : Boolean = False) : Variant;
+function CreateColumnsForDecompose(CommonFields, GroupFieldsToDecompose, SumFieldsToDecompose : string;
+  TblSource, TblTarget : ISValueTable; ComposeCount : Integer) : Variant;
+function DecomposeValueTable(FieldsForDecompValues, CommonFields, GroupFieldsToDecompose,
+  SumFieldsToDecompose : string; TblSource, TblTarget : ISValueTable;
+  LstValues, Descr : Variant = ''; DoGetListValues,
+  DoAppendNewCols : Boolean = True) : Variant;
+procedure DoRightCalculation(TblSource : ISValueTable; CondField, ResultField,
+  CalcFormula : string; Denum : string = '';
+  DefValue : string = '0');
+procedure ReadPropsFromBLOB(TblCurrProps : ISValueTable; OldData : Variant);
+function WritePropsToBlob(TblCurrProps : ISValueTable) : Variant;
+procedure RoundValuesInTable(TblCurrent : ISValueTable; ValList : string;
+  rdTo : Integer = 2; rdFrom : Integer = -1);
+procedure DeleteRecordsUnderRange(TblCurrent : ISValueTable);
+procedure DeleteColumnsByCondition(TblCurrent : ISValueTable; CondFieldName, Condition : string);
+procedure DeleteColumnsByConditions(TblCurrent : ISValueTable; CondFieldName : string; ConditionsArray : Variant);
+procedure SaveSortingForTables(arrTables : Variant; NewSort : string = '');
+procedure RestoreSortingForTables(arrTables : Variant);
+procedure AppendExtendedColumns(TblSource : ISValueTable; ExtDescr : Variant;
+  DoAppendData : Boolean = True);
+procedure JoinTwoTables(TblMain, TblAppended : ISValueTable; CommonFieldsList,
+  AppendedFieldsList : string; DoAppendRecordIfNotExist : Boolean = True);
+function GetColArrayDescrByFieldsList(TblSource : ISValueTable; FieldList : string) : Variant;
+function AppendTotalValuesToTable(TblTarget : ISValueTable; TotalFieldList : string;
+  DoAppend : Boolean = False) : Variant;
+function GetColumnsList(TblCurrent : ISValueTable) : string;
+// вычисление значения поля по дескриптору условия - (if-then-else)-ветка. Условие else необязательно
+procedure DoCalculationByOneCondition(TblSource : ISValueTable; CondField, ResultField : string;
+  arrFormulas : Variant);
+// вычисление значения поля по дескриптору условий - case-оператор
+// предполагается, что условия не пересекаются, иначе - в результат записывается значение по последнему условию
+procedure DoCalculationByConditions(TblSource : ISValueTable; CondField, ResultField : string;
+  ConditionsArray : Variant; ElseValue : string = '');
+procedure ExtendedGroupByWithLinkColsSep(TblForGroup : ISValueTable; LinkGroupCols,
+  OtherGroupCols, SumCols, IndexCol : string);
+procedure ExtendedGroupBy(TblForGroup : ISValueTable; GroupCols, SumCols, IndexCol : string);
+procedure FillColsWithDefVarValues(TblForGroup : ISValueTable; ColsList : string);
+procedure CreateAttributesTable(TblAttributes : ISValueTable);
+
+implementation
+
+procedure AddColumnsByStrDescr(var Tbl : ISValueTable; ColsDescriptorList : string;
+  DoOpen : Boolean = True; DoClose : Boolean = True);
+var
+  ColListCounter, ColType, ColNamesCounter : Integer;
+  ColDescriptor, ColNamesList : string;
+begin
+  if IsNil(Tbl) then
+    Tbl := CreateObject('ValueTable')
+  else
+    if DoClose then
+      Tbl.Close;
+  for ColListCounter := 1 to WordCount(ColsDescriptorList, ';') do
+    begin
+      ColDescriptor := ExtractWord(ColListCounter, ColsDescriptorList, ';');
+      ColNamesList := ExtractWord(1, ColDescriptor, ',');
+      case StrLowerCase(ExtractWord(2, ColDescriptor, ',')) of
+        'vtcboolean' :
+          ColType := vtcBoolean;
+        'vtcblob' :
+          ColType := vtcBlob;
+        'vtcdate' :
+          ColType := vtcDate;
+        'vtcdatetime' :
+          ColType := vtcDateTime;
+        'vtcfft' :
+          ColType := vtcFFT;
+        'vtcfloat' :
+          ColType := vtcFloat;
+        'vtcinteger' :
+          ColType := vtcInteger;
+        'vtclink' :
+          ColType := vtcLink;
+        'vtcmemo' :
+          ColType := vtcMemo;
+        'vtcstring' :
+          ColType := vtcString;
+        'vtctime' :
+          ColType := vtcTime;
+      end;
+      if (ColType = vtcFFT) or (ColType = vtcString) then
+        for ColNamesCounter := 1 to WordCount(ColNamesList, '+') do
+          Tbl.AddColumn(ExtractWord(ColNamesCounter, ColNamesList, '+'), ColType,
+            VarAsInt(ExtractWord(3, ColDescriptor, ',')))
+      else
+        for ColNamesCounter := 1 to WordCount(ColNamesList, '+') do
+          Tbl.AddColumn(ExtractWord(ColNamesCounter, ColNamesList, '+'), ColType, 0);
+    end;
+  if DoOpen then
+    Tbl.Open;
+end;
+
+procedure AddColumnsByArrDescr(var Tbl : ISValueTable; ColsDescriptorList : Variant;
+  DoOpen, DoClose : Boolean = True);
+var
+  ColListCounter, ColNamesCounter : Integer;
+  ColNamesList, ColName : string;
+  arrColumnDescr : Variant;
+begin
+  if IsNil(Tbl) then
+    Tbl := CreateObject('ValueTable')
+  else
+    if DoClose then
+      Tbl.Close;
+  for ColListCounter := 0 to ArrayHigh(ColsDescriptorList) do
+    begin
+      arrColumnDescr := ColsDescriptorList[ColListCounter];
+      ColNamesList := arrColumnDescr[0];
+      for ColNamesCounter := 1 to WordCount(ColNamesList, ';') do
+        begin
+          ColName := ExtractWord(ColNamesCounter, ColNamesList, ';');
+          case ArrayHigh(arrColumnDescr) of
+            1 :
+              Tbl.AddColumn(ColName, arrColumnDescr[1], 0);
+            2 :
+              Tbl.AddColumn(ColName, arrColumnDescr[1], arrColumnDescr[2]);
+            3 :
+              begin
+                Tbl.AddColumn(ColName, arrColumnDescr[1], arrColumnDescr[2]);
+                Tbl.SetColumnFormat(ColName, arrColumnDescr[3]);
+              end;
+          end;
+        end;
+    end;
+  if DoOpen then
+    Tbl.Open;
+end;
+
+procedure AddColumnsByType(var Tbl : ISValueTable; ColNamesList : string;
+  ColType : Integer; Precision : Integer = 0;
+  DoOpen : Boolean = False; DoClose : Boolean = False);
+var
+  ColNamesCounter : Integer;
+begin
+  if IsNil(Tbl) then
+    Tbl := CreateObject('ValueTable')
+  else
+    if DoClose then
+      Tbl.Close;
+  for ColNamesCounter := 1 to WordCount(ColNamesList, ';') do
+    Tbl.AddColumn(ExtractWord(ColNamesCounter, ColNamesList, ';'), ColType, Precision);
+  if DoOpen then
+    Tbl.Open;
+end;
+
+procedure SetColumnsFormat(Tbl : ISValueTable; ColNamesList : string;
+  Format : string = '0.00');
+var
+  ColNamesCounter : Integer;
+begin
+  for ColNamesCounter := 1 to WordCount(ColNamesList, ';') do
+    Tbl.SetColumnFormat(ExtractWord(ColNamesCounter, ColNamesList, ';'), Format);
+end;
+
+procedure CopyColumnsFormat(Columns : string; TblSource, TblTarget : ISValueTable);
+var
+  i, FieldIndex : Integer;
+begin
+  if Columns = '' then
+    begin
+      for i := 0 to TblSource.GetColumnCount - 1 do
+        TblTarget.SetColumnFormat(TblSource.GetColumnName(i), TblSource.GetColumnFormat(i))
+    end
+  else
+    begin
+      for i := 1 to WordCount(Columns, ';') do
+        begin
+          FieldIndex := GetColumnIndexByName(TblSource, ExtractWord(i, Columns, ';'));
+          TblTarget.SetColumnFormat(TblSource.GetColumnName(FieldIndex),
+            TblSource.GetColumnFormat(FieldIndex))
+        end;
+    end
+end;
+
+procedure AddFFtColumn(ValTbl : ISValueTable; ColumnName : string);
+var
+  Size : Integer;
+begin
+  if not IsNil(ValTbl) then
+    begin
+      if StrCopy(ColumnName, 1, 3) = 'Кол' then
+        Size := 5 //StrLength(GetConstants._Default['ФорматКол']) - StrPos('.',GetConstants._Default['ФорматКол'])
+      else
+        Size := 7; //StrLength(GetConstants._Default['ФорматЦеныГРН']) - StrPos('.',GetConstants._Default['ФорматЦеныГРН']);
+      ValTbl.AddColumn(ColumnName, lftFFt, Size);
+    end;
+end;
+
+procedure AddFFtColumnsList(ValTbl : ISValueTable; ColumnList : string);
+var
+  i : Integer;
+begin
+  if not IsNil(ValTbl) then
+    for i := 1 to WordCount(ColumnList, FieldDelimiter) do
+      AddFFtColumn(ValTbl, ExtractWord(i, ColumnList, FieldDelimiter));
+end;
+
+procedure SetFormatStdColumn(ValTbl : ISValueTable; ColumnName : string; Fmt : string = '');
+var
+  Cur : string;
+begin
+  if (not IsNil(ValTbl)) and (ValTbl.HasField(ColumnName)) then
+    begin
+      if Fmt = '' then
+        if StrCopy(ColumnName, 1, 3) = 'Кол' then
+          Fmt := GetConstants._Default['ФорматКол']
+        else
+          if StrPos('Курс', ColumnName) <> 0 then
+            Fmt := GetConstants._Default['ФорматКурс']
+          else
+            begin
+              if StrPos('Вал', ColumnName) <> 0 then
+                Cur := 'Вал'
+              else
+                Cur := 'ГРН';
+              if (StrPos('Цена', ColumnName) <> 0) or (ColumnName = 'НДС') then
+                Fmt := GetConstants._Default['ФорматЦены' + Cur]
+              else
+                Fmt := GetConstants._Default['ФорматСум' + Cur]
+            end;
+      ValTbl.SetColumnFormat(ColumnName, Fmt);
+    end;
+end;
+
+procedure SetFormatStdColumnsList(ValTbl : ISValueTable; ColumnList : string; Fmt : string = '');
+var
+  i : Integer;
+begin
+  if not IsNil(ValTbl) then
+    for i := 1 to WordCount(ColumnList, FieldDelimiter) do
+      SetFormatStdColumn(ValTbl, ExtractWord(i, ColumnList, FieldDelimiter), Fmt);
+end;
+
+function GetColumnIndexByName(TblWithField : IObject; FieldName : string;
+  DoRaise : Boolean = True) : Integer; server;
+var
+  i : Integer;
+begin
+  Result := -1;
+  for i := 0 to TblWithField.GetColumnCount - 1 do
+    if StrLowerCase(TblWithField.GetColumnName(i)) = StrLowerCase(FieldName) then
+      begin
+        Result := i;
+        break;
+      end;
+  if (Result = -1) and DoRaise then
+    raise(GetTranslation(errFieldNameNotFound, ArrayOf(FieldName)));
+end;
+
+function GetTableValuesByFields(TblSource : ISValueTable; FieldsList : string) : Variant;
+var
+  i : Integer;
+begin
+  if FieldsList = '' then
+    begin
+      Result := Null;
+      exit;
+    end;
+  ArrayCreate(Result, [0, WordCount(FieldsList, ';') - 1], Variant);
+  for i := 0 to WordCount(FieldsList, ';') - 1 do
+    Result[i] := TblSource._Default['@' + ExtractWord(i + 1, FieldsList, ';')];
+end;
+
+procedure GetListOfValues(ValueFieldNames : string; LstTarget : ISValueList;
+  TblSource, TblTemp : ISValueTable);
+var
+  i : Integer;
+begin
+  if ValueFieldNames = '' then
+    exit;
+  i := WordCount(ValueFieldNames, ';');
+  if i = 1 then
+    begin
+      TblSource.GroupToList(ValueFieldNames, LstTarget);
+      exit;
+    end;
+  if IsNil(TblTemp) then
+    TblTemp := CreateObject('ValueTable');
+  TblTemp.Close;
+  TblSource.CopyColumnsTo(TblTemp);
+  TblTemp.Open;
+  TblSource.AppendTo('', TblTemp);
+  TblTemp.SortBy('');
+  TblTemp.GroupBy(ValueFieldNames, '');
+  TblTemp.SortBy(ValueFieldNames);
+  //
+  LstTarget.Clear;
+  TblTemp.Select;
+  while TblTemp.SelectNext do
+    LstTarget.AddValue('', ArrayOf(fpOneValue, GetTableValuesByFields(TblTemp, ValueFieldNames)));
+end;
+
+procedure AppendAccumSumFields(TblSource, TblTarget : ISValueTable; FieldsList : string);
+var
+  i : Integer;
+  SOneField, TOneField : string;
+begin
+  if FieldsList = '' then
+    exit;
+  for i := 1 to WordCount(FieldsList, ';') do
+    begin
+      SOneField := ExtractWord(i, FieldsList, ';');
+      TOneField := ExtractWord(1, SOneField, '=');
+      SOneField := ExtractWord(2, SOneField, '=');
+      if SOneField = '' then
+        SOneField := TOneField;
+      TblTarget._Default[TOneField] := VarAsDec(TblTarget._Default[TOneField]) + VarAsDec(TblSource._Default[SOneField]);
+    end;
+end;
+
+procedure SetDecompFilterAndAppend(TblSource, TblTarget : ISValueTable;
+  DecompValuesFilter : Variant; CommonFieldList,
+  AppGroupedFieldList, AppSumFieldList : string);
+begin
+  TblSource.SetRange(DecompValuesFilter[0], DecompValuesFilter[1]);
+  if AppGroupedFieldList = '' then
+    TblSource.AppendTo(MakeDelimitedValue(ArrayOf(CommonFieldList, AppSumFieldList)), TblTarget)
+  else // нужно добавлять построчно, поскольку с суммируемыми можно вызвать позже GroupBy
+    begin
+      TblSource.Select;
+      while TblSource.SelectNext do
+        if TblTarget.Find(GetTableValuesByFields(TblSource, CommonFieldList)) then
+          begin
+            TblTarget.Edit;
+            TblTarget.AssignFields(MakeDelimitedValue(ArrayOf(AppGroupedFieldList, AppSumFieldList)), TblSource);
+            TblTarget.Post;
+          end
+        else
+          begin
+            TblTarget.Append;
+            TblTarget.AssignFields(MakeDelimitedValue(ArrayOf(CommonFieldList,
+              AppGroupedFieldList)), TblSource);
+            AppendAccumSumFields(TblSource, TblTarget, AppSumFieldList);
+            TblTarget.Post;
+          end;
+    end;
+end;
+
+function AppendColumnsFromOneToOther(TblSource, TblTarget : ISValueTable; FieldsList : string;
+  Multiplicity : Integer = 1; DoIndexOnMultOne : Boolean = False) : Variant;
+var
+  i, j, ColIndex : Integer;
+  FieldName, NewFiedsDescr, AssignmentDescr, ReverseAssignmentDescr : string;
+begin
+  NewFiedsDescr := '';
+  AssignmentDescr := '';
+  ReverseAssignmentDescr := '';
+  try
+    if FieldsList = '' then
+      exit;
+    for i := 1 to WordCount(FieldsList, ';') do
+      begin
+        FieldName := ExtractWord(i, FieldsList, ';');
+        ColIndex := GetColumnIndexByName(TblSource, FieldName);
+        if Multiplicity = 1 then
+          if DoIndexOnMultOne then
+            begin
+              NewFiedsDescr := NewFiedsDescr + ';' + FieldName + '1';
+              AssignmentDescr := AssignmentDescr + ';' + FieldName + '=' + FieldName + '1';
+              ReverseAssignmentDescr := ReverseAssignmentDescr + ';' + FieldName + '1' + '=' + FieldName;
+              TblTarget.AddColumn(FieldName + '1', TblSource.GetColumnDataType(ColIndex),
+                TblSource.GetColumnDataSize(ColIndex));
+            end
+          else
+            TblTarget.AddColumn(FieldName, TblSource.GetColumnDataType(ColIndex),
+              TblSource.GetColumnDataSize(ColIndex))
+        else
+          begin
+            NewFiedsDescr := NewFiedsDescr + ';' + FieldName + '%s';
+            AssignmentDescr := AssignmentDescr + ';' + FieldName + '=' + FieldName + '%s';
+            ReverseAssignmentDescr := ReverseAssignmentDescr + ';' + FieldName + '%s' + '=' + FieldName;
+            for j := 1 to Multiplicity do
+              TblTarget.AddColumn(FieldName + IntToStr(j), TblSource.GetColumnDataType(ColIndex),
+                TblSource.GetColumnDataSize(ColIndex));
+          end;
+      end;
+    if (Multiplicity = 1) and not DoIndexOnMultOne then
+      begin
+        NewFiedsDescr := FieldsList;
+        AssignmentDescr := FieldsList;
+        ReverseAssignmentDescr := FieldsList;
+      end
+    else
+      if NewFiedsDescr <> '' then
+        begin
+          StrDelete(NewFiedsDescr, 1, 1);
+          StrDelete(AssignmentDescr, 1, 1);
+          StrDelete(ReverseAssignmentDescr, 1, 1);
+        end;
+  finally
+    // запись дескрипторов новых полей для подальшего использования
+    Result := ArrayOf(NewFiedsDescr, AssignmentDescr, ReverseAssignmentDescr);
+  end;
+end;
+
+function CreateColumnsForDecompose(CommonFields, GroupFieldsToDecompose, SumFieldsToDecompose : string;
+  TblSource, TblTarget : ISValueTable; ComposeCount : Integer) : Variant;
+begin
+  if (GroupFieldsToDecompose = '') and (SumFieldsToDecompose = '') then
+    raise(Trans(errFieldsToComposeIsEmpty));
+  TblTarget.Close;
+  AppendColumnsFromOneToOther(TblSource, TblTarget, CommonFields);
+  Result := ArrayOf(AppendColumnsFromOneToOther(TblSource, TblTarget, GroupFieldsToDecompose, ComposeCount, True),
+    AppendColumnsFromOneToOther(TblSource, TblTarget, SumFieldsToDecompose, ComposeCount, True));
+  TblTarget.Open;
+end;
+
+function DecomposeValueTable(FieldsForDecompValues, CommonFields, GroupFieldsToDecompose,
+  SumFieldsToDecompose : string; TblSource, TblTarget : ISValueTable;
+  LstValues, Descr : Variant = ''; DoGetListValues,
+  DoAppendNewCols : Boolean = True) : Variant;
+var
+  TblTempSource : ISValueTable;
+  OneDecompValue, OneDecompValue2 : Variant;
+  AssistInt1, AssistInt2 : Integer;
+  OneIndexGroupFieldNames, OneIndexSumFieldNames, AllSummedCols : string;
+begin
+  TblTempSource := CreateObject('ValueTable');
+  //
+  if not IsObject(LstValues) then
+    LstValues := CreateObject('ValueList');
+  if DoGetListValues then // нужно достать значения для разбивки
+    GetListOfValues(FieldsForDecompValues, LstValues, TblSource, TblTempSource);
+  //
+  TblTempSource.Close;
+  TblSource.CopyColumnsTo(TblTempSource);
+  TblTempSource.Open;
+  TblSource.AppendTo('', TblTempSource);
+  //
+  if DoAppendNewCols then // добавить поля в таблицу-приемник
+    // формирование колонок в TblTarget
+    Descr := CreateColumnsForDecompose(CommonFields, GroupFieldsToDecompose, SumFieldsToDecompose,
+      TblTempSource, TblTarget, LstValues.Count);
+  //
+  TblTempSource.SortBy(FieldsForDecompValues);
+  TblTarget.SortBy(CommonFields);
+  // занесение данных
+  for AssistInt1 := 1 to LstValues.Count do
+    begin
+      if GroupFieldsToDecompose = '' then
+        begin
+          // для подальшей группировки
+          AllSummedCols := AllSummedCols + ';' +
+            ReplaceOneStrWithAnother(Descr[1][0], '%s', IntToStr(AssistInt1));
+          // подстановка в прямой дескриптор присваивания : TblSource.AppendTo(..., TblTarget)
+          OneIndexGroupFieldNames := ReplaceOneStrWithAnother(Descr[0][1], '%s', IntToStr(AssistInt1));
+          OneIndexSumFieldNames := ReplaceOneStrWithAnother(Descr[1][1], '%s', IntToStr(AssistInt1));
+        end
+      else
+        begin
+          // подстановка в обратный дескриптор присваивания : TblTarget.AssignFields(..., TblSource)
+          OneIndexGroupFieldNames := ReplaceOneStrWithAnother(Descr[0][2], '%s', IntToStr(AssistInt1));
+          OneIndexSumFieldNames := ReplaceOneStrWithAnother(Descr[1][2], '%s', IntToStr(AssistInt1));
+        end;
+      OneDecompValue := LstValues.GetValue(AssistInt1 - 1);
+      if IsArray(OneDecompValue) then
+        case VarAsInt(OneDecompValue[0]) of
+          fpOneValue :
+            begin
+              OneDecompValue2 := FillVariableToArray(OneDecompValue[1]);
+              SetDecompFilterAndAppend(TblTempSource, TblTarget,
+                ArrayOf(OneDecompValue2, OneDecompValue2),
+                CommonFields, OneIndexGroupFieldNames, OneIndexSumFieldNames);
+            end;
+          fpValuesArray :
+            begin
+              OneDecompValue2 := OneDecompValue[1]; // переопределение
+              for AssistInt2 := ArrayLow(OneDecompValue2) to ArrayHigh(OneDecompValue2) do
+                begin
+                  OneDecompValue := FillVariableToArray(OneDecompValue2[AssistInt2]);
+                  SetDecompFilterAndAppend(TblTempSource, TblTarget,
+                    ArrayOf(OneDecompValue, OneDecompValue),
+                    CommonFields, OneIndexGroupFieldNames, OneIndexSumFieldNames);
+                end;
+            end;
+          fpRange :
+            SetDecompFilterAndAppend(TblTempSource, TblTarget,
+              ArrayOf(OneDecompValue[1][0], OneDecompValue[1][1]),
+              CommonFields, OneIndexGroupFieldNames, OneIndexSumFieldNames);
+        end
+      else // одно значение, получено по GroupToList
+        SetDecompFilterAndAppend(TblTempSource, TblTarget,
+          ArrayOf(OneDecompValue, OneDecompValue),
+          CommonFields, OneIndexGroupFieldNames, OneIndexSumFieldNames);
+    end;
+  if GroupFieldsToDecompose = '' then // оптимизация в случае пустых колонок группировки
+    begin
+      TblTarget.SortBy('');
+      try
+        if AllSummedCols <> '' then
+          StrDelete(AllSummedCols, 1, 1);
+        TblTarget.GroupBy(CommonFields, AllSummedCols);
+      finally
+        TblTarget.SortBy(CommonFields);
+      end;
+    end;
+  Result := Descr;
+end;
+
+// вычисление значения поля по дескриптору условия - (if-then-else)-ветка. Условие else необязательно
+
+procedure DoCalculationByOneCondition(TblSource : ISValueTable; CondField, ResultField : string;
+  arrFormulas : Variant);
+// вычисление значения поля по дескриптору условий - case-оператор
+const
+  idxCondition = 0;
+  idxMainFormula = 1;
+  idxElseFormula = 2;
+begin
+  SaveSortingForTables(ArrayOf(TblSource));
+  try
+    TblSource.DoCalculation(CondField, arrFormulas[idxCondition]); //условие
+    TblSource.SortBy(CondField);
+    TblSource.SetRange(-1, -1);
+    TblSource.DoCalculation(ResultField, arrFormulas[idxMainFormula]); //если условие выполняется
+    if ArrayHigh(arrFormulas) = idxElseFormula then
+      begin
+        TblSource.SetRange(0, 0);
+        TblSource.DoCalculation(ResultField, arrFormulas[idxElseFormula]); //если условие не выполняется
+      end;
+  finally
+    RestoreSortingForTables(ArrayOf(TblSource));
+  end;
+end;
+
+// вычисление значения поля по дескриптору условий - case-оператор
+// предполагается, что условия не пересекаются, иначе - в результат записывается значение по последнему условию
+
+procedure DoCalculationByConditions(TblSource : ISValueTable; CondField, ResultField : string;
+  ConditionsArray : Variant; ElseValue : string = '');
+var
+  i : Integer;
+  ElseCond : string;
+begin
+  SaveSortingForTables(ArrayOf(TblSource));
+  try
+    ElseCond := '';
+    for i := ArrayLow(ConditionsArray) to ArrayHigh(ConditionsArray) do
+      begin
+        DoCalculationByOneCondition(TblSource, CondField, ResultField, ConditionsArray[i]);
+        if ElseValue <> '' then
+          ElseCond := ElseCond + 'and not(' + VarAsStr(ConditionsArray[i][0]) + ')';
+      end;
+    if (ElseValue <> '') and (ElseCond <> '') then
+      begin
+        StrDelete(ElseCond, 1, StrLength('and not'));
+        DoCalculationByOneCondition(TblSource, CondField, ResultField, ArrayOf(ElseCond, ElseValue));
+      end;
+  finally
+    RestoreSortingForTables(ArrayOf(TblSource));
+  end;
+end;
+
+// вычисление формулы с контролем (знаменатель=0)
+
+procedure DoRightCalculation(TblSource : ISValueTable; CondField, ResultField,
+  CalcFormula : string; Denum : string = '';
+  DefValue : string = '0');
+begin
+  if Denum = '' then
+    begin
+      TblSource.DoCalculation(ResultField, CalcFormula);
+      exit;
+    end;
+  if DefValue <> '' then
+    DoCalculationByOneCondition(TblSource, CondField, ResultField,
+      ArrayOf('(' + Denum + ')<>0', CalcFormula, DefValue))
+  else
+    DoCalculationByOneCondition(TblSource, CondField, ResultField,
+      ArrayOf('(' + Denum + ')<>0', CalcFormula));
+end;
+
+function CreateTableForBLOB : ISValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Structure', vtcBlob, 0);
+  Result.AddColumn('Data', vtcBlob, 0);
+  Result.Open;
+end;
+
+function CreateTableForBLOBStructure : ISValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Name', vtcString, 100);
+  Result.AddColumn('Type', vtcInteger, 0);
+  Result.AddColumn('Size', vtcInteger, 0);
+  Result.AddColumn('ColFormat', vtcString, 20);
+  Result.Open;
+end;
+
+// подчитка свойств с BLOB-поля с учетом версий
+
+procedure ReadPropsFromBLOB(TblCurrProps : ISValueTable; OldData : Variant);
+var
+  TblOldProps, TblStructure, TblAll : ISValueTable;
+  CommonFields : string;
+  DoExit : Boolean;
+begin
+  TblAll := CreateTableForBLOB;
+  try
+    TblAll.PackedData := OldData;
+  except // данные полностью несовместимы
+    DoExit := True;
+  end;
+  if DoExit then
+    exit;
+  if not TblAll.SelectFirst then
+    exit;
+  //
+  TblStructure := CreateTableForBLOBStructure;
+  //
+  TblStructure.PackedData := TblAll.Structure;
+  //
+  TblOldProps := CreateObject('ValueTable');
+  TblStructure.Select;
+  CommonFields := '';
+  while TblStructure.SelectNext do
+    begin
+      TblOldProps.AddColumn(TblStructure.Name, TblStructure.Type, TblStructure.Size);
+      if TblCurrProps.HasField(TblStructure.Name) then
+        begin
+          CommonFields := CommonFields + ';' + VarAsStr(TblStructure.Name);
+          TblCurrProps.SetColumnFormat(TblStructure.Name, VarAsStr(TblStructure.ColFormat));
+        end;
+    end;
+  TblOldProps.Open;
+  TblOldProps.PackedData := TblAll.Data;
+  TblOldProps.Select;
+  // подчитка в (возможно) новую структуру
+  if (CommonFields <> '') then
+    begin
+      StrDelete(CommonFields, 1, 1);
+      TblOldProps.AppendTo(CommonFields, TblCurrProps);
+    end;
+end;
+
+// запись свойств в BLOB-поле
+
+function WritePropsToBlob(TblCurrProps : ISValueTable) : Variant;
+var
+  TblStructure, TblAll : ISValueTable;
+  i : Integer;
+begin
+  TblAll := CreateTableForBLOB;
+  //
+  TblStructure := CreateTableForBLOBStructure;
+  for i := 0 to TblCurrProps.GetColumnCount - 1 do
+    begin
+      TblStructure.Append;
+      TblStructure.Name := TblCurrProps.GetColumnName(i);
+      TblStructure.Type := TblCurrProps.GetColumnDataType(i);
+      TblStructure.Size := TblCurrProps.GetColumnDataSize(i);
+      TblStructure.ColFormat := TblCurrProps.GetColumnFormat(i);
+      TblStructure.Post;
+    end;
+  //
+  TblAll.Append;
+  TblAll.Structure := TblStructure.PackedData;
+  TblAll.Data := TblCurrProps.PackedData;
+  TblAll.Post;
+  //
+  Result := TblAll.PackedData;
+end;
+
+procedure RoundValuesInTable(TblCurrent : ISValueTable; ValList : string;
+  rdTo : Integer = 2; rdFrom : Integer = -1);
+var
+  i : Integer;
+  Mult, OneCol : string;
+begin
+  if rdFrom <> -1 then
+    if rdFrom <= rdTo then
+      exit
+    else
+      Mult := '1' + FillStrByChar('0', rdFrom - rdTo)
+  else
+    Mult := '';
+  for i := 1 to WordCount(ValList, ';') do
+    begin
+      OneCol := ExtractWord(i, ValList, ';');
+      if rdFrom = -1 then
+        begin
+          Mult := '1' + FillStrByChar('0', TblCurrent.GetColumnDataSize(GetColumnIndexByName(TblCurrent, OneCol)) - rdTo);
+          if Mult = '1' then
+            continue;
+        end;
+      TblCurrent.DoCalculation(OneCol, OneCol + '/' + Mult);
+      TblCurrent.DoCalculation(OneCol, OneCol + '*' + Mult);
+    end;
+end;
+
+procedure DeleteRecordsUnderRange(TblCurrent : ISValueTable);
+begin
+  if TblCurrent.SelectFirst then
+    while TblCurrent.IsFocused do
+      TblCurrent.Delete;
+end;
+
+procedure DeleteColumnsByCondition(TblCurrent : ISValueTable; CondFieldName, Condition : string);
+var
+  SortedColumns : string;
+  TmpTbl : ISValueTable;
+begin
+  TmpTbl := CreateObject('ТаблицаЗначений');
+  TblCurrent.CopyColumnsTo(TmpTbl);
+  TmpTbl.Open;
+  SortedColumns := TblCurrent.SortedColumns;
+  TblCurrent.SortBy('');
+  try
+    TblCurrent.DoCalculation(CondFieldName, Condition);
+    TblCurrent.SortBy(CondFieldName);
+    TblCurrent.SetRange(0, 0);
+    TblCurrent.AppendTo('', TmpTbl);
+    TblCurrent.CancelRange;
+    TblCurrent.Clear;
+    TmpTbl.AppendTo('', TblCurrent);
+    TmpTbl.Clear;
+  finally
+    TblCurrent.SortBy(SortedColumns);
+  end;
+end;
+
+procedure DeleteColumnsByConditions(TblCurrent : ISValueTable; CondFieldName : string; ConditionsArray : Variant);
+var
+  i : Integer;
+begin
+  for i := ArrayLow(ConditionsArray) to ArrayHigh(ConditionsArray) do
+    DeleteColumnsByCondition(TblCurrent, CondFieldName, ConditionsArray[1]);
+end;
+
+procedure SaveSortingForTables(arrTables : Variant; NewSort : string = '');
+var
+  i : Integer;
+begin
+  for i := ArrayLow(arrTables) to ArrayHigh(arrTables) do
+    begin
+      arrTables[i].Params['SortedColumns'] := arrTables[i].SortedColumns;
+      // if NewSort <> arrTables[i].Params['SortedColumns'] then - не оптимизировать!
+      arrTables[i].SortedColumns := NewSort;
+    end;
+end;
+
+procedure RestoreSortingForTables(arrTables : Variant);
+var
+  i : Integer;
+begin
+  for i := ArrayLow(arrTables) to ArrayHigh(arrTables) do
+    arrTables[i].SortedColumns := arrTables[i].Params['SortedColumns'];
+end;
+
+procedure AppendExtendedColumns(TblSource : ISValueTable; ExtDescr : Variant;
+  DoAppendData : Boolean = True);
+var
+  TblTemp : ISValueTable;
+  i : Integer;
+begin
+  AddColumnsByArrDescr(TblTemp, ExtDescr, False);
+  for i := 0 to TblSource.GetColumnCount - 1 do
+    TblTemp.AddColumn(TblSource.GetColumnName(i), TblSource.GetColumnDataType(i),
+      TblSource.GetColumnDataSize(i));
+  TblTemp.Open;
+  SaveSortingForTables(ArrayOf(TblSource));
+  try
+    if DoAppendData then
+      TblSource.AppendTo('', TblTemp);
+    //
+    TblSource.Close;
+    TblTemp.CopyTo('', TblSource);
+  finally
+    RestoreSortingForTables(ArrayOf(TblSource));
+  end;
+end;
+
+function GetColArrayDescrByFieldsList(TblSource : ISValueTable; FieldList : string) : Variant;
+var
+  i, FieldIndex : Integer;
+  OneFieldName : string;
+begin
+  if FieldList = '-' then
+    begin
+      ArrayCreate(Result, [0, TblSource.GetColumnCount - 1], Variant);
+      for i := 0 to ArrayLength(Result) - 1 do
+        Result[i] := ArrayOf(TblSource.GetColumnName(i), TblSource.GetColumnDataType(i),
+          TblSource.GetColumnDataSize(i));
+    end
+  else
+    begin
+      ArrayCreate(Result, [0, WordCount(FieldList, ';') - 1], Variant);
+      for i := 0 to ArrayLength(Result) - 1 do
+        begin
+          OneFieldName := ExtractWord(i + 1, FieldList, ';');
+          FieldIndex := GetColumnIndexByName(TblSource, OneFieldName);
+          Result[i] := ArrayOf(OneFieldName, TblSource.GetColumnDataType(FieldIndex),
+            TblSource.GetColumnDataSize(FieldIndex));
+        end;
+    end;
+end;
+
+// процедура обьединения двох таблиц значений
+
+procedure JoinTwoTables(TblMain, TblAppended : ISValueTable; CommonFieldsList,
+  AppendedFieldsList : string; DoAppendRecordIfNotExist : Boolean = True);
+var
+  TmpValues : Variant;
+begin
+  if (CommonFieldsList = '') or (AppendedFieldsList = '') then // по нечему или нечего добавлять в главную таблицу
+    exit;
+  SaveSortingForTables(ArrayOf(TblMain, TblAppended));
+  try
+    AppendExtendedColumns(TblMain, GetColArrayDescrByFieldsList(TblAppended, AppendedFieldsList));
+    TblMain.SortBy(CommonFieldsList);
+    TblAppended.Select;
+    while TblAppended.SelectNext do
+      begin
+        TmpValues := GetTableValuesByFields(TblAppended, CommonFieldsList);
+        TblMain.SetRange(TmpValues, TmpValues);
+        if TblMain.LineCount > 0 then
+          begin
+            TblMain.Select;
+            while TblMain.SelectNext do
+              begin
+                TblMain.Edit;
+                TblMain.AssignFields(AppendedFieldsList, TblAppended);
+                TblMain.Post;
+              end;
+          end
+        else
+          if DoAppendRecordIfNotExist then
+            begin
+              TblMain.Append;
+              TblMain.AssignFields(MakeDelimitedValue(ArrayOf(CommonFieldsList, AppendedFieldsList)), TblAppended);
+              TblMain.Post;
+            end;
+      end;
+  finally
+    RestoreSortingForTables(ArrayOf(TblMain, TblAppended));
+  end;
+end;
+
+function AppendTotalValuesToTable(TblTarget : ISValueTable; TotalFieldList : string;
+  DoAppend : Boolean = False) : Variant;
+var
+  i : Integer;
+  OneCol : string;
+  RecID : Double;
+begin
+  if DoAppend then
+    TblTarget.Append
+  else
+    TblTarget.Edit;
+  if TotalFieldList = '' then
+    begin
+      Result := Null;
+      exit;
+    end;
+  if DoAppend then
+    TblTarget.Cancel
+  else
+    RecID := TblTarget.RecID;
+  try
+    Result := FillVariableToArray(TblTarget.Total(TotalFieldList));
+  finally
+    if not DoAppend and (TblTarget.RecID <> RecID) then
+      TblTarget.FindByRecID(RecID);
+  end;
+  if DoAppend then
+    TblTarget.Append
+  else
+    TblTarget.Edit;
+  for i := 1 to WordCount(TotalFieldList, ';') do
+    begin
+      OneCol := ExtractWord(i, TotalFieldList, ';');
+      TblTarget._Default[OneCol] := Result[i - 1];
+    end;
+end;
+
+function GetColumnsList(TblCurrent : ISValueTable) : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 0 to TblCurrent.GetColumnCount - 1 do
+    Result := Result + ';' + TblCurrent.GetColumnName(i);
+  if Result <> '' then
+    StrDelete(Result, 1, 1);
+end;
+
+function LogarithmOf(Number, Base : Integer) : Integer;
+begin
+  Result := 0;
+  while Number <> 0 do
+    begin
+      inc(Result);
+      Number := Number div Base;
+    end;
+end;
+
+function GroupByRestrList(TblForGroup, TblTemp : ISValueTable; RestrictedGroupColsList,
+  IndexCol : string; FreeDegree : Integer) : Integer;
+var
+  OneRange : Variant;
+  Counter : Integer;
+begin
+  TblForGroup.GroupTo(RestrictedGroupColsList, '', TblTemp);
+  //Sleep(5); // между двумя процедурами решено сделать паузу для отработки
+  TblForGroup.SortBy(RestrictedGroupColsList);
+  TblTemp.Select;
+  Result := LogarithmOf(TblTemp.LineCount, 2) + FreeDegree;
+  Counter := 0;
+  while TblTemp.SelectNext do
+    begin
+      OneRange := GetTableValuesByFields(TblTemp, RestrictedGroupColsList);
+      TblForGroup.SetRange(OneRange, OneRange);
+      TblForGroup.DoCalculation(IndexCol, IndexCol + '+' + IntToStr(Bits(FreeDegree) * Counter));
+      inc(Counter);
+    end;
+end;
+
+// GroupBy для таблицы значений - только работает с любым кол-вом полей.
+// Колонки группировки разбиваются на два типа: link и не-link
+// IndexCol - ненужное поле таблицы значений числового типа
+
+procedure ExtendedGroupByWithLinkColsSep(TblForGroup : ISValueTable; LinkGroupCols,
+  OtherGroupCols, SumCols, IndexCol : string);
+const
+  cMaxGroupColsCount = 12; // поскольку есть ещё системные поля самой таблицы значений; сработает и пр значении = 13, но в строке TblForGroup.GroupTo(RestrictedGroupColsList, '', TblTemp);
+  cSimpleColWeigth = 1;
+  cLinkColWeigth = 2;
+var
+  OneColWeight, ColWeightCounter, LinkColsCount, ColsCounter, FreeDegree : Integer;
+  OneCol, GroupColsNow : string;
+  DoGroupNow : Boolean;
+  TblGroupIndexes, TblTemp : ISValueTable;
+begin
+  OtherGroupCols := MakeDelimitedValue(ArrayOf(LinkGroupCols, OtherGroupCols));
+  if OtherGroupCols = '' then
+    exit;
+  if LinkGroupCols <> '' then
+    begin
+      LinkColsCount := WordCount(LinkGroupCols, ';');
+      LinkGroupCols := ';' + LinkGroupCols + ';';
+    end
+  else
+    LinkColsCount := 0;
+  LinkGroupCols := OtherGroupCols; // запоминание всех полей группировки
+  SaveSortingForTables(ArrayOf(TblForGroup));
+  TblForGroup.DoCalculation(IndexCol, '0');
+  TblTemp := CreateObject('ValueTable');
+  try
+    ColsCounter := 0;
+    GroupColsNow := '';
+    ColWeightCounter := 0;
+    FreeDegree := 0;
+    while OtherGroupCols <> '' do // прогонка цикла группировки: пока не погруппируем по всем полям
+      begin
+        inc(ColsCounter);
+        OneCol := ExtractWord(1, OtherGroupCols, ';');
+        if OneCol <> OtherGroupCols then
+          OtherGroupCols := StrCopy(OtherGroupCols, StrLength(OneCol) + 2, StrLength(OtherGroupCols))
+        else
+          OtherGroupCols := '';
+        //
+        if ColsCounter <= LinkColsCount then
+          OneColWeight := cLinkColWeigth
+        else
+          OneColWeight := cSimpleColWeigth;
+        if (ColWeightCounter + OneColWeight > cMaxGroupColsCount) then
+          begin // группировка по раннее набравшейся куче полей
+            StrDelete(GroupColsNow, 1, 1);
+            FreeDegree := GroupByRestrList(TblForGroup, TblTemp, GroupColsNow, IndexCol, FreeDegree);
+            GroupColsNow := '';
+            ColWeightCounter := 0;
+          end;
+        ColWeightCounter := ColWeightCounter + OneColWeight;
+        GroupColsNow := GroupColsNow + ';' + OneCol;
+      end;
+    if GroupColsNow <> '' then
+      begin
+        StrDelete(GroupColsNow, 1, 1);
+        GroupByRestrList(TblForGroup, TblTemp, GroupColsNow, IndexCol, FreeDegree);
+      end;
+    // результат группировки
+    TblTemp.Close;
+    TblForGroup.CopyColumnsTo(TblTemp);
+    TblTemp.Open;
+    TblGroupIndexes := CreateObject('ValueTable');
+    TblForGroup.SortBy('');
+    TblForGroup.GroupTo(IndexCol, SumCols, TblGroupIndexes);
+    TblForGroup.SortBy(IndexCol);
+    TblGroupIndexes.Select;
+    while TblGroupIndexes.SelectNext do
+      begin
+        TblForGroup.SetRange(TblGroupIndexes._Default[IndexCol], TblGroupIndexes._Default[IndexCol]);
+        TblForGroup.SelectFirst;
+        TblTemp.Append;
+        TblTemp.AssignFields(LinkGroupCols, TblForGroup);
+        if SumCols <> '' then
+          TblTemp.AssignFields(SumCols, TblGroupIndexes);
+        TblTemp.Post;
+      end;
+    // результат -> в начальную таблицу
+    TblForGroup.Close;
+    TblTemp.CopyTo('', TblForGroup);
+    TblTemp.Close; // закрытие таблицы перед сортировкой ниже - экономия памяти на саму сортировку
+  finally
+    RestoreSortingForTables(ArrayOf(TblForGroup));
+  end;
+end;
+
+procedure ExtendedGroupBy(TblForGroup : ISValueTable; GroupCols, SumCols, IndexCol : string);
+var
+  OneCol, LinkGrCols, OtherGrCols : string;
+  ColsCounter : Integer;
+begin
+  if GroupCols = '' then
+    exit;
+  // разбитие группируемых колонок на link и не-link
+  for ColsCounter := 1 to WordCount(GroupCols, ';') do
+    begin
+      OneCol := ExtractWord(ColsCounter, GroupCols, ';');
+      if TblForGroup.GetColumnDataType(GetColumnIndexByName(TblForGroup, OneCol)) = vtcLink then
+        LinkGrCols := LinkGrCols + ';' + OneCol
+      else
+        OtherGrCols := OtherGrCols + ';' + OneCol;
+    end;
+  if LinkGrCols <> '' then
+    StrDelete(LinkGrCols, 1, 1);
+  if OtherGrCols <> '' then
+    StrDelete(OtherGrCols, 1, 1);
+  ExtendedGroupByWithLinkColsSep(TblForGroup, LinkGrCols, OtherGrCols, SumCols, IndexCol);
+end;
+
+procedure FillColsWithDefVarValues(TblForGroup : ISValueTable; ColsList : string);
+var
+  ColsCounter : Integer;
+  DefValues : Variant;
+  OneCol : string;
+begin
+  ArrayCreate(DefValues, [1, WordCount(ColsList, ';')], Variant);
+  for ColsCounter := 1 to WordCount(ColsList, ';') do
+    DefValues[ColsCounter] := DefaultVariant(TblForGroup.GetColumnDataType(
+      GetColumnIndexByName(TblForGroup, ExtractWord(ColsCounter, ColsList, ';'))));
+  TblForGroup.Select;
+  while TblForGroup.SelectNext do
+    begin
+      TblForGroup.Edit;
+      for ColsCounter := 1 to WordCount(ColsList, ';') do
+        begin
+          OneCol := ExtractWord(ColsCounter, ColsList, ';');
+          if IsNull(TblForGroup._Default['@' + OneCol]) then
+            TblForGroup._Default[OneCol] := DefValues[ColsCounter];
+        end;
+      TblForGroup.Post;
+    end;
+end;     
+                   
+procedure CreateAttributesTable(TblAttributes : ISValueTable);
+begin    
+  AddColumnsByArrDescr(TblAttributes,
+                       ArrayOf(
+                               ArrayOf('StringField', vtcString, 256),
+                               ArrayOf('BooleanField', vtcBoolean, 0),
+                               ArrayOf('FloatField', vtcFloat, 0),
+                               ArrayOf('FFTField', vtcFFT, 10),
+                               ArrayOf('DateField', vtcDate, 0),
+                               ArrayOf('TimeField', vtcTime, 0),
+                               ArrayOf('DateTimeField', vtcDateTime, 0),
+                               ArrayOf('LinkField', vtcLink, 0),
+                               ArrayOf('BlobField', vtcBlob, 0),
+                               ArrayOf('MemoField', vtcMemo, 0)
+                               ), True);
+end;
+
+end.

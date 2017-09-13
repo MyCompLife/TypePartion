@@ -1,0 +1,221 @@
+object Form: TO4DataForm
+  Left = 0
+  Top = 0
+  Width = 445
+  Height = 175
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'dbgData.PosColumns[  0].Title.Caption'
+    0
+    #1'-1'#1'Индекс'#1'1058'#1'Індекс'
+    'dbgData.PosColumns[  1].Title.Caption'
+    0
+    #1'-1'#1'Город'#1'1058'#1'Місто'
+    'dbgData.PosColumns[  2].Title.Caption'
+    0
+    #1'-1'#1'Улица, дом'#1'1058'#1'Вулиця, дім'
+    'dbgData.PosColumns[  3].Title.Caption'
+    0
+    #1'-1'#1'Тип адреса'#1'1058'#1'Тип адреси'
+    'pmiAdd.Caption'
+    0
+    #1'-1'#1'Добавить'
+    'pmiAdd.Hint'
+    0
+    #1'-1'#1'Добавить'
+    'pmiDelete.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'pmiDelete.Hint'
+    0
+    #1'-1'#1'Удалить'
+    'pmiEdit.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'pmiEdit.Hint'
+    0
+    #1'-1'#1'Изменить'
+    'pmiSort.Caption'
+    0
+    #1'-1'#1'Сортировать'
+    'pmiSort.Hint'
+    0
+    #1'-1'#1'Сортировать'
+    'tbAdd.Caption'
+    0
+    #1'-1'#1'Добавить'
+    'tbAdd.Hint'
+    0
+    #1'-1'#1'Добавить'
+    'tbDelete.Caption'
+    0
+    #1'-1'#1'Удалить'
+    'tbDelete.Hint'
+    0
+    #1'-1'#1'Удалить'
+    'tbEdit.Caption'
+    0
+    #1'-1'#1'Изменить'
+    'tbEdit.Hint'
+    0
+    #1'-1'#1'Изменить')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = ()
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  object dbgData: TO4DBGrid
+    Left = 0
+    Top = 24
+    Width = 445
+    Height = 151
+    AutoAlign = True
+    Align = alClient
+    Anchors = []
+    EditAction = True
+    IndicatorWidth = 18
+    Images = ImagesHolder.Bmp16x16
+    DragDisabled = False
+    Options = [dgEditing, dgTitles, dgColumnResize, dgColLines, dgRowLines, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit, dgMultiSelect]
+    O4MDSource = MDS
+    PopupMenu = pmData
+    ReadOnly = True
+    TabOrder = 0
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'Склад'
+        Title.Caption = 'Склад'
+        Width = 440
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '30.03.2010'
+      end>
+  end
+  object tbrData: TO4ToolBar
+    Left = 0
+    Top = 0
+    Width = 445
+    Height = 24
+    Anchors = []
+    ButtonWidth = 25
+    EdgeBorders = [ebLeft, ebTop, ebRight]
+    Flat = True
+    Images = ImagesHolder.Bmp16x16
+    List = True
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 1
+    Transparent = True
+    O4MDSource = MDS
+    object tbAdd: TO4ToolButton
+      Left = 0
+      Top = 0
+      Hint = 'Добавить'
+      Caption = 'Добавить'
+      ImageIndex = 0
+      O4Action = actAdd
+    end
+    object tbEdit: TO4ToolButton
+      Left = 25
+      Top = 0
+      Hint = 'Изменить'
+      Caption = 'Изменить'
+      ImageIndex = 1
+      O4Action = actEdit
+    end
+    object tbDelete: TO4ToolButton
+      Left = 50
+      Top = 0
+      Hint = 'Удалить'
+      Caption = 'Удалить'
+      ImageIndex = 2
+      O4Action = actDel
+    end
+    object ToolButton1: TO4ToolButton
+      Left = 75
+      Top = 0
+      Width = 8
+      Caption = 'ToolButton1'
+      ImageIndex = 4
+      Style = tbsSeparator
+      O4Action = actNone
+    end
+    object tbParam: TO4ToolButton
+      Left = 83
+      Top = 0
+      AutoSize = True
+      Caption = 'tbParam'
+      ImageIndex = 48
+      O4Action = actGridParam
+    end
+  end
+  object MDS: TO4DataSource
+    VPABeforeOpen.EventName = 'MDS_VPABeforeOpen'
+    VPAAfterDelete.EventName = 'MDS_VPAAfterPost'
+    VPAAfterPost.EventName = 'MDS_VPAAfterPost'
+    AfterScrollLock = False
+    VPATimedAfterScroll.EventName = 'MDS_VPAAfterPost'
+    AfterScrollInterval = 200
+    Left = 197
+    Top = 74
+  end
+  object pmData: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = MDS
+    Left = 355
+    Top = 82
+    object pmiAdd: TO4MenuItem
+      Caption = 'Добавить'
+      Hint = 'Добавить'
+      ImageIndex = 0
+      ShortCut = 45
+      O4Action = actAdd
+      SortMenuParent = False
+    end
+    object pmiEdit: TO4MenuItem
+      Caption = 'Изменить'
+      Hint = 'Изменить'
+      ImageIndex = 1
+      ShortCut = 113
+      O4Action = actEdit
+      SortMenuParent = False
+    end
+    object pmiDelete: TO4MenuItem
+      Caption = 'Удалить'
+      Hint = 'Удалить'
+      ImageIndex = 2
+      ShortCut = 46
+      O4Action = actDel
+      SortMenuParent = False
+    end
+    object MenuItem2: TO4MenuItem
+      Caption = '-'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object pmiSort: TO4MenuItem
+      Caption = 'Сортировать'
+      Hint = 'Сортировать'
+      ImageIndex = 37
+      O4Action = actSelect
+      SortMenuParent = True
+    end
+  end
+end

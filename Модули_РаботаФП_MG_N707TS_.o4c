@@ -1,0 +1,425 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСWebApi;
+function StrWithoutQuotes(s:string):string;
+procedure PrintNotFiscalDocMGN707(FiscalDic:ICDictionary; Doc:ICDocuments);
+procedure PrintFiscalDocMGN707(FiscalDic:ICDictionary; Doc:ICDocuments; CashPaySum, CardPaySum:Decimal=0);
+procedure PrintFiscalReturnDocMGN707(FiscalDic:ICDictionary; Doc:ICDocuments; CashPaySum, CardPaySum:Decimal=0);
+procedure InputOutputCashMGN707(FiscalDic:ICDictionary; Sum:Decimal);
+procedure PrintLastCheckMGN707(FiscalDic:ICDictionary);
+function GetFiscalPrinterStateMGN707(FiscalDic:ICDictionary):string;
+function GetFiscalPrinterReadyMGN707(FiscalDic:ICDictionary):Boolean;
+function CheckPrintCheckResultMGN707(HTTPStatus, HTTPResult:string; var CheckErrorMessage:string):boolean;
+procedure PrintFiscalReportMGN707(FiscalDic:ICDictionary; ReportNum:string);
+procedure PrintZeroReceiptMGN707(FiscalDic:ICDictionary);
+
+implementation
+const ErrorCodes='x01;x02;x03;x04;x25;x31;x32;x33;x34;x35;x36;x37;x38;x39;x3A;x3B;x3C;x3D;x3E;x3F;x40;x41;x42;x43;x44;x87;x88;x89;x8A;x8B;x8C;x8D;xA3;xA5;xA7;xA8;xA9;xBB;xBC;xBD;xBE;xBF;xC0;xC1;xC2;xC3;xC4;xC5;xC6;xC7;xC8;xCC;xCF;xD0;xD1;xD2;xD3;xD4;xD5;xD6;xD7;xD8;xD9;xDA;xDB;xDC;xDD;xDE;xDF;xE0;xE1;xE2;xE3;xE4;xE5;xE6;xE7;xE8;xE9;xEA;xEB;xEC;xED;xEE;xEF;xF0;xF1;xF2;xF3;xF4;xF5;xF6;xF7;xF8;xF9;xFA;xFB;xFC;xFD;xFE;xFF';
+      ErrorNames='Цена не указана;Количество не указано;Отдел не указан;Группа не указана;Нет бумаги;Пользователь уже зарегистрирован;Неверный пароль;Неверный номер таблицы;Доступ к таблице запрещен;Умолчание не найдено;Неверный индекс;Неверное поле;Таблица переполнена;Неверная длина двоичных данных;Попытка модификации поля только для чтения;Неверное значение поля;Товар уже существует;По товару были продажи;Запрос запрещен;Неверная закладка;Ключ не найден;Процедура уже исполняется;Количество товара отрицательно;Включено перенаправление с карты памяти;501 отчет не пуст;Ошибка фискальной памяти;Ошибка карты памяти;Переполнение карты памяти;Нет бумаги для контрольной ленты;Нет бумаги;Переполнение фискальной памяти;Выдача сдачи запрещена;Операция прекращена устройством;Дневной отчет не найден;MMC запрещено;Неверен номер фискальной памяти;Фискальная память не пуста;Лента не пуста;Режим тренировки;Текущая дата неверна;Запрещено изменение времени;Истек сервисный таймер;Ошибка работы с терминалом НСМЕП;'+
+      'Неверный номер;Неверный параметр у процедуры;Режим фискального принтера не активен;Изменялось название товара или его налог;Необходима персонализация;Отсутствует обмен с сервером НСМЭП на протяжении 72 часов;Запрещено обнуление данных ЭКЛ;Запрещена работа с GPRS модемом;Начата операция возврата;Не выведен отчет Z1;Не сделана инкассация денег;Сейф не закрыт;Печать ленты прервана;Достигнут конец текущей смены, или изменилась дата;Не указано значение процентной скидки по умолчанию;Не указано значение скидки по умолчанию;Дневной отчет не выведен;Дневной отчет уже выведен (и пуст);Нельзя отменить товар на который сделана скидка без ее предварительной отмены;Товар не продавался в этом чеке;Нечего отменять;Отрицательная сумма продажи товара;Неверный процент;Нет ни одной продажи;Скидки запрещены;Неверная сумма платежа;Тип оплаты не предполагает введения кода клиента;Неверная сумма платежа;Идет оплата чека;Товар закончился;Номер группы не может меняться;Неверная группа;Номер отдела не может меняться;'+
+     'Неверный отдел;Нулевое произведение количества на цену;Переполнение внутренних сумм;Дробное количество запрещено;Неверное количество;Цена не может быть изменена;Неверная цена;Товар не существует;Начат чек внесения-изъятия денег;Чек содержит продажи;Не существующий или запрещенный тип оплаты;Поле в строке переполнено;Отрицательная сумма по дневному отчету;Отрицательная сумма по чеку;Чек переполнен;Дневной отчет переполнен;Чек для копии не найден;Оплата чека не завершена;Кассир не зарегистрирован;У кассира нет прав на эту операцию;Нефискальный чек не открыт;Чек не открыт;Нефискальный чек уже открыт;Чек уже открыт;Переполнение ленты;';
+
+
+function StrWithoutQuotes(s:string):string;
+var i : integer;
+begin
+ Result :='';
+ If StrLength(S)>0 then
+   for i := 1 to StrLength(S) do
+     if s[i]<>'"' then
+       Result := Result + s[i];
+end;
+
+
+function GetFiscalPrinterReadyMGN707(FiscalDic:ICDictionary):Boolean;
+const SkipErrorStr = ';No fiscal printer mode;';
+var HTTPStatus, HTTPError :string;
+    StatusStr, CurErrorStr, ErrorMessage : string;
+    JSonObject, JSonData, JSonErr  : OleVariant;
+    ErrCount,ErrTotal, tryStep : integer;
+begin
+ Result := false;
+ repeat
+   ErrorMessage := '';
+   StatusStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/state','', HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира), '', 'GET');
+   if HTTPStatus='12030' then
+     begin
+       tryStep := 0;
+       repeat
+         StatusStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/state','', HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира), '', 'GET');
+         inc(tryStep); 
+         Sleep(50);
+       until (tryStep>3) or (HTTPStatus<>'12030');
+     end;
+   if (HTTPStatus='200') and (StatusStr<>'') then
+     begin
+       JSonObject := GetJSonEncodedObject(StatusStr);
+       JSonData := GetJSonValueByKey(JSonObject,'err');
+       ErrTotal := GetJSonArraySize(JSonData);
+       if ErrTotal>0 then
+         for ErrCount := 0 to ErrTotal-1 do
+          begin
+            JSonErr := GetJSonElementOfArray(JSonData,ErrCount);
+            CurErrorStr := GetJSonValueByKey(JSonErr,'e');
+            if StrPos(';'+CurErrorStr+';',SkipErrorStr)=0 then
+              ErrorMessage := ErrorMessage +';'+CurErrorStr;
+          end;
+       if ErrorMessage<>'' then
+         ErrorMessage := 'ФП не готов! Ошибки:'+StrCopy(ErrorMessage,2,StrLength(ErrorMessage));
+     end
+   else
+     ErrorMessage := 'Ошибка связи с ФП (HTTP статус - '+HTTPStatus+#13+'Строка ошибки: '+HTTPError+')';
+   Result := (ErrorMessage='');
+ until  (ErrorMessage='') or (MessageDlg(ErrorMessage+#13+'Пробывать еще?',mtInformation,ArrayOf(mbYes,mbNo))=mrNo);
+end;
+
+function CheckPrintCheckResultMGN707(HTTPStatus, HTTPResult:string; var CheckErrorMessage:string):boolean;
+var JSonObject, JSonData  : OleVariant;
+    ErrTotal, CodeErrorPos, SeparCount, i : integer;
+    CurrErrorCode, CurErrorStr : string;
+begin
+  Result := false;  
+  CheckErrorMessage := '';
+  if HTTPStatus='200' then
+    begin
+      if StrPos('"err":',HTTPResult)<>0 then
+        begin
+          JSonObject := GetJSonEncodedObject(HTTPResult);
+          JSonData := GetJSonValueByKey(JSonObject,'err');
+          ErrTotal := GetJSonSize(JSonData);
+          if ErrTotal>0 then
+            begin
+              CurErrorStr := VarAsStr(GetJSonValueByKey(JSonData,'e'));
+              if CurErrorStr<>'' then
+                begin
+                  CodeErrorPos := StrPos(CurErrorStr,ErrorCodes);
+                  if CodeErrorPos>0 then
+                    begin
+                      SeparCount := 0;
+                      for i:= CodeErrorPos downto 1 do
+                        if StrCopy(ErrorCodes,i,1)=';' then
+                          inc(SeparCount);  
+                      inc(SeparCount);
+                      CheckErrorMessage := CurErrorStr+' '+ExtractWord(SeparCount,ErrorNames,';');
+                    end;
+                end;
+            end;
+        end
+      else
+        Result := true;
+    end
+  else 
+    begin     
+     if HTTPResult<>'' then
+       CheckErrorMessage := HTTPResult
+     else
+       CheckErrorMessage := 'Ошибка связи '+HTTPStatus;
+    end;
+end;  
+
+procedure PrintFiscalReportMGN707(FiscalDic:ICDictionary; ReportNum:string);
+var HTTPStatus, HTTPError, ResultStr, CheckErrorMessage : string;
+begin     
+// ReportNum=
+// 0 - Z отчет
+// 10 - X отчет
+// 20 - X отчет по товарам
+  ResultStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/proc/printreport?'+ReportNum,
+                               '', HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира), '', 'GET');
+  if not CheckPrintCheckResultMGN707(HTTPStatus,ResultStr, CheckErrorMessage) then
+   ShowMessage(CheckErrorMessage);
+end;
+
+procedure PrintNotFiscalDocMGN707(FiscalDic:ICDictionary; Doc:ICDocuments);
+var
+  OneDoc : ICDocuments;
+  PayTbl, Tbl : ICValueTable;
+  CashPaySum, CardPaySum : DEcimal;
+  JSONStr, ResultStr, HTTPStatus, HTTPError, CheckErrorMessage : string;
+  GoodNameStr, CountStr, SumStr : string; 
+  GoodLineCount, MaxGoodLineCount,i : integer;
+begin
+ if not IsObjFocused(Doc) then
+   ShowMessage('Документ не задан!')
+ else
+   begin  
+     Tbl := CreateObject('ТаблицаЗначений');
+     Tbl.AddColumn('Товар',vtcLink,0);
+     Tbl.AddColumn('НомСтроки',vtcInteger,0);
+     Tbl.AddColumn('Код',vtcInteger,0);
+     Tbl.AddColumn('Количество',vtcFFT,5);
+     Tbl.AddColumn('Цена',vtcFFT,2);
+     Tbl.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,2);
+     Tbl.AddColumn('Название',vtcString,150);
+     Tbl.AddColumn('Сумма',vtcFFT,2);
+     Tbl.Open;
+     OneDoc := CreateObject('Документы.'+Doc.GetSign);
+     OneDoc.Find(Doc);
+     OneDoc.AppendLinesTo('НомСтроки;Товар;Количество;Цена;ЦенаБезСкидкиНадбавки',Tbl);
+     Tbl.DoGetLinks('Код=Товар.Код;Название=Товар.НазвТовара');
+     Tbl.DoCalculation('Сумма','Количество*Цена');
+     JSONStr := '{"P":[';
+     JSONStr := JSONStr + '{"N":{"cm":"-------------------------------"}},';
+     JSONStr := JSONStr + '{"N":{"cm":" Назва           К-сть   Сума"}},';
+     JSONStr := JSONStr + '{"N":{"cm":"-------------------------------"}},';
+     Tbl.SortBy('НомСтроки');
+     Tbl.Select;
+     While Tbl.SelectNext do
+      if VarAsDec(Tbl.Количество)>0 then
+        begin
+          GoodNameStr := StrWithoutQuotes(Tbl.Название);
+          GoodLineCount := trunc(StrLength(GoodNameStr)/17+0.99);
+          MaxGoodLineCount := GoodLineCount;
+          CountStr :=  StrDecimalSeparatorDot(FormatFloat('0.#',VarAsDec(Tbl.Количество)));
+          GoodLineCount := trunc(StrLength(CountStr)/3+0.99);
+          if GoodLineCount>MaxGoodLineCount then
+            MaxGoodLineCount := GoodLineCount;
+          SumStr := StrDecimalSeparatorDot(FormatFloat('0.00',VarAsDec(Tbl.Сумма)));
+          GoodLineCount := trunc(StrLength(SumStr)/9+0.99);
+          if GoodLineCount>MaxGoodLineCount then
+            MaxGoodLineCount := GoodLineCount;
+          for i:=0 to MaxGoodLineCount-1 do
+            JSONStr := JSONStr + '{"N":{"cm":"'+
+              AlignStr(StrCopy(GoodNameStr,1+i*17,17),17,false,' ')+' '+
+              AlignStr(StrCopy(CountStr,1+i*3,3),3,true,' ')+' '+
+              AlignStr(StrCopy(SumStr,1+i*9,9),9,true,' ')+'"}},';
+        end;
+     JSONStr := JSONStr + '{"N":{"cm":"-------------------------------"}},';
+     JSONStr := JSONStr + '{"N":{"cm":"'+'Всього:'+AlignStr(StrDecimalSeparatorDot(DecToStr(VarAsDec(OneDoc.Сумма),2)),24,true,' ')+'"}},';
+
+     if VarAsBool(OneDoc.@Ответственный.IsFocused) then
+       JSONStr := JSONStr+'{"N":{"cm":"'+'Касир: '+VarAsStr(OneDoc.Ответственный.ПолноеНазвание)+'"}},';
+     JSONStr := JSONStr + '{"N":{"cm":"     Дякуємо за Ваш вибір!"}},'+
+                          '{"N":{"cm":" Дата:'+FormatDateTime('dd.nn.yyyy',CurrentDate)+
+                                     '  Час:'+FormatDateTime('hh:mm:ss',CurrentTime)+'"}},'+
+                          '{"N":{"cm":"'+' Чек №'+StrWithoutQuotes(VarAsStr(OneDoc.GetNumber))+'"}},'+
+                          '{"BC":{"code":"*01'+VarAsStr(OneDoc.NumID)+'","type":"2"}}]}';
+     if GetFiscalPrinterReadyMGN707(FiscalDic) then
+       begin
+         ResultStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/chk',JSONStr,
+                                 HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира));
+         if not CheckPrintCheckResultMGN707(HTTPStatus, ResultStr, CheckErrorMessage) then
+           ShowMessage('Ошибка печати не фискального чека!'+#13+CheckErrorMessage);
+       end;
+   end;
+end;
+
+procedure PrintFiscalDocMGN707(FiscalDic:ICDictionary; Doc:ICDocuments; CashPaySum, CardPaySum:Decimal=0);
+var
+  Tbl, PayTbl : ICValueTable;
+  AllPaySum : DEcimal;
+  JSONStr, ResultStr, HTTPStatus, HTTPError, CheckErrorMessage : string;  
+  OneDoc : ICDocuments; 
+begin
+ if not IsObjFocused(Doc) then
+   ShowMessage('Документ не задан!')
+ else
+   begin
+     Tbl := CreateObject('ТаблицаЗначений');
+     Tbl.AddColumn('Товар',vtcLink,0);
+     Tbl.AddColumn('НомСтроки',vtcInteger,0);
+     Tbl.AddColumn('Код',vtcInteger,0);
+     Tbl.AddColumn('Количество',vtcFFT,5);
+     Tbl.AddColumn('Цена',vtcFFT,2);
+     Tbl.AddColumn('Название',vtcString,150);
+     Tbl.AddColumn('Сумма',vtcFFT,2);   
+     Tbl.AddColumn('НалоговаяГруппа',vtcInteger,0);
+     Tbl.Open;
+     OneDoc := CreateObject('Документы.'+Doc.GetSign);
+     OneDoc.Find(Doc);
+     OneDoc.AppendLinesTo('НомСтроки;Товар;Количество;Цена',Tbl);
+     Tbl.DoGetLinks('Код=Товар.Код;Название=Товар.НазвТовара;НалоговаяГруппа=Товар.НалоговаяГруппа');
+     Tbl.DoCalculation('Сумма','Количество*Цена');
+     Tbl.Select;
+     While Tbl.SelectNext do
+      if VarAsInt(Tbl.НалоговаяГруппа)=0 then
+       begin
+         Tbl.Edit;
+         Tbl.НалоговаяГруппа := 1;
+         Tbl.Post;
+       end;
+     OneDoc := CreateObject('Документы.'+Doc.GetSign);
+     OneDoc.Find(Doc);  
+     if (CashPaySum=0) and (CardPaySum=0) then
+       begin   
+         PayTbl := CreateObject('ТаблицаЗначений');
+         PayTbl.AddColumn('DocSign',vtcString,64);
+         PayTbl.AddColumn('Sum',vtcFFT,2);
+         PayTbl.Open;
+         OneDoc.SetSrvToClientPos;
+         PayTbl.CopyDataToServer;
+         server.FillPayTblS(OneDoc.SrvMean, PayTbl.SrvMean, true);
+         PayTbl.CopyDataFromServer;
+         PayTbl.SrvMean.Clear;
+         AllPaySum := PayTbl.Total('Sum');
+         if PayTbl.Locate('DocSign','ПриходПоЭквайрингу') then
+          CardPaySum := VarAsDec(PayTbl.Sum);
+       end
+     else
+      AllPaySum := CashPaySum+CardPaySum;
+     if (AllPaySum<>VarAsDec(OneDoc.Сумма)) and (MessageDlg('Сумма документа '+DecToStr(OneDoc.Сумма)+' грн. отличаеться от суммы оплат '+
+         DecToStr(AllPaySum)+' грн.'+#13+'Все равно печатать чек?',mtConfirmation,ArrayOf(mbYes,mbNo))<>mrYes) then
+       exit;
+     AllPaySum := VarAsDec(OneDoc.Сумма);
+     if CardPaySum>AllPaySum then
+       CardPaySum := AllPaySum
+     else
+     if CardPaySum<0 then
+       CardPaySum := 0;
+     CashPaySum := AllPaySum - CardPaySum;
+     JSONStr := '{"F":[';
+     Tbl.SortBy('НомСтроки');
+     Tbl.Select;
+     While Tbl.SelectNext do
+      if VarAsDec(Tbl.Количество)>0 then
+        JSONStr := JSONStr + '{"S":{"code":'+StrWithoutQuotes(VarAsStr(Tbl.Код))+
+                                  ',"price":'+StrDecimalSeparatorDot(FormatFloat('0.##',VarAsFloat(Tbl.Цена)))+
+                                  ',"name":"'+StrWithoutQuotes(VarAsStr(Tbl.Название))+  
+                                  ',"tax":"'+VarAsStr(Tbl.НалоговаяГруппа)+
+                                  '","qty":'+StrDecimalSeparatorDot(FormatFloat('0.###',VarAsFloat(Tbl.Количество))) +'}},';
+     if CardPaySum>0 then
+      JSONStr := JSONStr +'{"P":{"sum":'+ StrDecimalSeparatorDot(FormatFloat('0.##',CardPaySum))+',"no":4}},';
+     if CashPaySum>0 then
+      JSONStr := JSONStr +'{"P":{"sum":'+ StrDecimalSeparatorDot(FormatFloat('0.##',CashPaySum))+'}}';
+     if JSONStr[StrLength(JSONStr)]=',' then
+       JSONStr[StrLength(JSONStr)] := ' ';
+     JSONStr := JSONStr + ']}';
+     if GetFiscalPrinterReadyMGN707(FiscalDic) then
+       begin
+         ResultStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/chk',JSONStr,
+                                 HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира));
+         if not CheckPrintCheckResultMGN707(HTTPStatus, ResultStr, CheckErrorMessage) then
+           ShowMessage('Ошибка печати фискального чека!'+#13+CheckErrorMessage);
+       end;
+   end;
+end;
+
+procedure PrintFiscalReturnDocMGN707(FiscalDic:ICDictionary; Doc:ICDocuments; CashPaySum, CardPaySum:Decimal=0);
+var
+  OneDoc : ICDocuments;
+  Tbl, PayTbl : ICValueTable;
+  AllPaySum : DEcimal;
+  JSONStr, ResultStr, HTTPStatus, HTTPError, CheckErrorMessage  : string;
+  //P : ICProcessing;
+begin
+ if not IsObjFocused(Doc) then
+   ShowMessage('Документ не задан!')
+ else
+ if Doc.GetDocState=0 then
+   ShowMessage('Документ не зафиксирован!') 
+ else
+   begin
+     Tbl := CreateObject('ТаблицаЗначений');
+     Tbl.AddColumn('Товар',vtcLink,0);
+     Tbl.AddColumn('НомСтроки',vtcInteger,0);
+     Tbl.AddColumn('Код',vtcInteger,0);
+     Tbl.AddColumn('Количество',vtcFFT,5);
+     Tbl.AddColumn('Цена',vtcFFT,2);
+     Tbl.AddColumn('Название',vtcString,150);
+     Tbl.AddColumn('Сумма',vtcFFT,2);     
+     Tbl.AddColumn('НалоговаяГруппа',vtcInteger,0);
+     Tbl.Open;
+     OneDoc := CreateObject('Документы.'+Doc.GetSign);
+     OneDoc.Find(Doc);
+     OneDoc.AppendLinesTo('НомСтроки;Товар;Количество;Цена',Tbl);
+     Tbl.DoGetLinks('Код=Товар.Код;Название=Товар.НазвТовара;НалоговаяГруппа=Товар.НалоговаяГруппа');
+     Tbl.DoCalculation('Сумма','Количество*Цена');
+     Tbl.Select;
+     While Tbl.SelectNext do
+      if VarAsInt(Tbl.НалоговаяГруппа)=0 then
+       begin
+         Tbl.Edit;
+         Tbl.НалоговаяГруппа := 1;
+         Tbl.Post;
+       end;
+     OneDoc := CreateObject('Документы.'+Doc.GetSign);
+     OneDoc.Find(Doc);
+     if (CashPaySum=0) and (CardPaySum=0) then
+       begin   
+         PayTbl := CreateObject('ТаблицаЗначений');
+         PayTbl.AddColumn('DocSign',vtcString,64);
+         PayTbl.AddColumn('Sum',vtcFFT,2);
+         PayTbl.Open;
+         OneDoc.SetSrvToClientPos;
+         PayTbl.CopyDataToServer;
+         server.FillPayTblS(OneDoc.SrvMean, PayTbl.SrvMean, false);
+         PayTbl.CopyDataFromServer;
+         PayTbl.SrvMean.Clear;
+         AllPaySum := PayTbl.Total('Sum');
+         if PayTbl.Locate('DocSign','РасходПоЭквайрингу') then
+           CardPaySum := VarAsDec(PayTbl.Sum);
+       end
+     else    
+       AllPaySum := CashPaySum+CardPaySum;
+     if (AllPaySum<>VarAsDec(OneDoc.Сумма)) and (MessageDlg('Сумма документа '+DecToStr(OneDoc.Сумма)+' грн. отличаеться от суммы оплат '+
+         DecToStr(AllPaySum)+' грн.'+#13+'Все равно печатать чек?',mtConfirmation,ArrayOf(mbYes,mbNo))<>mrYes) then
+       exit;
+     AllPaySum := VarAsDec(OneDoc.Сумма);
+     if CardPaySum>AllPaySum then
+       CardPaySum := AllPaySum
+     else
+     if CardPaySum<0 then
+       CardPaySum := 0;
+     CashPaySum := AllPaySum - CardPaySum;
+     JSONStr := '{"R":[';
+     Tbl.SortBy('НомСтроки');
+     Tbl.Select;
+     While Tbl.SelectNext do
+      if VarAsDec(Tbl.Количество)>0 then
+        JSONStr := JSONStr + '{"S":{"code":'+StrWithoutQuotes(VarAsStr(Tbl.Код))+
+                                  ',"price":'+StrDecimalSeparatorDot(FormatFloat('0.##',VarAsFloat(Tbl.Цена)))+
+                                  ',"name":"'+StrWithoutQuotes(VarAsStr(Tbl.Название))+ 
+                                  ',"tax":"'+VarAsStr(Tbl.НалоговаяГруппа)+
+                                  '","qty":'+StrDecimalSeparatorDot(FormatFloat('0.###',VarAsFloat(Tbl.Количество))) +'}},';
+     if CardPaySum>0 then
+      JSONStr := JSONStr +'{"P":{"sum":'+ StrDecimalSeparatorDot(FormatFloat('0.##',CardPaySum))+',"no":4}},';
+     if CashPaySum>0 then
+      JSONStr := JSONStr +'{"P":{"sum":'+ StrDecimalSeparatorDot(FormatFloat('0.##',CashPaySum))+'}}';
+     if JSONStr[StrLength(JSONStr)]=',' then
+       JSONStr[StrLength(JSONStr)] := ' ';
+     JSONStr := JSONStr + ']}';
+     if GetFiscalPrinterReadyMGN707(FiscalDic) then
+      begin
+        ResultStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/chk',JSONStr,
+                                   HTTPStatus, HTTPError,VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира));
+        if not CheckPrintCheckResultMGN707(HTTPStatus,ResultStr,CheckErrorMessage) then
+          ShowMessage('Ошибка печати фискального чека!'+#13+CheckErrorMessage);
+      end;
+   end;
+end;
+
+procedure InputOutputCashMGN707(FiscalDic:ICDictionary; Sum:Decimal);
+var JSONStr, ResultStr, HTTPStatus, HTTPError, CheckErrorMessage  : string;
+begin
+  JSONStr := '{"IO":[{"IO":{"sum":'+FormatFloat('0.##',Sum)+'}}]}';
+  ResultStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/chk',JSONStr,HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира));
+  if not CheckPrintCheckResultMGN707(HTTPStatus,ResultStr,CheckErrorMessage) then
+    ShowMessage('Ошибка! '+CheckErrorMessage);
+end;
+
+procedure PrintLastCheckMGN707(FiscalDic:ICDictionary);
+var JSONStr, ResultStr, HTTPStatus, HTTPError  : string;
+begin
+  JSONStr := '{"L":[]}';
+  ResultStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/chk',JSONStr,HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира));
+end;
+
+function GetFiscalPrinterStateMGN707(FiscalDic:ICDictionary):string;
+var HTTPStatus, HTTPError :string;
+begin
+ Result := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/state','', HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира), '', 'GET');
+ if HTTPStatus<>'200' then
+   Result := Result+#13+'HTTP статус: '+HTTPStatus;
+ if HTTPError<>'' then
+   Result := Result+#13+'Ошибка:'+HTTPError;
+end;
+
+procedure PrintZeroReceiptMGN707(FiscalDic:ICDictionary);
+var JSONStr, ResultStr, HTTPStatus, HTTPError  : string;
+begin
+  JSONStr := '{}';
+  ResultStr := SendHttpQuery(VarAsStr(FiscalDic.IP),'/cgi/chk',JSONStr,HTTPStatus, HTTPError, VarAsStr(FiscalDic.НомерКассира),VarAsStr(FiscalDic.ПарольКассира));
+end;
+
+end.

@@ -1,0 +1,68 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+Var
+  Good : ICDictionary;
+  CalcNum, FirstNum : Decimal;
+  V: ICProcessing;
+  AnyOwnKeyPress : Boolean;
+  FirstResult, KeyResult : String;
+
+implementation
+
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+
+begin
+ V := Mean;
+ FirstResult := V.Params['PartCode'];
+ if VarAsBool(V.HasParam('FormName')) then
+   lbName.Caption := VarAsStr(V.Params['FormName']);
+ edTablo.text := FirstResult;
+ AnyOwnKeyPress := false;
+end;
+
+procedure btOk_Click(Sender: TObject);
+begin
+ if AnyOwnKeyPress then
+   V.Params['PartCode'] := KeyResult
+ else
+   V.Params['PartCode'] := FirstResult;
+end;
+
+procedure bt_Click(Sender: TObject);
+Var
+  TOper : Integer;
+begin
+  AnyOwnKeyPress := true;
+  TOper := (Sender as TO4Button).Tag;
+  Case TOper of
+    10 :  KeyResult := '';
+  else
+    KeyResult := KeyResult + VarAsStr(TOper);
+  end;
+  edTablo.text := KeyResult;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel2:TO4Panel
+pnGoodName:TO4Panel
+lbName:TO4Label
+bt7:TO4Button
+bt8:TO4Button
+bt9:TO4Button
+bt4:TO4Button
+bt5:TO4Button
+bt6:TO4Button
+bt1:TO4Button
+bt2:TO4Button
+bt3:TO4Button
+bt0:TO4Button
+btOk:TO4Button
+btMin:TO4Button
+Panel1:TO4Panel
+edTablo:TO4Edit
+btDot:TO4Button

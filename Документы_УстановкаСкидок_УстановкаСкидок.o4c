@@ -1,0 +1,420 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, Пользователи, Интерфейс, РаботаСТаблицамиЗначений, РаботаСТаблицамиЗначенийCL,
+   РаботаСОбъектами, НумерацияДокументов, РаботаСЖурналомИзменений;
+
+implementation 
+
+var 
+  listPriceType: ICValueList;
+  LockCalc, AddDoc, isSave: Boolean;
+  MasterData: ICDocuments;
+  Constants: IC4VPAConst; 
+  TblPart, TblGoods: ICValueTable;    
+  Options : ICOptions;
+
+procedure CreateObjects;
+begin                         
+  Options := GetOptions;
+  Constants := GetConstants;
+end;
+
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+  isSave := false;
+  MasterData := MDS.GetMean;
+  CreateObjects;
+end;
+
+procedure CreateTbls;
+begin
+  TblPart := CreateTblFromBLOB(MasterData.Партнеры);
+  if IsNil(TblPart) then
+    begin
+      TblPart := CreateObject('ValueTable');
+      TblPart.AddColumn('Партнер',vtcLink,0);
+      TblPart.Open;
+      TblPart.SortBy('Партнер');
+    end;
+  TblGoods := CreateTblFromBLOB(MasterData.Товары);
+  if IsNil(TblGoods) then
+    begin
+      TblGoods := CreateObject('ValueTable');
+      TblGoods.AddColumn('Товар',vtcLink,0);
+      TblGoods.AddColumn('Процент',vtcFFT,2);
+      TblGoods.AddColumn('Цена',vtcFFT,7);
+      TblGoods.Open;
+      TblGoods.SetColumnFormat('Процент','0.##'); 
+      TblGoods.SetColumnFormat('Цена','0.00#####');
+    end;
+  TblGoods.SortBy('Товар');
+  TblPart.UseDataSource(CtrlToVar(TVSPart));
+  TblGoods.UseDataSource(CtrlToVar(TVSGoods));
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+  CreateTbls;
+  listPriceType := CreateObject('ValueList');
+  listPriceType.AddValue('Цена',0);
+  listPriceType.AddValue('ОптЦена',1);
+  listPriceType.AddValue('КрОптЦена',2);
+  LockCalc := true;
+  listPriceType.UseControl(ctrlToVar(edPriceType));
+  listPriceType.CurIndex := listPriceType.FindByStr(MasterData.ТипЦены);
+  LockCalc := false;
+  if MasterData.ТипСкидки = 0 then
+    begin
+      ePrice.Enabled := false;
+      ePercent.Enabled := true;
+    end
+  else
+    begin
+      rbPrice.Checked := true;
+      ePrice.Enabled := true;
+      ePercent.Enabled := false;
+    end;
+  cbAllGoods.Checked := VarAsBool(MasterData.ВсеТовары);
+  cbAllPart.Checked := VarAsBool(MasterData.ВсеПартнеры);
+  if (TblGoods.LineCount > 0) or (TblPart.LineCount > 0) then
+    begin
+      edPriceType.Enabled := false;
+      eRegion.Enabled := false
+    end;
+  if MasterData.GetDocState > 0 then
+    SetReadOnlyForm(Form);
+end;
+
+procedure edPriceType_Change(Sender: TObject);
+begin
+  if not LockCalc then
+    MasterData.ТипЦены := listPriceType.GetStr(listPriceType.CurIndex);
+end;
+
+procedure MDS_Append(Sender: TObject);
+begin
+  AddDoc := true;
+  MasterData.Регион := GetUsersField('Регион');
+  MasterData.BaseID := VarAsInt(Constants.КодИБ);
+  if MasterData.BaseID = 0 then
+    raise('Заполните код информационной базы в значениях важных констант');
+  MasterData.Ответственный := GetEmplByName(GetUserName);     
+  MasterData.ТипЦены := 'Цена';   
+  MasterData.ТипСкидки := 0;
+end;
+
+procedure rb_Click(Sender: TObject);
+begin
+  LockCalc := true;
+  case (Sender as TO4RadioButton).Tag of
+    0: begin
+      MasterData.Цена := 0;
+      ePrice.Enabled := false;
+      ePercent.Enabled := true;
+      MasterData.ТипСкидки := 0;
+    end;
+    1: begin
+      MasterData.Процент := 0;
+      ePrice.Enabled := true;
+      ePercent.Enabled := false;
+      MasterData.ТипСкидки := 1;
+    end;
+  end;
+  LockCalc := false;
+end;
+
+procedure cbAllPart_Click(Sender: TObject);
+begin
+  if cbAllPart.Checked then
+    begin
+      TblPart.Clear;
+      tbDel.Enabled := false;
+      tbSource.Enabled := false;
+    end
+  else
+    begin
+      tbDel.Enabled := true;
+      tbSource.Enabled := true;
+    end;
+  if cbAllPart.Checked and cbAllGoods.Checked then
+    begin
+      edPriceType.Enabled := true;
+      eRegion.Enabled := true
+    end;
+end;  
+
+procedure cbAllGoods_Click(Sender: TObject);
+begin
+  if cbAllGoods.Checked then
+    begin
+      TblGoods.Clear;
+      tbDelGood.Enabled := false;
+      tbSourceGood.Enabled := false;
+    end
+  else
+    begin
+      tbDelGood.Enabled := true;
+      tbSourceGood.Enabled := true;
+    end; 
+  if cbAllPart.Checked and cbAllGoods.Checked then
+    begin
+      edPriceType.Enabled := true;
+      eRegion.Enabled := true
+    end;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+begin
+  if MasterData.NumID = 0 then
+    MasterData.NumID := УстановитьНомерДокумента(MasterData, '');  
+  if (TblGoods.LineCount = 0) and not cbAllGoods.Checked then
+    raise('Не определены товары для установки скидок!');
+  if (TblPart.LineCount = 0) and not cbAllPart.Checked then
+    raise('Не определены партнеры для установки скидок!');
+  if rbPrice.Checked and (TblGoods.LineCount = 0) then
+    raise('Укажите товары, на которые будет действовать фиксированная цена!');
+  if cbAllPart.Checked then
+    MasterData.ВсеПартнеры := 1
+  else
+    MasterData.ВсеПартнеры := 0;
+  if cbAllGoods.Checked then
+    MasterData.ВсеТовары := 1
+  else
+    MasterData.ВсеТовары := 0;
+  MasterData.Партнеры := WritePropsToBlob(TblPart);
+  MasterData.Товары := WritePropsToBlob(TblGoods);
+end;
+
+procedure tbSource_Click(Sender: TObject);
+begin
+  case (Sender as TO4ToolButton).Tag of
+    0: begin
+      MasterData.OpenDropSource('Справочники.ЮрПартнеры','ПодборПартнеров',ArrayOf(MasterData.ТипЦены, MasterData.Регион));
+    end;
+    1: begin  
+      if VarAsBool(Constants.ИспользоватьМодели) then
+        MasterData.OpenDropSource('Справочники.МоделиГотовойПродукции','Подбор',Null)
+      else
+        MasterData.OpenDropSource('Справочники.Товары','ПодборГотовойПродукции',Null)
+    end;
+  end;
+end;
+
+procedure TDS_Drop(Source: Variant; var Accept: boolean); 
+var Dic: ICDictionary;
+begin
+  LockCalc := true;
+  if Source.GetSign = 'ЮрПартнеры' then
+    begin  
+      TblPart.SortBy('Партнер');
+      if not TblPart.Find(Source) then
+        begin
+          TblPart.Append;
+          TblPart.Партнер := Source;
+          TblPart.Post;
+        end;
+    end
+  else
+    begin    
+      TblGoods.SortBy('Товар');
+      if not TblGoods.Find(Source) then
+        begin
+          TblGoods.Append;
+          TblGoods.Товар := Source;
+          if rbPercent.Checked then   
+            begin
+              TblGoods.Процент := MasterData.Процент;
+              TblGoods.Цена := Source._Default[listPriceType.GetStr(listPriceType.CurIndex)]*TblGoods.Процент/100 + Source._Default[listPriceType.GetStr(listPriceType.CurIndex)];
+            end
+          else
+            begin
+              if Source._Default[listPriceType.GetStr(listPriceType.CurIndex)] <> 0 then
+                TblGoods.Процент := (MasterData.Цена - Source._Default[listPriceType.GetStr(listPriceType.CurIndex)]) / Source._Default[listPriceType.GetStr(listPriceType.CurIndex)] * 100
+              else
+                TblGoods.Процент := 0;
+              TblGoods.Цена := MasterData.Цена;
+            end;
+          TblGoods.Post;
+        end;
+    end;
+  LockCalc := false;
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  if AddDoc then
+    ChangeDoc(clmtAppend,MasterData)
+  else
+    ChangeDoc(clmtEdit,MasterData);
+  MasterData.ApplyUpdates;
+end;
+
+procedure tbDelGood_Click(Sender: TObject);
+begin
+  if TblGoods.IsFocused then
+    TblGoods.Delete;
+end;
+
+procedure tbDel_Click(Sender: TObject);
+begin
+  if TblPart.IsFocused then
+    TblPart.Delete;
+end;
+
+procedure TVSGoods_FieldChange(FieldName: string; Value: Variant);
+begin 
+  if LockCalc then
+    exit;
+  LockCalc := true;
+  if TblGoods.IsFocused then
+    begin
+      case StrLowerCase(FieldName) of
+        'процент': begin
+          TblGoods.Edit;
+          TblGoods.Цена := TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)]*TblGoods.Процент/100 + TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)];
+          TblGoods.Post;
+        end;  
+        'цена': begin 
+          TblGoods.Edit;
+          if TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)] <> 0 then
+            TblGoods.Процент := (TblGoods.Цена - TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)]) / TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)] * 100
+          else
+            TblGoods.Процент := 0;
+          TblGoods.Post;
+        end;
+      end;
+    end; 
+  LockCalc := false;
+end;
+
+procedure TVSGoods_VPAAfterPost(Sender: TObject);
+begin
+  if TblGoods.LineCount > 0 then
+    begin
+      edPriceType.Enabled := false;
+      eRegion.Enabled := false
+    end
+  else if TblPart.LineCount = 0 then
+    begin
+      edPriceType.Enabled := true;
+      eRegion.Enabled := true
+    end;
+end;
+
+procedure TVSPart_VPAAfterPost(Sender: TObject);
+begin
+  if TblPart.LineCount > 0 then
+    begin
+      edPriceType.Enabled := false;
+      eRegion.Enabled := false
+    end
+  else if TblGoods.LineCount = 0 then
+    begin
+      edPriceType.Enabled := true;
+      eRegion.Enabled := true
+    end;
+end;
+
+procedure btRefresh_Click(Sender: TObject);
+begin
+  if LockCalc then
+    exit;
+  LockCalc := true;
+  if rbPercent.Checked and (TblGoods.LineCount > 0) then
+    begin
+      TblGoods.DisableControls;
+      TblGoods.Select;
+      while TblGoods.SelectNext do
+        begin
+          TblGoods.Edit;
+          TblGoods.Процент := MasterData.Процент;
+          TblGoods.Цена := TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)]*TblGoods.Процент/100 + TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)];
+          TblGoods.Post;
+        end;
+      TblGoods.EnableControls;
+    end;
+  if rbPrice.Checked and (TblGoods.LineCount > 0)  then
+    begin
+      TblGoods.DisableControls;
+      TblGoods.Select;
+      while TblGoods.SelectNext do
+        begin
+          TblGoods.Edit;
+          if TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)] <> 0 then
+            TblGoods.Процент := (MasterData.Цена - TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)]) / TblGoods.Товар._Default[listPriceType.GetStr(listPriceType.CurIndex)] * 100
+          else
+            TblGoods.Процент := 0;
+          TblGoods.Цена := MasterData.Цена;
+          TblGoods.Post;
+        end;
+      TblGoods.EnableControls;
+    end;
+  LockCalc := false;
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+procedure MDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+procedure TDS_FieldChange(FieldName: string; Value: Variant);
+begin
+  isSave := true;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Label14:TO4Label
+Label26:TO4Label
+Label1:TO4Label
+Label2:TO4Label
+Label16:TO4Label
+Label3:TO4Label
+Label8:TO4Label
+eDateFrom:TO4DBEdit
+eRespons:TO4DBEdit
+eDateTo:TO4DBEdit
+eNumber:TO4DBEdit
+eRegion:TO4DBEdit
+edPriceType:TO4Edit
+ePercent:TO4DBEdit
+ePrice:TO4DBEdit
+rbPercent:TO4RadioButton
+rbPrice:TO4RadioButton
+Panel2:TO4Panel
+Panel1:TO4Panel
+Label6:TO4Label
+dbgPart:TO4DBGrid
+Panel4:TO4Panel
+tbrSource:TO4ToolBar
+tbSource:TO4ToolButton
+tbrData:TO4ToolBar
+tbDel:TO4ToolButton
+Panel3:TO4Panel
+Label7:TO4Label
+dbgGoods:TO4DBGrid
+Panel5:TO4Panel
+ToolBar1:TO4ToolBar
+tbSourceGood:TO4ToolButton
+ToolBar2:TO4ToolBar
+tbDelGood:TO4ToolButton
+ButtonsPanel:TO4Panel
+btCancel:TO4Button
+btOK:TO4Button
+cbAllGoods:TO4CheckBox
+eTitle:TO4DBEdit
+cbAllPart:TO4CheckBox
+btRefresh:TO4Button
+MDS:TO4DataSource
+TDS:TO4DocContentsSource
+TVSPart:TO4TableValueSource
+TVSGoods:TO4TableValueSource

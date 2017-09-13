@@ -1,0 +1,92 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты, Фиксация,
+  РаботаСПеременными, РаботаСОбъектами, РаботаСТаблицамиЗначений;
+
+implementation
+
+var
+  AccGood, AccPartGood, AccReserv, AccPartner, AccsPart, AccsGoodCurrent : ISAccs;
+  Constants : IS4VPAConst;
+  Goods : ISDictionary;
+  TblOwnerDoc : ISValueTable;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  HasReserv : Boolean;
+  DocDate : DateTime;
+  PartGoodID : Double;
+  Count, Total : Integer;
+  Sum, SumNT, Tax, Col, CurSum : Decimal;
+begin
+  DocDate := Doc.GetDate;
+  Doc.SelectLines;
+  Count := 1;
+  Total := Doc.LinesCount;
+  Constants := GetConstants;
+  while Doc.SelectNextLine do
+    begin
+      if not VarAsBool(Doc.Товар.Услуга) then
+        begin
+          AccsPart.ClearFieldFilters;
+          AccsPart.Товар := Doc.Товар;
+          TblOwnerDoc := CreateObject('ТаблицаЗначений');
+          TblOwnerDoc.Close();
+          TblOwnerDoc.AddColumn('Дата',vtcDateTime,0);
+          TblOwnerDoc.AddColumn('Номер',vtcString,25);
+          TblOwnerDoc.AddColumn('Партнер',vtcString,200);
+          TblOwnerDoc.AddColumn('Документ',vtcString,255);
+          TblOwnerDoc.AddColumn('Валюта',vtcString,5);
+          TblOwnerDoc.AddColumn('Сумма',vtcFft,2);
+          TblOwnerDoc.Open();
+          TblOwnerDoc.PackedData := Doc.ДокументОснование;
+          if TblOwnerDoc.LineCount <> 0  then
+            begin
+              AccsPart.ДатаДокОсн := TblOwnerDoc.Дата;
+              AccsPart.НомерДокОсн := TblOwnerDoc.Номер;
+              AccsPart.ПартнерДокОсн := TblOwnerDoc.Партнер;
+              AccsPart.ДокументДокОсн := TblOwnerDoc.Документ;
+              AccsPart.ВалютаДокОсн := TblOwnerDoc.Валюта;
+              AccsPart.СуммаДокОсн := TblOwnerDoc.Сумма;
+              //AccsPart.ДокументОснование := Doc.ДокументОснование;
+            end;
+          AccsPart.ТипЦены := Doc.ТипЦены;
+          AccsPart.Цена := Doc.Цена;
+          AccsPart.Пользователь := GetUserName;
+          AccsPart.Income(Doc, Doc.ДатаДокумента, 0);
+
+          Goods := CreateObject('Справочники.Товары');
+          if Goods.FindByCodeName(Doc.Товар.Код,Doc.Товар.НазвТовара) then
+            begin
+              Goods.Edit;
+              Goods._Default[Doc.ТипЦены] := Doc.Цена;
+              Goods.Post;
+              Goods.ApplyUpdates;
+            end;
+        end;
+    end;
+  Accept := true;
+end;
+
+function GetChangeStateUpEP : Variant; server;
+begin
+  AccsPart := CreateObject('Аккумуляторы.ИзмОтпЦенСпрТовара');
+  Result := EntryPoint(ChangeStateUp)
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  AccsPart := CreateObject('Аккумуляторы.ИзмОтпЦенСпрТовара');
+  case Doc.GetDocState of
+    1 :
+      ChangeStateUp(Doc, Accept);
+    2 :
+      ;
+  end;
+end;
+
+end.

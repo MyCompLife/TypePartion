@@ -1,0 +1,190 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+var   Constants : IC4VPAConst;
+      MasterProc : ICProcessing;
+      CurrPriceInDic, CurrPrice1Dic, CurrPrice2Dic, CurrPrice3Dic, PartnerCurrency : ICDictionary;
+      PriceTypes : string;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);   
+var i:integer;
+begin
+  MasterProc := Mean;
+  Constants := GetConstants;
+  edTypePrice.Items.Clear;
+  PriceTypes := Constants.ТипыЦен;
+  if StrLength(PriceTypes) > 0 then
+    begin
+      for i := 1 to StrLength(PriceTypes) do
+        case PriceTypes[i] of
+          '0': edTypePrice.Items.Add('Цена');
+          '1': edTypePrice.Items.Add('ОптЦена');
+          '2': edTypePrice.Items.Add('КрОптЦена');
+        end;
+    end
+  else
+    ShowMessage('Укажите типы цен в значениях важных констант!');
+  CurrPriceInDic := GetActiveCurrency;
+  if IsObjFocused(CurrPriceInDic) then
+    edCurrPriceIn.Text := CurrPriceInDic.CodeField;    
+  CurrPrice1Dic := GetActiveCurrency;
+  if IsObjFocused(CurrPrice1Dic) then
+    edCurrPrice1.Text := CurrPrice1Dic.CodeField;  
+  CurrPrice2Dic := GetActiveCurrency;
+  if IsObjFocused(CurrPrice2Dic) then
+    edCurrPrice2.Text := CurrPrice2Dic.CodeField;
+  CurrPrice3Dic := GetActiveCurrency;
+  if IsObjFocused(CurrPrice3Dic) then
+    edCurrPrice3.Text := CurrPrice3Dic.CodeField;
+end;
+
+
+procedure btFillTypePrice_Click(Sender: TObject);
+begin
+ if edTypePrice.Text = '' then
+   ShowMessage('Укажите тип цены!')
+ else
+ if not IsObjFocused(PartnerCurrency) then
+  ShowMessage('Укажите валюту взаиморасчета!')
+ else
+   begin     
+    PartnerCurrency.SetSrvToClientPos;
+    if MasterProc.RunThreadProcess(server.FillTypePriceEP(edTypePrice.Text, PartnerCurrency.SrvMean), 'Заполнение типов цен') then
+      ShowMessage('Заполнение типов цен произведено')
+    else
+      ShowMessage('Во время заполнения типов цен произошла ошибка либо заполнение прервано пользователем');
+   end;
+
+end;
+
+procedure edCurrPriceIn_ActionClear(Sender: TObject);
+begin
+  edCurrPriceIn.Text := '';
+  Nil(CurrPriceInDic);
+end;
+
+procedure edCurrPriceIn_ActionExecute(Sender: TObject);
+var DefName : string;
+begin
+    if IsNil(CurrPriceInDic) then
+      CurrPriceInDic := CreateObject('Справочники.Валюты');
+    if CurrPriceInDic.SelectInForm('ВыборВалюты', DefName, Null) then
+     edCurrPriceIn.Text := DefName;
+end;
+
+procedure edCurrPrice1_ActionClear(Sender: TObject);
+begin
+  edCurrPrice1.Text := '';
+  Nil(CurrPrice1Dic);
+end;
+
+procedure edCurrPrice1_ActionExecute(Sender: TObject);
+var DefName : string;
+begin
+    if IsNil(CurrPrice1Dic) then
+      CurrPrice1Dic := CreateObject('Справочники.Валюты');
+    if CurrPrice1Dic.SelectInForm('ВыборВалюты', DefName, Null) then
+     edCurrPrice1.Text := DefName;
+end;
+
+procedure edCurrPrice2_ActionClear(Sender: TObject);
+begin
+  edCurrPrice2.Text := '';
+  Nil(CurrPrice2Dic);
+end;
+
+procedure edCurrPrice2_ActionExecute(Sender: TObject);
+var DefName : string;
+begin
+    if IsNil(CurrPrice2Dic) then
+      CurrPrice2Dic := CreateObject('Справочники.Валюты');
+    if CurrPrice2Dic.SelectInForm('ВыборВалюты', DefName, Null) then
+     edCurrPrice2.Text := DefName;
+end;
+
+procedure edCurrPrice3_ActionClear(Sender: TObject);
+begin
+  edCurrPrice3.Text := '';
+  Nil(CurrPrice3Dic);
+end;
+
+procedure edCurrPrice3_ActionExecute(Sender: TObject);
+var DefName : string;
+begin
+    if IsNil(CurrPrice3Dic) then
+      CurrPrice3Dic := CreateObject('Справочники.Валюты');
+    if CurrPrice3Dic.SelectInForm('ВыборВалюты', DefName, Null) then
+     edCurrPrice3.Text := DefName;
+end;
+
+procedure btFillCurrencyPrice_Click(Sender: TObject);
+begin
+ if IsObjFocused(CurrPriceInDic) and IsObjFocused(CurrPrice1Dic) and
+     IsObjFocused(CurrPrice2Dic) and IsObjFocused(CurrPrice3Dic) then
+   begin
+     if CurrPriceInDic.GetTimedValue('КурсНаличный', CurrentDate)=0 then
+       ShowMessage('Курс валюты для ВхЦена=0! Установите курс!')
+     else
+     if CurrPrice1Dic.GetTimedValue('КурсНаличный', CurrentDate)=0 then
+       ShowMessage('Курс валюты для Цена=0! Установите курс!')
+     else   
+     if CurrPrice2Dic.GetTimedValue('КурсНаличный', CurrentDate)=0 then
+       ShowMessage('Курс валюты для ОптЦена=0! Установите курс!')
+     else
+     if CurrPrice3Dic.GetTimedValue('КурсНаличный', CurrentDate)=0 then
+       ShowMessage('Курс валюты для КрЦена=0! Установите курс!')
+     else
+       begin    
+         CurrPriceInDic.SetSrvToClientPos;
+         CurrPrice1Dic.SetSrvToClientPos;
+         CurrPrice2Dic.SetSrvToClientPos;
+         CurrPrice3Dic.SetSrvToClientPos;
+         if MasterProc.RunThreadProcess(server.FillCurrencyPriceEP(CurrPriceInDic.SrvMean, CurrPrice1Dic.SrvMean,
+            CurrPrice2Dic.SrvMean,CurrPrice3Dic.SrvMean), 'Заполнение валют цен') then
+           ShowMessage('Заполнение валют цен произведено')
+         else
+           ShowMessage('Во время заполнения валют цен произошла ошибка либо заполнение прервано пользователем');
+       end;
+   end
+ else
+   ShowMessage('Выберите валюты для всех цен!');
+end;
+
+
+procedure edPartnerCurrency_ActionClear(Sender: TObject);
+begin
+  edPartnerCurrency.Text := '';
+  Nil(PartnerCurrency);
+end;
+
+procedure edPartnerCurrency_ActionExecute(Sender: TObject);
+var DefName : string;
+begin
+    if IsNil(PartnerCurrency) then
+      PartnerCurrency := CreateObject('Справочники.Валюты');
+    if PartnerCurrency.SelectInForm('ВыборВалюты', DefName, Null) then
+     edPartnerCurrency.Text := DefName;
+end;
+
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+gbPartnerTypePrice:TO4GroupBox
+Label1:TO4Label
+Label6:TO4Label
+edTypePrice:TO4Edit
+btFillTypePrice:TO4Button
+edPartnerCurrency:TO4Edit
+gbFillCurPriceGood:TO4GroupBox
+Label2:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+Label5:TO4Label
+edCurrPriceIn:TO4Edit
+edCurrPrice1:TO4Edit
+edCurrPrice2:TO4Edit
+edCurrPrice3:TO4Edit
+btFillCurrencyPrice:TO4Button

@@ -1,0 +1,188 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€;
+
+implementation
+
+var
+  AccsGood, AccsRealizGood, AccsRealizPart, AccsPart : ISAccs;
+  ApplyTbl, MinTbl : ISValueTable;
+  Constants : IS4VPAConst;
+
+procedure CreateApplyTable(Doc : ISDocuments; var Accept : Boolean);
+begin
+  // отправка сообщени€ клиенту
+  Doc.NotifyClient(CheckAboutOverflow, 1, 2);
+  CreateApplyTableExternal(Doc, AccsGood, ApplyTbl, MinTbl);
+  Accept := not Doc.Terminated
+end;
+
+procedure ApplyTblToAccs(Doc : ISDocuments; var Accept : Boolean);
+var
+  Count, Total : Integer;
+  Sum, SumNT, Tax, Col, OverSum, CurSum, InCurSum, InSumNT, InTax : Decimal;
+  AccsPartGood : ISAccs;
+begin
+  Constants := GetConstants;
+  Count := 1;
+  Total := Doc.LinesCount;
+  AccsGood.ClearFieldFilters();
+  AccsPartGood := CreateObject('јккумул€торы.ѕартии“оваров');
+  Doc.SelectLines;
+  while Doc.SelectNextLine do
+    begin
+      —уммаЌƒ—(Doc, Sum, SumNT, Tax, Col);
+      InSumNT := Doc.¬х÷енаЅезЌƒ— * Col;
+      if VarAsBool(Constants.ќкругл€ть—умму—трокиЅезЌƒ—) then
+        InSumNT := RoundFloat(InSumNT, Constants. оличество«наков¬—умме—трокиЅезЌƒ—);
+      OverSum := SumNT - InSumNT;
+      CurSum := Doc.÷ена¬¬алюте * Col;
+      CalcTaxPrice(Doc.—тавкаЌƒ—, InSumNT, InTax);
+      //запись в регистре остатков на реализаторе
+      AccsRealizGood.ClearFieldBuffers();
+      AccsRealizGood.AssignFields('“овар;ѕарти€;÷ена;¬алюта“овара; урс“овара;÷ена¬¬алюте', Doc);
+      AccsRealizGood.AssignFields('ѕартнер', Doc);
+      if VarAsBool(Doc. омисси€) then
+        AccsRealizGood.“ип := midComInputRest
+      else
+        AccsRealizGood.“ип := midInputRest;
+      if AccsRealizGood.ѕарти€ <> 0 then
+        if AccsPartGood.SelectDimID(AccsRealizGood.ѕарти€) then
+          InCurSum := AccsPartGood.¬х÷ена¬ал * Col;
+      AccsRealizGood. олќбщ := Col;
+      AccsRealizGood.—ум¬х := InSumNT;
+      AccsRealizGood.—умќтп := Sum;
+      AccsRealizGood.—умќтпЌƒ— := Tax;
+      AccsRealizGood.—ум¬ал¬х := InCurSum;
+      AccsRealizGood.—ум¬алќтп := CurSum;
+      AccsRealizGood.—умЌац := OverSum;
+
+      AccsRealizGood.Income(Doc, Doc.GetDate(), Doc.Ќом—троки);
+
+      // отправка сообщени€ клиенту
+      if Count mod 10 = 0 then
+        Doc.NotifyClient(msgProceed + IntToStr(Count) + ':' + IntToStr(Total), Count, Total);
+      if Doc.Terminated then
+        break;
+      inc(Count);
+    end;
+
+  //взаиморасчеты с партнерами
+  AccsPart.ClearFieldFilters();
+  if VarAsBool(Doc.@ѕартнер.IsFocused) then
+    AccsPart.ѕартнер := Doc.ѕартнер.@ѕартнер;
+  AccsPart.—умѕрих := Doc.—умма;
+  AccsPart.—умќбщ := Doc.—умма;
+  AccsPart.—умѕрих¬ал := Doc.—умма¬¬алюте;
+  AccsPart.—умќбщ¬ал := Doc.—умма¬¬алюте;
+  AccsPart.Income(Doc, Doc.GetDate(), 0);
+
+  //запись в регистре расчетов с реализатором
+  AccsRealizPart.ClearFieldBuffers();
+  AccsRealizPart.ѕартнер := Doc.@ѕартнер;
+  AccsRealizPart.—умќст := Doc.—умма;
+  AccsRealizPart.—умќбщ := Doc.—умма;
+  AccsRealizPart.—умќст¬ал := Doc.—умма¬¬алюте;
+  AccsRealizPart.—умќбщ¬ал := Doc.—умма¬¬алюте;
+  AccsRealizPart.Income(Doc, Doc.GetDate(), 0);
+
+  Accept := not Doc.Terminated
+end;
+
+function GetChangeStateUpEP(AccsGoods : ISAccs; ApplyTbls : ISValueTable) : Variant; server;
+begin
+  AccsGood := AccsGoods;
+  ApplyTbl := ApplyTbls;
+  AccsRealizGood := CreateObject('јккумул€торы.ќстатки“оваровЌа–еализаторах');
+  AccsRealizPart := CreateObject('јккумул€торы.–асчеты—–еализаторами');
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Result := EntryPoint(ApplyTblToAccs);
+end;
+
+procedure CanChangeStateUp(Data : ISDocuments; var Accept : Boolean);
+begin
+  Accept := True;
+  case Data.GetDocState of
+    0 :
+      begin
+        AccsGood := CreateObject('јккумул€торы.ќстатки“оваров');
+        ApplyTbl := CreateObject('“аблица«начений');
+        MinTbl := CreateObject('“аблица«начений');
+        CreateApplyTable(Data, Accept);
+      end;
+    1 :
+      ;
+  end;
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccsRealizGood := CreateObject('јккумул€торы.ќстатки“оваровЌа–еализаторах');
+        AccsRealizPart := CreateObject('јккумул€торы.–асчеты—–еализаторами');
+        AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+        ApplyTblToAccs(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+procedure GetBuhIterationCount(Doc : ISDocuments; var Count : Integer);
+begin
+  Constants := GetConstants;
+end;
+
+procedure GetBuhSynonymValue(Doc : ISDocuments; Synonym : string;
+  Iteration : Integer; var Value : Variant);
+var
+  Tbl : ISValueTable;
+  SumNt, SumInNt : Decimal;
+begin
+  case StrLowerCase(Synonym) of
+    'суммаввалюте' : 
+      Value := Doc.÷ена¬¬алюте * Doc. оличество;
+    'суммастрокибезндс' :
+      begin
+        SumNt := Doc.÷енаЅезЌƒ— * Doc. оличество;
+        if VarAsBool(Constants.ќкругл€ть—умму—трокиЅезЌƒ—) then
+          Value := RoundFloat(SumNt, Constants. оличество«наков¬—умме—трокиЅезЌƒ—)
+        else
+          Value := SumNt;
+      end;
+    'суммастроки' :
+      Value := Doc.÷енаЅезЌƒ— * Doc. оличество * (1 + Doc.—тавкаЌƒ— / 100);
+    'суммандсстроки' :
+      Value := Doc.÷енаЅезЌƒ— * Doc. оличество * Doc.—тавкаЌƒ— / 100;
+    'наценка' :
+      begin
+        Tbl := CreateObject('“аблица«начений');
+        Doc.SaveContents(' оличество;÷енаЅезЌƒ—;¬х÷енаЅезЌƒ—;÷ена;ѕроцент—кидкиЌадбавки', Tbl);
+        if Doc.ѕроцентќбщий <> 0 then
+          begin
+            Tbl.Edit;
+            Tbl.ѕроцент—кидкиЌадбавки := Doc.ѕроцентќбщий / 100;
+            Tbl.Post;
+          end;
+        Tbl.DoCalculation('÷ена', ' оличество*((÷енаЅезЌƒ—+÷енаЅезЌƒ—*ѕроцент—кидкиЌадбавки)-¬х÷енаЅезЌƒ—)');
+        Value := Tbl.Total('÷ена');
+      end;
+    'вхсумма' : 
+      Value := Doc.¬х÷енаЅезЌƒ— * Doc. оличество;
+    'вхсуммабезндс' :
+      begin
+        Tbl := CreateObject('“аблица«начений');
+        Doc.SaveContents(' оличество;¬х÷енаЅезЌƒ—;÷ена', tbl);
+        Tbl.DoCalculation('÷ена', ' оличество* ¬х÷енаЅезЌƒ—');
+        Value := Tbl.Total('÷ена');
+      end;
+  end;
+end;
+
+end.

@@ -1,0 +1,60 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+Var
+  PaysIn, PaysOut : ISJournal; 
+  AccsPart: ISAccs;
+  Currency: ISDictionary;
+
+implementation
+
+procedure InitSrvDate;server;
+begin
+  AccsPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Currency := CreateObject('—правочники.¬алюты');
+  if not Currency.FindByField('јктивность', VarAsInt(true), false) then
+    begin
+      Currency.Select;
+      Currency.SelectNext;
+    end;
+end;
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := Data.Total('—умма¬ал');
+end;
+ 
+procedure OrderCalcFields(Order : ISJournal);
+var
+  TmpDoc : ISDocuments;
+begin
+  PaysOut.UseMaster(Order);
+  Order.ќплачено¬ал := PaysOut.Total('—умма¬¬алюте');
+  PaysOut.UseMaster(Null);
+  Order.ƒолжны¬ал := Order.—умма¬ал - Order.ќплачено¬ал;
+end;
+            
+function GetTotalPaySrv(Data : ISJournal) : Variant; server;
+Var
+  Sum : Decimal;
+begin
+  Data.Select;
+  While Data.SelectNext do
+    begin
+      PaysOut.UseMaster(Data);
+      Sum := Sum + PaysOut.Total('—умма¬¬алюте');
+    end;
+  Result :=  Sum;
+end;
+
+function GetCalcEP : Variant; server;
+begin
+  PaysOut := CreateObject('∆урналы.∆урналѕодчѕлатежейќтп');
+  PaysOut.SetDocMultiStateRange('1;2;');
+  PaysIn := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+  PaysIn.SetDocMultiStateRange('1;2;');
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+end.

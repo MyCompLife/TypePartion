@@ -1,0 +1,31 @@
+interface
+
+uses
+  System, DispIntf, РаботаСТаблицамиЗначенийCL;
+
+implementation
+
+var
+  AccsPartRealiz : ISAccs;
+
+function СформироватьПлатежПоДокументу(DocOwner, Doc : Variant) : Decimal; server;
+var
+  Pays: ISJournal;
+  s : string;
+begin
+  s := DocOwner.GetType();
+  if DocOwner.GetType() <> 'Dictionaries;Справочники;Довідники' then
+    begin
+      if (DocOwner.Отпуск = 1) then
+        Pays := CreateObject('Журналы.ЖурналПодчПлатежейОтп')
+      else
+        Pays := CreateObject('Журналы.ЖурналПодчПлатежейПрих');
+      Pays.UseMaster(DocOwner);
+      Pays.SetDocMultiStateRange('1;2;');
+      Result := DocOwner.Сумма - Pays.Total('Сумма');
+      if Result < 0 then
+        Result := 0;
+    end;
+end;
+
+end.

@@ -1,0 +1,242 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначений, РаботаСоСправочниками, 
+  РаботаСТаблицамиЗначенийCL, РаботаСоСправочникамиCL;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+  UseLevels : Boolean;
+  Opt : ICOptions;
+  GoodsDic : ICDictionary;   
+  FieldName : string;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;  
+  if VarAsBool(GetConstants.ПоказыватьЦеныГрн) then
+    MasterData.SetSrvOnCalcFields(server.SrvCalcFieldsEP);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itInPlaceForMain;
+  MakeStandartInterface(MasterData, Form, 'tbrData;tbrCtg', 'dbgData');
+  if IsNil(Opt) then
+    Opt := CreateObject('ОпцииКлиента');
+  UseLevels := VarAsBool(Opt.GetServerPrm(GetUserID + MasterData.GetSign + Form.Caption));  
+  tsFilter.Down := GetFilterPanel(MasterData.GetSign);
+  pFilter.Visible := tsFilter.Down; 
+  FieldName := 'Название';
+end;
+
+procedure tbRefresh_Click(Sender: TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure pmiDontUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := False;
+end;
+
+procedure pmiUseLevel_VPABeforeActionClick(Sender : TObject);
+begin
+  UseLevels := True;
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  Opt.SetServerPrm(GetUserID + MasterData.GetSign + Form.Caption, UseLevels);
+end;
+
+procedure miPrint_Click(Sender: TObject);
+var
+  V : ICProcessing;
+begin
+  if MasterData.IsFocused then
+    begin
+      V := CreateObject('Обработки.ПечВводОстатков');
+      V.PrintForm('ПечатьСоставаТермопринтер25х70', not VarAsBool(Opt.GetServerPrm(DirectPrint)), MasterData);
+    end;
+end;
+
+procedure miAddProdGoods_Click(Sender: TObject);
+Var
+  ColorTbl, SizesTbl: ICValueTable;
+  Comment: String;
+  AddCnt, EdCnt: Integer;
+begin
+  if not(MasterData.IsFocused) then
+    exit;
+  GoodsDic := CreateObject('Справочники.Товары');
+  ColorTbl := CreateTblFromBLOB(MasterData.ЦветовойРяд);
+  ColorTbl.Select;
+  SizesTbl := CreateTblFromBLOB(MasterData.РазмерныйРяд);
+  SizesTbl.Select;
+  while ColorTbl.SelectNext do
+    begin
+      while SizesTbl.SelectNext do
+        begin
+          GoodsDic.SetFieldFilter('Модель','=',MasterData,'','',null);
+          GoodsDic.SetFieldFilter('Цвет','=',ColorTbl.Код,'','',null);
+          GoodsDic.SetFieldFilter('Размер','=',SizesTbl.Название,'','',null);
+          GoodsDic.Select;
+          if GoodsDic.SelectNext then
+            begin
+              Comment := 'Корректировка карточки модели';
+              ChangePrice(GoodsDic, MasterData.Валюта, MasterData.ВхЦена, 'ВхЦена', Comment, 'EditInDoc');
+              ChangePrice(GoodsDic, MasterData.Валюта, MasterData.Цена, 'Цена', Comment, 'EditInDoc');
+              ChangePrice(GoodsDic, MasterData.Валюта, MasterData.ОптЦена, 'ОптЦена', Comment, 'EditInDoc');
+              ChangePrice(GoodsDic, MasterData.Валюта, MasterData.КрОптЦена, 'КрОптЦена', Comment, 'EditInDoc');
+              GoodsDic.Edit;
+              GoodsDic.AssignFields('ЕдИзм',MasterData);
+              GoodsDic.НазвТовара := MasterData.Название + ' (' + GoodsDic.Код + ')';
+              GoodsDic.Post;
+              GoodsDic.ApplyUpdates;
+              inc(EdCnt);
+            end
+          else
+            begin
+              Comment := 'Добавление карточки товаров';
+              GoodsDic.Append;
+              GoodsDic.Артикул := GetNextNumberForField('Справочники.Товары', 'Артикул', false, '');
+              GoodsDic.AssignFields('ЕдИзм;Валюта;ВхЦена;Цена;ОптЦена;КрОптЦена',MasterData);
+              GoodsDic.Модель := MasterData;
+              GoodsDic.Код :=  MasterData.Код + '-' + ColorTbl.Код + '-' + SizesTbl.Название;
+              GoodsDic.НазвТовара := MasterData.Название + ' (' + GoodsDic.Код + ')';
+              GoodsDic.Цвет := ColorTbl.Код;
+              GoodsDic.Размер := SizesTbl.Название;
+              GoodsDic.Post;
+              GoodsDic.ApplyUpdates;
+              ChangePrice(GoodsDic, MasterData.Валюта, MasterData.ВхЦена, 'ВхЦена', Comment, 'EditInGoodDic');
+              ChangePrice(GoodsDic, MasterData.Валюта, MasterData.Цена, 'Цена', Comment, 'EditInGoodDic');
+              ChangePrice(GoodsDic, MasterData.Валюта, MasterData.ОптЦена, 'ОптЦена', Comment, 'EditInGoodDic');
+              ChangePrice(GoodsDic, MasterData.Валюта, MasterData.КрОптЦена, 'КрОптЦена', Comment, 'EditInGoodDic');
+              inc(AddCnt);
+            end;
+          GoodsDic.CancelFieldFilter('Модель');
+          GoodsDic.CancelFieldFilter('Цвет');
+          GoodsDic.CancelFieldFilter('Размер');
+        end;
+      SizesTbl.Select;
+    end;
+  Comment := '';
+  if AddCnt > 0 then
+    Comment := 'Добавлено: '+ VarAsStr(AddCnt) + ' ';
+  if EdCnt > 0 then
+    Comment := Comment + 'Изменено: '+ VarAsStr(EdCnt) + ' ';
+  ShowMessage(Comment +  'записей в справочнике готовой продукции');
+end;
+
+procedure MenuItem2_Click(Sender: TObject);
+var
+  ColorTbl, ColorTbl1: ICValueTable;
+begin
+  MasterData.Select;
+  while MasterData.SelectNext do
+    begin
+  ColorTbl1 := CreateTblFromBLOB(MasterData.ЦветовойРяд);
+  if IsNil(ColorTbl) then
+    begin
+      ColorTbl := CreateObject('ValueTable');
+      ColorTbl.AddColumn('Артикул',vtcInteger,0);
+      ColorTbl.AddColumn('Код',vtcString,2);
+      ColorTbl.AddColumn('Название',vtcString,200);
+      ColorTbl.AddColumn('ПолноеНазвание',vtcString,200);
+      ColorTbl.AddColumn('Бирка',vtcMemo,250);
+      ColorTbl.Open;
+    end;
+  ColorTbl.SortBy('Артикул');
+  if ColorTbl1.HasField('Бирка') then
+    ColorTbl1.AppendTo('Артикул;Код;Название;ПолноеНазвание;Бирка',ColorTbl)
+  else
+    ColorTbl1.AppendTo('Артикул;Код;Название;ПолноеНазвание',ColorTbl);
+
+  ColorTbl.SortBy('Код');
+  ColorTbl.Select;
+  while ColorTbl.SelectNext do
+    begin
+      ColorTbl.Edit;
+      ColorTbl.Код := FormatFloat('00', ColorTbl.Артикул);
+      ColorTbl.Название := StrCopy(ColorTbl.ПолноеНазвание,StrLength(ColorTbl.ПолноеНазвание)-1,2);//VarAsStr(ColorTbl.Код);
+      ColorTbl.ПолноеНазвание := FormatFloat('00', ColorTbl.Артикул) + ' ' + VarAsStr(ColorTbl.Название);
+      ColorTbl.Post;
+    end;
+  MasterData.Edit;
+  MasterData.ЦветовойРяд := WritePropsToBlob(ColorTbl);
+  MasterData.Post;
+  MasterData.ApplyUpdates;
+  ColorTbl1.Clear;
+      ColorTbl.Clear;
+  end;
+
+  ShowMessage('Процес окончен!');
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+  Case eFieldFilter.Text of
+        'Название' : FieldName := 'ПолноеНазвание';
+        'Название модели' : FieldName := 'Название';
+  else
+    FieldName := eFieldFilter.Text;
+  end;
+  MasterData.SetFieldFilter(FieldName,'Like', '%' + eGoodsFilter.Text + '%','','',Null);
+  MasterData.Refresh;
+  form.ActiveControl := dbgData;
+end;
+
+procedure eGoodsFilter_KeyDown(Sender: TObject; var Key: Integer);
+begin
+  if key=13 then
+    begin
+      tbFilterApply_Click(Form);
+    end;
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+  MasterData.CancelFieldFilter(FieldName);
+  MasterData.Refresh;
+  eGoodsFilter.Text := '';
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton1:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+ToolButton3:TO4ToolButton
+tsFilter:TO4ToolButton
+pFilter:TO4Panel
+CodePanel:TO4Panel
+eGoodsFilter:TO4Edit
+eFieldFilter:TO4Edit
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+MenuItem1:TO4MenuItem
+miAddProdGoods:TO4MenuItem
+MenuItem2:TO4MenuItem

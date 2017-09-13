@@ -1,0 +1,29 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, InitColors, –асчеты,
+  –абота—ƒокументами¬∆урналах, ѕодключениеƒоп»нтерфейса;
+
+implementation
+
+var
+  PaysIn, PaysOut : ISJournal;
+
+procedure OrderCalcFields(Order : ISJournal);
+var
+  v : Variant;
+begin
+  Order.ƒолжны¬ал := Order.—умма¬¬алќпт - Order.ќплачено¬ал;
+  { v := Order.GetDocOwner;
+   if VarAsBool(v.IsFocused) then
+    Order.¬ладелец := VarAsStr(v.GetName());}
+end;
+
+function GetCalcEP(Order : ISJournal) : Variant; server;
+begin
+  PaysIn := CreateObject('∆урналы.∆урналѕодчѕлатежейѕрих');
+  Order.SetCalcFieldInDBServer(ArrayOf(PaysIn), ArrayOf('ќплачено¬ал', '—умма¬¬алюте'), ArrayOf('1;2'));
+  Result := EntryPoint(OrderCalcFields);
+end;
+
+end.

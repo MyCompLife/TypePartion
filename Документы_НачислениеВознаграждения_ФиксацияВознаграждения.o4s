@@ -1,0 +1,63 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты, ‘иксаци€, ‘иксаци€ѕрибыли»«атрат,
+  –абота—ѕеременными, –абота—ќбъектами, –абота—“аблицами«начений;
+
+implementation
+
+var
+  AccPart, AccKassa, AccROutPart, AccRInPart, AccPartDog, AccMag, AccBarter, AccsGoodByInv : ISAccs;
+
+procedure ChangeStateUp(Doc : ISDocuments; var Accept : Boolean);
+var
+  DocDate : DateTime;
+  Partner : ISDictionary;
+  J : ISJournal;
+  DocCurrentOwner : ISDocuments;
+begin
+  DocDate := Doc.GetDate;
+  AccPart.ClearFieldBuffers();
+  Doc.SelectLines;
+  While Doc.SelectNextLine do
+  //if VarAsBool(Doc.¬заиморасчет) and VarAsBool(Doc.@ѕартнер.IsFocused) then
+    begin
+      Partner := Doc.ѕартнер;
+      //взаиморасчеты с партнерами
+      AccPart.ѕартнер := Partner;
+      AccPart.—ум–асх¬ал := Doc.—умма;
+      AccPart.—умќбщ¬ал := Doc.—умма¬¬алюте;
+      AccPart.¬алюта := Doc.¬алюта;
+      AccPart.Outcome(Doc, DocDate, 0);  
+      
+      //  прибыль/расход
+      if Doc.—умма¬¬алюте <> 0 then
+        AppendRecAccsInOutCome(Doc,Null);
+
+    end;
+  Accept := true;
+end;
+
+function GetChangeStateUpEP(Doc : ISDocuments) : Variant; server;
+begin
+  AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+  Result := EntryPoint(ChangeStateUp);
+end;
+
+procedure DoChangeStateUp(Doc : ISDocuments);
+var
+  Accept : Boolean;
+begin
+  Accept := True;
+  case Doc.GetDocState of
+    1 :
+      begin
+        AccPart := CreateObject('јккумул€торы.–асчеты—ѕартнерами');
+        ChangeStateUp(Doc, Accept);
+      end;
+    2 :
+      ;
+  end;
+end;
+
+end.

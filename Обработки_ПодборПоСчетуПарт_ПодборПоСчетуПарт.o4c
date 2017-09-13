@@ -1,0 +1,198 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL, Интерфейс, Расчеты;
+
+implementation
+
+var
+  Constants : IC4VPAConst;
+  CursorVis : TCursor;
+  TblPartFromInvoice, TblFromInvoice : ICValueTable;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  Constants := GetConstants;
+  if IsNil(Params) or not VarAsBool(Params.IsType('ТаблицаЗначений')) then
+    exit;
+  TblPartFromInvoice := CreateObject('ТаблицаЗначений');
+  TblPartFromInvoice.AddColumn('Товар', vtcLink, 0);
+  TblPartFromInvoice.AddColumn('Партия', vtcFloat, 0);
+  TblPartFromInvoice.AddColumn('Партнер', vtcLink, 0);
+  TblPartFromInvoice.AddColumn('ЕдИзм', vtcLink, 0);
+  TblPartFromInvoice.AddColumn('Код', vtcString, 20);
+  TblPartFromInvoice.AddColumn('Количество', vtcFFt, 5);
+  TblPartFromInvoice.AddColumn('Цена', vtcFFt, 7);
+  TblPartFromInvoice.AddColumn('ЦенаБезСкидкиНадбавки', vtcFFt, 7);
+  TblPartFromInvoice.AddColumn('ПроцентСкидкиНадбавки', vtcFFt, 2);
+  TblPartFromInvoice.AddColumn('ВхЦенаБезНДС', vtcFFt, 7);
+  TblPartFromInvoice.AddColumn('ВхЦенаВал', vtcFFt, 7);
+  TblPartFromInvoice.AddColumn('Валюта', vtcLink, 0);
+  TblPartFromInvoice.AddColumn('ДатаПр', vtcDate, 0);
+  TblPartFromInvoice.Open;
+  TblPartFromInvoice.tblName := 'TblPartFromInvoice';
+  Params.AppendTo('Код;Товар;Партия;Количество;Цена;ЦенаБезСкидкиНадбавки;' +
+    'ПроцентСкидкиНадбавки', TblPartFromInvoice);
+  TblPartFromInvoice.CopyDataToServer;
+  server.GetAllPart(TblPartFromInvoice.SrvMean);
+  TblPartFromInvoice.CopyDataFromServer;
+  TblPartFromInvoice.SrvMean.Clear;
+  TblPartFromInvoice.SetColumnFormat('ВхЦенаБезНДС', Constants.ФорматЦеныГРН);
+  TblPartFromInvoice.SetColumnFormat('ВхЦенаВал', Constants.ФорматЦеныВал);
+  TblPartFromInvoice.SetColumnFormat('Количество', Constants.ФорматКол);
+  //
+  TblFromInvoice := CreateObject('ТаблицаЗначений');
+  TblFromInvoice.tblName := 'TblFromInvoice';
+  TblFromInvoice.Params['ПодчиненнаяТаблица'] := TblPartFromInvoice;
+  TblPartFromInvoice.GroupToMaster('Код;Товар;Цена', 'Количество', TblFromInvoice);
+  TblFromInvoice.SetColumnFormat('Цена', Constants.ФорматЦеныГРН);
+  TblFromInvoice.SetColumnFormat('Количество', Constants.ФорматКол);
+  TblFromInvoice.SortBy('Товар;Код');
+  //
+  TblPartFromInvoice.UseMaster(TblFromInvoice);
+  TblFromInvoice.UseDataSource(CtrlToVar(TVSGood));
+  TblPartFromInvoice.UseDataSource(CtrlToVar(TVSPartGood));
+end;
+
+procedure TVSGood_VPAAfterMove(Sender : TObject);
+begin
+  TVSGood.AfterScrollLock := False;
+  SetCursor(CursorVis);
+end;
+
+procedure TVSGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  if not VarAsBool(Source.IsFocused) then
+    begin
+      Accept := False;
+      exit;
+    end;
+  TVSGood.AfterScrollLock := True;
+  CursorVis := WaitCursorStart;
+end;
+
+procedure TVSPartGood_VPAAfterMove(Sender : TObject);
+begin
+  TVSPartGood.AfterScrollLock := False;
+  SetCursor(CursorVis);
+end;
+
+procedure TVSPartGood_VPABeforeMove(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  TVSPartGood.AfterScrollLock := True;
+  CursorVis := WaitCursorStart;
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+begin
+  TblFromInvoice.Locate('Товар', InParams);
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  (dbgPart.PosColumns.Items[0] as TO4GridColumn).Visible := Constants.УчетДата;
+end;
+
+procedure miSortByCode_Click(Sender : TObject);
+begin
+  if TblFromInvoice.IsFocused then
+    begin
+      TblFromInvoice.SortBy('Код;Товар');
+      miSortByCode.Checked := True;
+      miSortByName.Checked := False;
+    end;
+end;
+
+procedure miSortByName_Click(Sender : TObject);
+begin
+  if TblFromInvoice.IsFocused then
+    begin
+      TblFromInvoice.SortBy('Товар;Код');
+      miSortByCode.Checked := False;
+      miSortByName.Checked := True;
+    end;
+end;
+
+procedure Sort(Sender : TObject);
+var
+  ChangeImage : Integer;
+  ChangeSort : Boolean;
+begin
+  if TblPartFromInvoice.IsFocused then
+    begin
+      miSortByPrice.ImageIndex := -1;
+      miSortByCnt.ImageIndex := -1;
+      miSortByDate.ImageIndex := -1;
+
+      if ChangeImage = (Sender as TO4MenuItem).Tag then
+        begin
+          if ChangeSort then
+            begin
+              case (Sender as TO4MenuItem).Tag of
+                0 :
+                  TblPartFromInvoice.SortBy('-ВхЦенаБезНДС');
+                1 :
+                  TblPartFromInvoice.SortBy('-Количество');
+                2 :
+                  TblPartFromInvoice.SortBy('ДатаПр');
+              end;
+              ChangeSort := False;
+              (Sender as TO4MenuItem).ImageIndex := 225
+            end
+          else
+            begin
+              case (Sender as TO4MenuItem).Tag of
+                0 :
+                  TblPartFromInvoice.SortBy('ВхЦенаБезНДС');
+                1 :
+                  TblPartFromInvoice.SortBy('Количество');
+                2 :
+                  TblPartFromInvoice.SortBy('-ДатаПр');
+              end;
+              ChangeSort := True;
+              (Sender as TO4MenuItem).ImageIndex := 224
+            end
+        end
+      else
+        begin
+          case (Sender as TO4MenuItem).Tag of
+            0 :
+              TblPartFromInvoice.SortBy('ВхЦенаБезНДС');
+            1 :
+              TblPartFromInvoice.SortBy('Количество');
+            2 :
+              TblPartFromInvoice.SortBy('-ДатаПр');
+          end;
+          ChangeSort := True;
+          (Sender as TO4MenuItem).ImageIndex := 224
+        end;
+
+      miSortByPrice.Checked := False;
+      miSortByCnt.Checked := False;
+      miSortByDate.Checked := False;
+      case (Sender as TO4MenuItem).Tag of
+        0 :
+          miSortByPrice.Checked := True;
+        1 :
+          miSortByCnt.Checked := True;
+        2 :
+          miSortByDate.Checked := True;
+      end;
+      ChangeImage := (Sender as TO4MenuItem).Tag;
+    end
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Splitter1:TO4Splitter
+dbgGoods:TO4DBGrid
+dbgPart:TO4DBGrid
+TVSGood:TO4TableValueSource
+TVSPartGood:TO4TableValueSource
+pmSort:TO4PopupMenu
+miSortByCode:TO4MenuItem
+miSortByName:TO4MenuItem
+pmSortPart:TO4PopupMenu
+miSortByPrice:TO4MenuItem
+miSortByCnt:TO4MenuItem
+miSortByDate:TO4MenuItem

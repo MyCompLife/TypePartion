@@ -1,0 +1,260 @@
+object Form: TO4Form
+  Left = -1
+  Top = 0
+  Width = 501
+  Height = 396
+  Translat.Languages.Strings = (
+    '1058, Украинский')
+  Translat.ScanedProps.Cols = (
+    16
+    120
+    120
+    120
+    120)
+  Translat.ScanedProps.Props = (
+    'dbgGoods.PosColumns[  1].Title.Caption'
+    0
+    #1'-1'#1'Товар'
+    'dbgGoods.PosColumns[  2].Title.Caption'
+    0
+    #1'-1'#1'Количество'
+    'dbgGoods.PosColumns[  3].Title.Caption'
+    0
+    #1'-1'#1'Цена'
+    'dbgPart.PosColumns[  1].Title.Caption'
+    0
+    #1'-1'#1'Поставщик'
+    'dbgPart.PosColumns[  2].Title.Caption'
+    0
+    #1'-1'#1'Цена без НДС (вал.)'
+    'dbgPart.PosColumns[  4].Title.Caption'
+    0
+    #1'-1'#1'Цена'
+    'dbgPart.PosColumns[  5].Title.Caption'
+    0
+    #1'-1'#1'К-ство остатка'
+    'miSortByCnt.Caption'
+    0
+    #1'-1'#1'сортировать по количеству'
+    'miSortByCode.Caption'
+    0
+    #1'-1'#1'Сортировать по коду'
+    'miSortByDate.Caption'
+    0
+    #1'-1'#1'сортировать по дате прихода'
+    'miSortByName.Caption'
+    0
+    #1'-1'#1'Сортировать по названию'
+    'miSortByPrice.Caption'
+    0
+    #1'-1'#1'сортировать по цене')
+  Translat.LangDict.Cols = (
+    16
+    120
+    120)
+  Translat.LangDict.Words = (
+    0
+    #1'-1'#1'К-ство остатка'#1'1058'#1'К-сть залишку'
+    0
+    #1'-1'#1'Цена без НДС (вал.)'#1'1058'#1'Ціна без ПДВ (вал.)')
+  BevelOuter = bvNone
+  Caption = 'Form'
+  TabOrder = 0
+  Transparent = False
+  VPAOnOpen.EventName = 'Form_Open'
+  VPAOnExecute.EventName = 'Form_Execute'
+  VPAOnExecProc.EventName = 'Form_ExecProc'
+  object Splitter1: TO4Splitter
+    Left = 0
+    Top = 300
+    Width = 501
+    Height = 5
+    Cursor = crVSplit
+    Align = alTop
+    Transparent = False
+  end
+  object dbgGoods: TO4DBGrid
+    Left = 0
+    Top = 0
+    Width = 501
+    Height = 300
+    AutoAlign = True
+    Align = alTop
+    EditAction = True
+    DragDisabled = False
+    Options = [dgTitles, dgColumnResize, dgColLines, dgRowLines, dgRowSelect, dgAlwaysShowSelection, dgMultiSelect]
+    O4MDSource = TVSGood
+    PopupMenu = pmSort
+    ReadOnly = True
+    TabOrder = 0
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'Код'
+        Title.Caption = 'Код'
+        Width = 95
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end
+      item
+        O4FieldName = 'Товар'
+        Title.Caption = 'Товар'
+        Width = 258
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end
+      item
+        O4FieldName = 'Количество'
+        Title.Caption = 'Количество'
+        Width = 66
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end
+      item
+        O4FieldName = 'Цена'
+        Title.Caption = 'Цена'
+        Width = 74
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end>
+  end
+  object dbgPart: TO4DBGrid
+    Left = 0
+    Top = 305
+    Width = 501
+    Height = 91
+    AutoAlign = True
+    Align = alClient
+    EditAction = True
+    DragDisabled = False
+    Options = [dgTitles, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgRowSelect, dgConfirmDelete, dgCancelOnExit]
+    O4MDSource = TVSPartGood
+    PopupMenu = pmSortPart
+    ReadOnly = True
+    TabOrder = 1
+    TitleFont.Charset = RUSSIAN_CHARSET
+    TitleFont.Color = clWindowText
+    TitleFont.Height = -11
+    TitleFont.Name = 'MS Sans Serif'
+    TitleFont.Style = []
+    PosColumns = <
+      item
+        O4FieldName = 'ДатаПр'
+        Title.Caption = 'Дата'
+        Width = 74
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end
+      item
+        O4FieldName = 'Партнер'
+        Title.Caption = 'Поставщик'
+        Width = 169
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end
+      item
+        O4FieldName = 'ВхЦенаВал'
+        Title.Caption = 'Цена без НДС (вал.)'
+        Width = 77
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end
+      item
+        O4FieldName = 'Валюта'
+        Title.Caption = 'Валюта'
+        Width = 55
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end
+      item
+        O4FieldName = 'ВхЦенаБезНДС'
+        Title.Caption = 'Цена'
+        Width = 34
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end
+      item
+        O4FieldName = 'Количество'
+        Title.Caption = 'К-ство остатка'
+        Width = 82
+        Visible = True
+        Period.Enabled = False
+        Period.StrStartDate = '14.01.2002'
+      end>
+  end
+  object TVSGood: TO4TableValueSource
+    VPABeforeMove.EventName = 'TVSGood_VPABeforeMove'
+    VPAAfterMove.EventName = 'TVSGood_VPAAfterMove'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 150
+    Top = 189
+  end
+  object TVSPartGood: TO4TableValueSource
+    VPABeforeMove.EventName = 'TVSPartGood_VPABeforeMove'
+    VPAAfterMove.EventName = 'TVSPartGood_VPAAfterMove'
+    AfterScrollLock = False
+    AfterScrollInterval = 200
+    Left = 142
+    Top = 350
+  end
+  object pmSort: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = TVSGood
+    Left = 187
+    Top = 189
+    object miSortByCode: TO4MenuItem
+      Caption = 'Сортировать по коду'
+      VPAOnClick.EventName = 'miSortByCode_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSortByName: TO4MenuItem
+      Caption = 'Сортировать по названию'
+      Checked = True
+      VPAOnClick.EventName = 'miSortByName_Click'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+  end
+  object pmSortPart: TO4PopupMenu
+    Images = ImagesHolder.Bmp16x16
+    O4MDSource = TVSPartGood
+    Left = 182
+    Top = 350
+    object miSortByPrice: TO4MenuItem
+      Caption = 'сортировать по цене'
+      ImageIndex = 225
+      VPAOnClick.EventName = 'Sort'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSortByCnt: TO4MenuItem
+      Tag = 1
+      Caption = 'сортировать по количеству'
+      VPAOnClick.EventName = 'Sort'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+    object miSortByDate: TO4MenuItem
+      Tag = 2
+      Caption = 'сортировать по дате прихода'
+      VPAOnClick.EventName = 'Sort'
+      O4Action = actNone
+      SortMenuParent = False
+    end
+  end
+end

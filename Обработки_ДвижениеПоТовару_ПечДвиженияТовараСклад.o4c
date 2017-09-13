@@ -1,0 +1,114 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+Var PrintTbl, StoreTbl,DocTbl, DetTbl:ICValueTable;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+begin
+  PrintTbl:=Form.GetParams;
+  StoreTbl:=PrintTbl.Params['StoreTbl'];
+  DocTbl:=PrintTbl.Params['DocTbl'];
+  DocTbl.SortBy('Склад;Sort');
+
+  lbGoodName.Caption := PrintTbl.Params['Good'];
+// StoreTbl.GroupToMaster('Партия;Склад;ДатаПр;Партнер;Валюта','ВхЦенаВал;ВхЦенаБезНДС;КолОбщ',StoreTbl);
+end;
+
+procedure Structure1_Store_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if Index=0 then Accept:= StoreTbl.SelectFirst()
+             else Accept:= StoreTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   if VarAsBool(StoreTbl.@Склад.IsFocused) then
+     Value['Name'] := StoreTbl.Склад.Название;
+   Value['SumOut'] := StoreTbl.СумОтп;
+  end;
+  DocTbl.SetRange(StoreTbl.Склад,StoreTbl.Склад);
+  //DocTbl.Select;
+end;
+
+procedure Structure1_Store_Doc_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  if Index=0 then Accept:= DocTbl.SelectFirst()
+             else Accept:= DocTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do begin
+   Value['Date'] := DocTbl.Date;
+   if VarAsBool(DocTbl.Document.IsFocused) then
+     Value['Document'] := DocTbl.Document.GetName
+   else
+     Value['Document'] := DocTbl.Документ;
+   if VarAsBool(DocTbl.Партнер.IsFocused) then
+     Value['PartName'] := GetPartName(DocTbl.Партнер);
+   Value['Count'] := DocTbl.КолОбщ;
+   Value['Price'] := DocTbl.Цена;
+   Value['Summa'] := DocTbl.СумОтп;
+   Value['PartId'] := DocTbl.Партия;
+  end;
+end;
+
+procedure DetailBand3_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+  if (DocTbl.Документ = 'Остаток на начало периода')or(DocTbl.Документ = 'Остаток на конец периода') then
+    begin
+      Label22.Color := 11461087;
+      Label23.Color := 11461087;
+      Label24.Color := 11461087;
+      Label25.Color := 11461087;
+      Label26.Color := 11461087;
+      Label27.Color := 11461087;
+      Label22.Font.Color := 5338286;
+      Label23.Font.Color := 5338286;
+      Label24.Font.Color := 5338286;
+      Label25.Font.Color := 5338286;
+      Label26.Font.Color := 5338286;
+      Label27.Font.Color := 5338286;
+    end
+  else
+    begin
+      Label22.Color := clWhite;
+      Label23.Color := clWhite;
+      Label24.Color := clWhite;
+      Label25.Color := clWhite;
+      Label26.Color := clWhite;
+      Label27.Color := clWhite;
+      Label22.Font.Color := clWindowText;
+      Label23.Font.Color := clWindowText;
+      Label24.Font.Color := clWindowText;
+      Label25.Font.Color := clWindowText;
+      Label26.Font.Color := clWindowText;
+      Label27.Font.Color := clWindowText;
+    end;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label1:TRBLabel
+lbGoodName:TRBLabel
+DetailBand2:TRBDetailBand
+Label9:TRBLabel
+Label15:TRBLabel
+DetailBand3:TRBDetailBand
+Label22:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Band2:TRBBand
+Label16:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Band3:TRBBand
+Label2:TRBLabel
+Label8:TRBLabel
+Band4:TRBBand
+Structure1:TRBStructure

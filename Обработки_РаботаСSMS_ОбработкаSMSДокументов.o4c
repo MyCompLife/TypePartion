@@ -1,0 +1,120 @@
+interface
+
+uses
+ System, DispIntf,  РаботаСSMS;
+
+implementation
+var MasterData : ICJournal;
+    Command, ErrorStr : string;
+    SMSDoc : ICDocuments;
+    GoodSMSCount, CurDoc : integer;
+    DocList : ICValueList;
+    CursorVis : TCursor;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+ MasterData := Params[0];
+ Command:='';
+ Command := StrLowerCase(Params[1]);
+ if (IsNil(MasterData)) or ((Command<>'sendsms') and (Command<>'checksms')) then
+  begin
+   form.Close;
+   raise('Не правильные параметры запуска обработки');
+  end;
+ case Command of
+      'sendsms' :   TitlePanel.Caption := 'Отправка SMS-сообщений';
+      'checksms' :  TitlePanel.Caption := 'Проверка доставки SMS-сообщений';
+ end;
+ MemoErrors.Lines.Clear;
+ SMSDoc := CreateObject('Документы.SMSРассылка');
+ DocList := CreateObject('СписокЗначений');
+ if MasterData.SelectBookmarks then
+  begin
+   MasterData.GetSelectedDocsAsValueList(DocList);
+   CurDoc := 0;
+   pbDoc.Max := DocList.Count;
+   pbDoc.Position := 0;
+   LabelProgressDoc.Caption := 'Документов обработано: '+ IntToStr(CurDoc)+' из '+ IntToStr(DocList.Count);
+  end;
+end;
+
+
+
+procedure btRun_Click(Sender: TObject);
+var    GoodDocCount : integer;
+       CommentStr: string;
+begin
+ if MasterData.SelectBookmarks then
+  begin
+   CursorVis := WaitCursorStart;
+   MemoErrors.Lines.Clear;
+   GoodDocCount := 0;   
+   CurDoc := 0;
+   MasterData.DisableControls;
+   While MasterData.SelectNextBookmark do
+    begin
+     if SMSDoc.Find(MasterData.GetDoc) then
+       begin
+         CommentStr := VarAsStr(SMSDoc.Комментарий,'');
+         if StrTrim(CommentStr)<>'' then
+           CommentStr := ' ('+CommentStr+')';
+         MemoErrors.Lines.Add('Обработка документа №'+VarAsStr(SMSDoc.GetNumber,' ')+' от '+VarAsStr(SMSDoc.GetDate,' ')+CommentStr);
+         case Command of
+          'sendsms' :
+            begin
+
+                if VarAsInt(SMSDoc.СтатусДокумента,0) = 0 then
+                 begin
+                  if CheckValidSMSdocument(SMSDoc,ErrorStr) then
+                   begin
+                    pbSMS.Max := SMSDoc.LinesCount;
+                    if SendSMSDocument(SMSDoc, GoodSMSCount, pbSMS) then
+                      inc(GoodDocCount)
+                    else
+                     MemoErrors.Lines.Add('Не удалось отправить все SMS-сообщения (отправлено '+ VarAsStr(GoodSMSCount)+' из '+VarAsStr(SMSDoc.LinesCount)+')');
+                   end
+                  else
+                   MemoErrors.Lines.Add(ErrorStr);
+                 end;
+            end;
+          'checksms' :
+            begin
+               if VarAsInt(SMSDoc.СтатусДокумента,0) = 1 then
+                begin
+                  pbSMS.Max := SMSDoc.LinesCount;
+                  if CheckStatusSMSDocument(SMSDoc, GoodSMSCount, pbSMS) then
+                    inc(GoodDocCount)
+                  else
+                   MemoErrors.Lines.Add('Не все SMS-сообщения доставлены (доставлено '+ VarAsStr(GoodSMSCount)+' из '+VarAsStr(SMSDoc.LinesCount)+')');
+              end;
+            end;
+         end; // case
+       end; //   if SMSDoc.Find(MasterData.GetDoc) then
+     inc(CurDoc);
+     pbDoc.Position := CurDoc;
+     LabelProgressDoc.Caption := 'Документов обработано: '+ IntToStr(CurDoc)+' из '+ IntToStr(DocList.Count);
+    end; // while
+   MemoErrors.Lines.Add('');
+   MemoErrors.Lines.Add('Обработка завершена');
+   MemoErrors.Lines.Add('Успешно обработано '+ IntToStr(GoodDocCount)+' из '+ IntToStr(DocList.Count) + ' документов');
+   MasterData.EnableControls;
+   SetCursor(CursorVis);
+  end // if MasterData.SelectBookmarks
+ else
+  begin
+   ShowMessage('Нет выбраных документов!');
+  end;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Panel1:TO4Panel
+LabelProgressDoc:TO4Label
+pbDoc:TO4ProgressBar
+Panel2:TO4Panel
+LabelProgressSMS:TO4Label
+pbSMS:TO4ProgressBar
+btExit:TO4Button
+MemoErrors:TO4Memo
+TitlePanel:TO4Panel
+btRun:TO4Button

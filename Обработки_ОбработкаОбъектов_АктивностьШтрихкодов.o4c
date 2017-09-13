@@ -1,0 +1,58 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+Var
+  V : IcProcessing;
+
+procedure tbRun_Click(Sender: TObject);
+VAr
+  TblGoods, TblBarCodes : IcValueTable; 
+  i : Integer;
+begin
+  XGrid.ClearAll;
+  TblBarCodes := CreateObject('ValueTable');
+  TblBarCodes.AddColumn('Товар',vtcLink,0);
+  TblBarCodes.AddColumn('ШтрихКод',vtcString,30);
+  TblBarCodes.AddColumn('Кол',vtcInteger,0);
+  TblBarCodes.Open;
+
+  TblGoods := CreateObject('ValueTable');
+  TblGoods.AddColumn('Товар',vtcLink,0);
+  TblGoods.AddColumn('Код',vtcString,30);
+  TblGoods.Open;
+
+  TblBarCodes.CopyDataToServer;
+  TblGoods.CopyDataToServer;
+  v.RunThreadProcess(server.GetBarCodesErrorEp(TblGoods.SrvMean,TblBarCodes.SrvMean ),'123');
+  TblBarCodes.CopyDataFromServer;
+  TblGoods.CopyDataFromServer;
+  TblBarCodes.SortBy('Товар');
+  XGrid.AddSection('Hed');
+  TblGoods.Select;
+  i:=1;
+  While TblGoods.SelectNext do
+    begin  
+      TblBarCodes.CancelRange;
+      TblBarCodes.Select;
+      TblBarCodes.SetRange(TblGoods.@Товар,TblGoods.@Товар);
+      TblBarCodes.Select;
+      TblBarCodes.SelectFirst;
+      TblGoods.AddToXGrid(CtrlToVar(XGrid),'Good','Код;Товар',i,1);
+      TblBarCodes.AddToXGrid(CtrlToVar(XGrid),'BarCode',';ШтрихКод;Кол',0,TblBarCodes.LineCount);
+      inc(i);
+    end;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+XGrid:TO4XGrid
+ToolBar1:TO4ToolBar
+tbRun:TO4ToolButton

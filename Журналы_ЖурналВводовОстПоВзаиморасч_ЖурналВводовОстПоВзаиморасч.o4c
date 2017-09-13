@@ -1,0 +1,56 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  MasterData : ICJournal;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := CreateObject('Журналы.ЖурналВводовОстПоВзаиморасч');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    begin
+      //    if Form.GetPrintKind = pkWindow then
+      MasterData.AssignSelectParams(Form.GetMean);
+      MasterData.Select;
+    end;
+  Accept := MasterData.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Number'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if VarAsBool(MasterData.@Ответственный.IsFocused) then
+        Value['Partner'] := MasterData.Ответственный.ПолноеНазвание;
+      Value['TypeDoc'] := MasterData.Документ;
+      Value['SumNT'] := MasterData.Сумма;
+      Value['Val'] := MasterData.Валюта.Код;
+    end;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+Band1:TRBBand
+Label4:TRBLabel
+Band2:TRBBand
+hdPartner:TRBLabel
+hdDate:TRBLabel
+hdNumber:TRBLabel
+Label1:TRBLabel
+hdTypeDoc:TRBLabel
+Label5:TRBLabel
+DetailBand1:TRBDetailBand
+lbPartner:TRBLabel
+lbDate:TRBLabel
+lbNumber:TRBLabel
+Label2:TRBLabel
+lbTypeDoc:TRBLabel
+Label3:TRBLabel
+Structure1:TRBStructure

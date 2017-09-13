@@ -1,0 +1,107 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+implementation
+
+var
+  MasterData : ICJournal;
+
+procedure dsMaster_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := dsMaster.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  i : Integer;
+begin
+  for i := 0 to MasterData.StateCount - 1 do
+    tsState.Tabs.Add(Trans(MasterData.GetStateName(i)));
+  MasterData.DefineSelectParams(True);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1; 
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+end;
+
+procedure tsState_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  MasterData.SetDocStateRange(Newtab - 1);
+  MasterData.Select;
+end;
+
+procedure miSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+  tsState.TabIndex := MasterData.GetDocStateRange + 1;
+end;
+
+procedure miPrintOne_Click(Sender : TObject);
+begin
+  if MasterData.IsFocused then
+    MasterData.GetDoc.PrintForm('', True, Null);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if MasterData.IsFocused then
+    if MasterData.GetDocState > 0 then
+      Index1 := 10
+    else
+      Index1 := 9;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure dsMaster_VPATimedAfterScroll(Sender: TObject);
+begin
+  if MasterData.IsFocused then
+    tsState.SecondSelect := MasterData.GetDocState + 1
+  else
+    tsState.SecondSelect := -1;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+tsState:TO4TabSet
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbFixUp:TO4ToolButton
+tbFixDown:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbPrint:TO4ToolButton
+ToolButton5:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+dsMaster:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miFixUp:TO4MenuItem
+miFixDown:TO4MenuItem
+miDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+miPrintOne:TO4MenuItem
+MenuItem2:TO4MenuItem
+miSort:TO4MenuItem
+miSelect:TO4MenuItem
+MenuItem6:TO4MenuItem
+miRefresh:TO4MenuItem
+miInfoChange:TO4MenuItem

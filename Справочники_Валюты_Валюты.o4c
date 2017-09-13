@@ -1,0 +1,124 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –абота—ѕеременными, –абота—ќбъектами,
+  –абота— омпонентамиVCL;
+
+implementation
+
+var
+  MasterData : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  eCursDate.Text := DateToStr(CurrentDate);
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData', 'dbgData');
+end;
+
+procedure eCursDate_Change(Sender : TObject);
+begin
+  MasterData.SetDateForTimedFields(StrToDateDef(eCursDate.Text, CurrentDate));
+end;
+
+procedure MDS_VPABeforeDelete(Source : Variant; IsGroup : Boolean; var Accept : Boolean);
+begin
+  Accept := not VarAsBool(MasterData.Ќац¬алюта);
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if VarAsBool(MasterData.јктивность) then
+    Index1 := 36;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+procedure miPrint_Click(Sender : TObject);
+var
+  dialog : ICProcessing;
+  Print : ICValueTable;
+  MDBank : Variant;
+  i : Integer;
+  Param : Variant;
+begin
+  if MasterData.Ќац¬алюта = -1 then
+    begin
+      MessageDlg(Trans('Ёто национальна€ валюта!'), mtConfirmation, ArrayOf(mbOk));
+      exit;
+    end;
+  dialog := CreateObject('ќбработки.”становкаƒат» урсов');
+  if dialog.Execute('”становкаƒат» урсов', MasterData) = mrOk then
+    begin
+      MDBank := CreateObject('—писок«начений');
+      Print := CreateObject('“аблица«начений');
+      Print.AddColumn('Data', vtcDateTime, 0);
+      Print.AddColumn('BankCourse', vtcFFt, 6);
+      Print.AddColumn('WhatCourse', vtcString, 12);
+      Print.Open();
+      Param := MasterData.Params[' урс'];
+      if Param[0] = 0 then
+        MasterData.GetDVListForTimedFields(' урсЌацЅанка', Param[1], Param[2], MDBank)
+      else
+        MasterData.GetDVListForTimedFields(' урсЌаличный', Param[1], Param[2], MDBank);
+      for i := 0 to MDBank.Count - 1 do
+        begin
+          Print.Append();
+          Print.Data := MDBank.GetStr(i);
+          Print.BankCourse := MDBank.GetValue(i);
+          Print.WhatCourse := Param[3];
+          Print.Post();
+        end;
+      MasterData.PrintForm('»стори€ урсов', True, 0, Print)
+    end;
+end;
+
+procedure MDS_Append(Sender: TObject);
+var
+  Dic : ICDictionary;
+begin
+  Dic := CreateObject('—правочники.¬алюты');
+//  Dic.Select;
+//  if Dic.SelectNext then
+//    Raise('Ѕольше одной валюты в справочник добавл€ть запрещено');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbPrint:TO4ToolButton
+tbDelimiter2:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+TopPanel:TO4Panel
+Label1:TO4Label
+eCursDate:TO4Edit
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

@@ -1,0 +1,163 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, Пользователи;
+  
+//function DelRegistration(Doc: ICDocuments; Source: ICDictionary): Boolean;  
+function ChangePriceRegistration(Doc: ICDocuments; Source: ICDictionary): Boolean;
+function ChangeDiscountPrecentRegistration(Doc: ICDocuments): Boolean;
+
+implementation
+
+function DelRegistration(Doc: ICDocuments; Source: ICDictionary): Boolean;
+var
+  V: ICProcessing;
+  Respons: ICDictionary;
+  Accept: Boolean;
+  Accs: ICAccs;
+  Docum, Store: String;
+begin
+  Accept := false;
+  try
+    if not Doc.IsFocused or not Source.IsFocused then
+      exit;
+    V := CreateObject('Обработки.ПодтверждениеУдаления');
+    V.Execute('ПодтверждениеУдаления',Null);
+    Accept := V.HasParam('Accept') and V.Params['Accept'];
+    if Accept then
+      begin
+        Accs := CreateObject('Аккумуляторы.РегистрацияCобытий');
+        Docum := Doc.GetView;
+        if StrLength(Docum) = 0 then
+          Docum := Doc.GetSign;
+        Docum := Docum + ' №' + Doc.GetNumber + ' от ' + DateTimeToStr(Doc.GetDate);  
+        Accs.Докум := Docum;
+        Accs.Ответственный := V.Params['Respons'];
+        Accs.Событие := 'Удаление товара';
+        Accs.Кол := 1;
+        Accs.Объект := Source;
+        if Doc.HasField('СкладПоУмолч') and VarAsBool(Doc.@СкладПоУмолч.IsFocused) then
+          Accs.Склад := Doc.СкладПоУмолч;
+        Accs.НазваниеОбъекта := Store + Source.NameField + ', кол-' + VarAsStr(Doc.Количество) + ', цена-' + DecToStr(Doc.Цена, 2);
+        Accs.Комментарий := V.Params['Comment'];
+        Accs.Income(Null, CurrentDateTime, Doc.НомСтроки);
+      end;
+  finally
+    Result := Accept;
+  end;
+end;    
+
+function ChangePriceRegistration(Doc: ICDocuments; Source: ICDictionary): Boolean;
+var
+  V, VChange: ICProcessing;
+  Respons: ICDictionary;
+  Accept: Boolean;
+  Accs: ICAccs;
+  Docum, Store: String;
+  NewPrice: Decimal;  
+  eRespons : TO4dbEdit;
+begin
+  Accept := false;
+  try
+    if not Doc.IsFocused or not Source.IsFocused then
+      exit; 
+    if GetUsersBlockedField('ЗапрПарольПриИзмПроцЦены') then
+      begin
+        V := CreateObject('Обработки.ПодтверждениеИзменения');
+        V.Execute('ПодтверждениеИзменения','цена');
+        Accept := V.HasParam('Accept') and V.Params['Accept'];
+      end
+    else
+      Accept := true;
+    if Accept then
+      begin
+        VChange := CreateObject('Обработки.ПараметрыНастройкиКассы');
+        VChange.Params['Price'] := Doc.Цена;
+        VChange.Params['GoodName'] := Source.NameField;
+        VChange.Execute('ВводЦены',Null);
+        if not VChange.HasParam('NewPrice') then
+          begin
+            Accept := false;
+            ShowMessage('Отменено пользователем.');
+          end;
+      end;
+    if Accept then
+      begin
+        Accs := CreateObject('Аккумуляторы.РегистрацияCобытий');
+        NewPrice := VChange.Params['NewPrice'];
+        Docum := Doc.GetView;
+        if StrLength(Docum) = 0 then
+          Docum := Doc.GetSign;
+        Docum := Docum + ' №' + Doc.GetNumber + ' от ' + DateTimeToStr(Doc.GetDate);
+        Accs.Докум := Docum;
+        Accs.Ответственный := GetEmplByName(GetUserName, eRespons);
+        Accs.Событие := 'Изменение цены';
+        Accs.Кол := 1;
+        Accs.Объект := Source;
+        if Doc.HasField('СкладПоУмолч') and VarAsBool(Doc.@СкладПоУмолч.IsFocused) then
+          Accs.Склад := Doc.СкладПоУмолч;
+        Accs.НазваниеОбъекта := Store + Source.NameField + ', кол-' + VarAsStr(Doc.Количество) + ', ст. цена-' + DecToStr(Doc.Цена, 2)
+                           + ' , нов. цена-' + DecToStr(NewPrice, 2);
+        Accs.Комментарий := 'Ручная корректировка';
+        Accs.Income(Null, CurrentDateTime, Doc.НомСтроки);
+        Doc.EditLine;
+        Doc.Цена := NewPrice;
+        Doc.РучнаяКорректировка := true;
+        if VarAsDec(Doc.ЦенаБезСкидкиНадбавки)<>0 then
+          Doc.ПроцентСкидкиНадбавки := (Doc.Цена-Doc.ЦенаБезСкидкиНадбавки)/Doc.ЦенаБезСкидкиНадбавки*100 //ручное редактирование
+        else
+          Doc.ПроцентСкидкиНадбавки := 0;
+        Doc.КомментарийСкидкиНадбавки := 'Ручная корректировка';
+        Doc.PostLine;
+      end;
+  finally
+    Result := Accept;
+  end;
+end;
+
+function ChangeDiscountPrecentRegistration(Doc: ICDocuments): Boolean;
+var
+  V: ICProcessing;
+  Respons: ICDictionary;
+  Accept: Boolean;
+  Accs: ICAccs;
+  Docum, Store: String;
+  NewPrecent: Decimal;
+begin
+   Accept := false;
+  try
+    if not Doc.IsFocused or not VarAsBool(Doc.Партнер.IsFocused) then
+      exit;
+    V := CreateObject('Обработки.ПодтверждениеИзменения');
+    V.Execute('ПодтверждениеИзменения','процент');
+    Accept := V.HasParam('Accept') and V.Params['Accept'];
+    NewPrecent := VarAsDec(Doc.ПроцСкидки);
+    if (Accept) and (StdInpDec('Введите новое значение процента',NewPrecent)) and (NewPrecent<>VarAsDec(Doc.ПроцСкидки)) then
+      begin
+        if NewPrecent>0 then
+         NewPrecent := - NewPrecent;
+        Accs := CreateObject('Аккумуляторы.РегистрацияCобытий');
+        Docum := Doc.GetView;
+        if StrLength(Docum) = 0 then
+          Docum := Doc.GetSign;
+        Docum := Docum + ' №' + Doc.GetNumber + ' от ' + DateTimeToStr(Doc.GetDate);
+        Accs.Докум := Docum;
+        Accs.Ответственный := V.Params['Respons'];
+        Accs.Событие := 'Изменение процента скидки для партнера';
+        Accs.Кол := 1;
+        Accs.Объект := Doc.Партнер;
+        if Doc.HasField('СкладПоУмолч') and VarAsBool(Doc.@СкладПоУмолч.IsFocused) then
+          Accs.Склад := Doc.СкладПоУмолч;
+        Accs.НазваниеОбъекта := VarAsStr(Doc.Партнер.NameField) + ', ст. % скидки:' + DecToStr(Doc.ПроцСкидки, 2)
+                           + ' , нов. % скидки:' + DecToStr(NewPrecent, 2);
+        Accs.Комментарий := V.Params['Comment'];
+        Accs.Income(Null, CurrentDateTime, Doc.НомСтроки);
+        Doc.ПроцСкидки := NewPrecent;
+      end;
+  finally
+    Result := Accept;
+  end;
+  Result := Accept;
+end;
+
+end.

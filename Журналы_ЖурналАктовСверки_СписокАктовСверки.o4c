@@ -1,0 +1,236 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, InitColors, Расчеты, РаботаСПеременными, РаботаСДокументамиВЖурналах;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  PartTbl : ICValueTable;     
+  AktDoc  : ICDocuments;
+
+procedure SetTypePartnerRange(NewTab:integer);
+begin
+ PartTbl.CancelRange;
+ case NewTab of
+  0 :  // все
+    begin
+      PartTbl.SortBy('Sort;ПолноеНазвание');
+    end;
+  1: // поставщики
+    begin
+      PartTbl.SortBy('Sort;Поставщик;ПолноеНазвание');
+      PartTbl.SetRange(ArrayOf(-1,-1),ArrayOf(0,-1));
+    end;
+  2: // покупатели
+    begin
+      PartTbl.SortBy('Sort;Покупатель;ПолноеНазвание');
+      PartTbl.SetRange(ArrayOf(-1,-1),ArrayOf(0,-1));
+    end;
+  end;
+end; 
+
+procedure TVS_VPATimedAfterScroll(Sender: TObject);
+begin
+ if PartTbl.IsFocused and VarAsBool(PartTbl.@Self.IsFocused) then
+   MasterData.SetFieldFilter('Партнер','=',PartTbl.@Self,'','',Null)
+ else
+   MasterData.CancelFieldFilter('Партнер');
+ MasterData.Refresh;
+end;
+
+procedure RefreshPartTbl;
+var OldPart : ICDictionary;
+begin
+  try
+    TVS.AfterScrollLock := true;
+    if PartTbl.IsFocused then
+      OldPart := PartTbl.Self;
+    PartTbl.DisableControls; 
+    PartTbl.CancelRange;
+    PartTbl.Clear;
+    PartTbl.CopyDataToServer;
+    server.FillPartTbl(PartTbl.SrvMean, cbShowPart.Checked, cbShowEmpl.Checked, cbShowBank.Checked, edName.Text);
+    PartTbl.CopyDataFromServer;
+    SetTypePartnerRange(tbTypePartners.TabIndex);
+  finally
+    if not (IsObjFocused(OldPart) and PartTbl.Locate('Self',OldPart)) then
+      PartTbl.SelectFirst;
+    TVS.AfterScrollLock := false;
+    PartTbl.EnableControls; 
+    TVS_VPATimedAfterScroll(Form);
+  end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  SetColors(Constants); 
+  PartTbl := CreateObject('ТаблицаЗначений');
+  PartTbl.AddColumn('Self',vtcLink,0);
+  PartTbl.AddColumn('ПолноеНазвание',vtcString,200);
+  PartTbl.AddColumn('Поставщик',vtcInteger,0);
+  PartTbl.AddColumn('Покупатель',vtcInteger,0);
+  PartTbl.AddColumn('Sort',vtcInteger,0);
+  PartTbl.Open; 
+  PartTbl.UseDataSource(CtrlToVar(TVS));
+  RefreshPartTbl;  
+  AktDoc := CreateObject('Документы.АктСверки');
+  AktDoc.Select;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+  i : Integer;      
+  ItemMenu : TO4MenuItem;
+begin
+  Options := GetOptions;
+//  MakeInterface(tbrData, Nobody, dbgData);
+  MasterData.DefineSelectParams(True);
+  miInfoChange.Visible := GetUDASet('viewdochistory');
+end;
+
+
+procedure tbSelect_Click(Sender : TObject);
+begin
+  MasterData.DefineSelectParams(False);
+end;
+
+
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh();
+end;
+
+
+procedure DBMemo1_Exit(Sender : TObject);
+begin
+  ChangeDocFieldByJournalField(MasterData);
+end;
+
+
+procedure dbgPart_GetRowParams(Sender: TObject; DrawFont: TFont; var BackColor: TColor; Highlight: boolean);
+begin
+ if PartTbl.IsFocused and (VarAsInt(PartTbl.Sort)=-1) then
+   DrawFont.Style := 1;
+end;
+
+procedure cbShowPart_Click(Sender: TObject);
+begin
+ RefreshPartTbl;
+end;
+
+procedure tbFilterApply_Click(Sender: TObject);
+begin
+ if edName.Text<>'' then
+   RefreshPartTbl;
+end;
+
+procedure tbGoodsFilterClear_Click(Sender: TObject);
+begin
+ edName.Text := ''; 
+ RefreshPartTbl;
+end;
+
+procedure tbTypePartners_Change(Sender: TObject; NewTab: Integer; var AllowChange: Boolean);
+var OldPart : ICDictionary;
+begin
+  try
+    TVS.AfterScrollLock := true;
+    if PartTbl.IsFocused then
+      OldPart := PartTbl.Self;
+    PartTbl.DisableControls;    
+    SetTypePartnerRange(NewTab);
+  finally
+    if not (IsObjFocused(OldPart) and PartTbl.Locate('Self',OldPart)) then
+      PartTbl.SelectFirst;
+    TVS.AfterScrollLock := false;
+    PartTbl.EnableControls;
+  end;
+end;
+
+
+
+procedure MDS_VPATimedAfterScroll(Sender: TObject); 
+begin
+ if MasterData.IsFocused and AktDoc.Find(MasterData.GetDoc) then
+   XGrid.LoadFromString(VarAsStr(AktDoc.XGrid))
+ else
+   XGrid.ClearAll;     
+ XGrid.Refresh;
+end;
+
+procedure tbPrintXGrid_Click(Sender : TObject);
+begin
+  XGrid.Print('', True);
+end;
+
+
+procedure tbExportXLS_Click(Sender: TObject);
+begin
+ XGrid.ExportToExcel;
+end;
+
+procedure miInfoChange_Click(Sender: TObject);
+var
+  V: ICProcessing;
+begin
+  V := CreateObject('Обработки.ИнфоИзменений');
+  V.Execute('ИнфоИзменений', MasterData.GetDoc);
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Splitter3:TO4Splitter
+Splitter2:TO4Splitter
+pnJrn:TO4Panel
+Splitter1:TO4Splitter
+Label3:TO4Label
+tbrData:TO4ToolBar
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbSelect:TO4ToolButton
+ToolButton6:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+Panel2:TO4Panel
+Label1:TO4Label
+dbmComment:TO4DBMemo
+pnLeft:TO4Panel
+Label2:TO4Label
+dbgPart:TO4DBGrid
+tbTypePartners:TO4TabSet
+gbTypePartners:TO4GroupBox
+cbShowPart:TO4CheckBox
+cbShowEmpl:TO4CheckBox
+cbShowBank:TO4CheckBox
+gbNamePartner:TO4GroupBox
+edName:TO4Edit
+ToolBar1:TO4ToolBar
+tbFilterApply:TO4ToolButton
+tbGoodsFilterClear:TO4ToolButton
+Panel4:TO4Panel
+ToolBar2:TO4ToolBar
+tbPrintXGrid:TO4ToolButton
+ToolButton4:TO4ToolButton
+tbExportXLS:TO4ToolButton
+XGrid:TO4XGrid
+pmData:TO4PopupMenu
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+miSort:TO4MenuItem
+pmiSort:TO4MenuItem
+MenuItem3:TO4MenuItem
+miRefresh:TO4MenuItem
+MDS:TO4DataSource
+TVS:TO4TableValueSource
+miInfoChange:TO4MenuItem

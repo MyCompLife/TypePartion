@@ -1,0 +1,63 @@
+interface
+
+uses
+  System,  DispIntf, Расчеты;
+
+implementation   
+
+var
+  DicTbl, CtgTbl: ISValueTable; 
+  cbTitle, cbInfo: Boolean;
+
+procedure UpdateDic(V: ISProcessing; Accept: Boolean);
+var
+  Dic: ISDictionary;
+  count, total: Integer;
+begin
+  Accept := true;
+  Dic := CreateObject('Справочники.Товары');
+  Dic.Select;
+  DicTbl.Select;
+  count := 1;
+  total := DicTbl.LineCount;
+  while DicTbl.SelectNext do
+    if Dic.FindByCode(DicTbl.Код, false) then
+      begin
+        Dic.Edit;
+        if cbTitle then
+          Dic.НазвТовара := DicTbl.НазвТовара; 
+        if cbInfo then
+          Dic.Информация := DicTbl.Информация;
+        Dic.Post; 
+        V.NotifyClient('Обновление товаров: ' + IntToStr(count) + ' : ' + IntToStr(total), count, total);
+        inc(count);
+      end;
+  if cbTitle then
+    begin
+      Dic.IncludeOnlyLevels(true);
+      Dic.Select;
+      count := 1;
+      total := CtgTbl.LineCount;
+      CtgTbl.Select;
+      while CtgTbl.SelectNext do
+        if Dic.FindByCode(CtgTbl.Код, false) then
+          begin
+            Dic.Edit;
+            Dic.НазвТовара := CtgTbl.НазвТовара;
+            Dic.Post;
+            V.NotifyClient('Обновление категорий: ' + IntToStr(count) + ' : ' + IntToStr(total), count, total);
+            inc(count);
+          end;
+    end;
+end;
+
+function UpdateDicEP(DicTblS, CtgTblS: ISValueTable; cbTitleS, cbInfoS: Boolean): variant;server;
+begin
+  DicTbl := DicTblS;
+  CtgTbl := CtgTblS;
+  cbTitle :=  cbTitleS;
+  cbInfoS :=  cbInfoS;
+  Result := EntryPoint(UpdateDic);
+end;
+
+end.

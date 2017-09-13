@@ -1,0 +1,81 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСКомпонентамиVCL;
+
+implementation
+
+const
+  errPartnerDontShow = 'Нельзя выбрать телефон, так как не выбран партнер в содержимом документа';
+
+var
+  MasterData, Partner : ICDictionary;
+
+procedure MDS_Select(Sender : TObject; Mean : Variant; Params : Variant);
+var
+  SignDict : string;
+begin
+  if not IsNil(params) then
+    begin
+      if VarAsBool(Params.IsType('Документы')) then
+        Partner := Params.Партнер;
+      if VarAsBool(Params.IsType('Справочники')) then
+        begin
+          case VarAsStr(Params.GetSign) of
+            'ДоговПоставки', 'Представители', 'Реализаторы', 'ПостНаРеализацию', 'Бартер' :
+            Partner := Params.Партнер
+          else
+            exit
+          end;
+        end;
+      if IsNil(Partner) or (not Partner.IsFocused) then
+        raise(errPartnerDontShow);
+      Mean.UseMasterAndSelect(Partner);
+    end
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  MasterData.SetSrvOnCalcFields(server.GetCalcEP);
+end;
+
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if VarAsBool(MasterData.Активность) then
+    Index1 := 36;
+end;
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  Masterdata.Refresh;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  MasterData.Params[prmInterfaceType] := itInPlaceForMain;
+  MakeStandartInterface(MasterData, Form, '', '');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+dbgData:TO4DBGrid
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miAdd:TO4MenuItem
+miEdit:TO4MenuItem
+miDelete:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miPrint:TO4MenuItem
+miDelimiter2:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

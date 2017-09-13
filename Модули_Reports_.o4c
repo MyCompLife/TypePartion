@@ -1,0 +1,536 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –асчеты;
+
+procedure CreateGoodsTblCardCol(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+procedure CreatePartGoodTblCols(PartGoodTbl : ICValueTable; DoOpen : Boolean = True);
+procedure CreateDocsTblCols(DocsTbl : ICValueTable; DoOpen : Boolean = True);
+procedure CreatePartTblCols(PartTbl : ICValueTable; DoOpen : Boolean = True);
+procedure SetGoodsTblColumns(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+procedure SetGoodsTblColumnsSmall(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+procedure SetGoodsTblColumnsInPrice(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+//procedure SetGoodsTblColumns1(GoodsTbl: ICValueTable; DoOpen: boolean = true);
+procedure FormatGoodsTbl(GoodsTbl : ICValueTable);
+procedure FormatDocsTbl(DocsTbl : ICValueTable);
+procedure FormatPartTbl(PartTbl : ICValueTable);
+procedure FormatPartGoodTbl(PartGoodTbl : ICValueTable);
+procedure SetGoodsTblColumnsFormat(GoodsTbl : ICValueTable);
+//procedure SetGoodsTblColumnsFormat1(GoodsTbl: ICValueTable);
+procedure SetMenuDates(Sender : TObject; var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+procedure SetDatesOnOpenForm(var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+procedure SetOneDates(Sender : TObject; var DateFrom, DateTo : DateTime);
+procedure SetMenuDatesBuh(Sender : TObject; var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+procedure GetStore(Stores : ICValueList; var Store : ICDictionary);
+function CheckCtg : string;
+procedure DeleteColumnsByCondition(TblCurrent : ICValueTable; CondFieldName, Condition : string);
+procedure UnuseTableAndClear(TblPassed : ICValueTable);
+procedure UnuseTablesAndClear(arrTables : Variant);
+procedure UseTablesAgain(arrTables : Variant);
+procedure SaveSortingForTables(arrTables : Variant);
+procedure RestoreSortingForTables(arrTables : Variant);
+procedure AddColumnsToSorted(Tbl : ICValueTable; AddCols : string);
+procedure RemoveColumnsFromSorted(Tbl : ICValueTable; RemColCount : Integer;
+  RemoveFromBegin : Boolean = True);
+function UnuseCursor(var Cursor : TCursor; CursorsRefCount : Integer = -1) : Integer;
+function UseCursor(Cursor : TCursor; CursorsRefCount : Integer = -1) : Integer;
+procedure SaveTablePosition(TblCurrent : ICValueTable);
+procedure RestoreTablePosition(TblCurrent : ICValueTable);
+function CheckState(clbState : TO4CheckListBox) : string;
+
+implementation
+
+var
+  GlobalCursorRefCount : Integer;
+  GlobalCursor : TCursor;
+
+function UnuseCursor(var Cursor : TCursor; CursorsRefCount : Integer = -1) : Integer;
+var
+  RefCount : Integer;
+begin
+  if CursorsRefCount = -1 then // используетс€ глобальный курсор
+    RefCount := GlobalCursorRefCount
+  else
+    RefCount := CursorsRefCount;
+  inc(RefCount);
+  if RefCount = 1 then
+    begin
+      Cursor := WaitCursorStart;
+      if CursorsRefCount = -1 then // используетс€ глобальный курсор
+        GlobalCursor := Cursor;
+    end;
+  Result := RefCount;
+  if CursorsRefCount = -1 then // используетс€ глобальный курсор
+    GlobalCursorRefCount := RefCount;
+end;
+
+function UseCursor(Cursor : TCursor; CursorsRefCount : Integer = -1) : Integer;
+var
+  RefCount : Integer;
+begin
+  if CursorsRefCount = -1 then // используетс€ глобальный курсор
+    RefCount := GlobalCursorRefCount
+  else
+    RefCount := CursorsRefCount;
+  //
+  dec(RefCount);
+  if RefCount = 0 then
+    WaitCursorFinish(Cursor);
+  Result := RefCount;
+  //
+  if CursorsRefCount = -1 then // используетс€ глобальный курсор
+    GlobalCursorRefCount := RefCount;
+end;
+
+//добавление колонок в таблицы
+
+procedure CreateGoodsTblCardCol(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn('“овар', vtcLink, 0);
+  GoodsTbl.AddColumn(' од', vtcString, 20);
+  GoodsTbl.AddColumn('≈д»зм', vtcLink, 0);
+  AddFFtColumnsList(GoodsTbl, ' олќбщ;÷ена');
+  if DoOpen then
+    GoodsTbl.Open();
+end;
+
+procedure CreatePartGoodTblCols(PartGoodTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  PartGoodTbl.Close();
+  PartGoodTbl.AddColumn('“овар', vtcLink, 0);
+  PartGoodTbl.AddColumn('—клад', vtcLink, 0);
+  PartGoodTbl.AddColumn('ѕартнер', vtcLink, 0);
+  PartGoodTbl.AddColumn('ѕарти€', vtcFloat, 0);
+  PartGoodTbl.AddColumn('¬алюта', vtcLink, 0);
+  AddFFtColumnsList(PartGoodTbl, ' олќбщ;¬х÷енаЅезЌƒ—;¬х÷ена¬ал;—ум¬х;—ум¬хЌƒ—;—умќтп;—умќтпЌƒ—');
+  if DoOpen then
+    PartGoodTbl.Open();
+end;
+
+procedure CreateDocsTblCols(DocsTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  DocsTbl.Close();
+  DocsTbl.AddColumn('Date', vtcDateTime, 0);
+  DocsTbl.AddColumn('Document', vtcLink, 0);
+  DocsTbl.AddColumn('DNames', vtcString, 70);
+  DocsTbl.AddColumn('MotionSign', vtcInteger, 0);
+  AddFFtColumnsList(DocsTbl, ' олќбщ;—ум¬х;—ум¬хЌƒ—;—умќтпЌƒ—;—умќтп;—умЌакоп;—умЌац;—умќбщ');
+  if DoOpen then
+    DocsTbl.Open();
+end;
+
+procedure CreatePartTblCols(PartTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  PartTbl.Close();
+  PartTbl.AddColumn('ѕартнер', vtcLink, 0);
+  AddFFtColumnsList(PartTbl, '—умќбщ;—умѕрих;—ум–асх');
+  PartTbl.AddColumn('CondField', vtcInteger, 0);
+  if DoOpen then
+    PartTbl.Open();
+end;
+
+procedure SetGoodsTblColumns(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn(' од', lftString, 20);
+  GoodsTbl.AddColumn('“овар', lftLink, 0);
+  GoodsTbl.AddColumn('≈д»зм', lftLink, 0);
+  AddFFtColumnsList(GoodsTbl, server.GetGoodLinksList);
+  GoodsTbl.AddColumn('ѕарти€', lftFloat, 0);
+  GoodsTbl.AddColumn('—клад', lftLink, 0);
+  if DoOpen then
+    GoodsTbl.Open();
+end;
+
+procedure SetGoodsTblColumnsSmall(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn(' од', lftString, 20);
+  GoodsTbl.AddColumn('“овар', lftLink, 0);
+  GoodsTbl.AddColumn('≈д»зм', lftLink, 0);
+  AddFFtColumnsList(GoodsTbl, server.GetGoodLinksListSmall);
+  GoodsTbl.AddColumn('ѕарти€', lftFloat, 0);
+  GoodsTbl.AddColumn('—клад', lftLink, 0);
+  GoodsTbl.AddColumn('Document', lftLink, 0);
+  GoodsTbl.AddColumn('ѕартнер', lftLink, 0);
+  if DoOpen then
+    GoodsTbl.Open();
+end;
+
+procedure SetGoodsTblColumnsInPrice(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn(' од', lftString, 20);
+  GoodsTbl.AddColumn('“овар', lftLink, 0);
+  GoodsTbl.AddColumn('≈д»зм', lftLink, 0);
+  GoodsTbl.AddColumn('¬х÷енаЅезЌƒ—', lftFFt, 2);
+  AddFFtColumnsList(GoodsTbl, server.GetGoodLinksList);
+  GoodsTbl.AddColumn('ѕарти€', lftFloat, 0);
+  GoodsTbl.AddColumn('—клад', lftLink, 0);
+  if DoOpen then
+    GoodsTbl.Open();
+end;
+
+//форматирование колонок
+
+procedure FormatGoodsTbl(GoodsTbl : ICValueTable);
+begin
+  SetFormatStdColumnsList(GoodsTbl, ' олќбщ; оличество;¬х÷енаЅезЌƒ—;÷енаЅезЌƒ—;Ќƒ—;÷ена;' +
+    '—умма—трокиЅезЌƒ—;Ќƒ——троки;—умма—троки;÷ена¬¬алюте;—умма¬¬алюте—Ќƒ—;Ќаценка—троки');
+end;
+
+procedure FormatDocsTbl(DocsTbl : ICValueTable);
+begin
+  SetFormatStdColumnsList(DocsTbl, 'ƒатаƒокумента;Date', 'dd.mm.yyyy');
+  SetFormatStdColumnsList(DocsTbl, '¬х—умма;—умма;—умќпл;—ум ќпл;—умќтп;—умЌац;—умќбщ;' +
+    'ќтпущено“овара;Ќаценка;—умЌакоп; олќбщ;—умќтпЌƒ—;—уммаЅезЌƒ—;—уммаЌƒ—');
+end;
+
+procedure FormatPartTbl(PartTbl : ICValueTable);
+begin
+  SetFormatStdColumnsList(PartTbl, '—умќтп;—умѕрих;—ум–асх;—умќбщ');
+end;
+
+procedure FormatPartGoodTbl(PartGoodTbl : ICValueTable);
+begin
+  SetFormatStdColumnsList(PartGoodTbl, '¬х÷енаЅезЌƒ—;¬х÷ена¬ал; олќбщ;—ум¬х;—ум¬хЌƒ—;—умќтп;—умќтпЌƒ—');
+end;
+
+procedure SetGoodsTblColumnsFormat(GoodsTbl : ICValueTable);
+begin
+  SetFormatStdColumnsList(GoodsTbl, server.GetGoodLinksList);
+end;
+
+//установка дат дл€ меню
+
+procedure SetMenuDates(Sender : TObject; var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+var
+  Prd : Variant;
+  Year : Integer;
+begin
+  //  Year := GetYear(CurrentDate);
+  Year := GetYear(DateTo);
+  case (Sender as TO4MenuItem).Tag of
+    0 : 
+      Prd := ArrayOf(1, 1, 6, 30); //первое полугодие
+    1 : 
+      Prd := ArrayOf(1, 1, 3, 31); //первый квартал
+    2 : 
+      Prd := ArrayOf(1, 1, 1, 31); //€нварь
+    3 :
+      begin //февраль
+        Prd := ArrayOf(2, 1, 2, 28);
+        if IsLeapYear(Year) then
+          Prd[3] := 29;
+      end;
+    4 : 
+      Prd := ArrayOf(3, 1, 3, 31); //март
+    5 : 
+      Prd := ArrayOf(4, 1, 6, 30); //второй квартал
+    6 : 
+      Prd := ArrayOf(4, 1, 4, 30); //апрель
+    7 : 
+      Prd := ArrayOf(5, 1, 5, 31); //май
+    8 : 
+      Prd := ArrayOf(6, 1, 6, 30); //июнь
+    9 :
+      begin //предыдущий год
+        Prd := ArrayOf(1, 1, 12, 31);
+        Dec(Year);
+      end;
+    10 : 
+      Prd := ArrayOf(7, 1, 12, 31); //второе полугодие
+    11 : 
+      Prd := ArrayOf(7, 1, 9, 30); //третий квартал
+    12 : 
+      Prd := ArrayOf(7, 1, 7, 31); //июль
+    13 : 
+      Prd := ArrayOf(8, 1, 8, 31); //август
+    14 : 
+      Prd := ArrayOf(9, 1, 9, 30); //сент€брь
+    15 : 
+      Prd := ArrayOf(10, 1, 12, 31); //четвертый квартал
+    16 : 
+      Prd := ArrayOf(10, 1, 10, 31); //окт€брь
+    17 : 
+      Prd := ArrayOf(11, 1, 11, 30); //но€брь
+    18 : 
+      Prd := ArrayOf(12, 1, 12, 31); //декабрь
+    else
+      begin
+        Prd := ArrayOf(1, 1, 12, 31); //текущий год (весь, 19)
+        Year := GetYear(CurrentDate);
+      end
+  end;
+  DateFrom := EncodeDate(Year, Prd[0], Prd[1]);
+  DateTo := EncodeDate(Year, Prd[2], Prd[3]);
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+procedure SetDatesOnOpenForm(var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+var
+  Date : DateTime;
+  Prd : Integer;
+  Last : Boolean;
+begin
+  Prd := VarAsInt(GetOptions.GetServerPrm(DatesForReport));
+  Last := Prd div 4 <> 0;
+  Prd := Prd mod 4 + 3;
+  Date := CurrentDate;
+  if Last then
+    Date := RoundDate(Date, Prd, False) - 1;
+  DateFrom := RoundDate(Date, Prd, False);
+  DateTo := RoundDate(Date, Prd, True) - 1;
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+procedure SetOneDates(Sender : TObject; var DateFrom, DateTo : DateTime);
+var
+  Date : DateTime;
+begin
+  try
+    Date := StrToDate((Sender as TO4Edit).Text);
+    if Date<0 then Date := 0;
+    case (Sender as TO4Edit).Tag of
+      0 : 
+        DateFrom := Date;
+      1 : 
+        DateTo := Date;
+    end;
+  except
+  end;
+end;
+
+//установка периода дл€ бухгалтерии
+
+procedure SetMenuDatesBuh(Sender : TObject; var DateFrom, DateTo : DateTime;
+  eDateFrom, eDateTo : TO4Edit);
+var
+  Prd : Variant;
+  Year : Integer;
+begin
+  Year := GetYear(DateTo);
+  case (Sender as TO4MenuItem).Tag of
+    1 : 
+      Prd := ArrayOf(1, 1, 3, 31); //первый квартал
+    2 : 
+      Prd := ArrayOf(4, 1, 6, 30); //второй квартал
+    3 : 
+      Prd := ArrayOf(7, 1, 9, 30); //третий квартал
+    4 : 
+      Prd := ArrayOf(10, 1, 12, 31); //четвертый квартал
+    5 : 
+      Prd := ArrayOf(1, 1, 6, 30); //первое полугодие
+    6 : 
+      Prd := ArrayOf(7, 1, 12, 31); //второе полугодие
+    7 : 
+      Prd := ArrayOf(1, 1, 9, 30); //9 мес€цев
+    else
+      begin
+        Prd := ArrayOf(1, 1, 12, 31); //текущий год (весь, 8)
+        Year := GetYear(CurrentDate);
+      end;
+  end;
+  DateFrom := EncodeDate(Year, Prd[0], Prd[1]);
+  DateTo := EncodeDate(Year, Prd[2], Prd[3]);
+  eDateFrom.Text := DateToStr(DateFrom);
+  eDateTo.Text := DateToStr(DateTo);
+end;
+
+//разное
+
+procedure GetStore(Stores : ICValueList; var Store : ICDictionary);
+begin
+  if Stores.ValidIndex(Stores.CurIndex) and (Stores.CurIndex <> 0) then
+    Store := Stores.GetValue(Stores.CurIndex)
+  else
+    nil(Store);
+end;
+
+function CheckCtg : string;
+begin
+  Result := Trans('” вас выбран режим ѕросмотр с учетом категорий.') + #13#10 +
+    Trans('ќтметьте категории дл€ анализа.');
+end;
+
+procedure DeleteColumnsByCondition(TblCurrent : ICValueTable; CondFieldName, Condition : string);
+var
+  SortedColumns : string;
+  TmpTbl : ICValueTable;
+begin
+  TmpTbl := CreateObject('“аблица«начений');
+  TblCurrent.CopyColumnsTo(TmpTbl);
+  TmpTbl.Open;
+  SortedColumns := TblCurrent.SortedColumns;
+  TblCurrent.SortBy('');
+  try
+    TblCurrent.DoCalculation(CondFieldName, Condition);
+    TblCurrent.SortBy(CondFieldName);
+    TblCurrent.SetRange(0, 0);
+    TblCurrent.AppendTo('', TmpTbl);
+    TblCurrent.CancelRange;
+    TblCurrent.Clear;
+    TmpTbl.AppendTo('', TblCurrent);
+    TmpTbl.Clear;
+  finally
+    TblCurrent.SortBy(SortedColumns);
+  end;
+end;
+
+procedure UnuseTableAndClear(TblPassed : ICValueTable);
+begin
+  TblPassed.UseDataSource(0);
+  SaveSortingForTables(ArrayOf(TblPassed));
+  TblPassed.Clear;
+end;
+
+procedure UnuseTablesAndClear(arrTables : Variant);
+var
+  i : Integer;
+begin
+  for i := ArrayLow(arrTables) to ArrayHigh(arrTables) do
+    UnuseTableAndClear(arrTables[i]);
+end;
+
+procedure UseTableAgain(TblPassed : ICValueTable; ControlID : Variant = 0;
+  FftColsList : string = ''; CopyFromServer : Boolean = True);
+begin
+  if CopyFromServer then
+    try
+      TblPassed.CopyDataFromServer;
+    finally
+      TblPassed.SrvMean.Clear;
+      TblPassed.SrvMean.SortBy('');
+    end;
+  SetFormatStdColumnsList(TblPassed, FftColsList);
+  RestoreSortingForTables(ArrayOf(TblPassed));
+  TblPassed.UseDataSource(ControlID);
+end;
+
+procedure UseTablesAgain(arrTables : Variant);
+var
+  i : Integer;
+  OneTableDescr : Variant;
+begin
+  for i := ArrayLow(arrTables) to ArrayHigh(arrTables) do
+    begin
+      OneTableDescr := arrTables[i];
+      if IsArray(OneTableDescr) then
+        case ArrayHigh(OneTableDescr) of
+          0 : 
+            UseTableAgain(OneTableDescr[0]);
+          1 : 
+            UseTableAgain(OneTableDescr[0], OneTableDescr[1]);
+          2 : 
+            UseTableAgain(OneTableDescr[0], OneTableDescr[1], OneTableDescr[2]);
+          3 : 
+            UseTableAgain(OneTableDescr[0], OneTableDescr[1], OneTableDescr[2], OneTableDescr[3]);
+        end
+      else
+        UseTableAgain(OneTableDescr);
+    end;
+end;
+
+procedure SaveSortingForTables(arrTables : Variant);
+var
+  i : Integer;
+  RecID : Double;
+  TblFromArray : ICValueTable;
+begin
+  for i := ArrayLow(arrTables) to ArrayHigh(arrTables) do
+    begin
+      TblFromArray := arrTables[i];
+      if TblFromArray.IsFocused then
+        RecID := TblFromArray.RecID
+      else
+        RecID := 0;
+      TblFromArray.Params['SortedColumns'] := arrTables[i].SortedColumns;
+      TblFromArray.SortedColumns := '';
+      if RecID <> 0 then
+        TblFromArray.FindByRecID(RecID);
+    end;
+end;
+
+procedure RestoreSortingForTables(arrTables : Variant);
+var
+  i : Integer;
+begin
+  for i := ArrayLow(arrTables) to ArrayHigh(arrTables) do
+    arrTables[i].SortedColumns := arrTables[i].Params['SortedColumns'];
+end;
+
+procedure AddColumnsToSorted(Tbl : ICValueTable; AddCols : string);
+begin
+  if VarAsStr(Tbl.Params['SortedColumns']) = '' then
+    Tbl.Params['SortedColumns'] := AddCols
+  else
+    Tbl.Params['SortedColumns'] := AddCols + ';' + VarAsStr(Tbl.Params['SortedColumns']);
+end;
+
+procedure RemoveColumnsFromSorted(Tbl : ICValueTable; RemColCount : Integer;
+  RemoveFromBegin : Boolean = True);
+var
+  AllCount, Pos : Integer;
+  Cols : string;
+begin
+  if VarAsStr(Tbl.Params['SortedColumns']) = '' then
+    exit;
+  AllCount := WordCount(Tbl.Params['SortedColumns'], ';');
+  if (AllCount <= RemColCount) then
+    begin
+      Tbl.Params['SortedColumns'] := '';
+      exit;
+    end;
+  Pos := 0;
+  if RemoveFromBegin then
+    begin
+      for AllCount := 1 to RemColCount do
+        Pos := Pos + StrLength(ExtractWord(AllCount, Tbl.Params['SortedColumns'], ';')) + 1;
+      Cols := StrCopy(Tbl.Params['SortedColumns'], Pos + 1, StrLength(Tbl.Params['SortedColumns']));
+    end
+  else
+    begin
+      for AllCount := WordCount(Tbl.Params['SortedColumns'], ';') downto WordCount(Tbl.Params['SortedColumns'], ';') - RemColCount + 1 do
+        Pos := Pos + StrLength(ExtractWord(AllCount, Tbl.Params['SortedColumns'], ';')) + 1;
+      Cols := StrCopy(Tbl.Params['SortedColumns'], 1, StrLength(Tbl.Params['SortedColumns']) - Pos);
+    end;
+  Tbl.Params['SortedColumns'] := Cols;
+end;
+
+procedure SaveTablePosition(TblCurrent : ICValueTable);
+begin
+  if TblCurrent.IsFocused then
+    TblCurrent.Params['RecID'] := TblCurrent.RecID
+  else
+    TblCurrent.Params['RecID'] := 0;
+end;
+
+procedure RestoreTablePosition(TblCurrent : ICValueTable);
+begin
+  if VarAsFloat(TblCurrent.Params['RecID']) <> 0 then
+    begin
+      TblCurrent.FindByRecID(TblCurrent.Params['RecID']);
+      TblCurrent.Params['RecID'] := 0;
+    end;
+end;
+
+function CheckState(clbState : TO4CheckListBox) : string;
+var
+  i : Integer;
+begin
+  Result := '';
+  for i := 0 to clbState.Items.Count - 1 do
+    if clbState.Checked[i] then
+      Result := Result + ';' + IntToStr(i);
+  StrDelete(Result, 1, 1);
+end;
+
+end.

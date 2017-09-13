@@ -1,0 +1,62 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+implementation
+var MasterProc : ICProcessing;
+    Constants : IC4VPAConst;
+    Good, CheckGood : ICDictionary;
+procedure miBarCode_Click(Sender: TObject);
+begin  
+  edBarCode.Text := '';
+  edBarCode.SetFocus;
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  if not IsObjFocused(Params) then
+    raise('Неверно задан параметр!');
+  Good := Params;
+  MasterProc := Mean;
+  Constants :=  GetConstants;
+  if VarAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров) then
+    raise('Используеться Мульти Штрих Коды Для Товаров!');
+  CheckGood := CreateObject('Справочники.Товары');
+  lbGoodName.Caption := '('+IntToStr(Good.Код) + ') - '+  Good.NameField;  
+  edBarCode.Text :=  VarAsStr(Good.ШтрихКод);
+end;
+
+procedure btOk_Click(Sender: TObject);
+var Accept : boolean;
+begin     
+  CheckGood.SetFieldFilter('ШтрихКод','=',edBarCode.Text,'','',Null);
+  CheckGood.Select;
+  Accept := true;
+  While CheckGood.SelectNext do
+    if not IsObjEQ(CheckGood, Good, false) then
+      begin
+        Accept := false;
+        break;
+      end;
+  if Accept then
+    begin
+      Good.Edit;
+      Good.ШтрихКод := edBarCode.Text;
+      Good.Post;
+      Good.ApplyUpdates;
+      Form.ModalResult := mrOK;
+      Form.Close;
+    end
+  else
+    ShowMessage('Значение ШтрихКода не уникально!'+#13+'Товар "'+CheckGood.NameField+'" имеет такой же ШтрихКод');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+lbGoodName:TO4Label
+Label2:TO4Label
+edBarCode:TO4Edit
+btOk:TO4Button
+btExit:TO4Button
+PopupMenu1:TO4PopupMenu
+miBarCode:TO4MenuItem

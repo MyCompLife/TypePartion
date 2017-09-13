@@ -1,0 +1,80 @@
+interface
+
+uses
+  System, DispIntf, РаботаСПеременными, РаботаСОбъектами, РаботаСКомпонентамиVCL,
+  РаботаСТаблицамиЗначений;
+
+implementation
+
+var
+  PrcCurrent : ICProcessing;
+  LstSelected, LstMean : ICValueList;
+  DicMean : ICDictionary;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+var 
+  i : Integer;
+begin
+  PrcCurrent := Mean;
+  DicMean := CreateObject(PrcCurrent.Params['MeanID']);
+  LstMean := CreateObject('ValueList');
+  LstSelected := CreateObject('ValueList');
+  i := 0;
+  DicMean.Select;
+  while DicMean.SelectNext do
+    begin
+      inc(i);
+      LstMean.AddValue(IntToStr(i), DicMean);
+      chlbList.Items.Add(DicMean.NameField); // неправильно
+      chlbList.Checked[i - 1] := True;
+    end;
+  //LstMean.SortByValue(True);
+end;
+
+procedure Form_ExecProc(Self, Caller : Variant; ProcID : string; InParams : Variant; var OutParams : Variant);
+var
+  i : Integer;
+begin
+  case ProcID of
+    'GetSelectedMeans' :
+      begin
+        LstSelected.SrvMean.Clear;
+        for i := 0 to LstMean.Count - 1 do
+          if chlbList.Checked[i] then
+            LstSelected.AddValue(IntToStr(i), LstMean.GetValue(i));
+        LstSelected.CopyDataToServer;
+        LstSelected.Clear;
+        OutParams := LstSelected.SrvMean;
+      end;
+    'FreeSelectedMeans' : 
+      LstSelected.SrvMean.Clear;
+  end;
+end;
+
+procedure Form_Show(Sender : TObject);
+begin
+  Form.Width := Form.Parent.Parent.Width;
+end;
+
+procedure miSelectAll_Click(Sender : TObject);  
+var
+  i : Integer;
+begin
+  for i := 0 to LstMean.Count - 1 do
+    chlbList.Checked[i] := True;
+end;
+
+procedure miUnselectAll_Click(Sender : TObject);
+var
+  i : Integer;
+begin
+  for i := 0 to LstMean.Count - 1 do
+    chlbList.Checked[i] := False;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+chlbList:TO4CheckListBox
+pmSelection:TO4PopupMenu
+miSelectAll:TO4MenuItem
+miUnselectAll:TO4MenuItem

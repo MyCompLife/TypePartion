@@ -1,0 +1,175 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс;
+
+implementation
+
+const
+  wrnDeleteRecord = 'Данная запись, возможно, используется в других понятиях. Удалить?';
+  errRecordDeletedByAnotherUser = 'Данная запись была удалена другим пользователем!';
+
+var
+  TblCollections : ICValueTable;
+  ColCurrent : ICCollection;
+  V : ICProcessing;
+  TabNumber : Integer;
+
+procedure TVSUnitNames_VPAAfterScroll(Sender : TObject);
+begin
+  pmiSort.Enabled := TblCollections.IsFocused;
+  pmiEdit.Enabled := TblCollections.IsFocused;
+  tbEdit.Enabled := TblCollections.IsFocused;
+  pmiDelete.Enabled := TblCollections.IsFocused;
+  tbDelete.Enabled := TblCollections.IsFocused;
+end;
+
+procedure EmulativeSort; // эмуляция сортировки
+var
+  RecID : Double;
+begin
+  if TblCollections.IsFocused then
+    RecID := TblCollections.RecID;
+  if miSortByComment.ImageIndex = 224 then
+    TblCollections.SortBy('Сортировка')
+  else
+    TblCollections.SortBy('-Сортировка');
+  TblCollections.FindByRecID(RecID);
+end;
+
+procedure FillTable(TabIndex : Integer);
+begin
+  case TabIndex of
+    0 : 
+      ColCurrent := CreateObject('Коллекции.ОПФ');
+    1 : 
+      ColCurrent := CreateObject('Коллекции.ТипАдреса');
+    2 : 
+      ColCurrent := CreateObject('Коллекции.ТипТелефона');
+    3 : 
+      ColCurrent := CreateObject('Коллекции.ТипОбразования');
+    4 : 
+      ColCurrent := CreateObject('Коллекции.ТипЛичДокумента');
+    5 : 
+      ColCurrent := CreateObject('Коллекции.Должности');
+    6 : 
+      ColCurrent := CreateObject('Коллекции.ФормыРасчетов');
+    7 : 
+      ColCurrent := CreateObject('Коллекции.Упаковки');
+    8 : 
+      ColCurrent := CreateObject('Коллекции.ЕдИзм');
+    9 : 
+      ColCurrent := CreateObject('Коллекции.ОтметкиВНалоговыхНакладных');
+  end;
+  TblCollections.UseDataSource(0);
+  TblCollections.Clear;
+  ColCurrent.Select;
+  while ColCurrent.SelectNext do
+    begin
+      TblCollections.Append;
+      TblCollections.Название := ColCurrent.ValueSign;
+      TblCollections.Комментарий := ColCurrent.Value;
+      TblCollections.Комментарий := ColCurrent.Value;
+      TblCollections.Post;
+    end;
+  TblCollections.SortBy('Комментарий');
+  TblCollections.Select;
+  TblCollections.DoNumbering('Сортировка', 1, 1);
+  EmulativeSort;
+  TblCollections.UseDataSource(CtrlToVar(TVSUnitNames));
+  TblCollections.SelectFirst;
+end;
+
+procedure Form_Open(Sender : TObject);
+var
+  Nobody : TO4ToolBar; // заглушка на NIL
+begin
+  MakeInterface(tbrData, Nobody, dbgData);
+  TblCollections := CreateObject('ТаблицаЗначений');
+  TblCollections.AddColumn('Название', vtcString, 48);
+  TblCollections.AddColumn('Комментарий', vtcString, 128);
+  TblCollections.AddColumn('Сортировка', vtcInteger, 0);
+  TblCollections.Open;
+  tsCollections.TabIndex := 0;
+  FillTable(tsCollections.TabIndex);
+end;
+
+procedure pmiAdd_Click(Sender : TObject);
+begin
+  ColCurrent := CreateObject('Коллекции.' + ColCurrent.GetSign);
+  if V.Execute('ЭлементКоллекции', ArrayOf(ColCurrent, TblCollections)) = mrOK then
+    TVSUnitNames_VPAAfterScroll(Sender);
+end;
+
+procedure pmiEdit_Click(Sender : TObject);
+begin
+  if not TblCollections.IsFocused then
+    exit;
+  ColCurrent := CreateObject('Коллекции.' + ColCurrent.GetSign);
+  V.Execute('ЭлементКоллекции', ArrayOf(ColCurrent, TblCollections, 'Edit'));
+end;
+
+procedure pmiDelete_Click(Sender : TObject);
+begin
+  if not TblCollections.IsFocused or (MessageDlg(Trans(wrnDeleteRecord), mtWarning,
+    ArrayOf(mbYes, mbNo)) = mrNo) then
+    exit;
+  ColCurrent := CreateObject('Коллекции.' + ColCurrent.GetSign);
+  ColCurrent.Select;
+  if ColCurrent.FindByComment(TblCollections.Комментарий, False) then
+    begin
+      ColCurrent.Delete(TblCollections.Название);
+      ColCurrent.ApplyUpdates;
+      ColCurrent := CreateObject('Коллекции.' + ColCurrent.GetSign);
+      TblCollections.Delete;
+    end
+  else
+    raise(Trans(errRecordDeletedByAnotherUser));
+end;
+
+procedure pmiRefresh_Click(Sender : TObject);
+begin
+  FillTable(TabNumber);
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure tsCollections_Change(Sender : TObject; NewTab : Integer; var AllowChange : Boolean);
+begin
+  TabNumber := NewTab;
+  FillTable(NewTab);
+end;
+
+procedure miSortByComment_Click(Sender : TObject);
+begin
+  if miSortByComment.ImageIndex = 224 then
+    miSortByComment.ImageIndex := 225
+  else
+    miSortByComment.ImageIndex := 224;
+  EmulativeSort;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbParam:TO4ToolButton
+dbgData:TO4DBGrid
+tsCollections:TO4TabSet
+TVSUnitNames:TO4TableValueSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem10:TO4MenuItem
+pmiSort:TO4MenuItem
+miSortByComment:TO4MenuItem
+MenuItem5:TO4MenuItem
+pmiRefresh:TO4MenuItem

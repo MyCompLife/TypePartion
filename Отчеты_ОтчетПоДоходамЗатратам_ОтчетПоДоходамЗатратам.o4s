@@ -1,0 +1,583 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты, Reports;
+
+implementation
+
+var
+  AccsBalance : ISAccs;
+  BalanceAllTbl, BalanceTbl, TblFiltrAO1, TblFiltrAO2, FiltrAO, BalanceAllGTbl, BalanceGroupAO1, BalanceAllGroupAO1, tmpTbl : ISValueTable;
+  Currency, ArticleDic : ISDictionary;
+  DateFrom, DateTo, ПериодПоНеделям : DateTime;
+  AO1, AO2, CodeAO2, GroupAO1, cbAO3 : Boolean;
+  Period, InOutCome : integer;
+  AO2Text, FiltrAO1, FiltrAO2 : string;
+  LinkFiltrAO2 : Variant;
+
+function StringColumns(DocsTbl: ISValueTable): String;
+Var
+  ColumnCnt, NumBegColumn : Integer;
+begin
+  NumBegColumn := 0;
+  Result := '';
+  for ColumnCnt := NumBegColumn to DocsTbl.GetColumnCount-1 Do
+    begin
+      if Result = '' then
+        Result := DocsTbl.GetColumnName(ColumnCnt)
+      else
+        Result := Result + ';' + DocsTbl.GetColumnName(ColumnCnt);
+    end;
+end;
+
+procedure CreateSrvObjects; server;
+begin
+  AccsBalance := CreateObject('Аккумуляторы.ДоходыРасходы');
+  Currency := CreateObject('Справочники.Валюты');
+  ArticleDic := CreateObject('Справочники.СтатьиДоходовИЗатрат');
+end;
+
+procedure AddFieldPeriodDocDate(var BalanceAllTbl: ISValueTable; Period:integer);
+var ПериодПоНеделямС, ПериодПоНеделямПо : String;
+    ParamsToRoundDate : integer;
+begin
+  if Period = 1 then
+    begin
+      BalanceAllTbl.Период := DateToStr(BalanceAllTbl.DocDate);
+      BalanceAllTbl.DocDate := StrToDate(BalanceAllTbl.Период);
+    end
+  else
+    begin
+      if Period = 2 then ParamsToRoundDate := rdWeek;
+      if Period = 3 then ParamsToRoundDate := rdMonth;
+      if Period = 4 then ParamsToRoundDate := rdQuarter;
+      if Period = 5 then ParamsToRoundDate := rdYear;
+      if RoundDate(BalanceAllTbl.DocDate,ParamsToRoundDate,false) <= DateFrom then
+        ПериодПоНеделямС := DateToStr(DateFrom)
+      else
+        ПериодПоНеделямС := DateToStr(RoundDate(BalanceAllTbl.DocDate,ParamsToRoundDate,false));
+      if RoundDate(BalanceAllTbl.DocDate,ParamsToRoundDate,true)-1 >= DateTo then
+        ПериодПоНеделямПо := DateToStr(DateTo)
+      else
+        ПериодПоНеделямПо := DateToStr(RoundDate(BalanceAllTbl.DocDate,ParamsToRoundDate,true)-1);
+      BalanceAllTbl.Период := ПериодПоНеделямС +  '-' + ПериодПоНеделямПо;
+      BalanceAllTbl.DocDate := StrToDate(ПериодПоНеделямС);
+    end;
+end;
+
+procedure SetBalance(Doc:ISProcessing; var Accept : boolean);
+var
+  CurTbl, TblAO1, TblAO2, TblPeriod  : ISValueTable;
+  GroupFields, КодНазвание, ПериодПоНеделямС, ПериодПоНеделямПо, Delim : String;
+  SetListDetAO, TempList : ISValueList;
+  i, Count, Total : integer;
+  region: String;
+  docs: Isdocuments;
+  TempTbl: ISValueTable;
+  Analitic: Variant;
+begin
+  SetListDetAO := CreateObject('СписокЗначений');
+  CurTbl := CreateObject('ТаблицаЗначений');
+  CurTbl.Open;
+
+  TblAO1 := CreateObject('ТаблицаЗначений');
+  TblAO1.Close();
+  BalanceAllTbl.CopyColumnsTo(TblAO1);
+  TblAO1.Open();
+  TblAO2 := CreateObject('ТаблицаЗначений');
+  TblAO2.Close();
+  BalanceAllTbl.CopyColumnsTo(TblAO2);
+  TblAO2.Open();
+  TblPeriod := CreateObject('ТаблицаЗначений');
+  TblPeriod.Close();
+  BalanceAllTbl.CopyColumnsTo(TblPeriod);
+  TblPeriod.Open();
+  BalanceGroupAO1 := CreateObject('ТаблицаЗначений');
+  BalanceGroupAO1.Close();
+  BalanceAllTbl.CopyColumnsTo(BalanceGroupAO1);
+  BalanceGroupAO1.Open();
+  BalanceAllGroupAO1 := CreateObject('ТаблицаЗначений');
+  BalanceAllGroupAO1.Close();
+  BalanceAllTbl.CopyColumnsTo(BalanceAllGroupAO1);
+  BalanceAllGroupAO1.Open();
+
+  AccsBalance.ClearFieldFilters();
+  AccsBalance.ClearFieldBuffers();
+  DateFrom := RoundDate(DateFrom, rdDay, False);
+  DateTo := RoundDate(DateTo, rdDay, True);
+  // отправка сообщения клиенту
+  Doc.NotifyClient('Отбор данных из аккумулятора', 1, 50);
+  if Doc.Terminated then exit;
+  Accept := True;
+  //
+  BalanceAllTbl.Clear();
+  //-------вытяжка данных из аккумулятора---------------------------------------
+  if cbAO3 then
+    GroupFields := 'Регион;'
+  else
+    GroupFields := '';
+  if AO2 then
+    begin
+      if AO2Text = 'Партнеры' then
+        GroupFields := GroupFields + 'Партнер=Аналитика2;'
+      else
+        GroupFields := GroupFields + 'ТоварУслуга=Аналитика2;';
+    end;
+  if Period <> -1 then
+    GroupFields := GroupFields + 'Document=Документ;';
+  AccsBalance.AppendGroupMotionToValueTable(DateFrom, DateTo, InOutCome,
+      GroupFields + 'MotionSign;Статья=Аналитика1;Сумма=СуммаВВал;СуммаГрн=Сумма;Валюта;Количество', -1, BalanceAllTbl);
+  //----------------------------------------------------------------------------
+  //------заполнение полей link и сумм------------------------------------------
+  BalanceAllTbl.DoGetLinks('DocDate=Документ.ДатаДокумента;Код=Аналитика1.Код;Статья=Аналитика1.Название');
+  BalanceAllTbl.DoCalculation('СуммаВВал', 'СуммаВВал*MotionSign');
+  BalanceAllTbl.DoCalculation('Количество', 'Количество*MotionSign');
+  BalanceAllTbl.GroupTo('Валюта','Курс', CurTbl);
+  CurTbl.Select;
+  while CurTbl.SelectNext do
+    begin                          
+      if not VarAsBool(CurTbl.@Валюта.IsFocused) then
+        continue;
+      CurTbl.Edit;
+      CurTbl.Курс := CurTbl.Валюта.GetTimedValue(GetConstants.UsedCurs, DateTo);
+      CurTbl.Post;
+      BalanceAllTbl.SortBy('Валюта');
+      BalanceAllTbl.SetRange(CurTbl.Валюта, CurTbl.Валюта);
+      BalanceAllTbl.Select;
+      while BalanceAllTbl.SelectNext do
+        begin
+          BalanceAllTbl.Edit;
+          BalanceAllTbl.Курс := CurTbl.Курс;
+          BalanceAllTbl.Post;
+        end;
+    end;
+  BalanceAllTbl.CancelRange;
+  BalanceAllTbl.DoCalculation('Сумма', 'СуммаВВал*Курс');
+
+//  BalanceAllTbl.DoCalculation('Сумма', 'Сумма*MotionSign');
+  //----------------------------------------------------------------------------
+//удаляем 0-вые позиции, добавлено 02.11.10, замедляет выполнение отчета
+  Doc.NotifyClient('Отбор статей', 2, 50);
+  BalanceAllTbl.SortBy('Статья');
+  BalanceAllTbl.SelectFirst;
+  while not BalanceAllTbl.EOF do
+    begin
+      if StrLength(BalanceAllTbl.Статья) > 0 then
+        break
+      else
+        BalanceAllTbl.Delete;
+  end;
+  BalanceAllTbl.SortBy('Аналитика1');
+  Count := 1;
+  Total := BalanceAllTbl.LineCount();
+  //BalanceAllTbl.DoGetLinks('Статья=Аналитика1.Название');
+  if AO2Text = 'Товары/Услуги' then
+    BalanceAllTbl.DoGetLinks('ТоварУслугаПартнер=Аналитика2.НазвТовара')
+  else
+    BalanceAllTbl.DoGetLinks('ТоварУслугаПартнер=Аналитика2.ПолноеНазвание');
+  BalanceAllTbl.DoCalculation('Курс','Сумма/СуммаВВал');
+  BalanceAllTbl.Select;
+  while BalanceAllTbl.SelectNext do
+    begin
+      BalanceAllTbl.Edit;
+      BalanceAllTbl.Статья := BalanceAllTbl.Код + ' ' + BalanceAllTbl.Аналитика1.Название;
+      if AO2 and VarAsBool(BalanceAllTbl.@Аналитика2.IsFocused) and (AO2Text = 'Товары/Услуги') and CodeAO2 and (BalanceAllTbl.Аналитика2.Код <> '') then
+        BalanceAllTbl.ТоварУслугаПартнер := BalanceAllTbl.Аналитика2.Код + ' - ' + BalanceAllTbl.Аналитика2.НазвТовара;
+      if AO2 and VarAsBool(BalanceAllTbl.@Аналитика2.IsFocused) and VarAsBool(BalanceAllTbl.Аналитика2.IsType('Документы')) then
+        BalanceAllTbl.ТоварУслугаПартнер := BalanceAllTbl.Аналитика2.GetSign +' №'+
+                          BalanceAllTbl.Аналитика2.GetNumber +' от '+ DateToStr(BalanceAllTbl.Аналитика2.GetDate);
+      ///-----------вызов процедуры заполнения полей "Период" и "DocDate"-------
+      AddFieldPeriodDocDate(BalanceAllTbl, Period);
+      ///-----------------------------------------------------------------------
+      BalanceAllTbl.Post;
+      // отправка сообщения клиенту
+      if Count mod 10 = 0 then begin
+        Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+        if Doc.Terminated then break;
+      end;
+      inc(Count);
+    end;
+  if Doc.Terminated then exit;
+  //-------группировка по статьям (если включено "отображать общие данные по статье")
+  if cbAO3 then
+    region := 'Регион;'
+  else
+    region := '';
+  if GroupAO1 then
+    begin
+      GroupFields := region; /// ;Курс
+      if AO1 then GroupFields := GroupFields + 'Аналитика1;Статья;';
+      if AO2 then GroupFields := GroupFields + 'Аналитика2;ТоварУслугаПартнер';
+      if Period <> -1 then
+        begin
+          if Period = 0 then
+            GroupFields := GroupFields + ';Документ'
+          else
+            GroupFields := GroupFields + ';Период;DocDate'
+        end;
+      BalanceAllTbl.GroupBy(GroupFields + ';Валюта','Количество;СуммаВВал;Сумма');
+      BalanceAllTbl.DoCalculation('Курс','Сумма/СуммаВВал');
+    end;
+  //---------------------------------------------------------------------------------
+  // отправка сообщения клиенту
+  Doc.NotifyClient('Отбор по фильтру', 3, 50);
+  if Doc.Terminated then exit;
+  Accept := True;
+  //
+  if FiltrAO1 <> '-Нет-' then
+    begin
+    //-----отбор по фильтру1 (с учетом активности фильтра2)---------------------
+      BalanceAllGTbl := CreateObject('ТаблицаЗначений');
+      BalanceAllTbl.CopyTo('',BalanceAllGTbl);
+      //--- если в фильтре выбрана статья, то нужно отобрать все подстатьи------
+      if StrCopy(FiltrAO1,StrPos('.',FiltrAO1)+1,1) = ' ' then
+        begin
+          FiltrAO := CreateObject('ТаблицаЗначений');
+          BalanceAllGTbl.CopyTo('',FiltrAO);
+          FiltrAO.GroupBy('Статья','');
+          FiltrAO.SortBy('Статья');
+          FiltrAO.Select;
+          //--------формирование списка подстатей по статье-фильтра-------------
+          while FiltrAO.SelectNext do
+            begin
+              if (FiltrAO.Статья <> '') and (FiltrAO.Статья <> '-Нет-') and (StrCopy(FiltrAO.Статья,1,3) = StrCopy(FiltrAO1,1,3)) then
+                SetListDetAO.AddValue(FiltrAO.Статья,FiltrAO.Статья);
+            end;
+          //--------------------------------------------------------------------
+          BalanceAllGTbl.SortBy('Статья;Аналитика2');
+          BalanceAllTbl.Clear;
+          FiltrAO.SortBy('Статья');
+          i := 0;
+          //---отбор записей с подстатьями по статье-фыльтру--------------------
+          while i <= SetListDetAO.Count-1 do
+            begin
+              BalanceAllGTbl.CancelRange;
+              if FiltrAO2 <> '-Нет-' then
+                BalanceAllGTbl.SetRange(ArrayOf(SetListDetAO.GetStr(i),LinkFiltrAO2),ArrayOf(SetListDetAO.GetStr(i),LinkFiltrAO2))
+              else
+                BalanceAllGTbl.SetRange(SetListDetAO.GetStr(i),SetListDetAO.GetStr(i));
+              BalanceAllGTbl.AppendTo('',BalanceAllTbl);
+              inc(i);
+            end;
+          //--------------------------------------------------------------------
+        end
+      //------------------------------------------------------------------------
+      else
+        begin
+          //----если в фыльтре1 указана подстатья-------------------------------
+          BalanceAllGTbl.SortBy('Статья;Аналитика2');
+          if FiltrAO2 <> '-Нет-' then
+            BalanceAllGTbl.SetRange(ArrayOf(FiltrAO1,LinkFiltrAO2),ArrayOf(FiltrAO1,LinkFiltrAO2))
+          else
+            BalanceAllGTbl.SetRange(FiltrAO1,FiltrAO1);
+          BalanceAllTbl.Clear;
+          BalanceAllGTbl.AppendTo('',BalanceAllTbl);
+          //--------------------------------------------------------------------
+        end;
+    end
+  else
+    begin
+      //-----отбор по фильтру2--------------------------------------------------
+      if FiltrAO2 <> '-Нет-' then
+        begin
+          BalanceAllGTbl := CreateObject('ТаблицаЗначений');
+          BalanceAllTbl.CopyTo('',BalanceAllGTbl);
+          BalanceAllGTbl.SortBy('Аналитика2');
+          BalanceAllGTbl.SetRange(LinkFiltrAO2,LinkFiltrAO2);
+          BalanceAllTbl.Clear;
+          BalanceAllGTbl.AppendTo('',BalanceAllTbl);
+        end;
+      //------------------------------------------------------------------------
+    end;
+//------------формирование таблицы значений для фильтра по Аналитике1-----------
+  FiltrAO := CreateObject('ТаблицаЗначений');
+  BalanceAllTbl.CopyTo('Статья;Аналитика1',FiltrAO);
+  FiltrAO.GroupBy('Статья;Аналитика1','');
+  TblFiltrAO1.SortBy('Аналитика1');
+  // заполнение поля Статья  -  код + название
+  FiltrAO.Select;
+  while FiltrAO.SelectNext do
+    begin
+      if ArticleDic.FindByField('Код',StrCopy(FiltrAO.Статья,1,3),false) then
+        begin
+          BalanceAllTbl.SortBy('Аналитика1');
+          if not(BalanceAllTbl.Find(ArticleDic)) and not(TblFiltrAO1.Find(ArticleDic)) then // вторая проверка нужна на случай если счет уже добавлен
+            begin
+              TblFiltrAO1.Append;
+              TblFiltrAO1.Статья := ArticleDic.Код + ' ' + ArticleDic.Название;
+              TblFiltrAO1.Аналитика1 := ArticleDic;
+              TblFiltrAO1.Post;
+            end;
+        end;
+    end;
+  FiltrAO.AppendTo('Статья',TblFiltrAO1);
+  TblFiltrAO1.SortBy('Статья');
+//------------------------------------------------------------------------------
+  //-----создание таблицы с данными для фильтра2---------------------------------
+  BalanceAllTbl.AppendTo('Аналитика2',TblFiltrAO2);
+  TblFiltrAO2.GroupBy('Аналитика2','');
+  if AO2Text = 'Товары/Услуги' then
+    TblFiltrAO2.DoGetLinks('Код=Аналитика2.Код');
+  //----------------------------------------------------------------------------
+  //----заполнение переменной "GroupFields" для групировки записей с основной таблицы
+  //    в дополнительные "TblAO1" и "TblAO2" и создание етих же таблиц---------------
+  GroupFields := region;// ;Курс
+  if AO1 then
+    begin
+      GroupFields := GroupFields + 'Аналитика1;Статья';
+      BalanceAllTbl.DoCalculation('Курс','Сумма/СуммаВВал');
+      BalanceAllTbl.AppendTo('',TblAO1);
+      TblAO1.GroupBy(region + 'Аналитика1;Статья;Валюта','Курс;Сумма;СуммаВВал;Количество');
+      TblAO1.DoCalculation('Курс','Сумма/СуммаВВал');
+      TblAO1.SortBy('Аналитика1;Статья');
+    end;
+  if AO2 then
+    begin
+      if AO1 then GroupFields := GroupFields +';';
+      GroupFields := GroupFields + 'Аналитика2;ТоварУслугаПартнер';
+      BalanceAllTbl.AppendTo('',TblAO2);
+      TblAO2.GroupBy(GroupFields + ';Валюта' ,'Курс;Сумма;СуммаВВал;Количество');
+      TblAO2.DoCalculation('Курс','Сумма/СуммаВВал');
+      TblAO2.SortBy(region + 'Аналитика1;Валюта;Аналитика2;Статья;ТоварУслугаПартнер');
+    end;
+  //---------------------------------------------------------------------------------
+  //---создание дополнительной таблицы сгрупированой по периодам----------------
+  if Period <> -1 then
+    begin
+      if Period = 0 then
+        GroupFields := GroupFields + ';Документ'
+      else
+        GroupFields := GroupFields + ';Период;DocDate'
+    end;
+    BalanceAllTbl.GroupTo(GroupFields + ';Валюта','Курс;Сумма;СуммаВВал;Количество',TblPeriod);
+    BalanceAllTbl.DoCalculation('Курс','Сумма/СуммаВВал');
+    TblPeriod.DoCalculation('Курс','Сумма/СуммаВВал');
+  //----------------------------------------------------------------------------
+  //----заполнение основной таблицы "BalanceTbl"--------------------------------
+  BalanceAllTbl.SortBy(GroupFields);
+  //----если отмечена Аналитика1------------------------------------------------  
+  tmpTbl.Append;
+  tmpTbl.Сумма := TblAO1.Total('Сумма');
+  tmpTbl.Post;
+  if AO1 then
+    begin
+      Count := 1;
+      Total := TblAO1.LineCount();    
+      TempList := CreateObject('ValueList');
+      TblAO1.GroupToList('Аналитика1',TempList);
+      for i := 0 to TempList.Count-1 do
+        begin
+          TblAO1.SetRange(TempList.GetValue(i),TempList.GetValue(i));
+          TblAO1.Select;
+          TblAO1.SelectFirst;
+          BalanceTbl.Append;
+          BalanceTbl.AssignFields(StringColumns(TblAO1),TblAO1);
+          BalanceTbl.Сумма := TblAO1.Total('Сумма');
+          BalanceTbl.Валюта := '';
+          BalanceTbl.Курс := null;
+          BalanceTbl.СуммаВВал := null;
+          BalanceTbl.Post; 
+          TblAO1.Select;
+          while TblAO1.SelectNext do
+            begin                                       
+              if not AO2 and not (Period <> -1) then
+                begin
+                  //----добавление записи с осн. данными по статье----------------------
+                  BalanceTbl.Append;
+                  BalanceTbl.AssignFields(StringColumns(TblAO1),TblAO1);
+                  BalanceTbl.Статья := '';
+                  BalanceTbl.Аналитика1 := '';
+                  BalanceTbl.Post;
+                end;
+              //--------------------------------------------------------------------
+              //-----если отмечена Аналитика2---------------------------------------
+              if AO2 then
+                begin
+                  if region = '' then
+                    TblAO2.SetRange(ArrayOf(TblAO1.Аналитика1,TblAO1.Валюта),ArrayOf(TblAO1.Аналитика1,TblAO1.Валюта))
+                  else
+                    TblAO2.SetRange(ArrayOf(TblAO1.Регион,TblAO1.Аналитика1,TblAO1.Валюта),ArrayOf(TblAO1.Регион,TblAO1.Аналитика1,TblAO1.Валюта));
+                  TblAO2.Select;
+                  while TblAO2.SelectNext do
+                    begin
+                      BalanceTbl.Append;
+                      BalanceTbl.AssignFields(StringColumns(TblAO2),TblAO2);
+                      BalanceTbl.Статья := '';
+                      BalanceTbl.Аналитика1 := '';
+                      BalanceTbl.Post;
+                      if Period <> -1 then
+                        begin
+                          //-----если отмечен период--------------------------------
+                          if Period = 0 then
+                            TblPeriod.SortBy(region + 'Аналитика1;Аналитика2;Валюта;Документ')// Статья;ТоварУслугаПартнер
+                          else
+                            TblPeriod.SortBy(region + 'Аналитика1;Аналитика2;Валюта;DocDate;Период');
+                          if region = '' then
+                            TblPeriod.SetRange(ArrayOf(TblAO2.Аналитика1,TblAO2.Аналитика2,TblAO2.Валюта),ArrayOf(TblAO2.Аналитика1,TblAO2.Аналитика2,TblAO2.Валюта))
+                          else
+                            TblPeriod.SetRange(ArrayOf(TblAO2.Регион,TblAO2.Аналитика1,TblAO2.Аналитика2,TblAO2.Валюта),ArrayOf(TblAO2.Регион,TblAO2.Аналитика1,TblAO2.Аналитика2,TblAO2.Валюта));
+                          TblPeriod.Select;
+                          while TblPeriod.SelectNext do
+                            begin
+                              BalanceTbl.Append;
+                              BalanceTbl.AssignFields(StringColumns(TblPeriod),TblPeriod);
+                              BalanceTbl.Статья := '';
+                              BalanceTbl.Аналитика1 := '';
+                              BalanceTbl.Аналитика2 := '';
+                              BalanceTbl.ТоварУслугаПартнер := '';
+                              BalanceTbl.Post;
+                            end;
+                          //--------------------------------------------------------
+                        end;
+                    end;
+                  // отправка сообщения клиенту
+                  if Count mod 10 = 0 then begin
+                      Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+                      if Doc.Terminated then break;
+                    end;
+                  inc(Count);
+                end
+              //--------------------------------------------------------------------
+              else  //    по статьи и по периоду
+                begin
+                  if Period <> -1 then
+                    begin
+                      //-----если не отмечена Аналитика2 и отмечен период------------
+                      if Period = 0 then
+                        TblPeriod.SortBy(region + 'Аналитика1;Валюта;Статья;Документ')
+                      else
+                        TblPeriod.SortBy(region + 'Аналитика1;Валюта;Статья;DocDate;Период');
+                      if region = '' then
+                        TblPeriod.SetRange(ArrayOf(TblAO1.Аналитика1),ArrayOf(TblAO1.Аналитика1))
+                      else
+                        TblPeriod.SetRange(ArrayOf(TblAO1.Регион, TblAO1.Аналитика1),ArrayOf(TblAO1.Регион, TblAO1.Аналитика1));
+                      TblPeriod.Select;
+                      while TblPeriod.SelectNext do
+                        begin
+                          BalanceTbl.Append;
+                          BalanceTbl.AssignFields(StringColumns(TblPeriod),TblPeriod);
+                          BalanceTbl.Статья := '';
+                          BalanceTbl.Аналитика1 := '';
+                          BalanceTbl.Post;
+                        end;
+                      //------------------------------------------------------------
+                    end;
+                end;
+            end;
+          if Doc.Terminated then exit;    
+        end;
+    end;
+  {
+  //----------------------------------------------------------------------------
+  else
+  //----если Аналитика1 не отмечена---------------------------------------------
+    begin
+      //-----если отмечена Аналитика2-------------------------------------------
+      if AO2 then
+        begin
+          Count := 1;
+          Total := TblAO2.LineCount();
+          TblAO2.Select;
+          while TblAO2.SelectNext do
+            begin
+              BalanceTbl.Append;
+              BalanceTbl.AssignFields(StringColumns(TblAO2),TblAO2);
+              BalanceTbl.Статья := '';
+              BalanceTbl.Post;
+              if Period <> -1 then
+                begin
+                  //------если отмечен период-----------------------------------
+                  if Period = 0 then
+                    TblPeriod.SortBy(region+'Аналитика2;Валюта;Документ') // ТоварУслугаПартнер
+                  else
+                    TblPeriod.SortBy(region+'Аналитика2;Валюта;DocDate;Период');
+                  if region = '' then
+                    TblPeriod.SetRange(ArrayOf(TblAO2.Аналитика2,TblAO2.Валюта),ArrayOf(TblAO2.Аналитика2,TblAO2.Валюта))
+                  else
+                    TblPeriod.SetRange(ArrayOf(TblAO2.Регион,TblAO2.Аналитика2,TblAO2.Валюта),ArrayOf(TblAO2.Регион,TblAO2.Аналитика2,TblAO2.Валюта));
+                  TblPeriod.Select;
+                  while TblPeriod.SelectNext do
+                    begin
+                      BalanceTbl.Append;
+                      BalanceTbl.AssignFields(StringColumns(TblPeriod),TblPeriod);
+                      BalanceTbl.Статья := '';
+                      BalanceTbl.Аналитика1 := '';
+                      BalanceTbl.Аналитика2 := '';
+                      BalanceTbl.ТоварУслугаПартнер := '';
+                      BalanceTbl.Post;
+                    end;
+                  //------------------------------------------------------------
+                end;
+              // отправка сообщения клиенту
+              if Count mod 10 = 0 then begin
+                Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+                if Doc.Terminated then break;
+              end;
+              inc(Count);
+            end;
+          if Doc.Terminated then exit;
+        end
+      //------------------------------------------------------------------------
+      else
+        begin
+          //----если обе аналитики не отмечены----------------------------------
+          if Period <> -1 then
+          begin
+            if Period = 0 then
+              TblPeriod.SortBy(region+'Документ')
+            else
+              TblPeriod.SortBy(region+'DocDate;Период');
+          end;
+          Count := 1;
+          Total := TblPeriod.LineCount();
+          TblPeriod.Select;
+          while TblPeriod.SelectNext do
+            begin
+              BalanceTbl.Append;
+              BalanceTbl.AssignFields(StringColumns(TblPeriod),TblPeriod);
+              BalanceTbl.Post;
+              // отправка сообщения клиенту
+              if Count mod 10 = 0 then begin
+                Doc.NotifyClient(msgProceed + IntToStr(Count)+':'+IntToStr(Total), Count, Total);
+                if Doc.Terminated then break;
+              end;
+              inc(Count);
+            end;
+          //-------------------------------------------------------------------
+          if Doc.Terminated then exit;
+        end;
+        if Doc.Terminated then exit;
+    end;
+  //----------------------------------------------------------------------------
+  }
+  // отправка сообщения клиенту
+  Doc.NotifyClient('Формирование отчета завершено.', 1, 50);
+  if Doc.Terminated then exit;
+  Accept := True;
+end;
+
+function GetRunReportEP(BalanceAllTbls : ISValueTable; BalanceTbls : ISValueTable; DateFroms, DateTos : DateTime; AO1s, AO2s : boolean; edAO2s : string;    Periods,  InOutComes : integer; TblFiltrAO1s, TblFiltrAO2s : ISValueTable;  FiltrAO1s, FiltrAO2s : string; LinkFiltrAO2s : Variant; CodeAO2s, Groups, cbAO3S : boolean; tmpTbls: ISValueTable) : Variant; server;
+begin
+  BalanceAllTbl := BalanceAllTbls;
+  BalanceTbl := BalanceTbls;
+  DateFrom := DateFroms;
+  DateTo := DateTos;
+  ПериодПоНеделям := DateTos;
+  AO1 := AO1s;
+  AO2 := AO2s;
+  AO2Text := edAO2s;
+  Period := Periods;
+  InOutCome := InOutComes;
+  TblFiltrAO1 := TblFiltrAO1s;
+  TblFiltrAO2 := TblFiltrAO2s;
+  FiltrAO1 := FiltrAO1s;
+  FiltrAO2 := FiltrAO2s;
+  LinkFiltrAO2 := LinkFiltrAO2s;
+  CodeAO2 := CodeAO2s;
+  GroupAO1 := Groups;
+  cbAO3 := cbAO3S;
+  tmpTbl := tmpTbls;
+  Result := EntryPoint(SetBalance);
+end;
+
+end.

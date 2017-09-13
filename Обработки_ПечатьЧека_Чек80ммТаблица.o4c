@@ -1,0 +1,388 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV  : ICWriNums;
+  Tbl, ResultTbl, PayDocsTbl  : ICValueTable;
+  Options : ICOptions;
+  Constants : IC4VPAConst;
+  PayCard, PayCash, SumReturn : Decimal;
+  IsWorkPlace : Boolean;
+
+  ShowCurrencyTbl, ShowDiscountTbl, ShowCurencyHed,
+  ShowLogo, ShowFirmName, ShowAdress, ShowPhone, ShowSyte, ShowEmail,
+  IsTestPrint, IsMarketObjectParams, GroupPositionChek, UseTypeGoods : Boolean;
+
+procedure Form_BeginPrint(PrintForm:TO4PrintForm);
+Var
+  InParams : Variant;
+begin
+  IsWorkPlace := False;
+  InParams := Form.GetParams;
+  if IsArray(InParams) then
+    begin
+      MasterData := Form.GetParams[0];
+      PayCash := Form.GetParams[1];
+      PayCard := Form.GetParams[2];
+      SumReturn := Form.GetParams[3];
+      IsWorkPlace := True;
+    end
+  else
+    MasterData := Form.GetParams;
+
+  Constants := GetConstants;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+  Tbl.AddColumn('Товар',vtcLink,0);
+  Tbl.AddColumn('ЦенаБезСкидкиНадбавки',vtcFFT,7);
+  Tbl.AddColumn('ПроцентСкидкиНадбавки',vtcFFT,7);
+  Tbl.AddColumn('Цена',vtcFFT,7);
+  Tbl.AddColumn('Количество',vtcFFT,5);
+  Tbl.AddColumn('Код',vtcString,20);
+  Tbl.AddColumn('ЕдИзм',vtcLink,0);
+  Tbl.AddColumn('СуммаСтроки',vtcFFT,7);
+  Tbl.AddColumn('СуммаСтрокиБезСкидки',vtcFFT,7);
+  Tbl.AddColumn('СуммаСкидки',vtcFFT,7);
+  Tbl.Open;
+  ResultTbl := CreateObject('ТаблицаЗначений');
+  ResultTbl.AddColumn('NAME',vtcString,120);
+  ResultTbl.AddColumn('UnitName',vtcString,20);
+  ResultTbl.AddColumn('Count',vtcFFT,5);
+  ResultTbl.AddColumn('Price',vtcFFT,7);
+  ResultTbl.AddColumn('SummaStr',vtcFFT,7);
+  ResultTbl.AddColumn('IsDiscount',vtcBoolean,0);
+  ResultTbl.AddColumn('DrawBottom',vtcBoolean,0);
+  ResultTbl.Open;    
+
+  PayDocsTbl := CreateObject('ТаблицаЗначений');
+  PayDocsTbl.AddColumn('Документ',vtcString,64);
+  PayDocsTbl.AddColumn('СуммаВВалюте',vtcFFT,2);
+  PayDocsTbl.AddColumn('Валюта',vtcLink,0);
+  PayDocsTbl.AddColumn('Sort',vtcInteger,0);
+  PayDocsTbl.Open;
+
+  Options := GetOptions;
+  PrintForm.Page.LeftMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('LeftMargin Чек80ммТаблица')), 1);
+  PrintForm.Page.TopMargin := VarAsFloat(VarAsStr(Options.GetServerPrm('TopMargin Чек80ммТаблица')), 5);
+  if VarAsStr(Constants.ТекстПодвалаЧека)<>'' then
+    begin
+      lbFooter.Caption := VarAsStr(Constants.ТекстПодвалаЧека);
+      bndFooter2.Height := lbFooter.Height;
+    end
+ else
+   bndFooter2.Visible := False;
+
+  ShowCurrencyTbl := VarAsBool(Constants.ПечЧекВалютаТабл);
+  ShowDiscountTbl := VarAsBool(Constants.ПечЧекСкидкаТабл);
+
+  ShowLogo := VarAsBool(Constants.ПечЧекЛоготип);
+  ShowFirmName := VarAsBool(Constants.ПечЧекНазвание);
+  ShowAdress := VarAsBool(Constants.ПечЧекАдрес);
+  ShowPhone := VarAsBool(Constants.ПечЧекТелефон);
+  ShowSyte := VarAsBool(Constants.ПечЧекСайт);
+  ShowEmail := VarAsBool(Constants.ПечЧекEmail);
+  lbFiscal.Visible := VarAsBool(Constants.ПечЧекНефискальный);
+
+
+end;
+
+procedure Structure1_ROOT_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+var
+  GroupDic: ICDictionary;   
+  SummaDiscount : Decimal;
+begin   
+  Tbl.Clear;
+  MasterData.AppendLinesTo('Товар;ЦенаБезСкидкиНадбавки;ПроцентСкидкиНадбавки;Цена;Количество', Tbl);
+  Tbl.GroupBy('Товар;ЦенаБезСкидкиНадбавки;ПроцентСкидкиНадбавки;Цена', 'Количество');
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*Цена');
+  Tbl.DoCalculation('СуммаСтрокиБезСкидки', 'Количество*ЦенаБезСкидкиНадбавки');
+  Tbl.DoCalculation('СуммаСкидки', 'СуммаСтроки-СуммаСтрокиБезСкидки');
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  Tbl.SortBy('Товар');
+  Tbl.Select;
+  ResultTbl.Clear;
+  While Tbl.SelectNext do
+   begin
+     ResultTbl.Append;
+     ResultTbl.NAME := Tbl.Код + ' ' + Tbl.DefValue['Товар'];
+     ResultTbl.UnitName := Tbl.DefValue['ЕдИзм'];
+     ResultTbl.Count := Tbl.Количество;
+     ResultTbl.Price := Tbl.ЦенаБезСкидкиНадбавки;
+     ResultTbl.SummaStr := Tbl.СуммаСтрокиБезСкидки;
+     ResultTbl.IsDisCount := false;
+     if VarAsDec(Tbl.СуммаСкидки,0)<0 then
+       ResultTbl.DrawBottom := false
+     else   
+       begin
+         ResultTbl.DrawBottom := true; 
+         ResultTbl.Price := Tbl.Цена; 
+         ResultTbl.SummaStr := Tbl.СуммаСтроки;
+       end;
+     ResultTbl.Post;
+     if VarAsDec(Tbl.СуммаСкидки,0)<0 then
+       begin
+         ResultTbl.Append;
+         ResultTbl.NAME := 'Надано знижку '+DecToStr(AbsD(Tbl.ПроцентСкидкиНадбавки),2)+' %';
+         ResultTbl.UnitName := '';
+         ResultTbl.SummaStr := Tbl.СуммаСкидки;
+         ResultTbl.IsDisCount := true;
+         ResultTbl.DrawBottom := true;
+         ResultTbl.Post;
+       end;
+   end;
+  Tbl.Select;
+  ResultTbl.Select;
+
+  with Table do
+    begin
+     Value['NUMBER'] := MasterData.НомерДокумента;
+     Value['Respons'] := MasterData.Ответственный.ПолноеНазвание;
+     Value['Date'] := DateToStr(MasterData.ДатаДокумента);
+     Value['Time'] := TimeToStr(MasterData.ДатаДокумента);
+     Value['Summa'] := MasterData.Сумма;
+     SummaDiscount :=  Tbl.Total('СуммаСкидки');
+     Value['SummaDiscount'] := SummaDiscount;
+     if SummaDiscount >= 0 then
+       begin
+         Value['SummaWDiscount'] := MasterData.Сумма;
+         BandDiscount.Visible := false;
+       end
+     else
+       begin
+         Value['SummaWDiscount'] := Tbl.Total('СуммаСтрокиБезСкидки');
+         BandDiscount.Visible := true;
+       end;
+     MasterData.SetSrvToClientPos;
+     Value['PaySum'] := FormatFloat('0.00', server.CalcPaySum(MasterData.SrvMean));
+    end;
+ bcNumDoc.Text := '*01'+ AlignStr(VarAsStr(MasterData.NumID),6);
+end;
+
+procedure Structure1_ME_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  if VarAsStr(GetActiv(ADR, 'Город.Название', MYF)) <> '' then
+    Table.Value['ADDRESS'] := GetActiv(ADR, 'Город.Название', MYF) + ', ' + GetActiv(ADR, 'Адрес', MYF)
+  else
+    Table.Value['ADDRESS'] := GetActiv(ADR, 'Адрес', MYF);
+
+  if VarAsStr(GetActiv(TLF, 'КодГорода', MYF)) <> '' then
+    Table.Value['PHONE'] := '(' + GetActiv(TLF, 'КодГорода', MYF) + ') ' + GetActiv(TLF, 'Номер', MYF)
+  else
+    Table.Value['PHONE'] := GetActiv(TLF, 'Номер', MYF);
+  Table.Value['Site'] := MYF.Сайт;  
+  ShowFirmName := ShowFirmName and (VarAsStr(Table.Value['Name'])<>'');
+  ShowAdress := ShowAdress and (VarAsStr(Table.Value['ADDRESS'])<>'');
+  ShowPhone := ShowPhone and (VarAsStr(Table.Value['PHONE'])<>'');
+  ShowSyte := ShowSyte and (VarAsStr(Table.Value['Site'])<>'');
+  ShowLogo := ShowLogo and (VarAsStr(MYF.Логотип)<>'');
+
+  if ShowLogo then
+    Table.Value['LogoType'] :=  MYF.Логотип;
+
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table:TRBTable; Index,Count:Integer; var Accept:Boolean);
+var
+  GoodName: String;
+begin
+  Accept := ResultTbl.SelectNext();
+  if not Accept then Exit;
+  with Table do
+    begin
+      Value['NAME'] := ResultTbl.NAME;
+      Value['UnitName'] := ResultTbl.UnitName;
+      Value['Price'] := ResultTbl.Price;
+      Value['SummaStr'] := ResultTbl.SummaStr;
+//      if not VarAsBool(ResultTbl.IsDiscount,false) then
+//        Value['Count'] := DecToStr(ResultTbl.Count) + #13 + DecToStr(ResultTbl.Price,2);
+      Value['Count'] := DecToStr(ResultTbl.Count);
+    end;
+end;
+
+procedure dbndGoods_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+ if VarAsBool(ResultTbl.DrawBottom,false) then
+  begin
+   LabelName.Frame.DrawBottom := true;
+   LabelCount.Frame.DrawBottom := true;
+   LabelSummaStr.Frame.DrawBottom := true;
+  end
+ else
+  begin
+   LabelName.Frame.DrawBottom := false;
+   LabelCount.Frame.DrawBottom := false;
+   LabelSummaStr.Frame.DrawBottom := false;
+  end;     
+  
+  if VarAsBool(ResultTbl.IsDisCount,false) then   
+    begin
+      LabelName.Height := 20;
+      dbndGoods.Height := 19;
+    end;
+end;
+
+procedure dbLogo_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+  Accept := ShowLogo;
+end;
+
+procedure Structure1_Pays_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+ //Определение нужно ли печатать оплату документа
+ PayDocsTbl.Clear;
+ if IsWorkPlace then
+   begin
+     if PayCash<>0 then
+       begin
+         PayDocsTbl.Append;
+         PayDocsTbl.Документ := 'Готівка';
+         PayDocsTbl.СуммаВВалюте := PayCash;
+         PayDocsTbl.Sort := 1;
+         PayDocsTbl.Post;
+       end;
+     if PayCard<>0 then
+       begin
+         PayDocsTbl.Append;
+         PayDocsTbl.Документ := 'Платіж карткою';
+         PayDocsTbl.СуммаВВалюте := PayCard;
+         PayDocsTbl.Sort := 2;
+         PayDocsTbl.Post;
+       end;
+     if SumReturn<>0 then
+       begin
+         PayDocsTbl.Append;
+         PayDocsTbl.Документ := 'Решта';
+         PayDocsTbl.СуммаВВалюте := SumReturn;
+         PayDocsTbl.Sort := 3;
+         PayDocsTbl.Post;
+       end;
+     PayDocsTbl.SortBy('Sort');
+   end
+ else
+   begin
+     PayDocsTbl.CopyDataToServer;
+     MasterData.SetSrvToClientPos;
+     server.GetPaysTbl(MasterData.SrvMean, PayDocsTbl.SrvMean);
+     PayDocsTbl.CopyDataFromServer2;
+     PayDocsTbl.SortBy('СуммаВВалюте');
+   end;
+ PayDocsTbl.Select;
+ Accept := PayDocsTbl.LineCount>0;
+
+end;
+
+
+
+
+procedure Structure1_Pays_PayDet_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+   Accept := PayDocsTbl.SelectNext;
+   if not Accept then Exit;
+   with Table do
+     begin
+       Value['Summa'] := PayDocsTbl.СуммаВВалюте;
+       Case VarAsStr(PayDocsTbl.Документ) of
+         'Приход в кассу':
+                                    Value['DocName'] := 'Готівка';
+         'Приход на расчетный счет':
+                                    Value['DocName'] := 'Прихід на розрахунковий рахунок';
+         'Расход из кассы':
+                                    Value['DocName'] := 'Розхід з каси';
+         'Платеж с расчетного счета':
+                                    Value['DocName'] := 'Розхід з розрахункового рахунку';
+         'Приход по эквайрингу':
+                                    Value['DocName'] := 'Платіж карткою';
+         'Расход по эквайрингу':
+                                    Value['DocName'] := 'Повернення на картку';
+
+       else
+         Value['DocName'] := PayDocsTbl.Документ;
+       end;
+     end;
+
+end;
+       
+procedure dbFirmName_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+  Accept := ShowFirmName;
+end;
+
+procedure dbFirmAddress_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+  Accept := ShowAdress;
+end;
+
+procedure dbFirmPhone_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+  Accept := ShowPhone;
+end;
+
+procedure dbFirmSite_BeforePrint(Band: TRBCustomBand; var Accept: Boolean);
+begin
+  Accept := ShowSyte;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+dbLogo:TRBDetailBand
+Image1:TRBImage
+dbFirmName:TRBDetailBand
+Label23:TRBLabel
+dbFirmAddress:TRBDetailBand
+Label14:TRBLabel
+dbFirmPhone:TRBDetailBand
+Label6:TRBLabel
+dbFirmSite:TRBDetailBand
+Label7:TRBLabel
+BandDiscount:TRBBand
+Label15:TRBLabel
+Label17:TRBLabel
+Label18:TRBLabel
+Label19:TRBLabel
+bndHdDet:TRBBand
+Label27:TRBLabel
+Label29:TRBLabel
+Label31:TRBLabel
+Label5:TRBLabel
+Label8:TRBLabel
+dbndGoods:TRBDetailBand
+LabelName:TRBLabel
+LabelCount:TRBLabel
+LabelSummaStr:TRBLabel
+LabelUnit:TRBLabel
+LabelPrice:TRBLabel
+bndFtALL:TRBBand
+Label78:TRBLabel
+Label81:TRBLabel
+bndFooter1:TRBBand
+Label11:TRBLabel
+Label10:TRBLabel
+bndFooter2:TRBBand
+lbFooter:TRBLabel
+bndFooter:TRBBand
+Label1:TRBLabel
+Label84:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label9:TRBLabel
+Label12:TRBLabel
+bcNumDoc:TRBBarCode
+lbFiscal:TRBLabel
+bndPaysHed:TRBBand
+lbPayDocsHed:TRBLabel
+bndPaysDet:TRBDetailBand
+Label36:TRBLabel
+Label22:TRBLabel
+Structure1:TRBStructure

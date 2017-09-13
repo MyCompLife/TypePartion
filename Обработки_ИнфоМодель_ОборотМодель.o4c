@@ -1,0 +1,355 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, Расчеты, ConstNames, Reports;
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  Stores, GoodList : ICValueList;
+  S, UrPartner, ManPartner, Partner, Store, GoodDict : ICDictionary;
+  GoodsTbl, GoodsNewTbl, StoreTbl, StoreNewTbl : ICValueTable;
+  V : ICReport;
+  DateFrom, DateTo : DateTime;
+  Model : string;
+
+procedure SetGoodsTblColumnsFormat(GoodsTbl : ICValueTable);
+begin
+  SetFormatStdColumnsList(GoodsTbl, server.GetGoodLinksList);
+end;
+
+procedure SetGoodsTblColumns(GoodsTbl : ICValueTable; DoOpen : Boolean = True);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn('Код', lftString, 100);
+  GoodsTbl.AddColumn('ЕдИзм', lftLink, 0);
+  AddFFtColumnsList(GoodsTbl, server.GetGoodLinksList);
+  GoodsTbl.AddColumn('Товар', lftLink, 0);
+  GoodsTbl.AddColumn('Партия', lftFloat, 0);
+  GoodsTbl.AddColumn('Склад', lftLink, 0);   
+  GoodsTbl.AddColumn('Модель', lftString, 4);
+  if DoOpen then
+    GoodsTbl.Open();
+end;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+  Stores := CreateObject('СписокЗначений');
+  Store := CreateObject('Справочники.Склады');
+  S := CreateObject('Справочники.Склады');
+  Stores.AddValue(Trans('Все склады'), Null);
+  S.Select;
+  if S.FindByField('Активность', True, False) then
+    Stores.AddValue(S.Название, S);
+  S.Select;
+  while S.SelectNext do
+    if not S.Активность = True then
+      Stores.AddValue(S.Название, S); // или ('',S)
+  Stores.UseControl(CtrlToVar(eStores));
+  Stores.CurIndex := 0;
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  SetGoodsTblColumns(GoodsTbl, False);
+  // GoodsTbl.AddColumn('НазвТовара',vtcString,70);
+  // GoodsTbl.AddColumn('ЕдИзмТекст',vtcString,20);
+  GoodsTbl.Open;
+  SetGoodsTblColumnsFormat(GoodsTbl);
+  StoreTbl := CreateObject('ТаблицаЗначений');
+  GoodsTbl.CopyColumnsTo(StoreTbl);
+  StoreTbl.Open();
+  SetGoodsTblColumnsFormat(StoreTbl);
+  UrPartner := CreateObject('Справочники.ЮрПартнеры');
+  ManPartner := CreateObject('Справочники.ФизЛица');
+  //категории
+  GoodDict := CreateObject('Справочники.Товары');
+  GoodList := CreateObject('СписокЗначений');
+
+  GoodsNewTbl := CreateObject('ТаблицаЗначений');
+  GoodsNewTbl.Close();
+  GoodsNewTbl.AddColumn('Операция', lftString, 100);
+  GoodsNewTbl.AddColumn('Количество', lftFloat, 2);
+  GoodsNewTbl.AddColumn('Сумма', lftFloat, 2);
+  GoodsNewTbl.AddColumn('Склад', lftLink, 0);
+  GoodsNewTbl.Open();
+  StoreNewTbl := CreateObject('ТаблицаЗначений');
+  GoodsNewTbl.CopyColumnsTo(StoreNewTbl);
+  StoreNewTbl.Open();
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  tbXTools.Visible := GetUDASet('XTools');
+  CreateObjects;
+  server.CreateSrvObjects;
+  SetDatesOnOpenForm(DateFrom, DateTo, eDateFrom, eDateTo);
+  XGrid.AddSection('Hed');
+  XGrid1.AddSection('Hed1');
+end;
+
+procedure tbRun_Click(Sender : TObject);
+var
+  i, j, jj : Integer;
+begin
+  try
+    CursorVis := WaitCursorStart;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+    XGrid1.ClearAll;
+    XGrid1.AddSection('Hed1');
+    GetStore(Stores, Store);
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer;
+    StoreTbl.Clear;
+    StoreTbl.CopyDataToServer;
+    Model := eGoodModel.Text;
+    V.RunThreadProcess(server.GetRunReportEP(GoodsTbl.SrvMean, StoreTbl.SrvMean, GoodList.SrvMean,
+      Model, Store, VarAsBool(Options.GetServerPrm(ShowCodeUnitName)),
+      GoodDict.Params['UseLevel'], GoodDict.SrvMean,
+      DateFrom, DateTo, cbMoving.Checked),
+      ReportRunning);
+    GoodsTbl.CopyDataFromServer;
+    StoreTbl.CopyDataFromServer;
+    StoreTbl.Select;
+    i := 1;
+    GoodsNewTbl.Clear;
+    GoodsNewTbl.CopyDataToServer;
+    StoreNewTbl.Clear;
+    StoreNewTbl.CopyDataToServer;
+    GoodsTbl.SortBy('Склад;Товар;Код');
+    while StoreTbl.SelectNext do
+      begin
+          StoreNewTbl.Append;
+          StoreNewTbl.Операция := StoreTbl.Склад.Название;
+          StoreNewTbl.Склад := StoreTbl.Склад;
+          StoreNewTbl.Post;
+        //StoreTbl.AddToXGrid(CtrlToVar(XGrid), 'Store', '-', i, 1);
+        GoodsTbl.SetRange(StoreTbl.Склад, StoreTbl.Склад);
+       // GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Det', '-', 0, 0);
+        GoodsTbl.Select;
+        while GoodsTbl.SelectNext do
+          begin
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := 'На начало';
+            GoodsNewTbl.Количество := GoodsTbl.КолНач;
+            GoodsNewTbl.Сумма := GoodsTbl.СумНачВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := ' + Накладная прихода';
+            GoodsNewTbl.Количество := GoodsTbl.КолПрих;
+            GoodsNewTbl.Сумма := GoodsTbl.СумПрихВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := ' + Приход по вн.перемещению';
+            GoodsNewTbl.Количество := GoodsTbl.КолВПрих;
+            GoodsNewTbl.Сумма := GoodsTbl.СумВПрихВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := ' + Накладная возврата от покупателя';
+            GoodsNewTbl.Количество := GoodsTbl.КолВозвр;
+            GoodsNewTbl.Сумма := GoodsTbl.СумВозврВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := ' + Ввод остатков';
+            GoodsNewTbl.Количество := GoodsTbl.КолОст;
+            GoodsNewTbl.Сумма := GoodsTbl.СумОстВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+
+            GoodsNewTbl.Append;             
+            if GoodsTbl.СумРевизВх > 0 then
+              GoodsNewTbl.Операция := ' + Ревизия'
+            else
+              if GoodsTbl.СумРевизВх < 0 then
+                GoodsNewTbl.Операция := ' - Ревизия'
+              else
+                GoodsNewTbl.Операция := '   Ревизия';
+            GoodsNewTbl.Количество := GoodsTbl.КолРевиз;
+            GoodsNewTbl.Сумма := GoodsTbl.СумРевизВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := ' - Накладная отпуска';
+            GoodsNewTbl.Количество := GoodsTbl.КолРасх;
+            GoodsNewTbl.Сумма := GoodsTbl.СумРасхВх;  // СумРасхОтп
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := ' - Расход по вн.перемещению';
+            GoodsNewTbl.Количество := -GoodsTbl.КолВРасх;
+            GoodsNewTbl.Сумма := -GoodsTbl.СумВРасхВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := ' - Накладная возврата поставщику';
+            GoodsNewTbl.Количество := -GoodsTbl.КолВозврПост;
+            GoodsNewTbl.Сумма := -GoodsTbl.СумВозврПостВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := ' - Акт списания товара с учета';
+            GoodsNewTbl.Количество := -GoodsTbl.КолСпис;
+            GoodsNewTbl.Сумма := -GoodsTbl.СумСписВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+            GoodsNewTbl.Append;
+            GoodsNewTbl.Операция := 'На конец';
+            GoodsNewTbl.Количество := GoodsTbl.КолКон;
+            GoodsNewTbl.Сумма := GoodsTbl.СумКонВх;
+            GoodsNewTbl.Склад := GoodsTbl.Склад;
+            GoodsNewTbl.Post;
+          end;
+        inc(i);
+      end;
+    GoodsTbl.SortBy('Код');
+    GoodsTbl.SetRange(lblTotal, lblTotal);
+    GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Total', '-', 0, 0);
+    XGrid.Cells(2, 1, XGrid.RowCount, 2).AdjustColWidths(0);
+    XGrid.FixedColCount := 2;
+    if XGrid.RowCount > 3 then
+      XGrid.FixedRowCount := 3;
+    XGrid.Cell(1, 1).Value := XGrid.Cell(1, 1).Value + ' ' + DateToStr(DateFrom) + '-' + DateToStr(DateTo);
+
+    i := 1;  
+    jj := 6;
+    GoodsNewTbl.SortBy('Склад');
+    StoreNewTbl.Select;
+    while StoreNewTbl.SelectNext do
+      begin
+        StoreNewTbl.AddToXGrid(CtrlToVar(XGrid1), 'Store1', '-', i, 1);
+        GoodsNewTbl.SetRange(StoreNewTbl.Склад, StoreNewTbl.Склад);  
+        j := 1;
+        GoodsNewTbl.Select;
+        while GoodsNewTbl.SelectNext do
+          begin
+            GoodsNewTbl.AddToXGrid(CtrlToVar(XGrid1), 'Det1', '-', j, 1);
+            if (jj = 6) or (jj = 16) or
+               (jj = 18) or (jj = 28) or 
+               (jj = 30) or (jj = 40) or
+               (jj = 42) or (jj = 52) or 
+               (jj = 54) or (jj = 64) or
+               (jj = 66) or (jj = 76) or
+               (jj = 78) or (jj = 88) or
+               (jj = 90) or (jj = 100) or
+
+               (jj = 102) or (jj = 112) or
+               (jj = 114) or (jj = 124) then
+              begin
+                XGrid1.Cell(jj, 1).FontStyle := 3;
+                XGrid1.Cell(jj, 2).FontStyle := 3;
+                XGrid1.Cell(jj, 3).FontStyle := 3;
+              end;
+            inc(j);
+            inc(jj);
+          end;
+//        GoodsNewTbl.AddToXGrid(CtrlToVar(XGrid1), 'Det1', '-', 0, 0);   
+        inc(jj);
+        inc(i);
+      end;
+    XGrid1.Cell(1, 1).Value := XGrid1.Cell(1, 1).Value + ' ' + DateToStr(DateFrom) + '-' + DateToStr(DateTo);
+    XGrid1.Cell(2, 1).Value := 'Модель товара: ' + Model;
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure Form_Execute(Sender : TObject; Mean : Variant; Params : Variant);
+begin
+  V := Mean;
+end;
+
+procedure miFirstHalfYear_Click(Sender : TObject);
+begin
+  SetMenuDates(Sender, DateFrom, DateTo,
+    eDateFrom, eDateTo);
+  (Sender as TO4MenuItem).Checked := True;
+end;
+
+procedure tbSelectDates_Click(Sender : TObject);
+var
+  X, Y : Integer;
+begin
+  tbSelectDates.GetScreenPos(X, Y);
+  Y := Y + tbSelectDates.Height;
+  pmDates.Popup(X, Y)
+end;
+
+procedure eDateFrom_Change(Sender : TObject);
+begin
+  SetOneDates(Sender, DateFrom, DateTo);
+end;
+
+procedure tbXTools_Click(Sender : TObject);
+begin
+  XGridTools.Visible := not XGridTools.Visible;
+  if XGridTools.Visible then
+    tbXTools.ImageIndex := 98
+  else
+    tbXTools.ImageIndex := 44;
+end;
+
+procedure tbExcel_Click(Sender : TObject);
+begin
+  XGrid1.ExportToExcel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+Label2:TO4Label
+Panel1:TO4Panel
+GroupBox2:TO4GroupBox
+eStores:TO4Edit
+cbMoving:TO4CheckBox
+Panel5:TO4Panel
+Label1:TO4Label
+eGoodModel:TO4Edit
+XGrid:TO4XGrid
+XGridTools:TXGridTools
+tbrData:TO4ToolBar
+tbRun:TO4ToolButton
+ToolButton2:TO4ToolButton
+tbXTools:TO4ToolButton
+tbExcel:TO4ToolButton
+ToolButton1:TO4ToolButton
+Panel4:TO4Panel
+lDateFrom:TO4Label
+lDateTo:TO4Label
+eDateFrom:TO4Edit
+eDateTo:TO4Edit
+tbSelectDates:TO4ToolButton
+XGrid1:TO4XGrid
+TableValueSource1:TO4TableValueSource
+pmDates:TO4PopupMenu
+miFirstHalfYear:TO4MenuItem
+MenuItem7:TO4MenuItem
+miFirstQuartal:TO4MenuItem
+miJan:TO4MenuItem
+miFeb:TO4MenuItem
+miMar:TO4MenuItem
+MenuItem9:TO4MenuItem
+miSecondQuartal:TO4MenuItem
+miApr:TO4MenuItem
+miMay:TO4MenuItem
+miJun:TO4MenuItem
+MenuItem14:TO4MenuItem
+miLastYear:TO4MenuItem
+miSecondHalfYear:TO4MenuItem
+MenuItem17:TO4MenuItem
+miThirdQuartal:TO4MenuItem
+miJul:TO4MenuItem
+miAug:TO4MenuItem
+miSep:TO4MenuItem
+MenuItem22:TO4MenuItem
+miFourthQuartal:TO4MenuItem
+miOct:TO4MenuItem
+miNov:TO4MenuItem
+miDec:TO4MenuItem
+MenuItem27:TO4MenuItem
+miThisYear:TO4MenuItem
+PopupMenu1:TO4PopupMenu
+MenuItem1:TO4MenuItem

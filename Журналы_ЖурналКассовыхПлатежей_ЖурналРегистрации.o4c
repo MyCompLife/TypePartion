@@ -1,0 +1,136 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICJournal;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+  TmpTbl : ICValueTable;
+  Pk : integer;           
+  DateFrom, DateTo : DateTime;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetMean;
+  Pk := Form.GetPrintKind;
+  CNV := CreateObject('ЧислаПрописью');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  TmpTbl := CreateObject('ТаблицаЗначений');
+  TmpTbl.AddColumn('ДатаВх', vtcDate, 0);
+  TmpTbl.AddColumn('НомерВх', vtcString, 20);
+  TmpTbl.AddColumn('СуммаВх', vtcFft, 2);
+  TmpTbl.AddColumn('ЗаметкиВх', vtcString, 255);
+  TmpTbl.AddColumn('ДатаИсх', vtcDate, 0);
+  TmpTbl.AddColumn('НомерИсх', vtcString, 255);
+  TmpTbl.AddColumn('СуммаИсх', vtcFft, 2);
+  TmpTbl.AddColumn('ЗаметкиИсх', vtcString, 50);
+  TmpTbl.Open;
+
+  MasterData.AssignSelectParams(Form.GetMean);
+  MasterData.GetDateRange(DateFrom, DateTo);
+  if GetMonth(DateFrom) = GetMonth(DateTo) then
+    lbPeriod.Caption := CNV.MonthToStr(GetMonth(DateFrom), 0, 1058) + ' ' + IntToStr(GetYear(DateFrom)) + 'р.'
+  else                                                                                                        
+    lbPeriod.Caption := IntToStr(GetYear(DateFrom)) + 'р.';
+  MasterData.Select;
+  while MasterData.SelectNext do
+    if MasterData.Сумма > 0 then
+      begin
+        TmpTbl.Append;
+        TmpTbl.ДатаВх := MasterData.ДатаДокумента;
+        TmpTbl.НомерВх := MasterData.НомерДокумента;
+        TmpTbl.СуммаВх := MasterData.Сумма;
+        TmpTbl.ЗаметкиВх := MasterData.GetDoc.Комментарий;
+        TmpTbl.Post;
+      end;
+  TmpTbl.Select;
+  MasterData.Select;
+  while MasterData.SelectNext do
+    if MasterData.Сумма < 0 then
+      begin
+        if TmpTbl.SelectNext then
+          TmpTbl.Edit
+        else
+          TmpTbl.Append;
+        TmpTbl.ДатаИсх := MasterData.ДатаДокумента;
+        TmpTbl.НомерИсх := MasterData.НомерДокумента;
+        TmpTbl.СуммаИсх := AbsD(MasterData.Сумма);
+        TmpTbl.ЗаметкиИсх := MasterData.GetDoc.Комментарий;
+        TmpTbl.Post;
+      end;
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  if Index = 0 then
+    TmpTbl.Select;
+  Accept := TmpTbl.SelectNext;
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['InDate'] := TmpTbl.ДатаВх;
+      Value['InNumber'] := TmpTbl.НомерВх;
+      Value['InSumma'] := TmpTbl.СуммаВх;
+      Value['InComment'] := TmpTbl.ЗаметкиВх;
+      Value['OutDate'] := TmpTbl.ДатаИсх;
+      Value['OutNumber'] := TmpTbl.НомерИсх;
+      Value['OutSumma'] := TmpTbl.СуммаИсх;
+      Value['OutComment'] := TmpTbl.ЗаметкиИсх;
+    end;
+end;
+
+procedure Structure1_Me_GetData(Table: TRBTable; Index, Count: Integer; var Accept: Boolean);
+begin
+  GetMyFirm(Table, MYF, ADR, TLF, RRR);
+  Accept := False;
+end;
+
+end.
+
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand2:TRBDetailBand
+Label6:TRBLabel
+Label7:TRBLabel
+Label8:TRBLabel
+Label9:TRBLabel
+Label12:TRBLabel
+Label13:TRBLabel
+Label18:TRBLabel
+Label16:TRBLabel
+Band3:TRBBand
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+Label10:TRBLabel
+Label17:TRBLabel
+Label1:TRBLabel
+Label11:TRBLabel
+Label5:TRBLabel
+Label14:TRBLabel
+Label15:TRBLabel
+Label19:TRBLabel
+Label20:TRBLabel
+Label21:TRBLabel
+Label22:TRBLabel
+Label23:TRBLabel
+Label24:TRBLabel
+Label25:TRBLabel
+Label26:TRBLabel
+Band1:TRBBand
+Label28:TRBLabel
+Label27:TRBLabel
+Label29:TRBLabel
+Label30:TRBLabel
+Label31:TRBLabel
+Label32:TRBLabel
+lbPeriod:TRBLabel
+Label34:TRBLabel
+Structure1:TRBStructure

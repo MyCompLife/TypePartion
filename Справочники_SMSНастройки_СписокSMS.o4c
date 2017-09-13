@@ -1,0 +1,101 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСSMS;
+
+implementation
+
+var
+  Constants: IC4VPAConst;
+  MasterData : ICDictionary;
+procedure Form_Open(Sender: TObject);
+begin
+  Constants := GetConstants;
+  eLibrary.Text := VarAsStr(Constants.FtpБиблиотека);
+end;
+
+procedure btLibraryPath_Click(Sender: TObject);
+var
+  FilePath: string;
+begin
+  with OpenDialog do begin
+    Filter := 'addl_func.dll|addl_func.dll';
+    FileName := 'addl_func.dll';
+    Title := Trans('Определите путь к dll-библиотеке');
+    if Execute then
+      eLibrary.Text := FileName
+    else
+      exit;
+  end;
+end;
+
+procedure btReg_Click(Sender: TObject);
+begin
+  if not FileExists(eLibrary.Text) then
+    begin
+      ShowMessage('По указанному пути файл отсутствует!');
+      exit;
+    end;
+  Run('RegSvr32 ' + eLibrary.Text, true);
+end;
+
+procedure Form_Close(Sender: TObject);
+begin
+  Constants.FtpБиблиотека := eLibrary.Text;
+end;
+
+
+procedure MDS_VPABeforeOpen(Sender: TObject);
+begin
+ MasterData := MDS.GetMean;
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender: TObject; var Index1, Index2: integer);
+begin
+  if not MasterData.IsFocused then
+    exit;
+  if VarAsBool(MasterData.Активность) then
+    Index1 := 36
+
+end;
+{$D+}
+
+procedure tbAbout_Click(Sender: TObject);
+begin
+ MasterData.EditInForm('ОписаниеSMSКонфигурации',3);
+end;
+
+procedure tbCheckTel_Click(Sender: TObject);  
+var   SMSProcessing : ICProcessing;
+begin
+ SMSProcessing := CreateObject('Обработки.РаботаСSMS');
+ SMSProcessing.OpenForm('ПроверкаТелефонов');
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel2:TO4Panel
+dbgData:TO4DBGrid
+tbrData:TO4ToolBar
+tbAdd:TO4ToolButton
+tbEdit:TO4ToolButton
+tbDelete:TO4ToolButton
+tsSeparator:TO4ToolButton
+tbParam:TO4ToolButton
+tbAbout:TO4ToolButton
+tbCheckTel:TO4ToolButton
+Panel1:TO4Panel
+Label1:TO4Label
+LabelVersion:TO4Label
+eLibrary:TO4Edit
+btLibraryPath:TO4Button
+btReg:TO4Button
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+pmiAdd:TO4MenuItem
+pmiEdit:TO4MenuItem
+pmiDelete:TO4MenuItem
+MenuItem1:TO4MenuItem
+miSort:TO4MenuItem
+OpenDialog:TO4OpenDialog

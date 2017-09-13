@@ -1,0 +1,999 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Интерфейс, Расчеты;
+
+const
+  errReportMustRecalcByButton = 'Невозможно пересчитать ячейки. Для корректного ' +
+    'пересчета необходимо дважды нажать на кнопку ' +
+    '"Автоматический расчет"';
+  prmNameReportType = 'GlobalName';
+  // report save mode
+  smAppend = 0;
+  smEdit = 1;
+
+var
+  GlobalOpers : IC4VPATax;
+  gCNV : ICWriNums;
+
+function gDivision(V1, V2 : Variant; pos : Integer = 0;
+  InverseOrder : Boolean = False; AfterComa : Integer = -1;
+  IsEmptyForZero : Boolean = False) : Variant;
+function gMult(V1, V2 : Variant; pos : Integer = 0; Coef : Decimal = 1;
+  AfterComa : Integer = -1; InverseOrder : Boolean = False;
+  IsEmptyForZero : Boolean = False) : Variant;
+function gIIF(V1, V2 : Variant; pos : Integer = 0;
+  InverseOrder : Boolean = False; AfterComa : Integer = -1;
+  IsEmptyForZero : Boolean = False) : Variant;
+function gGetUhiquePercent(MYF : ICDictionary; pos : Integer = 0; InverseOrder : Boolean = False;
+  AfterComa : Integer = -1; IsEmptyForZero : Boolean = False) : Variant;
+function gGetName(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetTerritoryCode(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetEconomCode(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetZKGNG(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetZKPO(MYF : ICDictionary; pos : Variant) : Variant;
+function gGetShortAddres(MYF, ADR : ICDictionary; pos : Integer = 0;
+  AdressType : Integer = 0) : Variant;
+function gGetAddres(MYF, ADR : ICDictionary; pos : Integer = 0;
+  AdressType : Integer = 0) : Variant;
+function gGetEMail(MYF, EML : ICDictionary; pos : Integer = 0) : Variant;
+function gGetPhone(MYF, TLF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetBankName(MYF, RRR : ICDictionary; pos : Integer = 0) : Variant;
+function gGetBankMFO(MYF, RRR : ICDictionary; pos : Integer = 0) : Variant;
+function gGetPayAccNum(MYF, RRR : ICDictionary; pos : Integer = 0) : Variant;
+function gGetIndex(MYF, ADR : ICDictionary; pos : Integer = 0; AdressType : Integer = 0) : Variant;
+function gGetTownCode(MYF, TLF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetPDVNum(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetTaxSystem(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetKPF(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetKOPFG(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetChief(MYF : ICDictionary; pos : Integer = 0; UseShortName : Boolean = False) : Variant;
+function gGetBuh(MYF : ICDictionary; pos : Integer = 0; UseShortName : Boolean = False) : Variant;
+function gGetManPartner(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetRegisterOrganization(RegNumbers : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0) : Variant;
+function gGetDPA(MYF : ICDictionary; pos : Integer = 0) : Variant;
+function gGetYear(Date : DateTime; pos : Integer = 0;
+  Frm : Integer = -1; LangID : Integer = 1058) : Variant;
+function gGetQuarter(V : Variant; DateFrom, DateTo : DateTime; Index : Integer) : Variant;
+function gGetMonth(Date : DateTime; pos : Integer = 0; WithLeadZero : Boolean = True;
+  Frm : Integer = -1; LangID : Integer = 1058) : Variant;
+function gGetDay(Date : DateTime; pos : Integer = 0; WithLeadZero : Boolean = True;
+  Frm : Integer = -1; LangID : Integer = 1058) : Variant;
+function gGetPeriod(V : Variant; DateFrom, DateTo : DateTime; Index : Integer) : Variant;
+function GetSymbol(s : string; pos : Integer = 0; InverseOrder : Boolean = False) : string;
+function GetVarCellLength(Cells : Variant; var ToRight : Boolean;
+  var FirstAdress : Variant) : Integer; // длина аргумента - множества ячеек
+function GetVarCellHeight(Cells : Variant; var ToDown : Boolean;
+  var FirstAdress : Variant) : Integer; // высота аргумента - множества ячеек
+function GetCellAdress(Cell : Variant) : Variant;
+function IsArgCell(Cell : Variant) : Boolean;
+function gGetTaxCode(Employ : ICDictionary; pos : Integer = 0) : string;
+function gGetRegisterNumber(RegNumbers : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0; InverseOrder : Boolean = False) : string;
+function gGetSertRegisterNumber(RegNumbers : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0; InverseOrder : Boolean = False) : string;
+function gGetRegisterNumberMYF(MYF : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0; InverseOrder : Boolean = False) : string;
+function gGetSertRegisterNumberMYF(MYF : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0; InverseOrder : Boolean = False) : string;
+function GetStandartReportName(DocReport : ICDocuments) : string;
+function SaveReport(ctrlFrom : TWinControl; DocReportToSave : ICDocuments;
+  TblSelectedLinks : ICValueTable;
+  RepCurrent : ICReport; SaveMode : Integer) : string;
+procedure CreateRepAttrTable(AttribTable : ICValueTable);
+function gGetSellXGridValue(FormObj : TO4Form; XGridName, SellName : string) : Variant;
+procedure CreateReportTableFromControl(ctrlFrom : TWinControl; DocReportToSave : ICDocuments);
+function LoadXGridsFromReportDocument(Form : To4CustomForm; DocSavedReport : ICDocuments) : Boolean;
+procedure AddFieldToTbl(Tbl : ICValueTable; FieldName : string; FieldValue : Variant);
+function LoadFieldValueFromTbl(Tbl : ICValueTable; FieldName : string) : Variant;
+function CreateReportDoc(RepID : string; DocID : string = 'Отчет') : ICDocuments;
+procedure LoadDefaultOnOpen(RepCurrent : ICReport; DocCurrentReport : ICDocuments;
+  TblSelectedLinks : ICValueTable; SelID : string = '');
+procedure LoadDefaultDataToControl(ctrlTo : TWinControl; SectionName : string = 'Head';
+  DoClear : Boolean = False);
+function RecalcXGrids(ctrlFrom : TWinControl) : Boolean;
+procedure CreateSelectedLinksTable(var TblSelectedLinks : ICValueTable;
+  LinkIDsList : string = ''; DefValuesList : Variant = '');
+function FillSelectedLinksValue(TblSelectedLinks : ICValueTable; Value : IObject) : string;
+function ImitatedLinkSelection(LinkMean : IObject; TblSelectedLinks : ICValueTable;
+  FormName : string; LinkID : string = '';
+  Params : Variant = '') : string;
+function gGetQuarterNumber(V : Variant; DateFrom, DateTo : DateTime; Index : Integer) : Variant;
+function FormatString(Str : String; OneChar : Char; Length : integer; Leading : Boolean = True) : string;
+
+implementation
+
+const
+  errInvalidCellNameFormat = 'Неправильный формат названия ячейки: ';
+  errCannotReadThisReportForm = 'Невозможно прочитать данную форму отчета. ' +
+    'Невозможно прочитать формы из документа. Возможно, Вы пытаетесь прочитать форму, вид которой уже устарел.';
+    
+function FormatString(Str : String; OneChar : Char; Length : integer; Leading : Boolean = True) : string;
+var
+  Count : integer;
+  TmpStr : string;
+begin
+  Result := '';
+  if StrLength(Str) >= Length then
+    begin
+      Result := StrCopy(Str, 1, Length);
+      exit;
+    end;
+  TmpStr := '';
+  Count := Length - StrLength(Str);
+  while Count > 0 do
+    begin
+      TmpStr := TmpStr + OneChar;
+      dec(Count);
+    end;
+  if Leading then
+    Result := TmpStr + Str
+  else
+    Result := Str + TmpStr;
+end;
+
+function StrInverse(s : string) : string;
+var
+  i, Length : Integer;
+begin
+  Result := '';
+  Length := StrLength(s);
+  for i := 1 to Length do
+    Result := s[i] + Result
+end;
+
+function GetSymbol(s : string; pos : Integer = 0; InverseOrder : Boolean = False) : string;
+begin
+  if InverseOrder then
+    s := StrInverse(s);
+  if pos = 0 then // все слово
+    begin
+      Result := s;
+      exit;
+    end;
+  if StrLength(s) >= pos then
+    Result := s[pos]
+  else
+    Result := '';
+end;
+
+function gMult(V1, V2 : Variant; pos : Integer = 0; Coef : Decimal = 1;
+  AfterComa : Integer = -1; InverseOrder : Boolean = False;
+  IsEmptyForZero : Boolean = False) : Variant;
+begin
+  try
+    Result := VarAsDec(V1) * VarAsDec(V2) / Coef
+  except
+    Result := 0
+  end;
+  if (Result = 0) and IsEmptyForZero then
+    Result := ''
+  else
+    Result := DecToStr(Result, AfterComa);
+  Result := GetSymbol(Result, pos, InverseOrder);
+end;
+
+function gDivision(V1, V2 : Variant; pos : Integer = 0;
+  InverseOrder : Boolean = False; AfterComa : Integer = -1;
+  IsEmptyForZero : Boolean = False) : Variant;
+begin
+  try
+    Result := VarAsDec(V1) / VarAsDec(V2)
+  except
+    Result := 0
+  end;
+  if (Result = 0) and IsEmptyForZero then
+    Result := ''
+  else
+    Result := DecToStr(Result, AfterComa);
+  Result := GetSymbol(Result, pos, InverseOrder);
+end;
+
+function gGetUhiquePercent(MYF : ICDictionary; pos : Integer = 0; InverseOrder : Boolean = False;
+  AfterComa : Integer = -1; IsEmptyForZero : Boolean = False) : Variant;
+begin
+  Result := MYF.Ставка;
+  if (Result = 0) and IsEmptyForZero then
+    Result := ''
+  else
+    Result := DecToStr(Result, AfterComa);
+  Result := GetSymbol(Result, pos, InverseOrder);
+end;
+
+function gIIF(V1, V2 : Variant; pos : Integer = 0;
+  InverseOrder : Boolean = False; AfterComa : Integer = -1;
+  IsEmptyForZero : Boolean = False) : Variant;
+begin
+  if V1 > V2 then
+    Result := V1 - V2
+  else
+    if V2 > V2 then
+      Result := -(V1 - V2)
+    else
+      Result := 0;
+  if (Result = 0) and IsEmptyForZero then
+    Result := ''
+  else
+    Result := DecToStr(Result, AfterComa);
+  Result := GetSymbol(Result, pos, InverseOrder);
+end;
+
+function gGetName(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetPartName(MYF);
+  Result := GetSymbol(Result, pos);
+end;
+
+function gGetZKPO(MYF : ICDictionary; pos : Variant) : Variant;
+var
+  s : string;
+begin
+  s := StrTrim(MYF.ЗКПО);
+  Result := '';
+  if IsArray(pos) then
+    begin
+      case VarAsInt(pos[1]) of
+        8 :
+          if StrLength(s) = 8 then
+            if pos[0] <= StrLength(s) then
+              Result := s[pos[0]];
+        10 :
+          if StrLength(s) = 10 then
+            if pos[0] <= StrLength(s) then
+              Result := s[pos[0]];
+      end;
+      exit;
+    end;
+  Result := GetSymbol(s, pos);
+end;
+
+function gGetTaxCode(Employ : ICDictionary; pos : Integer = 0) : string;
+begin
+  Result := '';
+  if not Employ.IsFocused then
+    exit;
+  if not Employ.HasField('НалогНом') then
+    exit;
+  Result := GetSymbol(Employ.НалогНом, pos);
+end;
+
+function gGetShortAddres(MYF, ADR : ICDictionary; pos : Integer = 0;
+  AdressType : Integer = 0) : Variant;
+begin
+  case AdressType of
+    0 : //юридический
+      Result := GetActivUr(ADR, 'Город.Название', MYF) + ', ' + GetActivUr(ADR, 'Адрес', MYF);
+    1 : //активный
+      Result := GetActiv(ADR, 'Город.Название', MYF) + ', ' + GetActiv(ADR, 'Адрес', MYF);
+  end;
+end;
+
+function gGetAddres(MYF, ADR : ICDictionary; pos : Integer = 0; AdressType : Integer = 0) : Variant;
+begin
+  case AdressType of
+    0 : //юридический
+      Result := GetActivUr(ADR, 'ПочтИндекс', MYF) + ', ' + GetActivUr(ADR, 'Город.Название', MYF) +
+        ', ' + GetActivUr(ADR, 'Адрес', MYF);
+    1 : //активный
+      Result := GetActiv(ADR, 'ПочтИндекс', MYF) + ', ' + GetActiv(ADR, 'Город.Название', MYF) +
+        ', ' + GetActiv(ADR, 'Адрес', MYF);
+  end;
+end;
+
+function gGetEMail(MYF, EML : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(GetActiv(EML, 'Адрес', MYF)), pos);
+end;
+
+function gGetBankMFO(MYF, RRR : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(GetActiv(RRR, 'Банк.МФО', MYF)), pos);
+end;
+
+function gGetBankName(MYF, RRR : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(GetActiv(RRR, 'Банк.Название', MYF)), pos);
+end;
+
+function gGetPayAccNum(MYF, RRR : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(GetActiv(RRR, 'НомерСчета', MYF)), pos);
+end;
+
+function gGetPhone(MYF, TLF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  if pos = 0 then
+    Result := '(' + GetActiv(TLF, 'КодГорода', MYF) + ') ' + GetActiv(TLF, 'Номер', MYF)
+  else
+    Result := GetSymbol(StrTrim(VarAsStr(GetActiv(TLF, 'Номер', MYF))), pos);
+end;
+
+function gGetIndex(MYF, ADR : ICDictionary; pos : Integer = 0; AdressType : Integer = 0) : Variant;
+var
+  ZIPCode : String;
+begin
+  case AdressType of
+    0 : //юридический
+      ZIPCode := StrTrim(GetActivUr(ADR, 'ПочтИндекс', MYF));
+    1 : //активный
+      ZIPCode := StrTrim(GetActiv(ADR, 'ПочтИндекс', MYF));
+  end;
+  Result := GetSymbol(FormatString(ZIPCode, '0', 5), pos);
+end;
+
+function gGetTownCode(MYF, TLF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(GetActiv(TLF, 'КодГорода', MYF)), pos);
+end;
+
+function gGetPDVNum(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(MYF.НалогНом), pos);
+end;
+
+function gGetTaxSystem(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(TransLCID(StrTrim(MYF.Система), 1058), pos);
+end;
+
+function gGetKPF(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(MYF.КПФ), pos);
+end;
+
+function gGetEconomCode(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(MYF.КВЭД), pos);
+end;
+
+function gGetZKGNG(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(MYF.ОтрасльЗКГНГ), pos);
+end;
+
+function gGetTerritoryCode(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(MYF.КОАТУУ), pos);
+end;
+
+function gGetKOPFG(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  Result := GetSymbol(StrTrim(MYF.КОПФГ), pos);
+end;
+
+function gGetChief(MYF : ICDictionary; pos : Integer = 0; UseShortName : Boolean = False) : Variant;
+begin
+  if UseShortName then
+    Result := GetShortPartName(MYF.Директор)
+  else
+    Result := GetPartName(MYF.Директор);
+  Result := GetSymbol(Result, pos);
+end;
+
+function gGetBuh(MYF : ICDictionary; pos : Integer = 0; UseShortName : Boolean = False) : Variant;
+begin
+  if UseShortName then
+    Result := GetShortPartName(MYF.Бухгалтер)
+  else
+    Result := GetPartName(MYF.Бухгалтер);
+  Result := GetSymbol(Result, pos);
+end;
+
+function gGetManPartner(MYF : ICDictionary; pos : Integer = 0) : Variant;
+var
+  s : string;
+begin
+  s := MYF.ЗКПО;
+  if StrLength(s) > 8 then
+    begin
+      if VarAsBool(MYF.ОПФ.IsFocused) then
+        Result := VarAsStr(MYF.ОПФ.Value) + ' ' + MYF.Название
+      else
+        Result := MYF.Название
+    end
+  else
+    Result := ''
+end;
+
+function gGetRegisterOrganization(RegNumbers : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0) : Variant;
+begin
+  if RegNumbers.FindByField('Тип', RegisterCode, False) and VarAsBool(RegNumbers.@Партнер.IsFocused) then
+    Result := GetSymbol(RegNumbers.Партнер.ПолноеНазвание, pos);
+end;
+
+function gGetDPA(MYF : ICDictionary; pos : Integer = 0) : Variant;
+begin
+  if VarAsBool(MYF.@ДПА.IsFocused) then
+    Result := GetSymbol(MYF.ДПА.ПолноеНазвание, pos);
+end;
+
+function gGetQuarter(V : Variant; DateFrom, DateTo : DateTime; Index : Integer) : Variant;
+var
+  yy1, mm1, dd1, yy2, mm2, dd2 : Integer;
+  s : string;
+begin
+  if Index = 1 then
+    begin
+      DecodeDate(DateFrom, yy1, mm1, dd1);
+      DecodeDate(DateTo, yy2, mm2, dd2);
+      if (mm1 >= 1) and (mm2 <= 3) then
+        Result := 'I квартал'
+      else
+        if (mm1 >= 4) and (mm2 <= 6) then
+          Result := 'II квартал'
+        else
+          if (mm1 >= 7) and (mm2 <= 9) then
+            Result := 'III квартал'
+          else
+            if (mm1 >= 10) and (mm2 <= 12) then
+              Result := 'IV квартал'
+            else
+              Result := '';
+    end
+  else
+    Result := '';
+end;
+
+function gGetYear(Date : DateTime; pos : Integer = 0; Frm : Integer = -1;
+  LangID : Integer = 1058) : Variant;
+var
+  yy : Integer;
+  s : string;
+begin
+  yy := GetYear(Date);
+  s := '';
+  case Frm of
+    -1 : 
+      s := IntToStr(yy);
+    0 :
+      begin
+        if IsNil(gCNV) then
+          gCNV := CreateObject('ЧислаПрописью');
+        s := gCNV.DigitToStr(yy, LangID);
+      end;
+  end;
+  Result := GetSymbol(s, pos);
+end;
+
+function gGetMonth(Date : DateTime; pos : Integer = 0; WithLeadZero : Boolean = True;
+  Frm : Integer = -1; LangID : Integer = 1058) : Variant;
+var
+  mm : Integer;
+  s : string;
+begin
+  mm := GetMonth(Date);
+  s := '';
+  case Frm of
+    -1 :
+      begin
+        if (mm < 10) and WithLeadZero then
+          s := '0' + IntToStr(mm)
+        else
+          s := IntToStr(mm);
+      end;
+    0, 1, 2, 3 :
+      begin
+        if IsNil(gCNV) then
+          gCNV := CreateObject('ЧислаПрописью');
+        s := gCNV.MonthToStr(mm, Frm, LangID);
+      end;
+  end;
+  Result := GetSymbol(s, pos);
+end;
+
+function gGetDay(Date : DateTime; pos : Integer = 0; WithLeadZero : Boolean = True;
+  Frm : Integer = -1; LangID : Integer = 1058) : Variant;
+var
+  dd : Integer;
+  s : string;
+begin
+  dd := GetDay(Date);
+  s := '';
+  case Frm of
+    -1 :
+      begin
+        if (dd < 10) and WithLeadZero then
+          s := '0' + IntToStr(dd)
+        else
+          s := IntToStr(dd);
+      end;
+    0 :
+      begin
+        if IsNil(gCNV) then
+          gCNV := CreateObject('ЧислаПрописью');
+        s := gCNV.DigitToStr(dd, LangID);
+      end;
+  end;
+  Result := GetSymbol(s, pos);
+end;
+
+function gGetPeriod(V : Variant; DateFrom, DateTo : DateTime; Index : Integer) : Variant;
+begin
+  gCNV := CreateObject('ЧислаПрописью');
+  if Index = 1 then
+    Result := gGetQuarter(V, DateFrom, DateTo, Index) + ' ' + IntToStr(GetYear(DateTo));
+  if Index = 0 then
+    Result := gCNV.MonthToStr(GetMonth(DateTo), 0, 1058) + ' ' + IntToStr(GetYear(DateTo));
+end;
+
+function IsNumber(a : string) : Boolean;
+begin
+  try
+    StrToInt(a);
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+function IsBigLatin(a : Char) : Boolean;
+begin
+  Result := (CharToByte(a) <= 90) and (CharToByte(a) >= 65);
+  // 90=CharToByte('Z'), 65=CharToByte('A')
+end;
+
+function ValidCell(var Cell : Variant; RaiseException : Boolean = True) : Boolean;
+var
+  adress : string;
+begin
+  adress := StrUpperCase(StrTrim(VarAsStr(Cell)));
+  case StrLength(adress) of
+    2 : 
+      Result := IsBigLatin(adress[1]) and IsNumber(adress[2]);
+    3, 4, 5, 6, 7 :
+      Result := IsBigLatin(adress[1]) and IsNumber(StrCopy(adress, 3, StrLength(adress) - 2)) and
+        (IsBigLatin(adress[2]) or IsNumber(adress[2]));
+    else
+      Result := False
+  end;
+  if (not Result) and RaiseException then
+    raise(VarAsStr(Trans(errInvalidCellNameFormat) + VarAsStr(Cell)));
+end;
+
+function GetCellAdress(Cell : Variant) : Variant;
+var
+  adress : string;
+begin
+  ValidCell(Cell);
+  adress := Cell;
+  case StrLength(Cell) of
+    2 : 
+      Result := ArrayOf(CharToByte(adress[1]) - 64, CharToByte(adress[2]) - 47);
+    3, 4, 5, 6, 7 :
+      if IsBigLatin(adress[2]) then
+        Result := ArrayOf(26 * (CharToByte(adress[1]) - 64) + CharToByte(adress[2]) - 64,
+          StrToInt(StrCopy(adress, 3, StrLength(adress) - 2)))
+      else
+        Result := ArrayOf(CharToByte(adress[1]),
+          StrToInt(StrCopy(adress, 2, StrLength(adress) - 1)))
+  end;
+end;
+
+function GetVarCellLength(Cells : Variant; var ToRight : Boolean; var FirstAdress : Variant) : Integer; // длина аргумента - множества ячеек
+var
+  pos : Byte;
+begin
+  ToRight := True;
+  Result := 1;
+  Cells := VarAsStr(Cells);
+  pos := StrPos(':', Cells);
+  if pos = 0 then
+    begin
+      if ValidCell(Cells) then
+        FirstAdress := GetCellAdress(Cells); ;
+      exit;
+    end;
+  FirstAdress := GetCellAdress(StrCopy(Cells, 1, pos - 1));
+  Result := GetCellAdress(StrCopy(Cells, pos + 1, StrLength(Cells) - pos))[0] - FirstAdress[0];
+  ToRight := (Result >= 0);
+  Result := Abs(Result) + 1;
+end;
+
+function GetVarCellHeight(Cells : Variant; var ToDown : Boolean; var FirstAdress : Variant) : Integer; // высота аргумента - множества ячеек
+var
+  pos : Byte;
+begin
+  ToDown := True;
+  Result := 1;
+  Cells := VarAsStr(Cells);
+  pos := StrPos(':', Cells);
+  if pos = 0 then
+    begin
+      if ValidCell(Cells) then
+        FirstAdress := GetCellAdress(Cells);
+      exit;
+    end;
+  FirstAdress := GetCellAdress(StrCopy(Cells, 1, pos - 1));
+  Result := GetCellAdress(StrCopy(Cells, pos + 1, StrLength(Cells) - pos))[1] - FirstAdress[1];
+  ToDown := (Result >= 0);
+  Result := Abs(Result) + 1;
+end;
+
+function IsArgCell(Cell : Variant) : Boolean;
+var
+  pos : Byte;
+  adress : Variant;
+begin
+  Result := True;
+  try
+    pos := StrPos(':', Cell);
+    if pos = 0 then
+      begin
+        Result := ValidCell(Cell, False);
+        exit;
+      end;
+    adress := StrCopy(Cell, pos + 1, StrLength(Cell) - pos);
+    Result := ValidCell(adress, False);
+    adress := StrCopy(Cell, 1, pos - 1);
+    Result := ValidCell(adress, False);
+  except
+    Result := False;
+  end;
+end;
+
+function gGetRegisterNumber(RegNumbers : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0; InverseOrder : Boolean = False) : string;
+begin
+  if RegNumbers.FindByField('Тип', RegisterCode, False) then
+    Result := GetSymbol(RegNumbers.РегНомер, pos, InverseOrder);
+end;
+
+function gGetSertRegisterNumber(RegNumbers : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0; InverseOrder : Boolean = False) : string;
+begin
+  if RegNumbers.FindByField('Тип', RegisterCode, False) then
+    Result := GetSymbol(RegNumbers.НомерСвидетельства, pos, InverseOrder);
+end;
+
+function gGetRegisterNumberMYF(MYF : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0; InverseOrder : Boolean = False) : string;
+begin
+  Result := GetSymbol(MYF.НалогНом, pos, InverseOrder);
+end;
+
+function gGetSertRegisterNumberMYF(MYF : ICDictionary; RegisterCode : Integer;
+  pos : Integer = 0; InverseOrder : Boolean = False) : string;
+begin
+  Result := GetSymbol(MYF.НДСсвид, pos, InverseOrder);
+end;
+
+procedure CreateRepAttrTable(AttribTable : ICValueTable);
+begin
+  AttribTable.Close;
+  AttribTable.AddColumn('StringField', vtcString, 256);
+  AttribTable.AddColumn('IntegerField', vtcInteger, 0);
+  AttribTable.AddColumn('BooleanField', vtcBoolean, 0);
+  AttribTable.AddColumn('FloatField', vtcFloat, 0);
+  AttribTable.AddColumn('FFTField', vtcFFT, 10);
+  AttribTable.AddColumn('DateField', vtcDate, 0);
+  AttribTable.AddColumn('TimeField', vtcTime, 0);
+  AttribTable.AddColumn('DateTimeField', vtcDateTime, 0);
+  AttribTable.AddColumn('LinkField', vtcLink, 0);
+  AttribTable.AddColumn('BlobField', vtcBlob, 0);
+  AttribTable.AddColumn('MemoField', vtcMemo, 0);
+  AttribTable.Open;
+end;
+
+function gGetSellXGridValue(FormObj : TO4Form; XGridName, SellName : string) : Variant;
+var
+  TmpArray : Variant;
+begin
+  TmpArray := GetCellAdress(SellName);
+  Result := (FormObj.FindComponent(XGridName) as TO4XGrid).CalcCell(TmpArray[1], TmpArray[0]).Value;
+end;
+
+function LoadXGridsFromReportDocument(Form : To4CustomForm; DocSavedReport : ICDocuments) : Boolean;
+var
+  xgdLoaded : To4XGrid;
+begin
+  DocSavedReport.SelectLines;
+  while DocSavedReport.SelectNextLine do
+    begin
+      xgdLoaded := Form.FindComponent(VarAsStr(DocSavedReport.Код)) as To4XGrid;
+      if IsNil(xgdLoaded) then
+        begin
+          MessageDlg(Trans(errCannotReadThisReportForm), mtError, mbOk);
+          SetReadOnlyForm(Form);
+        end
+      else
+        if StrPos(VarAsStr('object ' + DocSavedReport.Код), VarAsStr(DocSavedReport.Шаблон)) > 0 then
+          begin
+            xgdLoaded.LoadFromString(DocSavedReport.Шаблон);
+            xgdLoaded.Refresh;
+          end
+        else
+          ; // иначе не тот шаблон под тем кодом "сидит"
+    end;
+  Result := not IsNil(xgdLoaded) and xgdLoaded.Calc;
+end;
+
+procedure AppendOneLineToTable(ctrlFrom : To4XGrid; TblContents : ICValueTable);
+begin
+  TblContents.Append;
+  TblContents.Код := ctrlFrom.Name;
+  TblContents.Шаблон := ctrlFrom.SaveToString;
+  TblContents.Post;
+end;
+
+procedure CreateReportTableFromControl(ctrlFrom : TWinControl; DocReportToSave : ICDocuments);
+var
+  TblContents : ICValueTable;
+  i, j : Integer;
+  tsTemp : TTabSheet;
+begin
+  TblContents := CreateObject('ValueTable');
+  TblContents.AddColumn('Код', vtcString, 128);
+  TblContents.AddColumn('Шаблон', vtcMemo, 0);
+  TblContents.AddColumn('ORDNUM', vtcInteger, 0);
+  TblContents.Open;
+  case ctrlFrom.ClassName of
+    'TO4PageControl' :
+      for i := 0 to (ctrlFrom as TO4PageControl).PageCount - 1 do
+        begin
+          tsTemp := (ctrlFrom as TO4PageControl).Pages[i];
+          if tsTemp.TabVisible then
+            for j := 0 to tsTemp.ControlCount - 1 do
+              if tsTemp.Controls[j] is TO4XGrid then
+                AppendOneLineToTable(tsTemp.Controls[j] as TO4XGrid, TblContents);
+        end;
+    'TO4XGrid' :
+      AppendOneLineToTable(ctrlFrom as TO4XGrid, TblContents);
+  end;
+  TblContents.DoNumbering('ORDNUM', 1, 1);
+  TblContents.SortBy('ORDNUM');
+  DocReportToSave.Params['TblContents'] := TblContents;
+end;
+
+function GetStandartReportName(DocReport : ICDocuments) : string;
+begin
+  if IsObjFocused(DocReport) then
+    Result := DocReport.Комментарий + ' № ' + DocReport.GetNumber
+  else
+    Result := '';
+end;
+
+function SaveReport(ctrlFrom : TWinControl; DocReportToSave : ICDocuments;
+  TblSelectedLinks : ICValueTable;
+  RepCurrent : ICReport; SaveMode : Integer) : string;
+var
+  JrnReport : ICJournal;
+  TblSavedDoc : ICValueTable;
+begin
+  try
+    try
+      CreateReportTableFromControl(ctrlFrom, DocReportToSave);
+      if VarasBool(TblSelectedLinks.@ЛинкПоле.IsFocused) then
+        DocReportToSave.EditInForm('Отчет', SaveMode)
+      else
+        DocReportToSave.EditInForm('Отчет', smAppend); // новый
+    finally
+      DocReportToSave.Params['TblContents'] := Null;
+    end;
+    DocReportToSave.ApplyUpdates;
+    //
+    if VarAsBool(DocReportToSave.Params['IsReportFocused']) then
+      begin
+        TblSavedDoc := DocReportToSave.Params['TblSavedDoc'];
+        if DocReportToSave.Find(TblSavedDoc.@SavedLink) then
+          begin
+            FillSelectedLinksValue(TblSelectedLinks, DocReportToSave);
+            Result := GetStandartReportName(DocReportToSave);
+          end
+        else
+          Result := '';
+      end
+    else
+      if VarAsBool(TblSelectedLinks.@ЛинкПоле.IsFocused) and
+        DocReportToSave.Find(TblSelectedLinks.@ЛинкПоле) then
+        Result := GetStandartReportName(DocReportToSave)
+      else
+        Result := '';
+  finally
+    DocReportToSave.Params['TblSavedDoc'] := Null;
+  end;
+  JrnReport := RepCurrent.Params['JrnReport'];
+  JrnReport.FindDoc(DocReportToSave);
+end;
+
+procedure AddFieldToTbl(Tbl : ICValueTable; FieldName : string; FieldValue : Variant);
+begin
+  Tbl.Append;
+  Tbl._Default[FieldName] := FieldValue;
+  Tbl.Post;
+end;
+
+function LoadFieldValueFromTbl(Tbl : ICValueTable; FieldName : string) : Variant;
+begin
+  Tbl.SelectNext;
+  Result := Tbl._Default[FieldName];
+end;
+
+function CreateReportDoc(RepID : string; DocID : string = 'Отчет') : ICDocuments;
+begin
+  Result := CreateObject('Документы.' + DocID);
+  Result.SetFieldFilter('Название', '=', RepID, '', '', '');
+  Result.Select;
+  Result.Params[prmNameReportType] := RepID;
+end;
+
+procedure LoadFromDoc(RepCurrent : ICReport; DocDataSource : ICDocuments;
+  TblSelectedLinks : ICValueTable);
+var
+  OutParams : Variant;
+begin
+  FillSelectedLinksValue(TblSelectedLinks, DocDataSource);
+  RepCurrent.ExecProc(Null, 'LoadDataToXGrids', ArrayOf(DocDataSource,
+    GetStandartReportName(DocDataSource)), OutParams);
+end;
+
+procedure LoadDefaultOnOpen(RepCurrent : ICReport; DocCurrentReport : ICDocuments;
+  TblSelectedLinks : ICValueTable; SelID : string = '');
+begin
+  try
+    TblSelectedLinks.Find(SelID);
+    if IsObjFocused(RepCurrent.Params['Doc']) and DocCurrentReport.Find(RepCurrent.Params['Doc']) then
+      LoadFromDoc(RepCurrent, DocCurrentReport, TblSelectedLinks)
+    else
+      {
+      if DocCurrentReport.FindByField('Активность', -1, False) then
+        LoadFromDoc(RepCurrent, DocCurrentReport, TblSelectedLinks)
+      else
+      }
+      LoadFromDoc(RepCurrent, Null, TblSelectedLinks);
+  finally
+    RepCurrent.Params['Doc'] := Null;
+  end;
+end;
+
+procedure LoadDefaultDataToXGrid(xgrCurrent : TO4XGrid; SectionName : string;
+  DoClear : Boolean);
+var
+  i : Integer;
+begin
+  if DoClear then
+    xgrCurrent.ClearAll; // - должно быть, но пока стирает разделители страниц
+  for i := 1 to WordCount(SectionName, ';') do
+    xgrCurrent.AddSection(ExtractWord(i, SectionName, ';'));
+  xgrCurrent.Refresh;
+end;
+
+procedure LoadDefaultDataToControl(ctrlTo : TWinControl; SectionName : string = 'Head';
+  DoClear : Boolean = False);
+var
+  i, j : Integer;
+  tsTemp : TTabSheet;
+begin
+  case ctrlTo.ClassName of
+    'TO4PageControl' :
+      for i := 0 to (ctrlTo as TO4PageControl).PageCount - 1 do
+        begin
+          tsTemp := (ctrlTo as TO4PageControl).Pages[i];
+          for j := 0 to tsTemp.ControlCount - 1 do
+            if tsTemp.Controls[j] is TO4XGrid then
+              LoadDefaultDataToXGrid(tsTemp.Controls[j] as TO4XGrid, SectionName, DoClear);
+        end;
+    'TO4XGrid' :
+      LoadDefaultDataToXGrid(ctrlTo as TO4XGrid, SectionName, DoClear);
+  end;
+end;
+
+function RecalcOneGrid(xgrCurrent : To4XGrid) : Boolean;
+begin
+  if not xgrCurrent.Calc then
+    xgrCurrent.EditData := True;
+  xgrCurrent.Calc := not xgrCurrent.Calc;
+  xgrCurrent.Refresh;
+  Result := xgrCurrent.Calc;
+end;
+
+function RecalcXGrids(ctrlFrom : TWinControl) : Boolean;
+var
+  i, j : Integer;
+  tsTemp : TTabSheet;
+begin
+  case ctrlFrom.ClassName of
+    'TO4PageControl' :
+      for i := 0 to (ctrlFrom as TO4PageControl).PageCount - 1 do
+        begin
+          tsTemp := (ctrlFrom as TO4PageControl).Pages[i];
+          if tsTemp.TabVisible then
+            for j := 0 to tsTemp.ControlCount - 1 do
+              if tsTemp.Controls[j] is TO4XGrid then
+                Result := RecalcOneGrid(tsTemp.Controls[j] as TO4XGrid);
+        end;
+    'TO4XGrid' :
+      Result := RecalcOneGrid(ctrlFrom as TO4XGrid);
+  end;
+end;
+
+procedure CreateSelectedLinksTable(var TblSelectedLinks : ICValueTable;
+  LinkIDsList : string = ''; DefValuesList : Variant = '');
+var
+  i : Integer;
+begin
+  if IsNil(TblSelectedLinks) then
+    TblSelectedLinks := CreateObject('ValueTable')
+  else
+    TblSelectedLinks.Close;
+  TblSelectedLinks.AddColumn('Идентификатор', vtcString, 20);
+  TblSelectedLinks.AddColumn('ЛинкПоле', vtcLink, 0);
+  TblSelectedLinks.Open;
+  //
+  for i := 1 to WordCount(LinkIDsList, ';') do
+    begin
+      TblSelectedLinks.Append;
+      TblSelectedLinks.Идентификатор := ExtractWord(i, LinkIDsList, ';');
+      if IsArray(DefValuesList) and (ArrayHigh(DefValuesList) >= i - 1) then
+        TblSelectedLinks.ЛинкПоле := DefValuesList[i - 1];
+      TblSelectedLinks.Post;
+    end;
+  //
+  TblSelectedLinks.SortBy('Идентификатор');
+end;
+
+function FillSelectedLinksValue(TblSelectedLinks : ICValueTable; Value : IObject) : string;
+begin
+  TblSelectedLinks.Edit;
+  TblSelectedLinks.ЛинкПоле := Value;
+  TblSelectedLinks.Post;
+  Result := TblSelectedLinks.DefValue['ЛинкПоле'];
+end;
+
+function ImitatedLinkSelection(LinkMean : IObject; TblSelectedLinks : ICValueTable;
+  FormName : string; LinkID : string = '';
+  Params : Variant = '') : string;
+begin
+  if (LinkID <> '') and not TblSelectedLinks.Find(LinkID) then
+    begin
+      TblSelectedLinks.Append;
+      TblSelectedLinks.Идентификатор := LinkID;
+      TblSelectedLinks.Post;
+    end;
+  if VarAsBool(TblSelectedLinks.@ЛинкПоле.IsFocused) and not
+    IsObjEQ(TblSelectedLinks.@ЛинкПоле, LinkMean) then
+    LinkMean.Find(TblSelectedLinks.@ЛинкПоле);
+  if VarAsBool(LinkMean.SelectInForm(FormName, Result, Params)) then
+    Result := FillSelectedLinksValue(TblSelectedLinks, LinkMean)
+  else
+    if VarAsBool(TblSelectedLinks.@ЛинкПоле.IsFocused) then
+      if VarAsBool(LinkMean.Find(TblSelectedLinks.@ЛинкПоле)) then
+        Result := TblSelectedLinks.DefValue['ЛинкПоле'] // не совсем правильно, значение может быть изменено интерфейсом LinkMean
+      else //запись была удалена
+        begin
+          FillSelectedLinksValue(TblSelectedLinks, Null);
+          Result := '';
+        end
+    else
+      Result := '';
+end;
+
+function gGetQuarterNumber(V : Variant; DateFrom, DateTo : DateTime; Index : Integer) : Variant;
+var
+  yy1, mm1, dd1, yy2, mm2, dd2 : Integer;
+  s : string;
+begin
+  if Index = 1 then
+    begin
+      DecodeDate(DateFrom, yy1, mm1, dd1);
+      DecodeDate(DateTo, yy2, mm2, dd2);
+      if (mm1 >= 1) and (mm2 <= 3) then
+        Result := '1'
+      else
+        if (mm1 >= 4) and (mm2 <= 6) then
+          Result := '2'
+        else
+          if (mm1 >= 7) and (mm2 <= 9) then
+            Result := '3'
+          else
+            if (mm1 >= 10) and (mm2 <= 12) then
+              Result := '4'
+            else
+              Result := '';
+    end
+  else
+    Result := '';
+end;
+
+end.

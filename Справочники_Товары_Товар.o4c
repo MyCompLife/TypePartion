@@ -1,0 +1,837 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, »нтерфейс, –асчеты,
+  –абота—ѕеременными, –абота—ќбъектами, –абота— омпонентамиVCL,
+  –абота—“аблицами«начений, –абота— оллекци€ми, –абота—о—правочниками, –абота—“аблицами«наченийCL, –абота—о—правочникамиCL,
+  –абота——айтом;
+
+implementation
+
+var
+  AddRec, ChangeLock : Boolean;
+  DetPack, DetCmp, MasterData, Currency, GroupDic, DetBarCodesDic, DetSuppDic, Cat : ICDictionary;
+  Constants : IC4VPAConst;
+  Options : ICOptions;
+  CollectTbl,SizesTbl,ColorTbl : ICValueTable;
+  Collection : ICCollection;
+  OldInPrice, OldPrice1, OldPrice2, OldPrice3, OldPrice4: Decimal;
+  OldInCurrency, OldCurrency1, OldCurrency2, OldCurrency3: ICDictionary;
+  SizesList, ColorList: ICValueList;
+  ChangeObjProc : ICProcessing;
+  PriceIsRounding : Boolean;
+
+const
+  ptReadOnly = 5;//TPropertyType
+  ptColor = 6;//TPropertyType
+
+function GetCode(Article : Integer): String;
+var
+  i : integer;
+  BarCode: String;
+begin
+  BarCode := IntToStr(Article);
+  i := GetConstants.Ўтрих од“овара¬нутренний ол—имв;
+  while StrLength(BarCode) < i do
+    begin
+      BarCode := '0' + BarCode;
+    end;
+  Result := BarCode;
+end;
+
+procedure SetVisible;
+var
+  PriceTypes: String;
+  i: Integer;                 
+  ctrlTemp : TComponent;
+begin
+  PriceTypes := Constants.“ипы÷ен;
+  if StrLength(PriceTypes) > 0 then
+    for i := 1 to StrLength(PriceTypes) do
+      begin
+        ctrlTemp := Form.FindComponent('pnPrice' + PriceTypes[i]);
+        if not IsNil(ctrlTemp) then
+         (ctrlTemp as TO4Panel).Visible := true;
+      end;
+  SetPropertyForComponentList(ptTabVisible, Form, 'tsPack;tsPhoto', false);
+  SetPropertyForComponentList(ptEnabled, Form, 'eCode', false);
+  case VarAsInt(MasterData.“ип арточки) of
+    0 : begin
+          if VarAsBool(Constants.»спльзоватьћультиЎтрих одыƒл€“оваров) then
+            begin
+              SetPropertyForComponentList(ptTabVisible, Form, 'tsBarCodes', true);
+              SetPropertyForComponentList(ptVisible, Form, 'pBarCode', false)
+            end
+          else
+            begin
+              SetPropertyForComponentList(ptTabVisible, Form, 'tsBarCodes', false);
+              SetPropertyForComponentList(ptVisible, Form, 'pBarCode', true)
+            end;
+           SetPropertyForComponentList(ptVisible, Form, 'eManufacturer;lManufacturer', VarAsBool(Constants.’арактеристикаѕроизводитель));
+           SetPropertyForComponentList(ptVisible, Form, 'pModel', VarAsBool(Constants.’арактеристикаћодель));
+           SetPropertyForComponentList(ptVisible, Form, 'pGroup', VarAsBool(Constants.’арактеристика√руппа)); 
+        end;
+    1,2 : SetPropertyForComponentList(ptVisible, Form, 'cbShowOnSite;lManufacturer;eManufacturer;cbWeight;cbService;' +
+                                                     'lModel;eModel;lColor;eColor;lColorCode;eColorCode;cbNoCount;btSelColor', false)
+  end;
+end;
+
+procedure SetProperty(TPropertyType : integer; Owner : TComponent;
+  AComponentList : string; Value : Variant);
+var
+  i : Byte;
+  ctrlTemp : TComponent;
+begin
+  for i := 1 to WordCount(AComponentList, ';') do
+    begin
+      ctrlTemp := Owner.FindComponent(ExtractWord(i, AComponentList, ';'));
+      if not IsNil(ctrlTemp) then
+        if (ctrlTemp is TControl) then
+          case TPropertyType of
+            ptReadOnly :
+              begin
+                if ctrlTemp.ClassName = 'TO4DBEdit' then
+                 (ctrlTemp as TO4DBEdit).ReadOnly := Value;
+                if ctrlTemp.ClassName = 'TO4Edit' then
+                 (ctrlTemp as TO4Edit).ReadOnly := Value;
+              end;
+            ptColor :
+              begin
+                if ctrlTemp.ClassName = 'TO4DBEdit' then
+                 (ctrlTemp as TO4DBEdit).Color := Value;
+                if ctrlTemp.ClassName = 'TO4Edit' then
+                 (ctrlTemp as TO4Edit).Color := Value;
+              end;
+           end;
+    end;
+end;
+
+procedure SetEnabled;
+var
+  Components: String;
+begin
+  case VarAsInt(MasterData.“ип арточки) of
+    0: begin
+         Components := 'eModel;eColor;eColorCode;eSize';
+         if  VarAsBool(Constants.»зменение“оваров“олько„ерезћодели) then
+           begin
+            SetProperty(ptReadOnly, Form, Components, true);
+            SetProperty(ptColor, Form, Components, clMenu);    
+            SetPropertyForComponentList(ptEnabled, Form, Components, false);
+           end
+         else
+           begin       
+             SetProperty(ptReadOnly, Form, Components, false);
+             SetProperty(ptColor, Form, Components, clWindow);  
+             SetPropertyForComponentList(ptEnabled, Form, Components, true);
+             btSelColor.Enabled := true;
+           end;
+       end;
+  end;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Constants := GetConstants;
+  Options := GetOptions;
+  if VarAsInt(Constants.Ўтрих од“овара¬нутренний ол—имв) <> 0 then
+    eCode.MaxLength := Constants.Ўтрих од“овара¬нутренний ол—имв
+end;
+
+procedure miLoadFromFile_Click(Sender : TObject);
+begin
+  if Sender = miSaveToFile then
+    begin
+      if spDlg.Execute then
+        iPhoto.SaveToFile(spDlg.FileName)
+    end
+  else
+    if Sender = miLoadFromFile then
+      begin
+        if opDlg.Execute then
+          iPhoto.LoadFromFile(opDlg.FileName)
+      end
+    else
+      if Sender = miCut then
+        iPhoto.CutToClipboard()
+      else
+        if Sender = miCopy then
+          iPhoto.CopyToClipboard()
+        else
+          if Sender = miPaste then
+            iPhoto.PasteFromClipboard();
+end;
+
+procedure dbeName_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(eName.Text), '');
+end;
+
+procedure pcLists_Change(Sender : TObject);
+begin
+  case pcLists.ActivePage.Name of
+    'tsBarCodes' :
+      if IsNil(DetBarCodesDic) and (not cbService.Checked) then
+        DetBarCodesDic := SetDetailDict(MasterData, 'Ўтрих оды“оваров', 'Ўтрих оды', CtrlToVar(pcLists.ActivePage));
+    'tsPack' :
+      if IsNil(DetPack) and (not cbService.Checked) then
+        DetPack := SetDetailDict(MasterData, '”паковки', 'ѕросмотр”паковок', CtrlToVar(pcLists.ActivePage));
+//    5 :
+//      if IsNil(DetCmp) then
+//        DetCmp := SetDetailDict(MasterData, ' омплектующие', 'ѕросмотр омплектующих', CtrlToVar(pcLists.ActivePage));
+    'tsPostavch' :
+      if IsNil(DetSuppDic) then
+        DetSuppDic := SetDetailDict(MasterData, 'ѕоставщики“оваров', 'ѕоставщики', CtrlToVar(pcLists.ActivePage));
+    'tsChangeObj' :
+     if IsNil(ChangeObjProc) then
+       begin
+         ChangeObjProc := CreateObject('ќбработки.»зменени€ќбъектов');
+         ChangeObjProc.Params['MasterData'] := MasterData;
+         ChangeObjProc.OpenFormInplace('»зменени€ќбъектов',CtrlToVar(tsChangeObj));
+       end;
+  end;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(eName.Text), '');
+  cbService.Checked := MasterData.”слуга;
+  cbWeight.Checked := VarAsBool(MasterData.¬есовой“овар);  
+  if VarAsInt(MasterData.Ќалогова€√руппа)>0 then
+    edTaxGroup.ItemIndex := VarAsInt(MasterData.Ќалогова€√руппа)-1
+  else       
+   edTaxGroup.ItemIndex := 0;
+ // cbWeight.Visible := VarAsBool(Constants.»сп¬есовой“овар);
+ 
+  cbExcise.Checked := VarAsBool(MasterData.ѕодјкцизний);
+  if cbExcise.Checked then
+    pExcise.Visible := True
+  else
+    pExcise.Visible := False;
+
+  Cat := CreateObject('—правочники.“овары');
+  Cat.IncludeLevels(true);
+  Cat.IncludeOnlyLevels(true);
+  if Cat.Find(MasterData.@ атегори€) then
+    edCtg.Text := Cat.NameField
+  else
+    Cat := Null;
+
+
+  SetVisible;
+  SetEnabled;
+  GetLocalization(MasterData, Form);
+  if VarAsBool(MasterData.≈д»зм.IsFocused) then
+    edCollect.Text := MasterData.≈д»зм.Value;
+  Collection := CreateObject(' оллекции.≈д»зм');
+  CollectTbl := CreateObject('“аблица«начений');
+  CreateCollectionTbl(CollectTbl, Collection); //расчеты
+  while CollectTbl.SelectNext() do
+    edCollect.Items.Add(CollectTbl.Comment);
+  ChangeLock := true;
+  ChangeLock := false;
+  cbShowOnSite.Checked := MasterData.ќтображатьЌа—айте;
+  OldInPrice  := MasterData.¬х÷ена;
+  OldPrice1   := MasterData.÷ена;
+  OldPrice2   := MasterData.ќпт÷ена;
+  OldPrice3   := MasterData. рќпт÷ена;
+  OldInCurrency := MasterData.¬алюта¬х÷ена;
+  OldCurrency1 := MasterData.¬алюта÷ена;
+  OldCurrency2 := MasterData.¬алютаќпт÷ена;
+  OldCurrency3 := MasterData.¬алюта рќпт÷ена;  
+  if MasterData.HasParam('EditOnlyPrices') and VarAsBool(MasterData.Params['EditOnlyPrices']) then
+    begin
+      tsMain.TabVisible := false;
+      tsBarCodes.TabVisible := false;
+      tsPack.TabVisible := false;
+      tsNotes.TabVisible := false;
+      tsPhoto.TabVisible := false;
+      tsSite.TabVisible := false;
+      tsPostavch.TabVisible := false;
+    end;
+ PriceIsRounding := VarAsBool(Constants.ќкругл€ть÷ены√рн);
+
+ if (VarAsInt(MasterData.“ип арточки)=0) and VarAsBool(Constants.’арактеристикаћодель) and
+     VarAsBool(Constants.»зменение“оваров“олько„ерезћодели) then
+    SetReadOnlyForm(Form);
+end;
+
+procedure eInPriceNT_Change(Sender : TObject);
+begin
+  if ChangeLock then
+    exit;
+  MasterData.UpdateRecord(True);
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  if ChangeLock then
+    exit;
+  try
+    try
+      ChangeLock := True;
+      case StrLowerCase(FieldName) of
+      'цена' :
+        begin
+          if MasterData.¬х÷ена<>0 then
+            MasterData.ѕрЌац÷ена :=  ((MasterData.÷ена*MasterData.¬алюта÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/(MasterData.¬х÷ена*MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime)) - 1) * 100
+          else
+            MasterData.ѕрЌац÷ена := 0;
+        end;
+      'оптцена' :
+        begin
+          if MasterData.¬х÷ена√рн<>0 then
+            MasterData.ѕрЌацќпт÷ена :=  ((MasterData.ќпт÷ена*MasterData.¬алютаќпт÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/(MasterData.¬х÷ена*MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime)) - 1) * 100
+          else
+            MasterData.ѕрЌацќпт÷ена := 0;
+        end;
+      'кроптцена' :
+        begin
+          if MasterData.¬х÷ена√рн<>0 then
+            MasterData.ѕрЌац рќпт÷ена :=  ((MasterData. рќпт÷ена*MasterData.¬алюта рќпт÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/(MasterData.¬х÷ена*MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime)) - 1) * 100
+          else
+            MasterData.ѕрЌац рќпт÷ена := 0;
+
+        end;
+      'прнаццена' :
+        begin
+          MasterData.÷ена := (MasterData.¬х÷ена * MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/MasterData.¬алюта÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime) * (1+MasterData.ѕрЌац÷ена/100);
+          if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+            MasterData.÷ена := RoundTo5Cop(MasterData.÷ена);
+
+        end;
+      'прнацоптцена' :
+        begin
+          MasterData.ќпт÷ена := (MasterData.¬х÷ена * MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/MasterData.¬алютаќпт÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime) * (1+MasterData.ѕрЌацќпт÷ена/100);
+          if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+            MasterData.ќпт÷ена := RoundTo5Cop(MasterData.ќпт÷ена);
+
+        end;
+      'прнацкроптцена' :
+        begin
+          MasterData. рќпт÷ена := (MasterData.¬х÷ена * MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/MasterData.¬алюта рќпт÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime) * (1+MasterData.ѕрЌац рќпт÷ена/100);
+          if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+            MasterData. рќпт÷ена := RoundTo5Cop(MasterData. рќпт÷ена);
+        end;
+
+{      'валютацена' :
+        begin
+          MasterData. урс÷ена := MasterData.валютацена.GetTimedValue(' урсЌаличный', CurrentDateTime);
+          if MasterData. урс÷ена<>0 then
+           MasterData.÷ена := MasterData.÷ена√рн / MasterData. урс÷ена;
+        end;
+      'валютаоптцена' :
+        begin
+          MasterData. урсќпт÷ена := MasterData.валютаќптцена.GetTimedValue(' урсЌаличный', CurrentDateTime);
+          if MasterData. урсќпт÷ена<>0 then
+           MasterData.ќпт÷ена := MasterData.ќпт÷ена√рн / MasterData. урсќпт÷ена;
+        end;
+      'валютакроптцена' :
+        begin
+          MasterData. урс рќпт÷ена := MasterData.валюта рќптцена.GetTimedValue(' урсЌаличный', CurrentDateTime);
+          if MasterData. урс рќпт÷ена<>0 then
+           MasterData. рќпт÷ена := MasterData. рќпт÷ена√рн / MasterData. урс рќпт÷ена;
+        end;
+}
+      'вхцена':
+        begin
+{          if MasterData. урс÷ена<>0 then
+            MasterData.÷ена := (MasterData.¬х÷ена * MasterData. урс¬х÷ена)/MasterData. урс÷ена * (1+MasterData.ѕрЌац÷ена/100);
+          if MasterData. урсќпт÷ена<>0 then
+            MasterData.ќпт÷ена := (MasterData.¬х÷ена * MasterData. урс¬х÷ена)/MasterData. урсќпт÷ена * (1+MasterData.ѕрЌацќпт÷ена/100);
+          if MasterData. урс рќпт÷ена<>0 then
+            MasterData. рќпт÷ена := (MasterData.¬х÷ена * MasterData. урс¬х÷ена)/MasterData. урс рќпт÷ена * (1+MasterData.ѕрЌац рќпт÷ена/100);
+}
+          MasterData.÷ена := (MasterData.¬х÷ена * MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/MasterData.¬алюта÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime) * (1+MasterData.ѕрЌац÷ена/100);
+          if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+            MasterData.÷ена := RoundTo5Cop(MasterData.÷ена);
+          MasterData.ќпт÷ена := (MasterData.¬х÷ена * MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/MasterData.¬алютаќпт÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime) * (1+MasterData.ѕрЌацќпт÷ена/100);
+          if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+            MasterData.ќпт÷ена := RoundTo5Cop(MasterData.ќпт÷ена);
+          MasterData. рќпт÷ена := (MasterData.¬х÷ена * MasterData.¬алюта¬х÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime))/MasterData.¬алюта рќпт÷ена.GetTimedValue(' урсЌаличный', CurrentDateTime) * (1+MasterData.ѕрЌац рќпт÷ена/100);
+          if VarAsBool(Constants.ќкругл€ть÷ены√рнƒо5 оп) then
+            MasterData. рќпт÷ена := RoundTo5Cop(MasterData. рќпт÷ена);
+
+        end;
+{
+      'валютавхцена':
+        begin
+          MasterData. урс¬х÷ена := MasterData.валютавхцена.GetTimedValue(' урсЌаличный', CurrentDateTime);
+          if MasterData. урс¬х÷ена<>0 then
+           MasterData.¬х÷ена := MasterData.¬х÷ена√рн / MasterData. урс¬х÷ена;
+          MasterData.¬х÷ена√рн := MasterData.¬х÷ена * MasterData. урс¬х÷ена;
+          if PriceIsRounding then
+            MasterData.¬х÷ена√рн := RoundDec(MasterData.¬х÷ена√рн, PriceRoundAfterComma);
+          if MasterData. урс÷ена<>0 then
+            MasterData.÷ена := (MasterData.¬х÷ена * MasterData. урс¬х÷ена)/MasterData. урс÷ена * (1+MasterData.ѕрЌац÷ена/100);
+          if MasterData. урсќпт÷ена<>0 then
+            MasterData.ќпт÷ена := (MasterData.¬х÷ена * MasterData. урс¬х÷ена)/MasterData. урсќпт÷ена * (1+MasterData.ѕрЌацќпт÷ена/100);
+          if MasterData. урс рќпт÷ена<>0 then
+            MasterData. рќпт÷ена := (MasterData.¬х÷ена * MasterData. урс¬х÷ена)/MasterData. урс рќпт÷ена * (1+MasterData.ѕрЌац рќпт÷ена/100);
+          SetAllNatPrices;
+
+        end; }
+
+        'назвтовара':
+          begin
+            if MasterData.Ќазв“овара_ru = '' then
+              MasterData.Ќазв“овара_ru := MasterData.Ќазв“овара;
+          end;
+      end;
+    except
+    end;
+  finally
+    ChangeLock := False;
+  end;
+end;
+
+procedure MDS_Append(Sender : TObject);
+var
+  CopyFrom, Pack, DetPackOld, Ctg, ParentDic : ICDictionary;
+  TmpPack, tmpTbl, ImportTbl : ICValueTable;
+  v : Variant;
+  i: Integer;  
+  s:string;
+begin
+  AddRec := true;
+  Ctg := MasterData.GetParent;
+  v := MasterData.Params['CopyFrom'];
+  if MasterData.HasParam('CopyFrom') and (not IsNull(v)) then
+    begin
+      CopyFrom := MasterData.Params['CopyFrom'];
+      ChangeLock := True;
+      MasterData.AssignFields(
+        'Ќазв“овара; од;≈д»зм;¬алюта÷ена;÷ена;ќпт÷ена; рќпт÷ена;¬х÷ена;»нформаци€;ћин«апас;Ўтрих од;' +
+        '”слуга; омплект;ћасса;ѕлощадь; ороткоеЌазвание;Ѕез оличества;—ертификат—оотвѕо”молчанию;' +
+        ' одѕроизводител€;ѕроцентЌаценкиѕо атег;—тавкаЌƒ—;√руппа;ќтображатьЌа—айте;“ип арточки;'+
+        '“аблицаЋокализаций; ол¬”паковке;¬есовой“овар;»сп–абћесто;»сп»зображени€–абћесто;ћодель;'+
+        'ѕроизводитель;÷вет; од÷вета;¬алюта¬х÷ена;¬алютаќпт÷ена;¬алюта рќпт÷ена;‘ото; одыѕоставщиков;'+
+        'ѕрЌац÷ена;ѕрЌацќпт÷ена;ѕрЌац рќпт÷ена;–азмер;—рокѕридатности', CopyFrom);
+      MasterData.јртикул := GetNextNumberForField('—правочники.“овары', 'јртикул', false, '');
+      MasterData.Ќомер := GetNextNumberForFieldCL('—правочники.“овары', 'Ќомер', Ctg);
+      if MasterData.“ип арточки = 0 then
+        MasterData. од := GetCode(MasterData.јртикул);
+      pcLists.ActivePage := tsPack;
+      if IsNil(DetPack) and (not cbService.Checked) then
+        begin
+          DetPack := SetDetailDict(MasterData, '”паковки', 'ѕросмотр”паковок', CtrlToVar(pcLists.ActivePage));
+          DetPackOld := CreateObject('—правочники.”паковки');
+          DetPackOld.UseMasterAndSelect(CopyFrom);
+          while DetPackOld.SelectNext do
+            begin
+              DetPack.Append;
+              DetPack.AssignFields('Ќазв”паковки; оличество', DetPackOld);
+              DetPack.Post;
+            end;
+        end;
+      pcLists.ActivePage := tsMain;
+      ChangeLock := False;
+      //
+    end
+  else
+    begin    
+      if VarAsBool(Constants.»спќбщЌаценки) then
+        begin
+          MasterData.ѕрЌац÷ена := Constants.ѕрЌац÷ена;
+          MasterData.ѕрЌацќпт÷ена := Constants.ѕрЌацќпт÷ена;
+          MasterData.ѕрЌац рќпт÷ена := Constants.ѕрЌац рќпт÷ена;
+        end
+      else
+        begin
+          ParentDic := MasterData.GetParent;
+          if IsObjFocused(ParentDic) then
+            MasterData.AssignFields('ѕрЌац÷ена;ѕрЌацќпт÷ена;ѕрЌац рќпт÷ена',ParentDic);
+        end;
+      Currency := CreateObject('—правочники.¬алюты');
+      if not Currency.FindByField('јктивность', VarAsInt(True), True) then
+        Currency := GetNatCurrency(Currency);
+      MasterData.¬алюта¬х÷ена := Currency;
+
+      if IsObjFocused(Constants.¬алюта÷ена”молч) then
+        MasterData.¬алюта÷ена := Constants.¬алюта÷ена”молч
+      else
+        MasterData.¬алюта÷ена := Currency;
+
+      if IsObjFocused(Constants.¬алютаќпт÷ена”молч) then
+        MasterData.¬алютаќпт÷ена := Constants.¬алютаќпт÷ена”молч
+      else
+        MasterData.¬алютаќпт÷ена := Currency;
+
+      if IsObjFocused(Constants.¬алюта рќпт÷ена”молч) then
+        MasterData.¬алюта рќпт÷ена := Constants.¬алюта рќпт÷ена”молч
+      else
+        MasterData.¬алюта рќпт÷ена := Currency;
+ 
+      MasterData.”слуга := 0;
+      MasterData.Ѕез оличества := 0;
+      MasterData. од := '';
+      MasterData. одѕроизводител€ := '';
+      MasterData.Ўтрихкод := '';
+      if MasterData.HasParam('tbl') then
+        begin
+          tmpTbl := MasterData.Params['tbl'];
+          MasterData. одѕроизводител€ := tmpTbl. одѕроизводител€Excel;
+          MasterData.Ќазв“овара := tmpTbl.“оварЌазвExcel;
+          Ctg := CreateObject('—правочники.“овары');
+          Ctg.IncludeOnlyLevels(true);
+          if not Ctg.FindByCode(tmpTbl. од атегории,false) then
+            Raise(' атегори€ не спозиционирована!');
+          MasterData.SetParent(Ctg);
+        end;
+      MasterData.“ип арточки := 0;
+      MasterData.јртикул := GetNextNumberForField('—правочники.“овары', 'јртикул', false, '');
+      if MasterData.HasParam('CardType') then
+        MasterData.“ип арточки := MasterData.Params['CardType'];
+      MasterData. од := GetCode(MasterData.јртикул);
+      if MasterData.HasParam('ImportTbl') and IsObjFocused(MasterData.Params['ImportTbl']) then
+        begin
+          ImportTbl :=  MasterData.Params['ImportTbl'];    
+          s := ImportTbl.Ќазв“овара;
+          if StrPos('“овар не найден  (',s)<>0 then
+           StrDelete(s,StrPos('“овар не найден',s),18);
+          if (StrLength(s)>0) and (S[StrLength(s)]=')') then
+            StrDelete(s,StrLength(s),1);
+          MasterData.Ќазв“овара := s;
+          MasterData.¬алюта¬х÷ена := ImportTbl.@¬алюта;
+          MasterData.¬х÷ена := ImportTbl.÷ена;
+          MasterData.≈д»зм := ImportTbl.@≈д»зм;
+          if ImportTbl.HasField(' атегори€') and (VarAsStr(ImportTbl. атегори€)<>'') then
+            begin
+              Ctg := CreateObject('—правочники.“овары');   
+              Ctg.IncludeOnlyLevels(true);
+              if not Ctg.FindByName(VarAsStr(ImportTbl. атегори€),false) then
+                begin
+                  Ctg.AppendLevel;
+                  Ctg.NameField := VarAsStr(ImportTbl. атегори€);
+                  Ctg.Post;
+                  Ctg.ApplyUpdates;
+                end;               
+              MasterData.SetParent(Ctg);
+            end;
+        end;
+    end;
+  if IsObjFocused(Ctg) then
+    MasterData. атегори€ := Ctg;
+end;
+
+procedure MDS_Validate(Sender : TObject);
+var
+  Comment, Collect, SuppliersCodes, PricesType, BarCodeStr  : string;
+  Dic, SuppliersDic, BarCodeDic, CatDic : ICDictionary;
+  UsePrice1, UsePrice2, UsePrice3 : Boolean ;
+begin
+  if not VarAsBool(MasterData.@ атегори€.IsFocused) then
+    raise('”кажите категорию');
+  PricesType := Constants.“ипы÷ен;
+  if StrPos('0',PricesType)>0 then
+    UsePrice1 := True
+  else
+    UsePrice1 := False;
+
+  if StrPos('1',PricesType)>0 then
+    UsePrice2 := True
+  else
+    UsePrice2 := False;
+
+  if StrPos('2',PricesType)>0 then
+    UsePrice3 := True
+  else
+    UsePrice3 := False;
+
+  if not VarAsBool(MasterData.@¬алюта¬х÷ена.IsFocused) then
+    raise('Ќе заполнена ¬алюта ¬х÷ены');
+  if UsePrice1 and not VarAsBool(MasterData.@¬алюта÷ена.IsFocused) then
+    raise('Ќе заполнена ¬алюта ÷ены');
+  if UsePrice2 and not VarAsBool(MasterData.@¬алютаќпт÷ена.IsFocused) then
+    raise('Ќе заполнена ¬алюта ќпт÷ены');
+  if UsePrice3 and not VarAsBool(MasterData.@¬алюта рќпт÷ена.IsFocused) then
+    raise('Ќе заполнена ¬алюта  рќпт÷ены');
+  SetLocalization(MasterData, Form);
+  Collect := edCollect.Text;
+  ChangeCollection(Collection, MasterData, Collect); //расчеты
+  MasterData.Ќалогова€√руппа := edTaxGroup.ItemIndex+1;
+  if AddRec then
+    begin
+      Comment := 'ƒобавление карточки товаров';
+      ChangePrice(MasterData, MasterData.¬алюта¬х÷ена, MasterData.¬х÷ена, '¬х÷ена', Comment, 'EditInGoodDic');
+      ChangePrice(MasterData, MasterData.¬алюта÷ена, MasterData.÷ена, '÷ена', Comment, 'EditInGoodDic');
+      ChangePrice(MasterData, MasterData.¬алютаќпт÷ена, MasterData.ќпт÷ена, 'ќпт÷ена', Comment, 'EditInGoodDic');
+      ChangePrice(MasterData, MasterData.¬алюта рќпт÷ена, MasterData. рќпт÷ена, ' рќпт÷ена', Comment, 'EditInGoodDic');
+
+      //        Ў“–»’- ќƒџ
+
+      Dic := CreateObject('—правочники.“овары');
+      Dic.Select;
+      if Dic.FindByField('јртикул',MasterData.јртикул,false) then
+        begin
+          MasterData.јртикул := GetNextNumberForField('—правочники.“овары', 'јртикул', false, '');
+          if MasterData.“ип арточки = 0 then
+            MasterData. од := GetCode(MasterData.јртикул);
+        end;
+
+      BarCodeStr := GetCode(MasterData.јртикул);
+      MasterData.Ўтрих од := BarCodeStr;
+      BarCodeDic := CreateObject('—правочники.Ўтрих оды“оваров');
+      BarCodeDic.UseMaster(Null);
+      if BarCodeDic.FindByCode(BarCodeStr,false) then
+        begin
+          BarCodeDic.Edit;
+          BarCodeDic.SetMaster(MasterData);
+          BarCodeDic.Post;
+          BarCodeDic.ApplyUpdates;
+        end
+      else
+        begin
+          BarCodeDic.UseMaster(MasterData);
+          BarCodeDic.Append;
+          BarCodeDic. од := BarCodeStr;
+          BarCodeDic. оличество := 1;
+          BarCodeDic.јктивность := true;
+          BarCodeDic.»дентификатор := '0';
+          BarCodeDic.Post;
+          BarCodeDic.ApplyUpdates;
+          ResetActive(BarCodeDic);
+        end;
+
+    end
+  else
+    begin
+        Comment := ' орректировка карточки товаров';
+      if (OldInPrice <> MasterData.¬х÷ена) or not IsObjEQ(OldInCurrency, MasterData.¬алюта¬х÷ена) then
+        ChangePrice(MasterData, MasterData.¬алюта¬х÷ена, MasterData.¬х÷ена, '¬х÷ена', Comment, 'EditInGoodDic');
+      if (OldPrice1 <> MasterData.÷ена) or not IsObjEQ(OldCurrency1, MasterData.¬алюта÷ена) then
+        ChangePrice(MasterData, MasterData.¬алюта÷ена, MasterData.÷ена, '÷ена', Comment, 'EditInGoodDic');
+      if (OldPrice2 <> MasterData.ќпт÷ена) or  not IsObjEQ(OldCurrency2, MasterData.¬алютаќпт÷ена)  then
+        ChangePrice(MasterData, MasterData.¬алютаќпт÷ена, MasterData.ќпт÷ена, 'ќпт÷ена', Comment, 'EditInGoodDic');
+      if (OldPrice3 <> MasterData. рќпт÷ена) or  not IsObjEQ(OldCurrency3, MasterData.¬алюта рќпт÷ена)  then
+        ChangePrice(MasterData, MasterData.¬алюта рќпт÷ена, MasterData. рќпт÷ена, ' рќпт÷ена', Comment, 'EditInGoodDic');
+    end;
+ SuppliersCodes:=';';
+ SuppliersDic := CreateObject('—правочники.ѕоставщики“оваров');
+ SuppliersDic.UseMasterAndSelect(MasterData);
+ While SuppliersDic.SelectNext do
+    SuppliersCodes := SuppliersCodes+ IntToStr(SuppliersDic. од)+';';
+ MasterData. одыѕоставщиков := SuppliersCodes;
+
+ CatDic := CreateObject('—правочники.“овары');
+ CatDic.IncludeLevels(true);
+ CatDic.IncludeOnlyLevels(true);
+ if CatDic.Find(MasterData.@ атегори€) and not IsObjEQ(MasterData.GetParent,CatDic)  then
+   MasterData.SetParent(CatDic);
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure cbService_Click(Sender: TObject);
+begin
+  MasterData.”слуга := cbService.Checked;
+end;
+
+procedure Form_Show(Sender: TObject);
+begin
+  if MasterData.HasParam('EditOnlyPrices') and VarAsBool(MasterData.Params['EditOnlyPrices']) then
+    pcLists.ActivePage :=  tsPrice
+  else     
+    begin
+      pcLists.ActivePage := tsMain;
+      if eName.Enabled then
+        eName.SetFocus;
+    end;
+end;
+
+procedure cbShowOnSite_Click(Sender: TObject);
+begin
+  MasterData.ќтображатьЌа—айте := cbShowOnSite.Checked;
+end;
+
+procedure tcLocal_Change(Sender: TObject);
+begin
+  ChangeLocalization(Form);
+end;
+
+procedure MDS_VPAAfterPost(Sender: TObject);
+begin
+  MasterData.ApplyUpdates;
+ if MasterData.HasParam('IsPostGoodParam') and VarAsBool(MasterData.Params['IsPostGoodParam']) then
+    MasterData.Params['PostGood'] := MasterData;
+end;      
+
+
+procedure btSelColor_Click(Sender: TObject);  
+var ColorDic:ICDictionary;
+    DefName : string;
+begin 
+  ColorDic := CreateObject('—правочники.÷вета');
+  if ColorDic.SelectInForm('',DefName,Null) then
+    MasterData.÷вет := DefName;
+end;
+
+procedure cbWeight_Click(Sender: TObject);
+begin
+  MasterData.¬есовой“овар :=  cbWeight.Checked;
+end;
+
+procedure cbExcise_Click(Sender: TObject);
+begin
+ MasterData.ѕодјкцизний := cbExcise.Checked;
+ if cbExcise.Checked then
+   pExcise.Visible := True
+ else
+   begin
+     pExcise.Visible := False;
+     MasterData.¬идѕодакцѕродукции := Null;
+     MasterData.ќбъемƒек := 0;
+   end;
+
+end;
+
+
+procedure edCtg_ActionClear(Sender: TObject);
+begin
+  Cat := Null;
+  MasterData. атегори€ := Null;
+  edCtg.Text := Null;
+end;
+
+procedure edCtg_ActionExecute(Sender: TObject);
+var
+  DefName: String;
+begin
+  if isNil(Cat) then
+    begin
+      Cat := CreateObject('—правочники.“овары');
+      Cat.IncludeLevels(true);
+      Cat.IncludeOnlyLevels(true);
+    end;
+  if Cat.SelectInForm('¬ыбор атегорииƒл€ћодели',DefName,Null) then
+    begin
+      edCtg.Text := DefName;
+      MasterData. атегори€ := Cat;
+    end
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+Panel1:TO4Panel
+LinkImage1:TO4LinkImage
+Panel5:TO4Panel
+Label9:TO4Label
+pcLists:TO4PageControl
+tsMain:TTabSheet
+Label1:TO4Label
+Label2:TO4Label
+Label4:TO4Label
+lManufacturer:TO4Label
+lbPackCnt:TO4Label
+lbNetto:TO4Label
+lbSquare:TO4Label
+lbMinCount:TO4Label
+Label7:TO4Label
+Label8:TO4Label
+Label16:TO4Label
+eName:TO4DBEdit
+eCode:TO4DBEdit
+deUnitName:TO4DBEdit
+edCollect:TO4Edit
+eManufacturer:TO4DBEdit
+ePackCnt:TO4DBEdit
+Panel2:TO4Panel
+pModel:TO4Panel
+lModel:TO4Label
+lColor:TO4Label
+lColorCode:TO4Label
+Label6:TO4Label
+eModel:TO4DBEdit
+eColor:TO4DBEdit
+eColorCode:TO4DBEdit
+eSize:TO4DBEdit
+btSelColor:TO4Button
+pBarCode:TO4Panel
+lBarCode:TO4Label
+eBarCode:TO4DBEdit
+dbeSquare:TO4DBEdit
+dbeNetto:TO4DBEdit
+dbeMinCount:TO4DBEdit
+cbService:TO4CheckBox
+cbNoCount:TO4CheckBox
+pGroup:TO4Panel
+lGroup:TO4Label
+eGroup:TO4DBEdit
+cbWeight:TO4CheckBox
+dbeStrok:TO4DBEdit
+edTaxGroup:TO4Edit
+edCtg:TO4Edit
+tsPrice:TTabSheet
+Panel4:TO4Panel
+lbCurPriceTitle:TO4Label
+lbCurName:TO4Label
+Label5:TO4Label
+pnInPrice:TO4Panel
+Label3:TO4Label
+dbePriceIn:TO4DBEdit
+dbeCurrencyIn:TO4DBEdit
+pnPrice0:TO4Panel
+lbPriceName1:TO4Label
+dbePrice1:TO4DBEdit
+dbeCurrency1:TO4DBEdit
+dbePrecent1:TO4DBEdit
+pnPrice1:TO4Panel
+lbPriceName2:TO4Label
+dbePrice2:TO4DBEdit
+dbeCurrency2:TO4DBEdit
+dbePrecent2:TO4DBEdit
+pnPrice2:TO4Panel
+lbPriceName3:TO4Label
+dbePrice3:TO4DBEdit
+dbeCurrency3:TO4DBEdit
+dbePrecent3:TO4DBEdit
+tsExcise:TTabSheet
+Panel3:TO4Panel
+cbExcise:TO4CheckBox
+pExcise:TO4Panel
+Label10:TO4Label
+Label11:TO4Label
+Label14:TO4Label
+Label15:TO4Label
+dbeTypeProd:TO4DBEdit
+dbeSpase:TO4DBEdit
+tsBarCodes:TTabSheet
+tsPack:TTabSheet
+tsNotes:TTabSheet
+dmNotes:TO4DBMemo
+tsPhoto:TTabSheet
+iPhoto:TO4DBImage
+tsSite:TTabSheet
+tcLocal:TO4TabControl
+Label12:TO4Label
+Label13:TO4Label
+eDescrLang:TO4Memo
+eTitleLang:TO4Edit
+cbShowOnSite:TO4CheckBox
+tsPostavch:TTabSheet
+tsChangeObj:TTabSheet
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+TitlePanel:TO4Panel
+lbTitle:TO4Label
+MDS:TO4DataSource
+pmPhoto:TO4PopupMenu
+miLoadFromFile:TO4MenuItem
+miSaveToFile:TO4MenuItem
+MenuItem4:TO4MenuItem
+miCut:TO4MenuItem
+miCopy:TO4MenuItem
+miPaste:TO4MenuItem
+opDlg:TO4OpenPictureDialog
+spDlg:TO4SavePictureDialog
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem

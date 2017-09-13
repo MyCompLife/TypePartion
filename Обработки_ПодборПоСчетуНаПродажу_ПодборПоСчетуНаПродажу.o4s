@@ -1,0 +1,45 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+var
+  AccsGood, AccsPartGood : ISAccs;
+  Store : ISDictionary;
+  Date : DateTime;
+
+procedure InitSrvData; server;
+begin
+  AccsGood := CreateObject('Аккумуляторы.ОстаткиТоваров');
+  AccsPartGood := CreateObject('Аккумуляторы.ПартииТоваров');
+end;
+
+procedure SetStoreParams(DT : DateTime; Stores : ISValueList; Index : Integer); server;
+begin
+  Date := RoundDate(DT, rdDay, True);
+  if Stores.ValidIndex(Index) and (Index <> 0) then
+    Store := Stores.GetValue(Index)
+  else
+    nil(Store);
+end;
+
+procedure GetStoreList(TblGood, TblStore, TblPartGood : ISValueTable; LineNum : Integer); server;
+var
+  Res : Boolean;
+begin
+  TblGood.Find(LineNum);
+  AccsGood.IncludeZeroRest := False;
+  AccsGood.SetFieldFilter('Товар', TblGood.@Товар);
+  if not IsNil(Store) and Store.IsFocused then
+    AccsGood.SetFieldFilter('Склад', Store);
+  AccsGood.AppendGroupRestToValueTable(Date, 'Товар;Склад;КолОбщ;Партия', TblPartGood);
+  // TblPartGood.GroupBy('Товар;Склад;Партия', 'КолОбщ');
+  AccsGood.ClearFieldFilters();
+  AccsPartGood.AssignFieldsByDimIDTo('Партия', 'ДатаПр;Партнер;ВхЦенаБезНДС;Валюта;ВхЦенаВал', TblPartGood);
+  TblPartGood.GroupToMaster('Товар;Склад', 'КолОбщ', TblStore);
+  TblStore.SortBy('Товар;Склад');
+end;
+
+end.

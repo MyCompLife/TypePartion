@@ -1,0 +1,91 @@
+interface
+
+uses
+  System, DispIntf, Расчеты, РаботаСОбъектами, РаботаСПеременными,
+  РаботаСТаблицамиЗначений;
+
+implementation
+
+Var
+  PaysIn, PaysOut : ISJournal;    
+  tmpPaysTbl : ISValueTable;
+  AccsPart: ISAccs;
+
+procedure InitSrvDate;server;
+begin
+  AccsPart := CreateObject('Аккумуляторы.РасчетыСПартнерами');
+  tmpPaysTbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure GetPaysTbl(PaysTbl, RestTbl: ISValueTable; Part: Variant; UseAnalit:Boolean);server;
+var DocSum: Decimal;
+    AnalitField : string;
+begin       
+  if UseAnalit then
+   AnalitField := ';АналитикаВзаиморасчета';
+  AccsPart.ClearFieldBuffers;
+  AccsPart.ClearFieldFilters;  
+  //tmpPaysTbl.Close;
+  PaysTbl.CopyTo('',tmpPaysTbl);
+  AccsPart.SetFieldFilter('Партнер',Part);      
+  AccsPart.IncludeZeroRest := true;
+  AccsPart.AppendGroupRestToValueTable(400000, 'Валюта;СумОбщВал'+AnalitField,RestTbl);
+  AccsPart.AppendMotionToValueTable(0,400000,amtIncome,'Document=Документ;Date=Дата;СумОбщВал=СуммаДок;Валюта'+AnalitField,-1,tmpPaysTbl);
+  RestTbl.DoCalculation('Просрочка','0');
+  tmpPaysTbl.DoCalculation('Calc','0');
+  tmpPaysTbl.SortBy('Валюта'+AnalitField+';-Дата');
+  RestTbl.Select;
+  While RestTbl.SelectNext do
+    begin
+      DocSum := RestTbl.СумОбщВал;
+      if DocSum > 0 then
+        begin
+          if UseAnalit then
+            tmpPaysTbl.SetRange(ArrayOf(RestTbl.@Валюта,RestTbl.@АналитикаВзаиморасчета),
+                                ArrayOf(RestTbl.@Валюта,RestTbl.@АналитикаВзаиморасчета))
+          else
+            tmpPaysTbl.SetRange(RestTbl.@Валюта,RestTbl.@Валюта);
+          tmpPaysTbl.Select;
+          while tmpPaysTbl.SelectNext do
+            if DocSum > 0 then
+              begin
+                tmpPaysTbl.Edit;
+                DocSum := DocSum - tmpPaysTbl.СуммаДок;
+                if DocSum >= 0 then
+                  tmpPaysTbl.Сумма := tmpPaysTbl.СуммаДок;
+                if DocSum < 0 then
+                  tmpPaysTbl.Сумма := tmpPaysTbl.СуммаДок + DocSum;
+                tmpPaysTbl.Calc := 1;
+                tmpPaysTbl.Post;
+              end
+            else
+              break;
+        end;
+    end;   
+  tmpPaysTbl.SortBy('Calc');
+  tmpPaysTbl.SetRange(1,1);
+  tmpPaysTbl.AppendTo('',PaysTbl);
+  tmpPaysTbl.Clear;
+  PaysTbl.SortBy('Валюта'+AnalitField+';Дата');
+  RestTbl.Select;
+  While RestTbl.SelectNext do
+    if RestTbl.СумОбщВал >0 then
+      begin  
+        if UseAnalit then
+          PaysTbl.SetRange(ArrayOf(RestTbl.@Валюта,RestTbl.@АналитикаВзаиморасчета),
+                           ArrayOf(RestTbl.@Валюта,RestTbl.@АналитикаВзаиморасчета))
+        else
+          PaysTbl.SetRange(RestTbl.@Валюта,RestTbl.@Валюта);
+        PaysTbl.Select;
+        if PaysTbl.SelectFirst then
+          begin
+            RestTbl.Edit;
+            RestTbl.Просрочка := CurrentDate - RoundDate(PaysTbl.Дата, rdDay, false);
+            RestTbl.Post;
+          end;
+      end;
+  RestTbl.CancelRange;
+  PaysTbl.CancelRange;
+end;
+
+end.

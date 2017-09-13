@@ -1,0 +1,78 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками, УстановкаВажныхОбъектов,
+  ПечатьИВыводНаЭкран, Печать;
+
+implementation
+
+var
+  Phone, MasterData : ICDictionary;
+
+procedure dbePartner_Change(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(GetPartName(MasterData, 4)), '');
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+  lbTitle.Caption := SetTitleCaption(ArrayOf(GetPartName(MasterData, 4)), '');
+  rgState.ItemIndex := MasterData.Состояние;
+end;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  case VarAsStr(FieldName) of
+    'Партнер' :
+      if VarAsBool(MasterData.@Партнер.IsFocused) then
+        begin
+          MasterData.ПолноеНазвание := GetPartName(MasterData.Партнер, 1);
+          if IsNil(Phone) then
+            Phone := CreateObject('Справочники.Телефоны');
+          MasterData.Телефон := GetActiveByMaster2(Phone, MasterData.Партнер);
+        end;
+  end;
+end;
+
+procedure rgState_Click(Sender : TObject);
+begin
+  MasterData.Состояние := rgState.ItemIndex;
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+ImagePanel:TO4Panel
+LinkImage:TO4LinkImage
+MainPanel:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+dbePartner:TO4DBEdit
+dbeCard:TO4DBEdit
+rgState:TO4RadioGroup
+dbePhone:TO4DBEdit
+dbeCardNumber:TO4DBEdit
+TitlePanel:TO4Panel
+lbTitle:TO4Label
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

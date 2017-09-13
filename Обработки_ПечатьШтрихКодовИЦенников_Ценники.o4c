@@ -1,0 +1,136 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  Tbl  : ICValueTable;
+  MYF : ICDictionary;
+  i,j : Integer;
+  Constants : IC4VPAConst;
+  TypePrice : String;
+  FindGood, CurrencyDic, BarCodeDic : ICDictionary;
+  Price : Decimal;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+begin
+  MasterData := Form.GetParams;
+  Constants := GetConstants;
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  BarCodeDic := CreateObject('Справочники.ШтрихКодыТоваров');
+
+  TypePrice := VarAsStr(Constants.ПечатьЭтикеткиТипЦены);
+  if TypePrice='' then
+    TypePrice := 'Цена';
+  FindGood := CreateObject('Справочники.Товары');
+  CurrencyDic := CreateObject('Справочники.Валюты');
+  Tbl := CreateObject('ТаблицаЗначений');
+  MasterData.SaveContents('', Tbl);
+  Tbl.GroupBy('Товар','Количество');
+  Tbl.SortBy('Товар');
+  Tbl.Select;
+  Tbl.SelectFirst;
+
+  i := Tbl.Количество;
+  j:=0;
+
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  str, str1 : string;
+  Rate : Decimal;
+begin
+  if j < i then
+    begin
+      Accept := true;
+      j := j+1;
+    end
+  else
+    begin
+      Repeat
+        Accept := Tbl.SelectNext();
+        i := Tbl.Количество;
+        if not Accept then Exit;
+        j := 1;
+      until i <> 0;
+    end;
+
+  if FindGood.Find(Tbl.@Товар) then
+    begin
+      with Table do
+        begin
+          Value['Name'] := StrUpperCase(FindGood.НазвТовара);
+          Value['Code'] := FindGood.Код;
+          if VarAsBool(FindGood.ЕдИзм.IsFocused) then
+            Value['UnitName'] := FindGood.ЕдИзм.Value;
+          if VArAsBool(Constants.ИспльзоватьМультиШтрихКодыДляТоваров) then
+            begin
+              BarCodeDic.UseMasterAndSelect(FindGood);
+              While BarCodeDic.SelectNext do
+                if not VarAsBool(BarCodeDic.Активность) then
+//                if StrLength(VarAsStr(BarCodeDic.Код))=13 then
+                  begin
+                    Value['BarCode'] := BarCodeDic.Код; 
+                    break;
+                  end
+            end
+          else
+            Value['BarCode'] := FindGood.ШтрихКод;
+
+        end;
+        if CurrencyDic.Find(FindGood._Default['Валюта'+TypePrice]) then
+          Rate := CurrencyDic.GetTimedValue(Constants.UsedCurs, CurrentDate)
+        else
+          Rate := 1;
+
+
+        Price :=  FindGood._Default[TypePrice]*Rate;
+        if VarAsBool(Constants.ОкруглятьЦеныГрн) then
+          begin
+            if VarAsBool(Constants.ОкруглятьЦеныГрнДо5Коп) then
+              Price := RoundTo5Cop(Price)
+            else
+              Price := RoundDec(Price,VarAsInt(Constants.ОкруглениеЦенГрн));
+          end;
+        str := StrCopy(VarAsStr((RoundFloat(Frac(Price), 2)) * 100), 1, 2);
+        case StrLength(str) of
+          0 :
+            str := '00';
+          1 :
+            str := '0' + str;
+        end;
+
+        lbPrice.Caption := IntToStr(trunc(Price))+'.';
+        lbPriceCop.Caption := str;
+    end;
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  MYF.Select;
+  if not MYF.SelectNext then
+    exit;
+  with Table do
+    Value['NAME'] := GetPartName(MYF);
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+DetailBand1:TRBDetailBand
+Label8:TRBLabel
+Label3:TRBLabel
+Label5:TRBLabel
+Label17:TRBLabel
+lbPrice:TRBLabel
+Label4:TRBLabel
+Label6:TRBLabel
+Label2:TRBLabel
+Label7:TRBLabel
+lbPriceCop:TRBLabel
+lbCurName:TRBLabel
+Label1:TRBLabel
+Label9:TRBLabel
+Structure1:TRBStructure

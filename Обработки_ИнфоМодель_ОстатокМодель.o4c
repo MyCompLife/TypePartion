@@ -1,0 +1,139 @@
+interface
+
+uses
+  System, DispIntf, Интерфейс, Расчеты, ConstNames, Reports;
+
+implementation
+
+var
+  Options : ICOptions;
+  CursorVis : TCursor;
+  GoodList : ICValueList;
+  UrPartner, ManPartner, Partner, GoodDict : ICDictionary;
+  GoodsTbl, StoreTbl, GoodsTblG, GoodsTblAll : ICValueTable;
+  V: ICReport;
+  IsDate : DateTime; 
+  Model : string;
+
+procedure SetGoodsTblColumns(GoodsTbl : ICValueTable; DoOpen : boolean = true);
+begin
+  GoodsTbl.Close();
+  GoodsTbl.AddColumn('Код', lftString, 20);
+  GoodsTbl.AddColumn('ЕдИзм', lftLink, 0);
+  GoodsTbl.AddColumn('Количество', vtcFft, 7);
+  GoodsTbl.AddColumn('СуммаВх', vtcFft, 7);
+  GoodsTbl.AddColumn('Цена', vtcFft, 7);
+  GoodsTbl.AddColumn('Сумма', vtcFft, 7);
+  GoodsTbl.AddColumn('Валюта', lftLink, 0);
+  GoodsTbl.AddColumn('Курс', vtcFft, 2);
+  GoodsTbl.AddColumn('Партия', lftFloat, 0);
+  GoodsTbl.AddColumn('Склад', lftLink, 0);
+  GoodsTbl.AddColumn('Товар', lftLink, 0);
+  GoodsTbl.AddColumn('Модель', lftString, 4);
+  if DoOpen then GoodsTbl.Open();  
+end;
+
+procedure CreateObjects;
+begin
+  Options := GetOptions;
+  GoodsTbl := CreateObject('ТаблицаЗначений');
+  SetGoodsTblColumns(GoodsTbl,true);
+  GoodsTbl.Open;
+  SetGoodsTblColumnsFormat(GoodsTbl);
+  StoreTbl := CreateObject('ТаблицаЗначений');
+//  GoodsTbl.CopyColumnsTo(StoreTbl);  GoodsTbl.CopyTo('Склад;Код;ЕдИзм;Количество;Сумма;Цена;СуммаВх', StoreTbl);
+  StoreTbl.Close();
+  StoreTbl.AddColumn('Код', lftString, 20);
+  StoreTbl.AddColumn('ЕдИзм', lftLink, 0);
+  StoreTbl.AddColumn('Количество', vtcFft, 7);
+  StoreTbl.AddColumn('СуммаВх', vtcFft, 7);
+  StoreTbl.AddColumn('Цена', vtcFft, 7);
+  StoreTbl.AddColumn('Сумма', vtcFft, 7);
+  StoreTbl.AddColumn('Склад', lftLink, 0);
+  StoreTbl.Open();
+  UrPartner := CreateObject('Справочники.ЮрПартнеры');
+  ManPartner := CreateObject('Справочники.ФизЛица');
+ //категории
+  GoodDict := CreateObject('Справочники.Товары');
+  GoodList := CreateObject('СписокЗначений');
+  GoodsTblG := CreateObject('ТаблицаЗначений');
+  GoodsTblAll := CreateObject('ТаблицаЗначений');
+end;
+
+procedure Form_Open(Sender: TObject);
+begin
+ // CreateObjects;
+ // Server.CreateSrvObjects;
+  IsDate := CurrentDate;
+  XGrid.AddSection('Hed');
+end;
+
+procedure Form_Execute(Sender: TObject; Mean: Variant; Params: Variant);
+begin
+  V := Mean;
+end;
+
+procedure tbRun_Click(Sender: TObject);
+var i,j: Integer;
+begin
+  try
+    CreateObjects;
+    Server.CreateSrvObjects;
+
+    CursorVis := WaitCursorStart;
+    XGrid.ClearAll;
+    XGrid.AddSection('Hed');
+
+    GoodsTbl.Clear;
+    GoodsTbl.CopyDataToServer();
+    GoodList.CopyDataToServer();
+    StoreTbl.Clear;
+    StoreTbl.CopyDataToServer();
+    Model := eGoodModel.Text;
+    V.RunThreadProcess(Server.GetRunReportEP(GoodsTbl.SrvMean, StoreTbl.SrvMean, Model, GoodList.SrvMean,
+                              VarAsBool(Options.GetServerPrm(ShowCodeUnitName)),
+                              GoodDict.Params['UseLevel'], GoodDict.SrvMean,
+                              IsDate, cbGroupModel.Checked),
+       ReportRunning);
+    GoodsTbl.CopyDataFromServer;    
+    StoreTbl.CopyDataFromServer;
+    StoreTbl.Select;
+    //GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Det', '-' , 0, GoodsTbl.LineCount - 1);
+    i := 1;
+    GoodsTbl.SortBy('Склад;Код');
+    while StoreTbl.SelectNext do begin
+      StoreTbl.AddToXGrid(CtrlToVar(XGrid), 'Store', 'Склад;;Количество;СуммаВх;;Сумма;;;' , i, 1);
+      GoodsTbl.SetRange(StoreTbl.Склад,StoreTbl.Склад);
+      GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Det', '-' , 0, 0);
+      inc(i);
+    end;
+
+    GoodsTbl.SortBy('Код');
+    GoodsTbl.SetRange(lblTotal, lblTotal);
+    GoodsTbl.AddToXGrid(CtrlToVar(XGrid), 'Total', 'Код;;Количество;СуммаВх;;Сумма;;;' , 0, 0);
+///////////////
+    XGrid.Cells(2,1,XGrid.RowCount,2).AdjustColWidths(0);
+    XGrid.FixedColCount := 2;
+    if XGrid.RowCount>3 then XGrid.FixedRowCount := 3;
+    XGrid.Cell(1,1).Value := XGrid.Cell(1,1).Value + ' ' + DateToStr(IsDate);
+  finally
+    SetCursor(CursorVis);
+  end;
+end;
+
+procedure tbExcel_Click(Sender: TObject);
+begin
+  XGrid.ExportToExcel;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4Form
+tbrData:TO4ToolBar
+tbExcel:TO4ToolButton
+Label2:TO4Label
+eGoodModel:TO4Edit
+cbGroupModel:TO4CheckBox
+Panel4:TO4Panel
+XGrid:TO4XGrid
+PopupMenu1:TO4PopupMenu
+MenuItem1:TO4MenuItem

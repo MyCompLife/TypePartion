@@ -1,0 +1,66 @@
+interface
+
+uses
+  System, DispIntf;
+
+implementation
+
+function GetTotalSumsSrv(Data : ISJournal) : Variant; server;
+begin
+  Result := Data.Total('Сумма');
+end;  
+
+procedure GetTable(Tbl : ISValueTable; MasterData : ISJournal); server;
+var
+  OutCome, HasOutCome : Boolean;
+  MasterDoc : ISDocuments;
+  LinkToPart : ISDictionary;
+begin
+  Tbl.Close();
+  Tbl.AddColumn('НомерДокумента', lftString, 20);
+  Tbl.AddColumn('ДатаДокумента', lftDateTime, 0);
+  Tbl.AddColumn('Партнер', lftString, 70);
+  Tbl.AddColumn('Документ', lftString, 70);
+  Tbl.AddColumn('Сумма', lftFFt, 4);  
+  Tbl.AddColumn('Комиссия', lftFFt, 4);
+  Tbl.AddColumn('СуммаЗарах', lftFFt, 4);
+  //Tbl.AddColumn('СуммаБезНДС', lftFFt, 4);
+  //Tbl.AddColumn('СуммаНДС', lftFFt, 4);  
+  Tbl.AddColumn('Комментарий', lftString, 100);
+  Tbl.AddColumn('Категория', lftString, 70);
+  Tbl.Open();
+  MasterData.Select();
+  while MasterData.SelectNext() do
+    begin
+      Tbl.Append();
+      Tbl.Сумма := MasterData.Сумма;
+      Tbl.Комиссия := MasterData.СуммаКомиссии;
+      Tbl.СуммаЗарах := MasterData.СуммаЗачисления;
+      //
+      Tbl.Комментарий := MasterData.Комментарий;
+      //
+      Tbl.ДатаДокумента := MasterData.ДатаДокумента;
+      Tbl.НомерДокумента := MasterData.НомерДокумента;
+      Tbl.Документ := MasterData.GetDoc.GetName;
+      if VarAsBool(MasterData.@Категория.IsFocused) then
+        Tbl.Категория := MasterData.Категория.Название
+      else
+        Tbl.Категория := '-';
+      LinkToPart := MasterData.Партнер;
+      if VarAsBool(LinkToPart.IsFocused) then
+        case LinkToPart.GetSign of
+          'Реализаторы', 'ПостНаРеализацию',
+            'КонтрактИмпорт', 'ДоговПоставки' :
+              Tbl.Партнер := LinkToPart.Партнер;
+          'Календарь' :
+            Tbl.Партнер := LinkToPart.Месяц;
+          'РасчСчета' :
+            Tbl.Партнер := LinkToPart.НомерСчета;
+          else
+            Tbl.Партнер := LinkToPart.ПолноеНазвание;
+        end;
+      Tbl.Post();
+    end;
+end;
+
+end.

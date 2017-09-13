@@ -1,0 +1,100 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, –абота—ѕеременными, –абота—ќбъектами,
+  –абота— омпонентамиVCL, –абота—“аблицами«начений, –абота—“аблицами«наченийCL;
+
+// установка локализаций дл€ справочников
+procedure GetLocalization(Data: ICDictionary; DicForm: TO4DataForm);
+procedure ChangeLocalization(DicForm: TO4DataForm);
+procedure SetLocalization(Data: ICDictionary; DicForm: TO4DataForm);
+
+implementation
+
+var
+  Constants: IC4VPAConst;
+  ActiveTabIndex: Integer;
+  TblLocal: ICValueTable;
+
+// установка локализаций дл€ справочников
+procedure GetLocalization(Data: ICDictionary; DicForm: TO4DataForm);
+var i: Integer;
+begin
+  Constants := GetConstants;
+  if not VarAsBool(Constants.»нтеграци€——айтом) then
+    begin
+      SetPropertyForComponentList(ptTabVisible, DicForm, 'tsSite', false);
+      exit;
+    end;
+  (DicForm.FindComponent('tcLocal')as TO4TabControl).Tabs.Clear;
+  if StrLength(Constants.“аблицаязыков) > 0 then
+    begin 
+      if WordCount(Constants.“аблицаязыков,'|') < 2 then
+        begin
+          (DicForm.FindComponent('tcLocal')as TO4TabControl).Visible := false;
+          exit;
+        end;
+      for i := 1 to WordCount(Constants.“аблицаязыков,'|') do
+        if VarAsInt(ExtractWord(3,ExtractWord(i,Constants.“аблицаязыков,'|'),';'),0) = 0 then
+          (DicForm.FindComponent('tcLocal')as TO4TabControl).Tabs.Add(ExtractWord(1,ExtractWord(i,Constants.“аблицаязыков,'|'),';') + ' ' + ExtractWord(2,ExtractWord(i,Constants.“аблицаязыков,'|'),';')) ;
+      ActiveTabIndex := 0;
+    end;
+  TblLocal := CreateTblFromBLOB(Data.“аблицаЋокализаций);
+  if isNil(TblLocal) then
+    begin
+      TblLocal := CreateObject('ValueTable');
+      TblLocal.AddColumn('code', vtcString, 3);
+      TblLocal.AddColumn('title', vtcString, 250);
+      TblLocal.AddColumn('description', vtcMemo, 0);
+      TblLocal.Open;
+    end;
+  TblLocal.SortBy('code');
+  if (DicForm.FindComponent('tcLocal')as TO4TabControl).Tabs.Count > 0 then
+    if TblLocal.Find(ExtractWord(1,(DicForm.FindComponent('tcLocal')as TO4TabControl).Tabs.Strings[ActiveTabIndex],' ')) then
+      begin
+        (DicForm.FindComponent('eTitleLang') AS TO4Edit).text := TblLocal.title;
+        (DicForm.FindComponent('eDescrLang') AS TO4Memo).text := TblLocal.description;
+      end
+end;
+
+procedure ChangeLocalization(DicForm: TO4DataForm);
+var tcLocal: TO4TabControl;
+begin
+  if not VarAsBool(Constants.»нтеграци€——айтом) then
+    exit;
+  tcLocal := (DicForm.FindComponent('tcLocal') AS TO4TabControl);
+  if TblLocal.Find(ExtractWord(1,tcLocal.Tabs.Strings[ActiveTabIndex],' ')) then
+    begin
+      TblLocal.Edit;
+      TblLocal.title := (DicForm.FindComponent('eTitleLang') AS TO4Edit).text;
+      TblLocal.description := (DicForm.FindComponent('eDescrLang') AS TO4Memo).text;
+      TblLocal.Post;
+    end
+  else
+    begin
+      TblLocal.Append;
+      TblLocal.code := ExtractWord(1,tcLocal.Tabs.Strings[ActiveTabIndex],' ');
+      TblLocal.title := (DicForm.FindComponent('eTitleLang') AS TO4Edit).text;
+      TblLocal.description := (DicForm.FindComponent('eDescrLang') AS TO4Memo).text;
+      TblLocal.Post;
+    end;
+  ActiveTabIndex := tcLocal.TabIndex;
+  if TblLocal.Find(ExtractWord(1,tcLocal.Tabs.Strings[ActiveTabIndex],' ')) then
+    begin
+      (DicForm.FindComponent('eTitleLang') AS TO4Edit).text := TblLocal.title;
+      (DicForm.FindComponent('eDescrLang') AS TO4Memo).text := TblLocal.description;
+    end
+end;
+
+procedure SetLocalization(Data: ICDictionary; DicForm: TO4DataForm);
+begin
+  if not VarAsBool(Constants.»нтеграци€——айтом) then
+    exit;
+  if WordCount(Constants.“аблицаязыков,'|') > 1 then
+    begin
+      ChangeLocalization(DicForm);
+      Data.“аблицаЋокализаций := WritePropsToBlob(TblLocal);
+    end;
+end;
+
+end.

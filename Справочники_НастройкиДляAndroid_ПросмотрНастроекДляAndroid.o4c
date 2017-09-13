@@ -1,0 +1,59 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, InitColors, Расчеты, Пользователи, РаботаСПеременными, РаботаСОбъектами,РаботаСТаблицамиЗначений,
+  XMLИмпортЭкспорт, РаботаСКомпонентамиVCL, РаботаСТаблицамиЗначенийCL, ПодключениеДопИнтерфейса, НумерацияДокументов,  РаботаСДокументамиCL, КПК;
+
+implementation
+
+var
+  MasterData, AndroidSettingsDict : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+end;
+
+procedure Form_Open(Sender : TObject);
+begin  
+  MasterData.Select;
+  if not MasterData.SelectNext then
+    begin                
+      GetAndroidSettingsDict(AndroidSettingsDict);
+      MasterData.Refresh;
+    end;
+  MasterData.Params[prmInterfaceType] := itMainForm;
+  MakeStandartInterface(MasterData, Form, 'tbrData', 'dbgData');
+end;
+
+{$D-}
+procedure dbgData_GetImageIndex(Sender : TObject; var Index1, Index2 : Integer);
+begin 
+  if not MasterData.IsFocused then
+    exit;
+  if VarAsBool(MasterData.Активность) then
+    Index1 := 36;
+end;
+{$D+}
+
+procedure miRefresh_Click(Sender : TObject);
+begin
+  MasterData.Refresh;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+tbrData:TO4ToolBar
+tbEdit:TO4ToolButton
+tbDelimiter1:TO4ToolButton
+tbRefresh:TO4ToolButton
+tbSettings:TO4ToolButton
+dbgData:TO4DBGrid
+MDS:TO4DataSource
+pmData:TO4PopupMenu
+miEdit:TO4MenuItem
+miDelimiter1:TO4MenuItem
+miSort:TO4MenuItem
+miDelimiter3:TO4MenuItem
+miRefresh:TO4MenuItem
+miSettings:TO4MenuItem

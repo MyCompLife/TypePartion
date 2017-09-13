@@ -1,0 +1,197 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  TLF, ADR, RRR, MYF : ICDictionary;
+  CNV : ICWriNums;
+  Tbl : ICValueTable;
+  OutCome : Boolean;
+
+procedure Form_BeginPrint(PrintForm : TO4PrintForm);
+var
+  NilMaster : TRBDetailBand;
+begin
+  MasterData := Form.GetParams; //Form.GetMean;
+  OutCome := true;
+  if OutCome then //меняется порядок печати
+    begin
+      lblMe.Caption := 'ПОСТАЧАЛЬНИК:';
+      lblPart.Caption := 'КОМУ:';
+      dbPartner.Master := NilMaster;
+      dbMe.Master := dbTop;
+    end
+  else
+    begin
+      lblPart.Caption := 'ПОСТАЧАЛЬНИК:';
+      lblMe.Caption := 'КОМУ:';
+    end;
+  TLF := CreateObject('Справочники.Телефоны');
+  ADR := CreateObject('Справочники.Адреса');
+  RRR := CreateObject('Справочники.РасчСчета');
+  MYF := CreateObject('Справочники.ВашеПредприятие');
+  CNV := CreateObject('ЧислаПрописью');
+  Tbl := CreateObject('ТаблицаЗначений');
+end;
+
+procedure Structure1_ROOT_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+var
+  TmpPartner : ICDictionary;
+  Dover : string;
+begin
+  with Table do
+    begin
+      Value['NUMBER'] := MasterData.НомерДокумента;
+      Value['Date'] := MasterData.ДатаДокумента;
+      if MasterData.HasField('Покупатель') and VarAsBool(MasterData.@Покупатель.IsFocused) then
+        TmpPartner := MasterData.Покупатель
+      else
+        TmpPartner := MasterData.Партнер;
+      if TmpPartner.IsFocused then
+        begin
+          Value['PARTADDR'] := GetActiv(ADR, 'ПочтИндекс', TmpPartner) + ', ' +
+            GetActiv(ADR, 'Город.Название', TmpPartner) + ', ' +
+            GetActiv(ADR, 'Адрес', TmpPartner);
+          Value['PARTPHONE'] := '(' + GetActiv(TLF, 'КодГорода', TmpPartner) + ') ' +
+            GetActiv(TLF, 'Номер', TmpPartner);
+          Value['PARTNAME'] := VarAsStr(TmpPartner.Код) + ' ' + GetPartName(TmpPartner);
+        end;
+      Value['Summa'] := MasterData.Сумма;
+      Value['CurrValue'] := MasterData.Курс;
+      Value['SummaHd'] := MasterData.Сумма / MasterData.Курс;
+      if VarAsBool(MasterData.Валюта.IsFocused) then
+        begin
+          Value['CurrName'] := MasterData.Валюта.Код;
+          Label9.Caption := 'Сума в ' + MasterData.Валюта.Код
+        end;
+     end;
+  MasterData.SaveContents('', Tbl);
+  if OutCome then
+    Tbl.GroupBy('Товар;Цена;ЦенаБезСкидкиНадбавки', 'Количество');
+  Tbl.DoCalculation('СуммаСтроки', 'Количество*Цена');
+  //для заполнения поля Код в таблице, с последующей сортировкой
+  Tbl.DoGetLinks('Код=Товар.Код;ЕдИзм=Товар.ЕдИзм');
+  //Tbl.SortBy('Код');
+  //для сортировки по названию товара
+  Tbl.SortBy('НомСтроки');
+  Tbl.Select;
+  if MasterData.ПроцСкидки >= 0 then
+    begin
+      Label31.Width := 0;
+      Label39.Width := 0;
+      Label27.Width := Label27.Width + 86;
+      Label35.Width := Label35.Width + 86;
+    end;
+//  lbSumInWord.Caption := CNV.MoneyToStr((MasterData.Сумма / MasterData.Курс), 'USD', 1058); //C_GRN,C_KOP,True);
+end;
+
+procedure Structure1_ME_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  MYF.Params['Region'] := MasterData.Регион;
+  if GetMyFirm(Table, MYF, ADR, TLF, RRR) then
+    with Table do
+      begin
+        if not IsNull(Value['BankTown']) then
+          Value['BankName'] := Value['BankName'] + ',' + Value['BankTown'];
+        Value['PayAccNum'] := Value['PayAccNum'] + ' в ' + Value['BankName'];
+      end;
+end;
+
+procedure Structure1_ROOT_Det_GetData(Table : TRBTable; Index, Count : Integer; var Accept : Boolean);
+begin
+  Accept := Tbl.SelectNext();
+  if not Accept then
+    exit;
+  with Table do
+    begin
+      Value['Code'] := Tbl.Код;
+      Value['NAME'] := Tbl.DefValue['Товар'];
+      Value['UnitName'] := Tbl.DefValue['ЕдИзм'];
+      Value['Count'] := Tbl.Количество;
+
+      Value['Price'] := RoundFloat(Tbl.Цена / MasterData.Курс,2);
+      Value['OldPrice'] := RoundFloat(Tbl.ЦенаБезСкидкиНадбавки / MasterData.Курс,2);
+      if VarAsBool(MasterData.Валюта.IsFocused) then
+        begin
+          Value['CurrName'] := MasterData.Валюта.Код;
+          Label9.Caption := 'Сума в ' + MasterData.Валюта.Код
+        end;
+//      Value['Price'] := Tbl.Цена;
+      Value['SummaStr'] := RoundFloat((Tbl.Цена / MasterData.Курс) * Tbl.Количество,2);
+    end;
+end;
+
+procedure dbTop_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+//  Label1.Caption := StrUpperCase(MasterData.GetView());
+end;
+
+procedure dbMeAdr_BeforePrint(Band : TRBCustomBand; var Accept : Boolean);
+begin
+  Accept := OutCome;
+end;
+
+procedure Structure1_ROOT_Det_GetCount(Table : TRBTable; var Count : Integer);
+begin
+  Count := Tbl.LineCount;
+end;
+
+procedure bndFtALL_AfterPrint(Band: TRBCustomBand; Accepted: Boolean);
+begin
+  Label9.Caption := 'Сума в ' + Label22.Caption;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4PrintForm
+dbLogotype:TRBDetailBand
+dbTop:TRBDetailBand
+Label1:TRBLabel
+Label84:TRBLabel
+Label2:TRBLabel
+Label3:TRBLabel
+Label4:TRBLabel
+dbMe:TRBDetailBand
+lblMe:TRBLabel
+Label11:TRBLabel
+dbPartner:TRBDetailBand
+lblPart:TRBLabel
+Label94:TRBLabel
+dbMeAdr:TRBDetailBand
+Label7:TRBLabel
+Label15:TRBLabel
+dbMeReq:TRBDetailBand
+Label8:TRBLabel
+Label16:TRBLabel
+bndHdDet:TRBBand
+Label45:TRBLabel
+Label26:TRBLabel
+Label27:TRBLabel
+Label28:TRBLabel
+Label29:TRBLabel
+Label31:TRBLabel
+Label32:TRBLabel
+Label12:TRBLabel
+dbndGoods:TRBDetailBand
+Label34:TRBLabel
+Label35:TRBLabel
+Label36:TRBLabel
+Label37:TRBLabel
+Label39:TRBLabel
+Label40:TRBLabel
+SysData1:TRBSysData
+Label13:TRBLabel
+bndFtALL:TRBBand
+Label22:TRBLabel
+Label5:TRBLabel
+Label6:TRBLabel
+Label81:TRBLabel
+Label9:TRBLabel
+Label10:TRBLabel
+bndFtDET:TRBBand
+Label48:TRBLabel
+Label51:TRBLabel
+Structure1:TRBStructure

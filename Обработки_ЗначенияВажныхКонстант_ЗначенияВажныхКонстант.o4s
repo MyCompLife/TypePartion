@@ -1,0 +1,118 @@
+interface
+
+uses
+  System, DispIntf, –асчеты;
+
+implementation
+var
+   UseGeneralPrecent:boolean;
+   Precent1, Precent2, Precent3:Decimal;
+  Constants : IS4VPAConst;
+
+procedure FillPrecentPrice(Proc:ISProcessing; var Accept : boolean);
+var Count, Total : integer;
+    Dic, ParentDic:ISDictionary;
+begin
+ Accept := false;
+ Dic := CreateObject('—правочники.“овары');
+ Dic.IncludeLevels(false);
+ if UseGeneralPrecent then
+   begin
+     Dic.Select;
+     Count := 1;
+     Total := Dic.RecordCount;
+     While Dic.SelectNext do
+       begin
+         Dic.Edit;
+         Dic.ѕрЌац÷ена := Precent1;
+         Dic.ѕрЌацќпт÷ена := Precent2;
+         Dic.ѕрЌац рќпт÷ена := Precent3;
+         Dic.Post;
+         if (Count mod 10)=0 then
+           Proc.NotifyClient('«аполнение наценки', Count, Total);
+         inc(Count);
+         if Proc.Terminated then
+           exit;
+       end;
+     Dic.ApplyUpdates;
+   end
+ else
+   begin
+      ParentDic := CreateObject('—правочники.“овары');
+      ParentDic.IncludeOnlyLevels(true);
+      ParentDic.Select;
+      Count := 1;
+      Total := ParentDic.RecordCount;
+      While ParentDic.SelectNext do
+        begin
+          Dic.UseParent(ParentDic);
+          Dic.Select;
+          While Dic.SelectNext do
+            begin
+              Dic.Edit;
+              Dic.AssignFields('ѕрЌац÷ена;ѕрЌацќпт÷ена;ѕрЌац рќпт÷ена',ParentDic);
+              Dic.Post;
+            end;
+          Proc.NotifyClient('«аполнение наценки', Count, Total);
+          inc(Count);
+          if Proc.Terminated then
+            exit;
+        end;
+      Dic.ApplyUpdates;
+
+   end;
+ Accept := not Proc.Terminated;
+end;
+
+function FillPrecentPriceEP(UseGeneralPrecentS:boolean; Precent1S, Precent2S, Precent3S:Decimal) : Variant; server;
+begin
+ UseGeneralPrecent := UseGeneralPrecentS;
+ Precent1 := Precent1S;
+ Precent2 := Precent2S;
+ Precent3 := Precent3S;
+ Result := EntryPoint(FillPrecentPrice);
+end;
+
+
+
+
+procedure FillCurPrice(Proc:ISProcessing; var Accept : boolean);
+var Count, Total : integer;
+    Dic, ParentDic:ISDictionary;
+begin
+ Accept := false;
+ Dic := CreateObject('—правочники.“овары');
+ Dic.IncludeLevels(false);
+
+     Dic.Select;
+     Count := 1;
+     Total := Dic.RecordCount;
+     While Dic.SelectNext do
+       begin
+         Dic.Edit;
+         if IsObjFocused(Constants.¬алюта÷ена”молч) then
+            Dic.¬алюта÷ена := Constants.¬алюта÷ена”молч;
+         if IsObjFocused(Constants.¬алютаќпт÷ена”молч) then
+            Dic.¬алютаќпт÷ена := Constants.¬алютаќпт÷ена”молч;
+         if IsObjFocused(Constants.¬алюта рќпт÷ена”молч) then
+            Dic.¬алюта рќпт÷ена := Constants.¬алюта рќпт÷ена”молч;
+         Dic.Post;
+         if (Count mod 10)=0 then
+           Proc.NotifyClient('«аполнение наценки', Count, Total);
+         inc(Count);
+         if Proc.Terminated then
+           exit;
+       end;
+     Dic.ApplyUpdates;
+
+ Accept := not Proc.Terminated;
+end;
+
+function FillCurPriceEP : Variant; server;
+begin
+ Constants := CreateObject(' онстанты');
+
+ Result := EntryPoint(FillCurPrice);
+end;
+end.
+

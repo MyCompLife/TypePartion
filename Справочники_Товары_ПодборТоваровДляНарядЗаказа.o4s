@@ -1,0 +1,22 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+var
+    Constants : IS4VPAConst;
+    CurrencyDic : ISDictionary;
+
+procedure SrvCalcFields(Dic : ISDictionary);
+begin
+  PricesInNativeCurrency(Dic); //находится в модуле Расчёты
+end;
+
+function SrvCalcFieldsEP : Variant; server;
+begin
+  Result := EntryPoint(SrvCalcFields);
+end;
+
+
+end.

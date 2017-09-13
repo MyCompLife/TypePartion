@@ -1,0 +1,76 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+procedure FillDoc(tblContents: ISValueTable; dateFrom, dateTo: DateTime; dicRegions: ISDictionary; ПроцентНачисленияЗП : variant);server;
+var
+  accsGood: ISAccs;
+  tblKassa, tblBank : ISValueTable;
+  dicTab: ISDictionary;
+  Sum, curSum, allTime, MinSum, curMinSum: Decimal;
+  journ: ISJournal;
+  Procent, SumBank, SumKassa : Decimal;
+  i : integer;
+begin                                
+  tblKassa := CreateObject('ValueTable');
+  tblContents.CopyColumnsTo(tblKassa);
+  tblBank := CreateObject('ValueTable');
+  tblContents.CopyColumnsTo(tblBank);
+  dateFrom := RoundDate(dateFrom,rdDay,false);
+  dateTo := RoundDate(dateTo,rdDay,true)-0.0001;
+  Procent := ПроцентНачисленияЗП;
+
+  journ := CreateObject('Журналы.ЖурналКассовыхПлатежей');
+  journ.SetDateRange(dateFrom, dateTo);
+  journ.SetDocTypeRange('Документы.ПриходВКассу');
+  journ.SetRangeByField('Регион',dicRegions);
+  journ.Select;
+  if journ.Select = true then
+    journ.SaveToValueTable('ДатаДокумента;Партнер;Сумма',tblKassa,1,journ.RecordCount);
+
+  journ := CreateObject('Журналы.ЖурналБанковскихПлатежей');
+  journ.SetDateRange(dateFrom, dateTo);
+  journ.SetDocTypeRange('Документы.ПриходНаРасчСчет');
+  journ.SetRangeByField('Регион',dicRegions);
+  if journ.Select = true then
+    journ.SaveToValueTable('ДатаДокумента;Партнер;Сумма',tblBank,1,journ.RecordCount);
+
+  tblBank.AppendTo('ДатаДокумента;Партнер;Сумма=СуммаБанк',tblContents);
+  tblKassa.AppendTo('ДатаДокумента;Партнер;Сумма=СуммаКасса',tblContents);
+  tblContents.GroupBy('ДатаДокумента;НомСтроки','СуммаКасса;СуммаБанк;СуммаЗП');
+  i := 1;
+  tblContents.SortBy('ДатаДокумента');
+  tblContents.Select;
+  if Procent <> 0 then
+    while tblContents.SelectNext do
+      begin
+        SumBank := tblContents.СуммаБанк;
+        SumKassa := tblContents.СуммаКасса;
+        tblContents.Edit;
+        tblContents.НомСтроки := i;
+        if SumBank + SumKassa <> 0 then
+          tblContents.СуммаЗП := (SumBank + SumKassa) * (Procent/100);
+        tblContents.Post;
+        inc(i);
+      end;
+  tblContents.SortBy('НомСтроки;ДатаДокумента');
+end;
+
+
+procedure ChangeTbl(TblContents: ISValueTable; Percent : Decimal); server;
+var
+  Course: Decimal;
+begin
+  TblContents.Select;
+  While TblContents.SelectNext do
+    begin
+      TblContents.Edit;
+      TblContents.СуммаЗП := (tblContents.СуммаКасса + tblContents.СуммаБанк)*(Percent/100);
+      TblContents.Post;
+    end;
+end;
+
+end.

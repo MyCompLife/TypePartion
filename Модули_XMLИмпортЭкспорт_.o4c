@@ -1,0 +1,252 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными;
+
+type
+  TExportType = T_Enum;
+  // TXMLAttributes таблица для хранения значений аттрибутов
+  //структура описана в таблице CreateXMLArttributeTable
+  // Name:название аттрибута:string30;
+  //TXMLAttributes = ICValueTable;
+
+const
+  procnmXMLNewNodeRead = 'XMLNewNodeRead';
+  XMLDOMDocumentOleName = 'Msxml2.DOMDocument.4.0';
+  XMLSchemaCacheOleName = 'Msxml2.XMLSchemaCache.4.0';
+  NilXMLAttr = 'xsi:nil';
+  TrueXMLValue = 'true';
+  XmlFileExt = '.xml';
+  XsdFileExt = '.xsd';
+  XmlWord = 'xml';
+  XmlVersionCode1251 = 'version="1.0" encoding="windows-1251"';
+  XmlVersionCodeUTF8 = 'version="1.0" encoding="UTF-8"';
+  XmlVersionCodeUTF16 = 'version="1.0" encoding="UTF-16"';
+  XMLVersion4 = '4.0';
+  XMLVersion6 = '6.0';
+
+function LoadXMLFromFile(XMLFile : string) : OLEVariant;
+function ReadFromXMLByQuery(OLEXMLDoc : OLEVariant; Query : string;
+  XMLFile : string = '') : OLEVariant;
+procedure ReadFromXMLByQueryAndProceed(ObjExportNodesInvoker : IObject; XMLFile,
+  Query : string; SelfIdentifying : Variant = '');
+function CreateXMLArttributeTable : ICValueTable;
+procedure WriteAttributesToTable(OLEXMLNode : OLEVariant; TblXMLAttributes : ICValueTable;
+  UseCaseSensitive : Boolean = False);
+procedure CheckForXMLError(OLEParseError : OLEVariant);
+function CreateDOMDocument : OLEVariant;
+procedure CreateXMLElement(Doc, ParentObj, ChildObj : OLEVariant; FiledName : string; AttributesArray : Variant);
+procedure CreateXMLElements(Doc, ParentNode : OLEVariant; ParametersArray : Variant);
+function ChangeSymbolsForXML(Str : string) : string;
+procedure AddLeadingSymbols(Symbol : string; TotalSymbols : Integer; var Str : string);
+function ValidateXMLFile(FileName, ShemaFileName : string; var Reason, Line : string) : Boolean;
+ 
+
+function CreateDOMDocumentByVersion(Version : String) : OLEVariant;
+function LoadXMLFromFileByVersion(XMLFile, Version : string) : OLEVariant;
+
+implementation
+
+const
+  SupportedVersion = '4.0'; // поддерживается только четвертая версия
+  MSXMLDomDocument = 'MSXML2.DOMDocument';
+  errSupportedXMLParserNotRegistered = 'Не зарегистрирована в системе поддерживаемая%s' +
+    'версия XML-парсера %s';
+  errErrorOccuredWhileXMLFileParsed = 'При разборке XML-файла %s на url %s' +
+    'возникла ошибка%s' +
+    'в позиции %s строки %s';
+
+function CreateDOMDocument : OLEVariant;
+begin
+  try
+    Result := CreateOLEObject(MSXMLDomDocument + '.' + SupportedVersion);
+  except
+    raise(GetTranslation(errSupportedXMLParserNotRegistered, ArrayOf(#13#10, SupportedVersion)));
+  end;
+  Result.Async := False;
+  Result.ValidateOnParse := False;
+end;
+
+procedure CheckForXMLError(OLEParseError : OLEVariant);
+begin
+  if VarAsInt(OLEParseError.errorCode) <> 0 then
+    raise(GetTranslation(errErrorOccuredWhileXMLFileParsed,
+      ArrayOf(OLEParseError.SrcText, OLEParseError.URL + #13#10, #13#10 + OLEParseError.Reason + #13#10,
+      IntToStr(OLEParseError.LinePos), IntToStr(OLEParseError.Line))));
+end;
+
+function LoadXMLFromFile(XMLFile : string) : OLEVariant;
+begin
+  Result := CreateDOMDocument;
+  Result.Load(XMLFile);
+  CheckForXMLError(Result.ParseError);
+end;
+
+procedure WriteToXML(ObjExportNodesInvoker : IObject; ExportType : TExportType;
+  ExportSchema : Variant);
+begin
+
+end;
+
+function ReadFromXMLByQuery(OLEXMLDoc : OLEVariant; Query : string;
+  XMLFile : string = '') : OLEVariant;
+begin
+  if IsNil(OLEXMLDoc) then
+    OLEXMLDoc := LoadXMLFromFile(XMLFile);
+  Result := OLEXMLDoc.SelectNodes(Query);
+end;
+
+procedure ReadFromXMLByQueryAndProceed(ObjExportNodesInvoker : IObject; XMLFile,
+  Query : string; SelfIdentifying : Variant = '');
+var
+  OLEXMLSelectedNodes : OLEVariant;
+  i : Integer;
+begin
+  OLEXMLSelectedNodes := ReadFromXMLByQuery(XMLFile, Query);
+  for i := 0 to OLEXMLSelectedNodes.Length - 1 do
+    ObjExportNodesInvoker.ExecProc(Null, procnmXMLNewNodeRead,
+      ArrayOf(SelfIdentifying, OLEXMLSelectedNodes.Items[i]), Null)
+end;
+
+procedure ReadSubNodes(ObjExportNodesInvoker : IObject; OLEParentNode : OLEVariant);
+var
+  OLEXMLSelectedNodes : OLEVariant;
+  i : Integer;
+begin
+  //
+end;
+
+function CreateXMLArttributeTable : ICValueTable;
+begin
+  Result := CreateObject('ValueTable');
+  Result.AddColumn('Name', vtcString, 30);
+  Result.AddColumn('Value', vtcMemo, 0);
+  Result.Open;
+  Result.SortBy('Name');
+end;
+
+procedure WriteAttributesToTable(OLEXMLNode : OLEVariant; TblXMLAttributes : ICValueTable;
+  UseCaseSensitive : Boolean = False);
+var
+  i : Integer;
+  OLEXMLDOMNamedNodeMap, OLEXMLDOMAttribute : OLEVariant;
+begin
+  OLEXMLDOMNamedNodeMap := OLEXMLNode.Attributes;
+  TblXMLAttributes.Clear;
+  for i := 0 to OLEXMLDOMNamedNodeMap.Length - 1 do
+    begin
+      OLEXMLDOMAttribute := OLEXMLDOMNamedNodeMap.Item[i];
+      TblXMLAttributes.Append;
+      if UseCaseSensitive then
+        TblXMLAttributes.Name := OLEXMLDOMAttribute.Name
+      else
+        TblXMLAttributes.Name := StrUpperCase(OLEXMLDOMAttribute.Name);
+      TblXMLAttributes.Value := VarAsStr(OLEXMLDOMAttribute.Value); // пока всегда возвращает string
+      TblXMLAttributes.Post;
+    end;
+end;
+
+procedure CreateXMLElement(Doc, ParentObj, ChildObj : OLEVariant; FiledName : string; AttributesArray : Variant);
+var
+  i : Integer;
+begin
+  ChildObj := Doc.CreateElement(FiledName);
+  ParentObj.AppendChild(ChildObj);
+  for i := 0 to ArrayHigh(AttributesArray) do
+    ChildObj.SetAttribute(AttributesArray[i][0], AttributesArray[i][1]);
+end;
+
+procedure CreateXMLElements(Doc, ParentNode : OLEVariant; ParametersArray : Variant);
+var
+  i, j : Integer;
+  ChildNode, TextNode : OLEVariant;
+  AttributesArray, ParameterArray : Variant;
+begin
+  for i := 0 to ArrayHigh(ParametersArray) do
+    begin
+      ParameterArray := ParametersArray[i];
+      if VarAsStr(ParametersArray[i][1]) = NilXMLAttr then
+        continue;
+      ChildNode := Doc.CreateElement(ParameterArray[0]);
+      ParentNode.AppendChild(ChildNode);
+      if VarAsStr(ParametersArray[i][1]) <> '' then
+        begin
+          TextNode := Doc.createTextNode(ChangeSymbolsForXML(ParameterArray[1]));
+          ChildNode.appendChild(TextNode);
+        end
+      else
+        ChildNode.SetAttribute(NilXMLAttr, TrueXMLValue);
+      if ArrayHigh(ParameterArray) < 2 then
+        continue;
+      AttributesArray := ParameterArray[2];
+      if not IsNull(AttributesArray) and IsArray(AttributesArray) then
+        for j := 0 to ArrayHigh(AttributesArray) do
+          ChildNode.SetAttribute(AttributesArray[j][0], ChangeSymbolsForXML(VarAsStr(AttributesArray[j][1])));
+    end;
+end;
+
+function ValidateXMLFile(FileName, ShemaFileName : string; var Reason, Line : string) : Boolean;
+var
+  XMLFile, ShemaFile : OLEVariant;
+begin
+  XMLFile := CreateOleObject(XMLDOMDocumentOleName);
+  XMLFile.async := False;
+  XMLFile.validateOnParse := True;
+  XMLFile.resolveExternals := True;
+  XMLFile.load(ShemaFileName);
+  ShemaFile := CreateOleObject(XMLSchemaCacheOleName);
+  ShemaFile.add(XMLFile.namespaceURI, XMLFile);
+  XMLFile.schemas := ShemaFile;
+  XMLFile.load(FileName);
+  if (XMLFile.parseError.errorCode <> 0) then
+    begin
+      Reason := VarAsStr(XMLFile.parseError.reason);
+      Line := XMLFile.parseError.line;
+    end
+  else
+    Result := True;
+end;
+
+procedure AddLeadingSymbols(Symbol : string; TotalSymbols : Integer; var Str : string);
+var
+  i, Length : Integer;
+begin
+  Length := StrLength(Str);
+  if Length >= TotalSymbols then
+    exit;
+  for i := 1 to (TotalSymbols - Length) do
+    Str := Symbol + Str
+end;
+
+function ChangeSymbolsForXML(Str : string) : string;
+begin
+  ReplaceOneStrWithAnother(Str, '>', '&gt;');
+  ReplaceOneStrWithAnother(Str, '<', '&lt;');
+  ReplaceOneStrWithAnother(Str, '"', '&quot;');
+  ReplaceOneStrWithAnother(Str, '''', '&apos;');
+  ReplaceOneStrWithAnother(Str, '&', '&amp;');
+  Result := Str;
+end;
+
+
+function CreateDOMDocumentByVersion(Version : String) : OLEVariant;
+begin
+  try
+    Result := CreateOLEObject(MSXMLDomDocument + '.' + Version);
+  except
+    raise(GetTranslation(errSupportedXMLParserNotRegistered, ArrayOf(#13#10, SupportedVersion)));
+  end;
+  Result.Async := False;
+  Result.ValidateOnParse := False;
+end;
+
+
+function LoadXMLFromFileByVersion(XMLFile, Version : string) : OLEVariant;
+var
+  OLEParseError : OLEVariant;
+begin
+  Result := CreateDOMDocumentByVersion(Version);
+  Result.Load(XMLFile);
+  CheckForXMLError(Result.ParseError);
+end;
+end.

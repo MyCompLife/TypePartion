@@ -1,0 +1,114 @@
+interface
+
+uses
+  System, DispIntf, ConstNames, РаботаСПеременными, РаботаСОбъектами,
+  РаботаСТаблицамиЗначений, РаботаСоСправочниками, УстановкаВажныхОбъектов,
+  ПечатьИВыводНаЭкран, Печать;
+
+implementation
+
+var
+  MasterData, Owner : ICDictionary;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  MasterData := MDS.GetMean;
+  Owner := MasterData._GetOwner;
+
+end;
+
+procedure Form_Open(Sender : TObject);
+begin
+//  lbTitle.Caption := SetTitleCaption(ArrayOf(dbeCode.Text), '');
+//  Owner := MasterData._GetOwner;
+  if (not IsNil(Owner)) and Owner.IsFocused then
+    lbTitle.Caption := SetTitleCaption(ArrayOf(VarAsStr(Owner.НазвТовара)), '');
+  if IsObjFocused(MasterData.Партнер) then
+    ePartner.Text := MasterData.Партнер.Название;
+
+end;
+
+procedure MDS_Append(Sender : TObject);
+begin
+//  Owner := MasterData._GetOwner;
+//  if (not IsNil(Owner)) and Owner.IsFocused then
+//    MasterData.Активность := not HasActive(MasterData);
+//  MasterData.Количество := 1;
+//  MasterData.Идентификатор := '0';
+end;
+
+procedure miCancel_Click(Sender : TObject);
+begin
+  Form.ModalResult := mrCancel;
+end;
+
+procedure ePartner_ActionClear(Sender: TObject);
+begin
+  MasterData.Партнер := Null;
+  ePartner.Text := '';
+  MasterData.Код := Null;
+end;
+
+procedure ePartner_ActionExecute(Sender: TObject);
+Var
+  LinkDic, PostDic : ICDictionary;
+  DefName : String;
+begin
+  LinkDic := CreateObject('Справочники.ЮрПартнеры');
+  PostDic := CreateObject('Справочники.ПоставщикиТоваров');
+
+  PostDic.UseMasterAndSelect(Owner);
+
+  LinkDic.SetFieldFilter('Поставщик','=',-1,'','',Null);
+  if LinkDic.SelectInForm('ВыборПартнера',DefName,Null) Then
+    begin
+      if (not PostDic.FindByField('Партнер',LinkDic,False))then
+        begin
+          ePartner.Text := DefName;
+          MasterData.Партнер := LinkDic;
+          MasterData.Код := LinkDic.Код;
+        end
+      else
+        ShowMessage('Вы уже добавили этого поставщика!!');
+    end;
+end;
+
+procedure MDS_Validate(Sender: TObject);
+Var
+  PostDic, CodesDic, GoodDict : ICDictionary;
+
+begin
+  PostDic := MasterData.Партнер;
+  if (IsNil(PostDic)) or (not PostDic.IsFocused) then
+    raise('Укажите поставщика!!');
+  CodesDic := CreateObject('Справочники.ПоставщикиТоваров');
+  CodesDic.SetFieldFilter('Партнер','=',PostDic,'','',Null);
+  CodesDic.SetFieldFilter('КодПоставщика','=',MasterData.КодПоставщика,'','',Null);
+  CodesDic.Select;
+  if CodesDic.SelectNext then
+    begin
+      GoodDict := CodesDic._GetOwner;
+      raise('Такой код уже привязан к товару: '+VarAsStr(GoodDict.НазвТовара));
+
+    end;
+end;
+
+end._VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+pnTitle:TO4Panel
+lbTitle:TO4Label
+MainPanel:TO4Panel
+Label5:TO4Label
+Label7:TO4Label
+dbeCount:TO4DBEdit
+chbActive:TO4CheckBox
+ePartner:TO4Edit
+BottomPanel:TO4Panel
+ButtonPanel:TO4Panel
+btOK:TO4Button
+btCancel:TO4Button
+pmSaveRecord:TO4PopupMenu
+miSave:TO4MenuItem
+miSaveAdd:TO4MenuItem
+MenuItem1:TO4MenuItem
+miCancel:TO4MenuItem
+MDS:TO4DataSource

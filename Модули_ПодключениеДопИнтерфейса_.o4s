@@ -1,0 +1,48 @@
+interface
+
+uses
+  System, DispIntf;
+
+function InvokeAIFunction(ctrlInvokeFrom : Variant; ProcID : string;
+  InParams : Variant = '') : Variant;
+
+implementation
+
+var
+  LstAdditInterfaceManager : IObject; {ICValueList} // дл€ доступа к объектам с сервера
+
+  //******************************************************************************
+  // работа с менеджером подключений дополнительного интерфейса
+  // менеджер подключений разработан в цел€х инкапсул€ции работы с
+  // дополнительными к режимам интерфейсами
+
+procedure PassManagerToServer(ALstAdditInterfaceManager : IObject); server;
+begin
+  LstAdditInterfaceManager := ALstAdditInterfaceManager;
+end;
+
+function GetAdditInterfaceFromManager(ctrlActivation : Variant) : IObject {ICProcessing};
+begin
+  if IsNil(LstAdditInterfaceManager) then
+    Result := Null
+  else
+    Result := LstAdditInterfaceManager.Params[VarAsStr(ctrlActivation)];
+end;
+//******************************************************************************
+
+// вызов процедур дополнительного интерфейса
+
+function InvokeAIFunction(ctrlInvokeFrom : Variant; ProcID : string;
+  InParams : Variant = '') : Variant;
+var
+  PrcAdditInterface : IObject; {ICProcessing}
+begin
+  PrcAdditInterface := GetAdditInterfaceFromManager(ctrlInvokeFrom);
+  if not IsNil(PrcAdditInterface) then
+    begin
+      Result := Null;
+      PrcAdditInterface.ExecProc(Null, ProcID, InParams, Result);
+    end;
+end;
+
+end.

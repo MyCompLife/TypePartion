@@ -1,0 +1,108 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+implementation
+
+var
+  MasterData : ICDocuments;
+  Currency : ICDictionary;
+  Constants : IC4VPAConst;
+  ChangeLock, isSave : Boolean;
+  Options : ICOptions;
+
+procedure MDS_VPABeforeOpen(Sender : TObject);
+begin
+  isSave := false;
+ Options := GetOptions;
+  MasterData := MDS.GetMean;
+  Currency := CreateObject('Справочники.Валюты');
+  Constants := GetConstants;
+end;
+
+procedure MDS_Append(Sender : TObject);
+var
+  OldDoc : ICDocuments;
+  TmpLHead : ICValueTable;
+  Number : string;
+begin
+  if MasterData.HasParam('OldDoc') then
+    begin
+      Number := MasterData.НомерДокумента;
+      OldDoc := MasterData.Params['OldDoc'];
+      TmpLHead := CreateObject('ValueTable');
+      OldDoc.SaveHead('', TmpLHead);
+      MasterData.LoadHead('', TmpLHead);
+      MasterData.ДатаДокумента := CurrentDateTime;
+      MasterData.НомерДокумента := Number;
+    end;
+
+  Currency := GetNatCurrency(Currency);
+  if Currency.IsFocused then
+    begin
+      MasterData.Курс := Currency.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+      MasterData.Валюта := Currency;
+    end;
+end;
+
+procedure MDS_FieldChange(FieldName : string; Value : Variant);
+begin
+  isSave := true;
+  if ChangeLock then
+    exit;
+  try
+    ChangeLock := True;
+    case StrLowerCase(FieldName) of
+      'сумма', 'валюта', 'курс' :
+        SetCurSumma(MasterData);
+      'суммаввалюте' :
+        MasterData.Сумма := VarAsDec(MasterData.СуммаВВалюте) * VarAsDec(MasterData.Курс);
+    end;
+  finally
+    ChangeLock := False;
+  end;
+end;
+
+procedure dbeCurrency_ActionExecute(Sender : TObject);
+begin
+  MasterData.Курс := MasterData.Валюта.GetTimedValue(Constants.UsedCurs, MasterData.ДатаДокумента);
+end;
+
+procedure Form_CloseQuery(var CanClose: Boolean);
+begin
+  if isSave and (VarAsBool(Options.GetServerPrm('CloseAck'))) and (MasterData.GetDocState = 0) then
+    if (Form.ModalResult = mrCancel) and (MessageDlg('Закрить документ без сохранения?', mtCustom, ArrayOF(mbYes,mbNo),0) = mrNo)  then
+      CanClose := false;
+end;
+
+end.
+_VPA_COMPONENTTLIST_DELIMITER_Form:TO4DataForm
+LinkImage1:TO4LinkImage
+Panel3:TO4Panel
+Panel4:TO4Panel
+Button1:TO4Button
+Button2:TO4Button
+Panel1:TO4Panel
+Label1:TO4Label
+Label2:TO4Label
+Label6:TO4Label
+Label26:TO4Label
+Label3:TO4Label
+Label4:TO4Label
+Label5:TO4Label
+Label7:TO4Label
+eData:TO4DBEdit
+eNumber:TO4DBEdit
+ePartner:TO4DBEdit
+eRespons:TO4DBEdit
+DBEdit1:TO4DBEdit
+dbeCurSum:TO4DBEdit
+dbeCurrency:TO4DBEdit
+dbeRate:TO4DBEdit
+MDS:TO4DataSource
+pmSaveRecord:TO4PopupMenu
+pmiSave:TO4MenuItem
+pmiSaveAdd:TO4MenuItem
+MenuItem3:TO4MenuItem
+pmiCancel:TO4MenuItem

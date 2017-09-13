@@ -1,0 +1,151 @@
+interface
+
+uses
+  System, DispIntf, Расчеты;
+
+function InitializationFtpConnect(FtpDic: ICDictionary; var ResMeesage: String): boolean;
+function CopyFileToFtp(LocalFilePath, FtpFilePath: String; var ResMeesage: String): boolean;
+function CopyFileFromFtp(LocalFilePath, FtpFilePath: String; var ResMeesage: String): boolean;
+function DeleteFileFromFtp(FtpFilePath: String; var ResMeesage: String): boolean;
+function FtpDirExists(DirPath: String): boolean;
+function FtpMkDir(DirPath: String; var ResMeesage: String): boolean;
+function GetFileList(DirPath: String): String;
+function InitFtpConnectKPK(IP,Login,Pass: String; var ResMeesage: String): boolean;
+
+procedure FtpManagerClose;
+
+implementation
+
+Var
+  Constants :IC4VPAConst;
+  ftpManager: OLEVariant;
+
+
+function InitFtpConnectKPK(IP,Login,Pass: String; var ResMeesage: String): boolean;
+var
+  res: integer;
+begin
+  ftpManager := CreateOLEObject('addl_func.ftpManager');
+  res := ftpManager.Connect(IP, Login, Pass);
+  case res of
+    1000000 : begin
+                ResMeesage := VarAsStr(Res) + ': Успешное выполнение';
+                Result := true;
+              end;
+  else
+    begin
+      ResMeesage := VarAsStr(Res) + ': Произошла ошибка';
+      Result := false;
+    end;
+  end;
+end;
+
+
+function InitializationFtpConnect(FtpDic: ICDictionary; var ResMeesage: String): boolean;
+var
+  res: integer;
+begin
+  ftpManager := CreateOLEObject('addl_func.ftpManager');
+  res := ftpManager.Connect(FtpDic.IP, FtpDic.Login, FtpDic.Pass);
+  case res of
+    1000000 : begin
+                ResMeesage := VarAsStr(Res) + ': Успешное выполнение';
+                Result := true;
+              end;
+  else
+    begin
+      ResMeesage := VarAsStr(Res) + ': Произошла ошибка';
+      Result := false;
+    end;
+  end;
+end;
+
+function CopyFileToFtp(LocalFilePath, FtpFilePath: String; var ResMeesage: String): boolean;
+var
+  res: integer;
+begin
+  res := ftpManager.DoExchange(LocalFilePath, FtpFilePath, 1);
+  case res of
+    1000000 : begin
+                ResMeesage := VarAsStr(Res) + ': Успешное выполнение';
+                Result := true;
+              end;
+  else
+    begin
+      ResMeesage := VarAsStr(Res) + ': Произошла ошибка';
+      Result := false;
+    end;
+  end;
+end;
+
+function CopyFileFromFtp(LocalFilePath, FtpFilePath: String; var ResMeesage: String): boolean;
+var
+  res: integer;
+begin
+  res := ftpManager.DoExchange(LocalFilePath, FtpFilePath, 0);
+  case res of
+    1000000 : begin
+                ResMeesage := VarAsStr(Res) + ': Успешное выполнение';
+                Result := true;
+              end;
+  else
+    begin
+      ResMeesage := VarAsStr(Res) + ': Произошла ошибка';
+      Result := false;
+    end;
+  end;
+end;
+
+function DeleteFileFromFtp(FtpFilePath: String; var ResMeesage: String): boolean;
+var
+  res: integer;
+begin
+  res := ftpManager.TakeAction(FtpFilePath, '', 2);
+  case res of
+    1000000 : begin
+                ResMeesage := VarAsStr(Res) + ': Успешное выполнение';
+                Result := true;
+              end;
+  else
+    begin
+      ResMeesage := VarAsStr(Res) + ': Произошла ошибка';
+      Result := false;
+    end;
+  end;
+end;
+
+function FtpDirExists(DirPath: String): boolean;
+begin
+  Result := ftpManager.IsDirExists(DirPath);
+end;
+
+function FtpMkDir(DirPath: String; var ResMeesage: String): boolean;
+var
+  res: integer;
+begin
+  res := ftpManager. TakeAction(DirPath, '', 3);
+  case res of
+    1000000 : begin
+                ResMeesage := VarAsStr(Res) + ': Успешное выполнение';
+                Result := true;
+              end;
+  else
+    begin
+      ResMeesage := VarAsStr(Res) + ': Произошла ошибка';
+      Result := false;
+    end;
+  end;
+end;
+
+function GetFileList(DirPath: String): String;
+begin
+  Result := ftpManager.GetFileList(DirPath,1);
+end;
+
+procedure ftpManagerClose;
+begin
+  ftpManager.CloseConnection;
+  nil(ftpManager);
+end;
+
+end.
